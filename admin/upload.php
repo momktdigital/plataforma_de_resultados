@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
 
     // Valida a extensão do arquivo
     if ($fileExtension !== 'csv') {
-        header('Location: index.php?error=1&msg=' . urlencode('O arquivo enviado não é um CSV.'));
+        header('Location: upload_form.php?error=1&msg=' . urlencode('O arquivo enviado não é um CSV.'));
         die();
     }
 
@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
         }
 
         if (!$header) {
-            header('Location: index.php?error=1&msg=' . urlencode('O arquivo CSV está vazio ou o formato é inválido.'));
+            header('Location: upload_form.php?error=1&msg=' . urlencode('O arquivo CSV está vazio ou o formato é inválido.'));
             fclose($handle);
             die();
         }
@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
 
         // Verifica se as colunas obrigatórias existem
         if (!isset($colIndex['RA']) || (!isset($colIndex['PERÍODO']) && !isset($colIndex['PERIODO']))) {
-            header('Location: index.php?error=1&msg=' . urlencode('As colunas RA e Período são obrigatórias no CSV.'));
+            header('Location: upload_form.php?error=1&msg=' . urlencode('As colunas RA e Período são obrigatórias no CSV.'));
             fclose($handle);
             die();
         }
@@ -156,16 +156,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
 
         fclose($handle);
 
-        header("Location: index.php?success=1&msg=" . urlencode("$count registros processados com sucesso."));
+        header("Location: upload_form.php?success=1&msg=" . urlencode("$count registros processados com sucesso."));
         die();
 
     } else {
-        header('Location: index.php?error=1&msg=' . urlencode('Não foi possível ler o arquivo.'));
+        header('Location: upload_form.php?error=1&msg=' . urlencode('Não foi possível ler o arquivo.'));
         die();
     }
 } else {
     // Redireciona se houver erro no upload ou acesso direto
-    header('Location: index.php?error=1&msg=' . urlencode('Erro ao fazer upload do arquivo.'));
+    header('Location: upload_form.php?error=1&msg=' . urlencode('Erro ao fazer upload do arquivo.'));
     die();
 }
 ?>
