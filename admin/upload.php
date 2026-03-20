@@ -28,26 +28,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
     // Tenta abrir o arquivo
     if (($handle = fopen($fileTmpPath, "r")) !== FALSE) {
 
-        // Lê o cabeçalho do CSV
-        $header = fgetcsv($handle, 10000, ",");
+        // 1. Detecta o delimitador correto dinamicamente
+        $delimiter = ",";
+        $header = fgetcsv($handle, 10000, $delimiter);
 
-        // Se o cabeçalho estiver vazio, encerra
+        if ($header && count($header) === 1 && strpos($header[0], ';') !== false) {
+            $delimiter = ";";
+            rewind($handle);
+            $header = fgetcsv($handle, 10000, $delimiter);
+        }
+
         if (!$header) {
             header('Location: index.php?error=1&msg=' . urlencode('O arquivo CSV está vazio ou o formato é inválido.'));
             fclose($handle);
             die();
         }
 
-        // Identifica os índices das colunas
+        // 2. Remove o BOM (Byte Order Mark) do primeiro item do cabeçalho
+        $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]);
+
+        // 3. Identifica os índices das colunas usando mb_strtoupper (corrige o bug do í em Período)
         $colIndex = array();
         foreach ($header as $index => $colName) {
-            // Remove espaços e deixa tudo em maiúsculo para facilitar a busca
-            $cleanName = strtoupper(trim($colName));
+            $cleanName = mb_strtoupper(trim($colName), 'UTF-8');
             $colIndex[$cleanName] = $index;
         }
 
         // Verifica se as colunas obrigatórias existem
-        if (!isset($colIndex['RA']) || !isset($colIndex['PERÍODO']) && !isset($colIndex['PERIODO'])) {
+        if (!isset($colIndex['RA']) || (!isset($colIndex['PERÍODO']) && !isset($colIndex['PERIODO']))) {
             header('Location: index.php?error=1&msg=' . urlencode('As colunas RA e Período são obrigatórias no CSV.'));
             fclose($handle);
             die();
@@ -94,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
         $stmt = $conn->prepare($query);
 
         // Processa cada linha do CSV
-        while (($data = fgetcsv($handle, 10000, ",")) !== FALSE) {
+        while (($data = fgetcsv($handle, 10000, $delimiter)) !== FALSE) {
 
             // Pula linhas vazias
             if (empty(array_filter($data))) continue;
