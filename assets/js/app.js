@@ -60,29 +60,87 @@ document.addEventListener('DOMContentLoaded', () => {
         summaryPanel.innerHTML = '';
         answersGrid.innerHTML = '';
 
-        // 1. Renderizar Notas Finais (Summary)
+        // 1. Renderizar Notas Finais (Summary com Agrupamento por Disciplina)
         const notas = item.notas_finais || {};
 
         if (Object.keys(notas).length === 0) {
              summaryPanel.innerHTML = '<div class="col-span-full p-4 bg-slate-50 rounded text-slate-500 text-center text-sm border border-slate-200">Nenhum resumo de notas disponível.</div>';
         } else {
-            for (const [key, value] of Object.entries(notas)) {
-                // Criação de um card para cada nota final encontrada
+            let disciplinas = {};
+            let notaGeral = '';
+
+            for (const [key, val] of Object.entries(notas)) {
+                const upperKey = key.toUpperCase().trim();
+
+                // Verifica se a chave original é o "Total" geral
+                if (upperKey === 'TOTAL' || upperKey === 'NOTA FINAL' || upperKey === 'PONTUAÇÃO FINAL') {
+                    notaGeral = val;
+                    continue;
+                }
+
+                // Separa Disciplina do Tipo usando hífen (-)
+                if (key.includes('-')) {
+                    const parts = key.split('-');
+                    const disciplinaNome = parts.slice(0, -1).join('-').trim();
+                    const tipoNota = parts[parts.length - 1].toLowerCase().trim();
+
+                    if (!disciplinas[disciplinaNome]) {
+                        disciplinas[disciplinaNome] = { total: '-', percentual: '-' };
+                    }
+
+                    if (tipoNota.includes('percentual') || tipoNota.includes('%')) {
+                        disciplinas[disciplinaNome].percentual = val;
+                    } else if (tipoNota.includes('total') || tipoNota.includes('acerto') || tipoNota.includes('nota')) {
+                        disciplinas[disciplinaNome].total = val;
+                    }
+                } else {
+                    // Se não tem hífen e não é "Total" geral, adiciona direto
+                    disciplinas[key.trim()] = { total: val, percentual: '' };
+                }
+            }
+
+            // Renderizar Nota Geral no Topo (Card Expandido)
+            if (notaGeral !== '') {
+                const cardGeral = document.createElement('div');
+                cardGeral.className = 'col-span-full bg-slate-800 rounded-2xl p-6 md:p-8 shadow-md flex flex-col sm:flex-row items-center justify-between border-l-8 border-primary transition-transform hover:-translate-y-1';
+                cardGeral.innerHTML = `
+                    <div class="flex items-center mb-4 sm:mb-0">
+                        <div class="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mr-6">
+                            <i class="ph-fill ph-trophy text-primary text-4xl"></i>
+                        </div>
+                        <div>
+                            <span class="text-sm font-bold text-slate-400 uppercase tracking-widest block mb-1">Pontuação Final do Aluno</span>
+                            <span class="text-5xl font-black text-white">${notaGeral}</span>
+                        </div>
+                    </div>
+                `;
+                summaryPanel.appendChild(cardGeral);
+            }
+
+            // Renderizar Disciplinas (Cards)
+            for (const [disciplina, dados] of Object.entries(disciplinas)) {
+                const displayTotal = (dados.total === '' || dados.total === null || dados.total === '-') ? '-' : dados.total;
+                let displayPercent = (dados.percentual === '' || dados.percentual === null || dados.percentual === '-') ? '' : dados.percentual;
+
+                // Adiciona o símbolo de porcentagem se for um número e não tiver o símbolo
+                if (displayPercent !== '' && !displayPercent.toString().includes('%')) {
+                    displayPercent += '%';
+                }
+
+                let percentHtml = displayPercent ? `<span class="text-lg text-slate-400 ml-1 font-medium">(${displayPercent})</span>` : '';
+
                 const card = document.createElement('div');
-                card.className = 'bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center transition-transform hover:-translate-y-1';
-
-                // Formatação simples para destacar números se for um valor numérico curto
-                const isNumber = !isNaN(parseFloat(value)) && isFinite(value);
-                const displayValue = value === '' ? '-' : value;
-
+                card.className = 'bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between transition-transform hover:-translate-y-1 hover:border-primary/40 hover:shadow-md';
                 card.innerHTML = `
-                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">${key}</p>
-                    <p class="text-3xl font-extrabold text-slate-800 tracking-tight"><span class="${isNumber ? 'text-primary' : ''}">${displayValue}</span></p>
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 leading-snug break-words" title="${disciplina}">${disciplina}</span>
+                    <div class="flex items-baseline mt-auto">
+                        <span class="text-3xl font-black text-[#00b48d]">${displayTotal}</span>
+                        ${percentHtml}
+                    </div>
                 `;
                 summaryPanel.appendChild(card);
             }
         }
-
         // 2. Renderizar Respostas (Q1-Q100)
         const respostas = item.respostas || {};
 

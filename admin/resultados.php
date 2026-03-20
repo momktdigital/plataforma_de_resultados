@@ -394,20 +394,81 @@ function viewDetails(buttonElement) {
     if (Object.keys(notas).length === 0) {
         containerNotas.innerHTML = '<div class="col-span-full p-3 text-sm text-slate-500">Nenhuma nota final registrada.</div>';
     } else {
+        let disciplinas = {};
+        let notaGeral = '';
+
         for (const [key, val] of Object.entries(notas)) {
-            const isNumber = !isNaN(parseFloat(val)) && isFinite(val);
-            const displayVal = (val === '' || val === null) ? '-' : val;
+            const upperKey = key.toUpperCase().trim();
+
+            // Verifica se a chave original é o "Total" geral
+            if (upperKey === 'TOTAL' || upperKey === 'NOTA FINAL' || upperKey === 'PONTUAÇÃO FINAL') {
+                notaGeral = val;
+                continue;
+            }
+
+            // Separa Disciplina do Tipo usando hífen (-)
+            if (key.includes('-')) {
+                const parts = key.split('-');
+                const disciplinaNome = parts.slice(0, -1).join('-').trim();
+                const tipoNota = parts[parts.length - 1].toLowerCase().trim();
+
+                if (!disciplinas[disciplinaNome]) {
+                    disciplinas[disciplinaNome] = { total: '-', percentual: '-' };
+                }
+
+                if (tipoNota.includes('percentual') || tipoNota.includes('%')) {
+                    disciplinas[disciplinaNome].percentual = val;
+                } else if (tipoNota.includes('total') || tipoNota.includes('acerto') || tipoNota.includes('nota')) {
+                    disciplinas[disciplinaNome].total = val;
+                }
+            } else {
+                // Se não tem hífen e não é "Total" geral, adiciona direto
+                disciplinas[key.trim()] = { total: val, percentual: '' };
+            }
+        }
+
+        // Renderizar Nota Geral no Topo (Card Expandido)
+        if (notaGeral !== '') {
+            const cardGeral = document.createElement('div');
+            cardGeral.className = 'col-span-full bg-slate-800 rounded-xl p-6 mb-2 shadow-sm flex flex-col sm:flex-row items-center justify-between border-l-4 border-primary';
+            cardGeral.innerHTML = `
+                <div class="flex items-center mb-2 sm:mb-0">
+                    <div class="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mr-4">
+                        <i class="ph-fill ph-trophy text-primary text-2xl"></i>
+                    </div>
+                    <div>
+                        <span class="text-sm font-bold text-slate-400 uppercase tracking-widest block mb-1">Nota Final / Total</span>
+                        <span class="text-3xl font-black text-white">${notaGeral}</span>
+                    </div>
+                </div>
+            `;
+            containerNotas.appendChild(cardGeral);
+        }
+
+        // Renderizar Disciplinas (Cards)
+        for (const [disciplina, dados] of Object.entries(disciplinas)) {
+            const displayTotal = (dados.total === '' || dados.total === null || dados.total === '-') ? '-' : dados.total;
+            let displayPercent = (dados.percentual === '' || dados.percentual === null || dados.percentual === '-') ? '' : dados.percentual;
+
+            // Adiciona o símbolo de porcentagem se for um número e não tiver o símbolo
+            if (displayPercent !== '' && !displayPercent.toString().includes('%')) {
+                displayPercent += '%';
+            }
+
+            let percentHtml = displayPercent ? `<span class="text-lg text-slate-400 ml-1 font-medium">(${displayPercent})</span>` : '';
 
             const card = document.createElement('div');
-            card.className = 'bg-white border border-slate-200 rounded-xl p-3 flex flex-col justify-center items-center shadow-sm';
+            card.className = 'bg-white border border-slate-200 rounded-xl p-4 flex flex-col justify-between shadow-sm hover:border-primary/40 hover:shadow-md transition-all';
             card.innerHTML = `
-                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 text-center w-full truncate" title="${key}">${key}</span>
-                <span class="text-xl font-black ${isNumber ? 'text-primary' : 'text-slate-700'}">${displayVal}</span>
+                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 leading-snug line-clamp-2" title="${disciplina}">${disciplina}</span>
+                <div class="flex items-baseline mt-auto">
+                    <span class="text-2xl font-black text-[#00b48d]">${displayTotal}</span>
+                    ${percentHtml}
+                </div>
             `;
             containerNotas.appendChild(card);
         }
     }
-
     // 5. Renderizar Respostas (Grid de Badges)
     const containerRespostas = document.getElementById('modal-respostas');
     containerRespostas.innerHTML = ''; // Clear
