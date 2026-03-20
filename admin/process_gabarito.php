@@ -48,49 +48,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
         // 2. Remove o BOM (Byte Order Mark) do primeiro item do cabeçalho
         $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]);
 
-        // 3. Mapeia os índices das colunas de questões (Q1 a Q100) no cabeçalho
+        // 3. Mapeamento Flexível do Cabeçalho
+        // Ignora "Nome", "Período" e busca "Q1", "Questão 1", etc.
         $qIndexes = array();
         foreach ($header as $index => $colName) {
             $cleanName = mb_strtoupper(trim($colName), 'UTF-8');
-            if (preg_match('/^Q\d+$/', $cleanName)) {
-                $qIndexes[$cleanName] = $index;
+
+            // Regex para capturar o número da questão logo após "Q" ou "QUESTÃO"
+            // Suporta: "Q1", "Q 1", "QUESTÃO 1", "QUESTAO 1"
+            if (preg_match('/^(?:Q|QUESTÃO|QUESTAO)\s*(\d+)$/', $cleanName, $matches)) {
+                $numeroQuestao = $matches[1];
+                // Se for até 100, a gente padroniza como Q1, Q2, etc.
+                if ((int)$numeroQuestao >= 1 && (int)$numeroQuestao <= 100) {
+                    $padronizado = "Q" . $numeroQuestao;
+                    $qIndexes[$padronizado] = $index;
+                }
             }
         }
 
         if (empty($qIndexes)) {
-            header('Location: upload_gabarito.php?error=1&msg=' . urlencode('Não foram encontradas colunas de questões (Q1, Q2, etc.) no cabeçalho (Linha 1).'));
+            header('Location: upload_gabarito.php?error=1&msg=' . urlencode('Não foram encontradas colunas de questões (ex: Questão 1, Q1) no cabeçalho.'));
             fclose($handle);
             die();
         }
 
-        // 4. Lê a SEGUNDA linha de dados para extrair as respostas do gabarito
-        $gabaritoData = fgetcsv($handle, 10000, $delimiter);
-        fclose($handle);
-
-        if (!$gabaritoData) {
-            header('Location: upload_gabarito.php?error=1&msg=' . urlencode('O arquivo CSV não contém uma segunda linha com as respostas corretas.'));
-            die();
-        }
-
-        // 5. Mapeia os dados da segunda linha baseando-se nos índices da primeira linha
+        // 4. Lê as linhas de dados até encontrar a primeira linha válida com respostas
         $respostasCorretas = array();
-        for ($i = 1; $i <= 100; $i++) {
-            $qName = "Q$i";
-            if (isset($qIndexes[$qName])) {
-                $idx = $qIndexes[$qName];
-                if (isset($gabaritoData[$idx])) {
-                    // Remove espaços e converte para maiúsculo (A, B, C...)
-                    $respostasCorretas[$qName] = mb_strtoupper(trim($gabaritoData[$idx]), 'UTF-8');
-                } else {
-                    $respostasCorretas[$qName] = "";
+        $gabaritoProcessado = false;
+
+        while (($gabaritoData = fgetcsv($handle, 10000, $delimiter)) !== FALSE) {
+            // Pula linhas vazias
+            if (empty(array_filter($gabaritoData))) continue;
+
+            $temRespostaValida = false;
+            $respostasTemp = array();
+
+            // Mapeia os dados da linha baseando-se nos índices do cabeçalho
+            for ($i = 1; $i <= 100; $i++) {
+                $qName = "Q$i";
+                if (isset($qIndexes[$qName])) {
+                    $idx = $qIndexes[$qName];
+                    if (isset($gabaritoData[$idx]) && trim($gabaritoData[$idx]) !== '') {
+                        $resposta = mb_strtoupper(trim($gabaritoData[$idx]), 'UTF-8');
+                        $respostasTemp[$qName] = $resposta;
+
+                        // Consideramos válido apenas letras únicas ou respostas lógicas
+                        if (preg_match('/^[A-Z]$/', $resposta)) {
+                            $temRespostaValida = true;
+                        }
+                    } else {
+                        $respostasTemp[$qName] = "";
+                    }
                 }
             }
-            // As outras colunas como "Período" são automaticamente ignoradas pois não entram no array qIndexes
+
+            // Se encontrou respostas válidas (letras), assume que esta é a linha correta do gabarito
+            if ($temRespostaValida) {
+                $respostasCorretas = $respostasTemp;
+                $gabaritoProcessado = true;
+                break; // Ignora as próximas linhas do CSV
+            }
+        }
+
+        fclose($handle);
+
+        if (!$gabaritoProcessado) {
+            header('Location: upload_gabarito.php?error=1&msg=' . urlencode('O arquivo CSV não contém uma linha com letras válidas para o gabarito.'));
+            die();
         }
 
         $respostasJson = json_encode($respostasCorretas);
 
-        // 6. Inserir ou atualizar na tabela gabaritos
+        // 5. Inserir ou atualizar na tabela gabaritos
         $db = new Database();
         $conn = $db->getConnection();
 
@@ -105,7 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
             $stmt->bindParam(':respostas', $respostasJson);
             $stmt->execute();
 
-            header("Location: upload_gabarito.php?success=1&msg=" . urlencode("O gabarito com " . count($respostasCorretas) . " respostas foi salvo com sucesso para a avaliação '$nomeAvaliacao'."));
+            header("Location: upload_gabarito.php?success=1&msg=" . urlencode("O gabarito com " . count(array_filter($respostasCorretas)) . " respostas foi salvo com sucesso para a avaliação '$nomeAvaliacao'."));
             die();
 
         } catch (PDOException $e) {
