@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS `resultados` (
     `periodo` VARCHAR(100) NOT NULL,
     `nome_avaliacao` VARCHAR(150) NOT NULL,
     `respostas` JSON,
+    `link_comentado` VARCHAR(255) NULL,
     `notas_finais` JSON,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -33,6 +34,7 @@ CREATE TABLE IF NOT EXISTS `gabaritos` (
     `nome_avaliacao` VARCHAR(150) NOT NULL,
 
     `respostas` JSON,
+    `link_comentado` VARCHAR(255) NULL,
 
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 

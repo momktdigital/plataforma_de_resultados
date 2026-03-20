@@ -27,7 +27,7 @@ try {
     // Consulta os resultados pelo RA fazendo JOIN no gabarito apenas pela nome_avaliacao
     $query = "SELECT
                 r.*,
-                g.respostas AS gabarito_respostas
+                g.respostas AS gabarito_respostas, g.link_comentado
               FROM resultados r
               LEFT JOIN gabaritos g ON r.nome_avaliacao = g.nome_avaliacao
               WHERE r.ra = :ra

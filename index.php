@@ -140,6 +140,7 @@
             </div>
             <div class="p-6">
                 <!-- Grid CSS Responsivo para "pílulas" -->
+                <div id="container-botoes-extras" class="mb-6 flex flex-col md:flex-row gap-4 items-center justify-center md:justify-start"></div>
                 <div id="answers-grid" class="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-8 lg:grid-cols-10 gap-3">
                     <!-- Badges injetadas via JS -->
                 </div>

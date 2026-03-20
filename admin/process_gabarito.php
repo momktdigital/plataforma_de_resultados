@@ -111,20 +111,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
         });
 
         $respostasJson = json_encode($respostasCorretas);
+        $linkComentado = $_POST['link_comentado'] ?? '';
+        if (empty(trim($linkComentado))) {
+            $linkComentado = null;
+        }
 
         // 5. Inserir ou atualizar na tabela gabaritos
         $db = new Database();
         $conn = $db->getConnection();
 
         try {
-            $query = "INSERT INTO gabaritos (nome_avaliacao, respostas)
-                      VALUES (:nome_avaliacao, :respostas)
+            $query = "INSERT INTO gabaritos (nome_avaliacao, respostas, link_comentado)
+                      VALUES (:nome_avaliacao, :respostas, :link_comentado)
                       ON DUPLICATE KEY UPDATE
-                      respostas = VALUES(respostas), updated_at = CURRENT_TIMESTAMP";
+                      respostas = VALUES(respostas), link_comentado = VALUES(link_comentado), updated_at = CURRENT_TIMESTAMP";
 
             $stmt = $conn->prepare($query);
             $stmt->bindParam(':nome_avaliacao', $nomeAvaliacao);
             $stmt->bindParam(':respostas', $respostasJson);
+            $stmt->bindParam(':link_comentado', $linkComentado);
             $stmt->execute();
 
             header("Location: upload_gabarito.php?success=1&msg=" . urlencode("O gabarito com " . count($respostasCorretas) . " respostas foi salvo com sucesso para a avaliação '$nomeAvaliacao'."));

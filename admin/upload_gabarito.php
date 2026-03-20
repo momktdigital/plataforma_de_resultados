@@ -76,8 +76,19 @@ try {
                 <p class="text-xs text-slate-500 mt-2">Escolha a avaliação para a qual este gabarito será aplicado. Todos os alunos, independentemente do período em que fizeram essa mesma avaliação, terão suas notas comparadas com esse gabarito único.</p>
             </div>
 
+            <div class="mb-6">
+                <label class="block text-sm font-bold text-slate-700 mb-2">2. Link do Gabarito Comentado <span class="text-slate-400 font-normal">(Opcional)</span></label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="ph-fill ph-link text-slate-400"></i>
+                    </div>
+                    <input type="url" name="link_comentado" placeholder="https://link.com/arquivo.pdf" class="block w-full pl-10 pr-3 py-3 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary shadow-sm">
+                </div>
+                <p class="text-xs text-slate-500 mt-2">Se você tiver um arquivo PDF ou vídeo com a resolução das questões, cole o link aqui. Ele ficará disponível para os alunos.</p>
+            </div>
+
             <div class="mb-8">
-                <label class="block text-sm font-bold text-slate-700 mb-3">2. Selecione o arquivo do Gabarito .CSV <span class="text-red-500">*</span></label>
+                <label class="block text-sm font-bold text-slate-700 mb-3">3. Selecione o arquivo do Gabarito .CSV <span class="text-red-500">*</span></label>
                 <div class="mt-1 flex justify-center px-6 pt-8 pb-10 border-2 border-slate-300 border-dashed rounded-xl hover:border-primary transition-colors bg-slate-50 group relative">
                     <div class="space-y-2 text-center">
                         <i class="ph-fill ph-file-csv text-5xl text-slate-400 group-hover:text-primary transition-colors mb-4 block"></i>

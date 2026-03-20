@@ -109,7 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <i class="ph-fill ph-trophy text-primary text-4xl"></i>
                         </div>
                         <div>
-                            <span class="text-sm font-bold text-slate-400 uppercase tracking-widest block mb-1">Pontuação Final do Aluno</span>
+                            <span class="text-sm font-bold text-slate-400 uppercase tracking-widest block mb-1">Total de Acertos</span>
                             <span class="text-5xl font-black text-white">${notaGeral}</span>
                         </div>
                     </div>
@@ -172,13 +172,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                // Badge
+                // Badge Modificada com Alternativa
                 const badge = document.createElement('div');
                 badge.className = 'flex flex-col border border-slate-200 rounded-md shadow-sm overflow-hidden w-full transition-transform hover:-translate-y-1';
 
+                let qLabel = temGabarito && gabarito[qKey] ? `${qKey} (${gabarito[qKey]})` : qKey;
+
                 badge.innerHTML = `
                     <div class="${corFundo} text-[10px] text-center font-bold uppercase py-1 border-b border-white/20">
-                        ${qKey}
+                        ${qLabel}
                     </div>
                     <div class="bg-white text-center py-2 font-bold text-lg text-slate-800 ${displayResp === '-' ? 'text-slate-300' : ''}">
                         ${displayResp}
@@ -191,6 +193,21 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!hasAnswers) {
              answersGrid.innerHTML = '<div class="col-span-full p-8 text-center text-slate-400 flex flex-col items-center gap-2"><i class="ph-fill ph-ghost text-4xl"></i><p>Nenhuma resposta registrada para este período.</p></div>';
         }
+
+        // 3. Renderizar Botão do Gabarito Comentado (se existir)
+        const containerBotoes = document.getElementById('container-botoes-extras');
+        if (containerBotoes) {
+            containerBotoes.innerHTML = ''; // Limpa botões antigos
+            if (item.link_comentado && item.link_comentado.trim() !== '') {
+                containerBotoes.innerHTML = `
+                    <a href="${item.link_comentado}" target="_blank" class="w-full md:w-auto inline-flex items-center justify-center px-6 py-3 bg-primary hover:bg-emerald-600 text-white font-bold rounded-lg shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5">
+                        <i class="ph-bold ph-link text-xl mr-2"></i>
+                        Acessar Gabarito Comentado
+                    </a>
+                `;
+            }
+        }
+    };
     };
     // Evento de Submissão do Formulário de Busca
     searchForm.addEventListener('submit', async (e) => {
