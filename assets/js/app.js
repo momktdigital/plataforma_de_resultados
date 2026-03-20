@@ -208,7 +208,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     };
-    };
     // Evento de Submissão do Formulário de Busca
     searchForm.addEventListener('submit', async (e) => {
         e.preventDefault();

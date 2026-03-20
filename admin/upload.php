@@ -137,35 +137,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
             }
             $respostasJson = json_encode($respostas);
 
-            // Extrai as notas finais para um array
-            $notasFinais = array();
-            foreach ($notasFinaisIndexes as $originalName => $index) {
-                if (isset($data[$index])) {
-                    $notasFinais[$originalName] = trim($data[$index]);
-                } else {
-                    $notasFinais[$originalName] = "";
-                }
-            }
-            $notasFinaisJson = json_encode($notasFinais);
-
-            // Executa o Upsert
-            try {
-                $stmt->bindParam(':ra', $ra);
-                $stmt->bindParam(':periodo', $periodo);
-                $stmt->bindParam(':nome_avaliacao', $nomeAvaliacao);
-                $stmt->bindParam(':respostas', $respostasJson);
-                $stmt->bindParam(':notas_finais', $notasFinaisJson);
-                $stmt->execute();
-                $count++;
-            } catch (PDOException $e) {
-                 // Log de erro (opcional, pode ser melhorado para produção)
-                 error_log("Erro ao processar RA $ra: " . $e->getMessage());
+        // Extrai as notas finais para um array
+        $notasFinais = array();
+        foreach ($notasFinaisIndexes as $originalName => $index) {
+            if (isset($data[$index])) {
+                $notasFinais[$originalName] = trim($data[$index]);
+            } else {
+                $notasFinais[$originalName] = "";
             }
         }
+        $notasFinaisJson = json_encode($notasFinais);
 
-        fclose($handle);
+        // Executa o Upsert
+        try {
+            $stmt->bindParam(':ra', $ra);
+            $stmt->bindParam(':periodo', $periodo);
+            $stmt->bindParam(':nome_avaliacao', $nomeAvaliacao);
+            $stmt->bindParam(':respostas', $respostasJson);
+            $stmt->bindParam(':notas_finais', $notasFinaisJson);
+            $stmt->execute();
+            $count++;
+        } catch (PDOException $e) {
+             error_log("Erro ao processar RA $ra: " . $e->getMessage());
+        }
+    }
 
-        header("Location: upload_form.php?success=1&msg=" . urlencode("$count registros processados com sucesso."));
+    fclose($handle);
+
+    // Se o usuário enviou um link comentado ao subir a prova, já criar um registro dummy/atrelado na tabela de gabaritos.
+    $linkComentado = $_POST['link_comentado'] ?? '';
+    if (!empty(trim($linkComentado))) {
+        try {
+            $stmtGab = $conn->prepare("INSERT INTO gabaritos (nome_avaliacao, link_comentado)
+                                       VALUES (:nome, :link)
+                                       ON DUPLICATE KEY UPDATE link_comentado = VALUES(link_comentado)");
+            $stmtGab->bindParam(':nome', $nomeAvaliacao);
+            $stmtGab->bindParam(':link', $linkComentado);
+            $stmtGab->execute();
+        } catch(PDOException $eg) {
+            error_log("Erro ao vincular link do gabarito: " . $eg->getMessage());
+        }
+    }
+
+    header("Location: upload_form.php?success=1&msg=" . urlencode("$count registros processados com sucesso."));
+    die();
         die();
 
     } else {
