@@ -10,15 +10,15 @@ require_once '../includes/Database.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FILES['csv_file']['error'] === UPLOAD_ERR_OK) {
 
-    $avaliacaoId = $_POST['avaliacao_id'] ?? '';
+    $avaliacaoSelecionada = $_POST['avaliacao_selecionada'] ?? '';
 
-    if (empty($avaliacaoId) || strpos($avaliacaoId, '|') === false) {
+    if (empty($avaliacaoSelecionada) || strpos($avaliacaoSelecionada, '|') === false) {
         header('Location: upload_gabarito.php?error=1&msg=' . urlencode('Selecione uma avaliação válida.'));
         die();
     }
 
     // Extrai período e nome da avaliação da string "Periodo|Avaliação"
-    list($periodo, $nomeAvaliacao) = explode('|', $avaliacaoId);
+    list($periodo, $nomeAvaliacao) = explode('|', $avaliacaoSelecionada);
 
     $fileTmpPath = $_FILES['csv_file']['tmp_name'];
     $fileName = $_FILES['csv_file']['name'];
@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
         // 2. Remove o BOM (Byte Order Mark) do primeiro item do cabeçalho
         $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]);
 
-        // 3. Mapeia os índices das colunas de questões (Q1 a Q100)
+        // 3. Mapeia os índices das colunas de questões (Q1 a Q100) no cabeçalho
         $qIndexes = array();
         foreach ($header as $index => $colName) {
             $cleanName = mb_strtoupper(trim($colName), 'UTF-8');
@@ -61,33 +61,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
         }
 
         if (empty($qIndexes)) {
-            header('Location: upload_gabarito.php?error=1&msg=' . urlencode('Não foram encontradas colunas de questões (Q1, Q2, etc.) no cabeçalho.'));
+            header('Location: upload_gabarito.php?error=1&msg=' . urlencode('Não foram encontradas colunas de questões (Q1, Q2, etc.) no cabeçalho (Linha 1).'));
             fclose($handle);
             die();
         }
 
-        // 4. Lê a primeira linha de dados para extrair as respostas do gabarito
+        // 4. Lê a SEGUNDA linha de dados para extrair as respostas do gabarito
         $gabaritoData = fgetcsv($handle, 10000, $delimiter);
         fclose($handle);
 
         if (!$gabaritoData) {
-            header('Location: upload_gabarito.php?error=1&msg=' . urlencode('O arquivo CSV não contém uma linha com as respostas corretas.'));
+            header('Location: upload_gabarito.php?error=1&msg=' . urlencode('O arquivo CSV não contém uma segunda linha com as respostas corretas.'));
             die();
         }
 
+        // 5. Mapeia os dados da segunda linha baseando-se nos índices da primeira linha
         $respostasCorretas = array();
-        foreach ($qIndexes as $qName => $index) {
-            if (isset($gabaritoData[$index])) {
-                // Remove espaços e converte para maiúsculo (A, B, C...)
-                $respostasCorretas[$qName] = mb_strtoupper(trim($gabaritoData[$index]), 'UTF-8');
-            } else {
-                $respostasCorretas[$qName] = "";
+        for ($i = 1; $i <= 100; $i++) {
+            $qName = "Q$i";
+            if (isset($qIndexes[$qName])) {
+                $idx = $qIndexes[$qName];
+                if (isset($gabaritoData[$idx])) {
+                    // Remove espaços e converte para maiúsculo (A, B, C...)
+                    $respostasCorretas[$qName] = mb_strtoupper(trim($gabaritoData[$idx]), 'UTF-8');
+                } else {
+                    $respostasCorretas[$qName] = "";
+                }
             }
+            // Se a questão não existir no cabeçalho, não a incluímos no JSON (ou pode incluir vazia se quiser forçar Q1-Q100).
+            // A lógica atual apenas salva o que veio no CSV.
         }
 
         $respostasJson = json_encode($respostasCorretas);
 
-        // 5. Inserir ou atualizar na tabela gabaritos
+        // 6. Inserir ou atualizar na tabela gabaritos
         $db = new Database();
         $conn = $db->getConnection();
 

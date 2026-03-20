@@ -59,13 +59,14 @@ try {
             <div class="mb-6">
                 <label class="block text-sm font-bold text-slate-700 mb-2">1. Selecione a Avaliação <span class="text-red-500">*</span></label>
                 <div class="relative">
-                    <select name="avaliacao_id" required class="block w-full pl-3 pr-8 py-3 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary shadow-sm bg-white appearance-none">
+                    <select name="avaliacao_selecionada" required class="block w-full pl-3 pr-8 py-3 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary shadow-sm bg-white appearance-none">
                         <option value="">-- Escolha uma Avaliação já cadastrada --</option>
                         <?php foreach ($avaliacoesList as $av): ?>
                             <?php
                                 // O valor do select será "Periodo|Avaliação"
                                 $val = htmlspecialchars($av['periodo'] . '|' . $av['nome_avaliacao']);
-                                $label = htmlspecialchars($av['periodo'] . ' - ' . $av['nome_avaliacao']);
+                                // O label visível será "Avaliação (Periodo)"
+                                $label = htmlspecialchars($av['nome_avaliacao']) . ' (' . htmlspecialchars($av['periodo']) . ')';
                             ?>
                             <option value="<?= $val ?>"><?= $label ?></option>
                         <?php endforeach; ?>
@@ -88,7 +89,7 @@ try {
                                 <input id="csv_file" name="csv_file" type="file" accept=".csv" class="sr-only" required onchange="document.getElementById('file-name').innerHTML = '<i class=\'ph-fill ph-check-square mr-2 text-primary\'></i> ' + this.files[0].name">
                             </label>
                         </div>
-                        <p class="text-xs text-slate-500 mt-2 pt-2">Apenas arquivos .CSV com uma única linha de respostas válidas (Q1, Q2, etc.).</p>
+                        <p class="text-xs text-slate-500 mt-2 pt-2">Apenas arquivos .CSV com Cabeçalho e 1 Linha de respostas.</p>
                         <p id="file-name" class="text-sm font-bold text-slate-800 mt-4 flex justify-center items-center h-6"></p>
                     </div>
                 </div>
