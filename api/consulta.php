@@ -25,8 +25,8 @@ try {
     $conn = $db->getConnection();
 
     // Consulta os resultados pelo RA, incluindo a nova coluna `nome_avaliacao`
-    $query = "SELECT periodo, nome_avaliacao, respostas, notas_finais, updated_at
-              FROM resultados
+    $query = "SELECT r.periodo, r.nome_avaliacao, r.respostas AS respostas_aluno, r.notas_finais, r.updated_at, g.respostas AS gabarito
+              FROM resultados r LEFT JOIN gabaritos g ON r.periodo = g.periodo AND r.nome_avaliacao = g.nome_avaliacao
               WHERE ra = :ra
               ORDER BY id DESC";
 
@@ -39,8 +39,9 @@ try {
 
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             // Decodifica os JSONs do banco para arrays associativos do PHP
-            $row['respostas'] = json_decode($row['respostas'], true);
+            $row['respostas_aluno'] = json_decode($row['respostas_aluno'], true);
             $row['notas_finais'] = json_decode($row['notas_finais'], true);
+            $row['gabarito'] = $row['gabarito'] ? json_decode($row['gabarito'], true) : [];
 
             $resultados[] = $row;
         }

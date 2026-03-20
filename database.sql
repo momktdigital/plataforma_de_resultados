@@ -22,3 +22,14 @@ CREATE TABLE IF NOT EXISTS `resultados` (
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY `uk_ra_periodo_avaliacao` (`ra`, `periodo`, `nome_avaliacao`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Tabela de Gabaritos
+CREATE TABLE IF NOT EXISTS `gabaritos` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `periodo` VARCHAR(100) NOT NULL,
+    `nome_avaliacao` VARCHAR(150) NOT NULL,
+    `respostas` JSON,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY `uk_periodo_avaliacao` (`periodo`, `nome_avaliacao`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

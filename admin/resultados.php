@@ -13,7 +13,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'delete_periodo') {
     $periodoDel = $_POST['periodo_delete'] ?? '';
     if (!empty($periodoDel)) {
         try {
-            $stmt = $conn->prepare("DELETE FROM resultados WHERE periodo = :periodo");
+            $stmt = $conn->prepare("DELETE FROM resultados r LEFT JOIN gabaritos g ON r.periodo = g.periodo AND r.nome_avaliacao = g.nome_avaliacao WHERE periodo = :periodo");
             $stmt->bindParam(':periodo', $periodoDel);
             $stmt->execute();
             $mensagem = "Período '$periodoDel' excluído com sucesso!";
@@ -49,7 +49,7 @@ $offset = ($page - 1) * $limit;
 // Buscar lista de períodos para o select filter
 $periodosList = [];
 try {
-    $stmt = $conn->query("SELECT DISTINCT periodo FROM resultados ORDER BY periodo DESC");
+    $stmt = $conn->query("SELECT DISTINCT periodo FROM resultados r LEFT JOIN gabaritos g ON r.periodo = g.periodo AND r.nome_avaliacao = g.nome_avaliacao ORDER BY periodo DESC");
     $periodosList = $stmt->fetchAll(PDO::FETCH_COLUMN);
 } catch (PDOException $e) {
     // Ignorar ou logar erro
@@ -73,7 +73,7 @@ $whereSql = count($where) > 0 ? "WHERE " . implode(" AND ", $where) : "";
 // Contar total para paginação
 $totalRows = 0;
 try {
-    $countSql = "SELECT COUNT(*) AS total FROM resultados $whereSql";
+    $countSql = "SELECT COUNT(*) AS total FROM resultados r LEFT JOIN gabaritos g ON r.periodo = g.periodo AND r.nome_avaliacao = g.nome_avaliacao $whereSql";
     $stmtCount = $conn->prepare($countSql);
     foreach ($params as $key => $val) {
         $stmtCount->bindValue($key, $val);
@@ -89,8 +89,8 @@ $totalPages = ceil($totalRows / $limit);
 // Buscar os dados da página atual
 $resultados = [];
 try {
-    $sql = "SELECT id, ra, periodo, nome_avaliacao, respostas, notas_finais, updated_at
-            FROM resultados
+    $sql = "SELECT r.id, r.ra, r.periodo, r.nome_avaliacao, r.respostas AS respostas_aluno, r.notas_finais, r.updated_at, g.respostas AS gabarito
+            FROM resultados r LEFT JOIN gabaritos g ON r.periodo = g.periodo AND r.nome_avaliacao = g.nome_avaliacao
             $whereSql
             ORDER BY updated_at DESC
             LIMIT :limit OFFSET :offset";
@@ -210,7 +210,8 @@ try {
                                         data-ra="<?= htmlspecialchars($row['ra']) ?>"
                                         data-avaliacao="<?= htmlspecialchars($row['nome_avaliacao']) ?>"
                                         data-periodo="<?= htmlspecialchars($row['periodo']) ?>"
-                                        data-respostas='<?= htmlspecialchars($row['respostas'], ENT_QUOTES, 'UTF-8') ?>'
+                                        data-respostas='<?= htmlspecialchars($row['respostas_aluno'], ENT_QUOTES, 'UTF-8') ?>'
+                                        data-gabarito='<?= htmlspecialchars($row['gabarito'], ENT_QUOTES, 'UTF-8') ?>'
                                         data-notas='<?= htmlspecialchars($row['notas_finais'], ENT_QUOTES, 'UTF-8') ?>'
                                         class="text-primary hover:text-emerald-700 transition-colors flex items-center justify-end w-full">
                                     <i class="ph ph-eye text-lg mr-1"></i> Visualizar
@@ -374,6 +375,7 @@ function viewDetails(buttonElement) {
     const avaliacao = buttonElement.getAttribute('data-avaliacao');
     const periodo = buttonElement.getAttribute('data-periodo');
     const respostasRaw = buttonElement.getAttribute('data-respostas');
+    const gabaritoRaw = buttonElement.getAttribute('data-gabarito');
     const notasRaw = buttonElement.getAttribute('data-notas');
 
     // 2. Preencher Header
@@ -383,8 +385,10 @@ function viewDetails(buttonElement) {
 
     // 3. Parse JSON
     let respostas = {};
+    let gabarito = {};
     let notas = {};
     try { respostas = JSON.parse(respostasRaw || '{}'); } catch(e){}
+    try { gabarito = JSON.parse(gabaritoRaw || '{}'); } catch(e){}
     try { notas = JSON.parse(notasRaw || '{}'); } catch(e){}
 
     // 4. Renderizar Notas (Cards CSS)
@@ -469,9 +473,13 @@ function viewDetails(buttonElement) {
             containerNotas.appendChild(card);
         }
     }
-    // 5. Renderizar Respostas (Grid de Badges)
+
+    // 5. Renderizar Respostas (Grid de Badges com Comparação de Gabarito)
     const containerRespostas = document.getElementById('modal-respostas');
     containerRespostas.innerHTML = ''; // Clear
+
+    // Verifica se temos um gabarito cadastrado
+    const temGabarito = Object.keys(gabarito).length > 0;
 
     // Para manter na ordem de Q1 a Q100 (força a ordem)
     let hasAnswers = false;
@@ -482,11 +490,29 @@ function viewDetails(buttonElement) {
             const respValue = respostas[qKey];
             const displayResp = (respValue === '' || respValue === null) ? '-' : respValue;
 
+            let corFundo = 'bg-slate-400'; // Default se não tiver gabarito
+
+            if (temGabarito && gabarito.hasOwnProperty(qKey)) {
+                const correta = gabarito[qKey];
+                if (correta === '') {
+                    // Questão anulada/sem gabarito
+                    corFundo = 'bg-slate-400';
+                } else if (displayResp === correta) {
+                    corFundo = 'bg-green-500'; // Acertou
+                } else {
+                    corFundo = 'bg-red-500'; // Errou
+                }
+            }
+
             const badge = document.createElement('div');
-            badge.className = 'flex flex-col bg-slate-50 border border-slate-200 rounded-md overflow-hidden';
+            badge.className = 'flex flex-col border border-slate-200 rounded shadow-sm overflow-hidden w-full';
             badge.innerHTML = `
-                <div class="bg-slate-200 text-[10px] text-slate-600 font-bold text-center py-0.5">${qKey}</div>
-                <div class="text-center font-bold text-sm text-slate-800 py-1 ${displayResp === '-' ? 'text-slate-300' : ''}">${displayResp}</div>
+                <div class="${corFundo} text-white text-[10px] text-center font-bold py-1">
+                    ${qKey}
+                </div>
+                <div class="bg-white text-center font-bold text-sm text-slate-700 py-1.5 ${displayResp === '-' ? 'text-slate-300' : ''}">
+                    ${displayResp}
+                </div>
             `;
             containerRespostas.appendChild(badge);
         }
@@ -500,6 +526,7 @@ function viewDetails(buttonElement) {
     document.getElementById('modal-details').classList.remove('hidden');
 }
 
+// Lógica para o botão de danger zone (Truncate)
 // Lógica para o botão de danger zone (Truncate)
 function checkTruncate() {
     const input = document.getElementById('truncate-confirm').value;

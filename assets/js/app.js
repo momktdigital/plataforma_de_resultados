@@ -141,8 +141,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 summaryPanel.appendChild(card);
             }
         }
-        // 2. Renderizar Respostas (Q1-Q100)
-        const respostas = item.respostas || {};
+        // 2. Renderizar Respostas (Q1-Q100) com Comparação de Gabarito
+        const respostas = item.respostas_aluno || {};
+        const gabarito = item.gabarito || {};
+        const temGabarito = Object.keys(gabarito).length > 0;
 
         // Vamos garantir a ordem de Q1 a Q100 (ou as que existirem)
         const totalQuestoes = 100;
@@ -157,15 +159,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Se a resposta estiver vazia, exibimos um traço ou N/A
                 const displayResp = (rValue === '' || rValue === null) ? '-' : rValue;
 
+                let corFundo = 'bg-slate-400 text-white'; // Default cinza
+
+                if (temGabarito && gabarito.hasOwnProperty(qKey)) {
+                    const correta = gabarito[qKey];
+                    if (correta === '') {
+                        corFundo = 'bg-slate-400 text-white';
+                    } else if (displayResp === correta) {
+                        corFundo = 'bg-green-500 text-white'; // Acertou
+                    } else {
+                        corFundo = 'bg-red-500 text-white'; // Errou
+                    }
+                }
+
                 // Badge
                 const badge = document.createElement('div');
-                badge.className = 'flex flex-col rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-white hover:border-primary hover:shadow-md transition-all group';
+                badge.className = 'flex flex-col border border-slate-200 rounded-md shadow-sm overflow-hidden w-full transition-transform hover:-translate-y-1';
 
                 badge.innerHTML = `
-                    <div class="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase text-center py-1 border-b border-slate-200 group-hover:bg-emerald-50 group-hover:text-primary transition-colors">
+                    <div class="${corFundo} text-[10px] text-center font-bold uppercase py-1 border-b border-white/20">
                         ${qKey}
                     </div>
-                    <div class="text-center py-3 font-bold text-lg text-slate-800 ${displayResp === '-' ? 'text-slate-300' : ''}">
+                    <div class="bg-white text-center py-2 font-bold text-lg text-slate-800 ${displayResp === '-' ? 'text-slate-300' : ''}">
                         ${displayResp}
                     </div>
                 `;
@@ -177,7 +192,6 @@ document.addEventListener('DOMContentLoaded', () => {
              answersGrid.innerHTML = '<div class="col-span-full p-8 text-center text-slate-400 flex flex-col items-center gap-2"><i class="ph-fill ph-ghost text-4xl"></i><p>Nenhuma resposta registrada para este período.</p></div>';
         }
     };
-
     // Evento de Submissão do Formulário de Busca
     searchForm.addEventListener('submit', async (e) => {
         e.preventDefault();
