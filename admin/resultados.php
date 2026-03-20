@@ -89,11 +89,13 @@ $totalPages = ceil($totalRows / $limit);
 // Buscar os dados da página atual
 $resultados = [];
 try {
-    $sql = "SELECT r.id, r.ra, r.periodo, r.nome_avaliacao, r.respostas AS respostas_aluno, r.notas_finais, r.updated_at, g.respostas AS gabarito
-            FROM resultados r LEFT JOIN gabaritos g ON r.nome_avaliacao = g.nome_avaliacao
-            $whereSql
-            ORDER BY updated_at DESC
-            LIMIT :limit OFFSET :offset";
+// Query para corrigir o JOIN do Gabarito no Admin
+$sql = "SELECT r.id, r.ra, r.periodo, r.nome_avaliacao, r.respostas, r.notas_finais, r.updated_at, g.respostas AS gabarito
+        FROM resultados r
+        LEFT JOIN gabaritos g ON r.nome_avaliacao = g.nome_avaliacao
+        $whereSql
+        ORDER BY r.updated_at DESC
+        LIMIT :limit OFFSET :offset";
 
     $stmt = $conn->prepare($sql);
 

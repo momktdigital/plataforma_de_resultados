@@ -24,11 +24,14 @@ try {
     $db = new Database();
     $conn = $db->getConnection();
 
-    // Consulta os resultados pelo RA, incluindo a nova coluna `nome_avaliacao`
-    $query = "SELECT r.periodo, r.nome_avaliacao, r.respostas AS respostas_aluno, r.notas_finais, r.updated_at, g.respostas AS gabarito
-              FROM resultados r LEFT JOIN gabaritos g ON r.nome_avaliacao = g.nome_avaliacao
-              WHERE ra = :ra
-              ORDER BY id DESC";
+    // Consulta os resultados pelo RA fazendo JOIN no gabarito apenas pela nome_avaliacao
+    $query = "SELECT
+                r.*,
+                g.respostas AS gabarito_respostas
+              FROM resultados r
+              LEFT JOIN gabaritos g ON r.nome_avaliacao = g.nome_avaliacao
+              WHERE r.ra = :ra
+              ORDER BY r.id DESC";
 
     $stmt = $conn->prepare($query);
     $stmt->bindParam(':ra', $ra, PDO::PARAM_STR);
@@ -39,9 +42,13 @@ try {
 
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             // Decodifica os JSONs do banco para arrays associativos do PHP
-            $row['respostas_aluno'] = json_decode($row['respostas_aluno'], true);
-            $row['notas_finais'] = json_decode($row['notas_finais'], true);
-            $row['gabarito'] = $row['gabarito'] ? json_decode($row['gabarito'], true) : [];
+            $row['respostas_aluno'] = json_decode($row['respostas'], true) ?: [];
+            $row['notas_finais'] = json_decode($row['notas_finais'], true) ?: [];
+            $row['gabarito'] = !empty($row['gabarito_respostas']) ? json_decode($row['gabarito_respostas'], true) : [];
+
+            // Remove as colunas cruas em string JSON para enviar um payload limpo
+            unset($row['respostas']);
+            unset($row['gabarito_respostas']);
 
             $resultados[] = $row;
         }
@@ -63,11 +70,14 @@ try {
 
 } catch (PDOException $e) {
     http_response_code(500); // Internal Server Error
+
+    // Agora retornamos o erro real no JSON para facilitar o debug (embora em produção não seja ideal)
     echo json_encode([
         'status' => 'error',
-        'message' => 'Erro interno ao consultar o banco de dados.'
+        'message' => 'Erro interno ao consultar o banco de dados.',
+        'error_detail' => $e->getMessage()
     ]);
-    // Log do erro real (apenas para o servidor)
+
     error_log("Erro na API de consulta: " . $e->getMessage());
 }
 ?>

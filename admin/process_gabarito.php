@@ -48,74 +48,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
         // 2. Remove o BOM (Byte Order Mark) do primeiro item do cabeçalho
         $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]);
 
-        // 3. Mapeamento Flexível do Cabeçalho
-        // Ignora "Nome", "Período" e busca "Q1", "Questão 1", etc.
-        $qIndexes = array();
+        // 3. Mapeamento Flexível do Cabeçalho Vertical
+        $idxQuestao = -1;
+        $idxResposta = -1;
+
         foreach ($header as $index => $colName) {
             $cleanName = mb_strtoupper(trim($colName), 'UTF-8');
 
-            // Regex para capturar o número da questão logo após "Q" ou "QUESTÃO"
-            // Suporta: "Q1", "Q 1", "QUESTÃO 1", "QUESTAO 1"
-            if (preg_match('/^(?:Q|QUESTÃO|QUESTAO)\s*(\d+)$/', $cleanName, $matches)) {
-                $numeroQuestao = $matches[1];
-                // Se for até 100, a gente padroniza como Q1, Q2, etc.
-                if ((int)$numeroQuestao >= 1 && (int)$numeroQuestao <= 100) {
-                    $padronizado = "Q" . $numeroQuestao;
-                    $qIndexes[$padronizado] = $index;
-                }
+            // Possíveis nomes para a coluna de Número da Questão
+            if (in_array($cleanName, ['QUESTÃO', 'QUESTAO', 'NUMERO', 'NÚMERO', 'Q', '#'])) {
+                $idxQuestao = $index;
+            }
+
+            // Possíveis nomes para a coluna de Alternativa Correta
+            if (in_array($cleanName, ['RESPOSTA', 'GABARITO', 'ALTERNATIVA', 'LETRA', 'CORRETA'])) {
+                $idxResposta = $index;
             }
         }
 
-        if (empty($qIndexes)) {
-            header('Location: upload_gabarito.php?error=1&msg=' . urlencode('Não foram encontradas colunas de questões (ex: Questão 1, Q1) no cabeçalho.'));
+        if ($idxQuestao === -1 || $idxResposta === -1) {
+            header('Location: upload_gabarito.php?error=1&msg=' . urlencode('O CSV deve conter uma coluna para a Questão (ex: "Questão" ou "Número") e uma para a Resposta (ex: "Gabarito" ou "Alternativa").'));
             fclose($handle);
             die();
         }
 
-        // 4. Lê as linhas de dados até encontrar a primeira linha válida com respostas
+        // 4. Lê as linhas de dados do CSV Vertical
         $respostasCorretas = array();
-        $gabaritoProcessado = false;
 
         while (($gabaritoData = fgetcsv($handle, 10000, $delimiter)) !== FALSE) {
             // Pula linhas vazias
             if (empty(array_filter($gabaritoData))) continue;
 
-            $temRespostaValida = false;
-            $respostasTemp = array();
+            if (isset($gabaritoData[$idxQuestao]) && isset($gabaritoData[$idxResposta])) {
+                $rawQuestao = trim($gabaritoData[$idxQuestao]);
+                $rawResposta = mb_strtoupper(trim($gabaritoData[$idxResposta]), 'UTF-8');
 
-            // Mapeia os dados da linha baseando-se nos índices do cabeçalho
-            for ($i = 1; $i <= 100; $i++) {
-                $qName = "Q$i";
-                if (isset($qIndexes[$qName])) {
-                    $idx = $qIndexes[$qName];
-                    if (isset($gabaritoData[$idx]) && trim($gabaritoData[$idx]) !== '') {
-                        $resposta = mb_strtoupper(trim($gabaritoData[$idx]), 'UTF-8');
-                        $respostasTemp[$qName] = $resposta;
+                // Extrai apenas os números da coluna questão (caso venha "Questão 1" ou "Q01")
+                if (preg_match('/\d+/', $rawQuestao, $matches)) {
+                    $numeroQuestao = (int)$matches[0];
 
-                        // Consideramos válido apenas letras únicas ou respostas lógicas
-                        if (preg_match('/^[A-Z]$/', $resposta)) {
-                            $temRespostaValida = true;
+                    // Valida se é uma questão de 1 a 100 e se a resposta tem apenas 1 caractere ou está vazia (anulada)
+                    if ($numeroQuestao >= 1 && $numeroQuestao <= 100) {
+                        // Aceita apenas letras A-Z ou string vazia
+                        if (preg_match('/^[A-Z]$/', $rawResposta) || $rawResposta === '') {
+                            $respostasCorretas["Q" . $numeroQuestao] = $rawResposta;
                         }
-                    } else {
-                        $respostasTemp[$qName] = "";
                     }
                 }
-            }
-
-            // Se encontrou respostas válidas (letras), assume que esta é a linha correta do gabarito
-            if ($temRespostaValida) {
-                $respostasCorretas = $respostasTemp;
-                $gabaritoProcessado = true;
-                break; // Ignora as próximas linhas do CSV
             }
         }
 
         fclose($handle);
 
-        if (!$gabaritoProcessado) {
-            header('Location: upload_gabarito.php?error=1&msg=' . urlencode('O arquivo CSV não contém uma linha com letras válidas para o gabarito.'));
+        if (empty($respostasCorretas)) {
+            header('Location: upload_gabarito.php?error=1&msg=' . urlencode('Nenhuma resposta válida encontrada no arquivo CSV.'));
             die();
         }
+
+        // Ordena as chaves pela numeração correta (Q1, Q2... Q10) ao invés de alfabética (Q1, Q10, Q2)
+        uksort($respostasCorretas, function($a, $b) {
+            return (int)substr($a, 1) - (int)substr($b, 1);
+        });
 
         $respostasJson = json_encode($respostasCorretas);
 
@@ -134,7 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
             $stmt->bindParam(':respostas', $respostasJson);
             $stmt->execute();
 
-            header("Location: upload_gabarito.php?success=1&msg=" . urlencode("O gabarito com " . count(array_filter($respostasCorretas)) . " respostas foi salvo com sucesso para a avaliação '$nomeAvaliacao'."));
+            header("Location: upload_gabarito.php?success=1&msg=" . urlencode("O gabarito com " . count($respostasCorretas) . " respostas foi salvo com sucesso para a avaliação '$nomeAvaliacao'."));
             die();
 
         } catch (PDOException $e) {
