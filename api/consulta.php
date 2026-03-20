@@ -26,7 +26,7 @@ try {
 
     // Consulta os resultados pelo RA, incluindo a nova coluna `nome_avaliacao`
     $query = "SELECT r.periodo, r.nome_avaliacao, r.respostas AS respostas_aluno, r.notas_finais, r.updated_at, g.respostas AS gabarito
-              FROM resultados r LEFT JOIN gabaritos g ON r.periodo = g.periodo AND r.nome_avaliacao = g.nome_avaliacao
+              FROM resultados r LEFT JOIN gabaritos g ON r.nome_avaliacao = g.nome_avaliacao
               WHERE ra = :ra
               ORDER BY id DESC";
 

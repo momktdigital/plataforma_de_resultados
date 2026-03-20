@@ -10,15 +10,12 @@ require_once '../includes/Database.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FILES['csv_file']['error'] === UPLOAD_ERR_OK) {
 
-    $avaliacaoSelecionada = $_POST['avaliacao_selecionada'] ?? '';
+    $nomeAvaliacao = $_POST['nome_avaliacao'] ?? '';
 
-    if (empty($avaliacaoSelecionada) || strpos($avaliacaoSelecionada, '|') === false) {
+    if (empty($nomeAvaliacao)) {
         header('Location: upload_gabarito.php?error=1&msg=' . urlencode('Selecione uma avaliação válida.'));
         die();
     }
-
-    // Extrai período e nome da avaliação da string "Periodo|Avaliação"
-    list($periodo, $nomeAvaliacao) = explode('|', $avaliacaoSelecionada);
 
     $fileTmpPath = $_FILES['csv_file']['tmp_name'];
     $fileName = $_FILES['csv_file']['name'];
@@ -88,8 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
                     $respostasCorretas[$qName] = "";
                 }
             }
-            // Se a questão não existir no cabeçalho, não a incluímos no JSON (ou pode incluir vazia se quiser forçar Q1-Q100).
-            // A lógica atual apenas salva o que veio no CSV.
+            // As outras colunas como "Período" são automaticamente ignoradas pois não entram no array qIndexes
         }
 
         $respostasJson = json_encode($respostasCorretas);
@@ -99,18 +95,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
         $conn = $db->getConnection();
 
         try {
-            $query = "INSERT INTO gabaritos (periodo, nome_avaliacao, respostas)
-                      VALUES (:periodo, :nome_avaliacao, :respostas)
+            $query = "INSERT INTO gabaritos (nome_avaliacao, respostas)
+                      VALUES (:nome_avaliacao, :respostas)
                       ON DUPLICATE KEY UPDATE
                       respostas = VALUES(respostas), updated_at = CURRENT_TIMESTAMP";
 
             $stmt = $conn->prepare($query);
-            $stmt->bindParam(':periodo', $periodo);
             $stmt->bindParam(':nome_avaliacao', $nomeAvaliacao);
             $stmt->bindParam(':respostas', $respostasJson);
             $stmt->execute();
 
-            header("Location: upload_gabarito.php?success=1&msg=" . urlencode("O gabarito com " . count($respostasCorretas) . " respostas foi salvo e vinculado à avaliação '$nomeAvaliacao' do período '$periodo'."));
+            header("Location: upload_gabarito.php?success=1&msg=" . urlencode("O gabarito com " . count($respostasCorretas) . " respostas foi salvo com sucesso para a avaliação '$nomeAvaliacao'."));
             die();
 
         } catch (PDOException $e) {

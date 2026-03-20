@@ -5,10 +5,10 @@ require_once '../includes/Database.php';
 $db = new Database();
 $conn = $db->getConnection();
 
-// Buscar todos os (período, nome_avaliacao) únicos já cadastrados
+// Buscar todos os (nome_avaliacao) únicos já cadastrados
 $avaliacoesList = [];
 try {
-    $stmt = $conn->query("SELECT DISTINCT periodo, nome_avaliacao FROM resultados ORDER BY periodo DESC, nome_avaliacao ASC");
+    $stmt = $conn->query("SELECT DISTINCT nome_avaliacao FROM resultados ORDER BY nome_avaliacao ASC");
     $avaliacoesList = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     // Ignorar ou logar erro
@@ -59,14 +59,12 @@ try {
             <div class="mb-6">
                 <label class="block text-sm font-bold text-slate-700 mb-2">1. Selecione a Avaliação <span class="text-red-500">*</span></label>
                 <div class="relative">
-                    <select name="avaliacao_selecionada" required class="block w-full pl-3 pr-8 py-3 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary shadow-sm bg-white appearance-none">
+                    <select name="nome_avaliacao" required class="block w-full pl-3 pr-8 py-3 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary shadow-sm bg-white appearance-none">
                         <option value="">-- Escolha uma Avaliação já cadastrada --</option>
                         <?php foreach ($avaliacoesList as $av): ?>
                             <?php
-                                // O valor do select será "Periodo|Avaliação"
-                                $val = htmlspecialchars($av['periodo'] . '|' . $av['nome_avaliacao']);
-                                // O label visível será "Avaliação (Periodo)"
-                                $label = htmlspecialchars($av['nome_avaliacao']) . ' (' . htmlspecialchars($av['periodo']) . ')';
+                                $val = htmlspecialchars($av['nome_avaliacao']);
+                                $label = htmlspecialchars($av['nome_avaliacao']);
                             ?>
                             <option value="<?= $val ?>"><?= $label ?></option>
                         <?php endforeach; ?>
@@ -75,7 +73,7 @@ try {
                         <i class="ph-bold ph-caret-down"></i>
                     </div>
                 </div>
-                <p class="text-xs text-slate-500 mt-2">Escolha a avaliação para a qual este gabarito será aplicado. As avaliações listadas são aquelas cujos resultados já foram importados.</p>
+                <p class="text-xs text-slate-500 mt-2">Escolha a avaliação para a qual este gabarito será aplicado. Todos os alunos, independentemente do período em que fizeram essa mesma avaliação, terão suas notas comparadas com esse gabarito único.</p>
             </div>
 
             <div class="mb-8">
@@ -98,9 +96,9 @@ try {
             <div class="bg-blue-50 border border-blue-200 rounded-xl p-6 mb-8 text-sm text-blue-800 shadow-inner">
                 <h4 class="font-bold flex items-center mb-3 text-blue-900 text-base"><i class="ph-fill ph-info mr-2 text-blue-600"></i> Como formatar o Gabarito:</h4>
                 <ul class="space-y-2 pl-2">
-                    <li class="flex items-start"><i class="ph-bold ph-check text-blue-500 mt-0.5 mr-2"></i> <span>A <strong>primeira linha</strong> deve ser o cabeçalho contendo "Q1, Q2, Q3...".</span></li>
-                    <li class="flex items-start"><i class="ph-bold ph-check text-blue-500 mt-0.5 mr-2"></i> <span>A <strong>segunda linha</strong> deve conter as respostas corretas (ex: A, B, C, D, E).</span></li>
-                    <li class="flex items-start"><i class="ph-bold ph-arrows-clockwise text-blue-500 mt-0.5 mr-2"></i> <span>Se você subir um novo gabarito para a mesma Avaliação/Período, ele substituirá o anterior.</span></li>
+                    <li class="flex items-start"><i class="ph-bold ph-check text-blue-500 mt-0.5 mr-2"></i> <span>A <strong>primeira linha</strong> deve ser o cabeçalho contendo "Q1, Q2, Q3...". (Outras colunas, como "Período", serão ignoradas).</span></li>
+                    <li class="flex items-start"><i class="ph-bold ph-check text-blue-500 mt-0.5 mr-2"></i> <span>A <strong>segunda linha</strong> deve conter as respostas corretas correspondentes a cada questão (ex: A, B, C, D, E).</span></li>
+                    <li class="flex items-start"><i class="ph-bold ph-arrows-clockwise text-blue-500 mt-0.5 mr-2"></i> <span>Se você subir um novo gabarito para a mesma Avaliação, ele substituirá o anterior.</span></li>
                 </ul>
             </div>
 

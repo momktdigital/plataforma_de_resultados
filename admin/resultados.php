@@ -13,7 +13,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'delete_periodo') {
     $periodoDel = $_POST['periodo_delete'] ?? '';
     if (!empty($periodoDel)) {
         try {
-            $stmt = $conn->prepare("DELETE FROM resultados r LEFT JOIN gabaritos g ON r.periodo = g.periodo AND r.nome_avaliacao = g.nome_avaliacao WHERE periodo = :periodo");
+            $stmt = $conn->prepare("DELETE FROM resultados r LEFT JOIN gabaritos g ON r.nome_avaliacao = g.nome_avaliacao WHERE periodo = :periodo");
             $stmt->bindParam(':periodo', $periodoDel);
             $stmt->execute();
             $mensagem = "Período '$periodoDel' excluído com sucesso!";
@@ -49,7 +49,7 @@ $offset = ($page - 1) * $limit;
 // Buscar lista de períodos para o select filter
 $periodosList = [];
 try {
-    $stmt = $conn->query("SELECT DISTINCT periodo FROM resultados r LEFT JOIN gabaritos g ON r.periodo = g.periodo AND r.nome_avaliacao = g.nome_avaliacao ORDER BY periodo DESC");
+    $stmt = $conn->query("SELECT DISTINCT periodo FROM resultados r LEFT JOIN gabaritos g ON r.nome_avaliacao = g.nome_avaliacao ORDER BY periodo DESC");
     $periodosList = $stmt->fetchAll(PDO::FETCH_COLUMN);
 } catch (PDOException $e) {
     // Ignorar ou logar erro
@@ -73,7 +73,7 @@ $whereSql = count($where) > 0 ? "WHERE " . implode(" AND ", $where) : "";
 // Contar total para paginação
 $totalRows = 0;
 try {
-    $countSql = "SELECT COUNT(*) AS total FROM resultados r LEFT JOIN gabaritos g ON r.periodo = g.periodo AND r.nome_avaliacao = g.nome_avaliacao $whereSql";
+    $countSql = "SELECT COUNT(*) AS total FROM resultados r LEFT JOIN gabaritos g ON r.nome_avaliacao = g.nome_avaliacao $whereSql";
     $stmtCount = $conn->prepare($countSql);
     foreach ($params as $key => $val) {
         $stmtCount->bindValue($key, $val);
@@ -90,7 +90,7 @@ $totalPages = ceil($totalRows / $limit);
 $resultados = [];
 try {
     $sql = "SELECT r.id, r.ra, r.periodo, r.nome_avaliacao, r.respostas AS respostas_aluno, r.notas_finais, r.updated_at, g.respostas AS gabarito
-            FROM resultados r LEFT JOIN gabaritos g ON r.periodo = g.periodo AND r.nome_avaliacao = g.nome_avaliacao
+            FROM resultados r LEFT JOIN gabaritos g ON r.nome_avaliacao = g.nome_avaliacao
             $whereSql
             ORDER BY updated_at DESC
             LIMIT :limit OFFSET :offset";
