@@ -126,16 +126,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
             // A Regra de Ouro: "NOME1" é completamente ignorado. Não o lemos para nenhuma variável.
             // O índice $nomeIndex foi identificado antes e não é usado em lugar nenhum da leitura de dados.
 
-            // Extrai as respostas (Q1 a Q100) para um array
-            $respostas = array();
-            foreach ($qIndexes as $qName => $index) {
-                if (isset($data[$index])) {
-                    $respostas[$qName] = trim($data[$index]);
-                } else {
-                     $respostas[$qName] = "";
-                }
+        // Extrai as respostas (Q1 a Q100) para um array
+        $respostas = array();
+        foreach ($qIndexes as $qName => $index) {
+            if (isset($data[$index])) {
+                $respostas[$qName] = trim($data[$index]);
+            } else {
+                 $respostas[$qName] = "";
             }
-            $respostasJson = json_encode($respostas);
+        }
+        $respostasJson = json_encode($respostas);
 
         // Extrai as notas finais para um array
         $notasFinais = array();

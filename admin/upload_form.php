@@ -68,16 +68,6 @@ require_once 'includes/header.php';
             <div class="mb-8">
                 <label class="block text-sm font-bold text-slate-700 mb-3">3. Selecione o arquivo .CSV <span class="text-red-500">*</span></label>
                 <label class="block text-sm font-bold text-slate-700 mb-2">1. Nome da Avaliação <span class="text-red-500">*</span></label>
-                <div class="relative">
-                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <i class="ph-fill ph-pencil-simple text-slate-400"></i>
-                    </div>
-                    <input type="text" id="nome_avaliacao" name="nome_avaliacao" required class="block w-full pl-10 pr-3 py-3 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary shadow-sm" placeholder="Ex: Simulado ENEM, Prova Bimestral, P1...">
-                </div>
-                <p class="text-xs text-slate-500 mt-2">Dê um nome claro para esta avaliação. Isso ajudará a diferenciar várias provas do mesmo período.</p>
-            </div>
-
-                <div class="mt-1 flex justify-center px-6 pt-8 pb-10 border-2 border-slate-300 border-dashed rounded-xl hover:border-primary transition-colors bg-slate-50 group relative">
                     <div class="space-y-2 text-center">
                         <i class="ph-fill ph-cloud-arrow-up text-5xl text-slate-400 group-hover:text-primary transition-colors mb-4 block"></i>
                         <div class="flex text-sm text-slate-600 justify-center">
