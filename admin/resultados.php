@@ -89,7 +89,7 @@ $totalPages = ceil($totalRows / $limit);
 // Buscar os dados da página atual
 $resultados = [];
 try {
-    $sql = "SELECT id, ra, periodo, respostas, notas_finais, updated_at
+    $sql = "SELECT id, ra, periodo, nome_avaliacao, respostas, notas_finais, updated_at
             FROM resultados
             $whereSql
             ORDER BY updated_at DESC
@@ -167,7 +167,7 @@ try {
     </div>
 </div>
 
-<!-- Tabela de Resultados -->
+<!-- Tabela de Resultados Limpa -->
 <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
     <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-slate-200">
@@ -175,6 +175,7 @@ try {
                 <tr>
                     <th scope="col" class="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-16">ID</th>
                     <th scope="col" class="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">RA</th>
+                    <th scope="col" class="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Avaliação</th>
                     <th scope="col" class="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Período</th>
                     <th scope="col" class="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Atualizado em</th>
                     <th scope="col" class="px-6 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Ações</th>
@@ -191,6 +192,11 @@ try {
                                 <span class="text-sm font-bold text-slate-800"><i class="ph-fill ph-identification-card text-primary mr-1"></i> <?= htmlspecialchars($row['ra']) ?></span>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="text-sm font-medium text-slate-700">
+                                    <?= htmlspecialchars($row['nome_avaliacao']) ?>
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
                                     <?= htmlspecialchars($row['periodo']) ?>
                                 </span>
@@ -199,7 +205,14 @@ try {
                                 <?= date('d/m/Y H:i', strtotime($row['updated_at'])) ?>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <button onclick='viewDetails(<?= json_encode($row['respostas']) ?>, <?= json_encode($row['notas_finais']) ?>, "<?= htmlspecialchars($row['ra']) ?>")' class="text-primary hover:text-emerald-700 transition-colors flex items-center justify-end w-full">
+                                <!-- Passando os dados via data-* para não poluir o HTML diretamente -->
+                                <button onclick='viewDetails(this)'
+                                        data-ra="<?= htmlspecialchars($row['ra']) ?>"
+                                        data-avaliacao="<?= htmlspecialchars($row['nome_avaliacao']) ?>"
+                                        data-periodo="<?= htmlspecialchars($row['periodo']) ?>"
+                                        data-respostas='<?= htmlspecialchars($row['respostas'], ENT_QUOTES, 'UTF-8') ?>'
+                                        data-notas='<?= htmlspecialchars($row['notas_finais'], ENT_QUOTES, 'UTF-8') ?>'
+                                        class="text-primary hover:text-emerald-700 transition-colors flex items-center justify-end w-full">
                                     <i class="ph ph-eye text-lg mr-1"></i> Visualizar
                                 </button>
                             </td>
@@ -207,7 +220,7 @@ try {
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr>
-                        <td colspan="5" class="px-6 py-12 text-center">
+                        <td colspan="6" class="px-6 py-12 text-center">
                             <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 mb-4">
                                 <i class="ph ph-magnifying-glass text-2xl text-slate-400"></i>
                             </div>
@@ -241,34 +254,56 @@ try {
     <?php endif; ?>
 </div>
 
-<!-- Modal Visualizar Detalhes -->
-<div id="modal-details" class="fixed inset-0 bg-slate-900/50 hidden z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+<!-- Modal Visualizar Detalhes Melhorado -->
+<div id="modal-details" class="fixed inset-0 bg-slate-900/60 hidden z-50 flex items-center justify-center p-4 backdrop-blur-sm transition-opacity">
+    <div class="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+
+        <!-- Header Modal -->
         <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-2xl">
-            <h3 class="text-lg font-bold text-slate-800 flex items-center">
-                <i class="ph-fill ph-student text-primary mr-2"></i> Detalhes do RA: <span id="modal-ra" class="ml-2 font-mono bg-white px-2 py-1 rounded border border-slate-200"></span>
-            </h3>
-            <button onclick="document.getElementById('modal-details').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 transition-colors">
+            <div>
+                <h3 class="text-xl font-bold text-slate-800 flex items-center">
+                    <i class="ph-fill ph-student text-primary mr-2"></i> Relatório do Aluno
+                </h3>
+                <p class="text-sm text-slate-500 mt-1 flex items-center gap-2">
+                    RA: <span id="modal-ra" class="font-bold text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200">---</span> |
+                    Avaliação: <span id="modal-avaliacao" class="font-bold text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200">---</span> |
+                    Período: <span id="modal-periodo" class="font-bold text-slate-700">---</span>
+                </p>
+            </div>
+            <button onclick="document.getElementById('modal-details').classList.add('hidden')" class="text-slate-400 hover:text-red-500 transition-colors bg-white rounded-full p-2 border border-slate-200 hover:border-red-200 hover:bg-red-50">
                 <i class="ph-bold ph-x text-xl"></i>
             </button>
         </div>
-        <div class="p-6 overflow-y-auto bg-slate-50">
 
-            <h4 class="text-sm font-bold text-slate-500 uppercase mb-3 flex items-center"><i class="ph-fill ph-star mr-2 text-amber-400"></i> Notas Finais</h4>
-            <div id="modal-notas" class="bg-white p-4 rounded-xl border border-slate-200 mb-6 font-mono text-sm overflow-x-auto shadow-sm"></div>
+        <!-- Body Modal (Scrollable) -->
+        <div class="p-6 overflow-y-auto bg-slate-50/50">
 
-            <h4 class="text-sm font-bold text-slate-500 uppercase mb-3 flex items-center"><i class="ph-fill ph-list-checks mr-2 text-primary"></i> Respostas (Gabarito)</h4>
-            <div id="modal-respostas" class="bg-white p-4 rounded-xl border border-slate-200 font-mono text-sm overflow-x-auto shadow-sm max-h-64 overflow-y-auto"></div>
+            <h4 class="text-sm font-bold text-slate-500 uppercase mb-4 flex items-center"><i class="ph-fill ph-star mr-2 text-amber-400"></i> Notas Finais</h4>
+
+            <!-- Grid das Notas (Cards) -->
+            <div id="modal-notas" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3 mb-8">
+                <!-- Preenchido via JS -->
+            </div>
+
+            <h4 class="text-sm font-bold text-slate-500 uppercase mb-4 flex items-center"><i class="ph-fill ph-list-checks mr-2 text-primary"></i> Gabarito de Respostas</h4>
+
+            <!-- Grid das Respostas (Pílulas) -->
+            <div id="modal-respostas" class="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-2 bg-white p-4 rounded-xl border border-slate-200 shadow-inner">
+                <!-- Preenchido via JS -->
+            </div>
 
         </div>
+
+        <!-- Footer Modal -->
         <div class="p-4 border-t border-slate-100 flex justify-end bg-white rounded-b-2xl">
             <button onclick="document.getElementById('modal-details').classList.add('hidden')" class="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors">
-                Fechar
+                Fechar Janela
             </button>
         </div>
     </div>
 </div>
 
+<!-- Modais de Delete / Truncate (já existentes) -->
 <!-- Modal Excluir por Período -->
 <div id="modal-delete-period" class="fixed inset-0 bg-slate-900/50 hidden z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden">
@@ -332,20 +367,79 @@ try {
 </div>
 
 <script>
-function viewDetails(respostasJson, notasJson, ra) {
+// Lógica atualizada do Modal de Visualização UI/UX
+function viewDetails(buttonElement) {
+    // 1. Extrair os dados dos data-attributes
+    const ra = buttonElement.getAttribute('data-ra');
+    const avaliacao = buttonElement.getAttribute('data-avaliacao');
+    const periodo = buttonElement.getAttribute('data-periodo');
+    const respostasRaw = buttonElement.getAttribute('data-respostas');
+    const notasRaw = buttonElement.getAttribute('data-notas');
+
+    // 2. Preencher Header
     document.getElementById('modal-ra').innerText = ra;
+    document.getElementById('modal-avaliacao').innerText = avaliacao;
+    document.getElementById('modal-periodo').innerText = periodo;
 
-    // Parse strings JSON se estiverem em formato string, ou usar o objeto se já estiver parseado pelo json_encode do PHP
-    let r = typeof respostasJson === 'string' ? JSON.parse(respostasJson || '{}') : respostasJson;
-    let n = typeof notasJson === 'string' ? JSON.parse(notasJson || '{}') : notasJson;
+    // 3. Parse JSON
+    let respostas = {};
+    let notas = {};
+    try { respostas = JSON.parse(respostasRaw || '{}'); } catch(e){}
+    try { notas = JSON.parse(notasRaw || '{}'); } catch(e){}
 
-    // Formatar bonita pra tela
-    document.getElementById('modal-respostas').innerHTML = '<pre class="text-xs text-slate-600">' + JSON.stringify(r, null, 4) + '</pre>';
-    document.getElementById('modal-notas').innerHTML = '<pre class="text-xs text-primary font-bold">' + JSON.stringify(n, null, 4) + '</pre>';
+    // 4. Renderizar Notas (Cards CSS)
+    const containerNotas = document.getElementById('modal-notas');
+    containerNotas.innerHTML = ''; // Clear
 
+    if (Object.keys(notas).length === 0) {
+        containerNotas.innerHTML = '<div class="col-span-full p-3 text-sm text-slate-500">Nenhuma nota final registrada.</div>';
+    } else {
+        for (const [key, val] of Object.entries(notas)) {
+            const isNumber = !isNaN(parseFloat(val)) && isFinite(val);
+            const displayVal = (val === '' || val === null) ? '-' : val;
+
+            const card = document.createElement('div');
+            card.className = 'bg-white border border-slate-200 rounded-xl p-3 flex flex-col justify-center items-center shadow-sm';
+            card.innerHTML = `
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 text-center w-full truncate" title="${key}">${key}</span>
+                <span class="text-xl font-black ${isNumber ? 'text-primary' : 'text-slate-700'}">${displayVal}</span>
+            `;
+            containerNotas.appendChild(card);
+        }
+    }
+
+    // 5. Renderizar Respostas (Grid de Badges)
+    const containerRespostas = document.getElementById('modal-respostas');
+    containerRespostas.innerHTML = ''; // Clear
+
+    // Para manter na ordem de Q1 a Q100 (força a ordem)
+    let hasAnswers = false;
+    for (let i = 1; i <= 100; i++) {
+        const qKey = `Q${i}`;
+        if (respostas.hasOwnProperty(qKey)) {
+            hasAnswers = true;
+            const respValue = respostas[qKey];
+            const displayResp = (respValue === '' || respValue === null) ? '-' : respValue;
+
+            const badge = document.createElement('div');
+            badge.className = 'flex flex-col bg-slate-50 border border-slate-200 rounded-md overflow-hidden';
+            badge.innerHTML = `
+                <div class="bg-slate-200 text-[10px] text-slate-600 font-bold text-center py-0.5">${qKey}</div>
+                <div class="text-center font-bold text-sm text-slate-800 py-1 ${displayResp === '-' ? 'text-slate-300' : ''}">${displayResp}</div>
+            `;
+            containerRespostas.appendChild(badge);
+        }
+    }
+
+    if (!hasAnswers) {
+        containerRespostas.innerHTML = '<div class="col-span-full p-4 text-sm text-slate-500 text-center w-full">Nenhum gabarito registrado.</div>';
+    }
+
+    // 6. Mostrar Modal
     document.getElementById('modal-details').classList.remove('hidden');
 }
 
+// Lógica para o botão de danger zone (Truncate)
 function checkTruncate() {
     const input = document.getElementById('truncate-confirm').value;
     const btn = document.getElementById('btn-truncate');

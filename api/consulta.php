@@ -24,9 +24,8 @@ try {
     $db = new Database();
     $conn = $db->getConnection();
 
-    // Consulta os resultados pelo RA, ordenando do mais recente para o mais antigo (baseado no created_at/updated_at ou id)
-    // OBS: Como 'periodo' é string, ordenar por id DESC geralmente traz os últimos inseridos/atualizados primeiro.
-    $query = "SELECT periodo, respostas, notas_finais, updated_at
+    // Consulta os resultados pelo RA, incluindo a nova coluna `nome_avaliacao`
+    $query = "SELECT periodo, nome_avaliacao, respostas, notas_finais, updated_at
               FROM resultados
               WHERE ra = :ra
               ORDER BY id DESC";

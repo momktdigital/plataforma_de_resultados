@@ -15,9 +15,10 @@ CREATE TABLE IF NOT EXISTS `resultados` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `ra` VARCHAR(50) NOT NULL,
     `periodo` VARCHAR(100) NOT NULL,
+    `nome_avaliacao` VARCHAR(150) NOT NULL,
     `respostas` JSON,
     `notas_finais` JSON,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY `uk_ra_periodo` (`ra`, `periodo`)
+    UNIQUE KEY `uk_ra_periodo_avaliacao` (`ra`, `periodo`, `nome_avaliacao`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

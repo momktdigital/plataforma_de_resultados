@@ -12,6 +12,14 @@ require_once '../includes/Database.php';
 // Verifica se o formulário foi enviado e se o arquivo existe
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FILES['csv_file']['error'] === UPLOAD_ERR_OK) {
 
+    // Captura e sanitiza o nome da avaliação
+    $nomeAvaliacao = trim($_POST['nome_avaliacao'] ?? '');
+
+    if (empty($nomeAvaliacao)) {
+        header('Location: upload_form.php?error=1&msg=' . urlencode('O nome da avaliação é obrigatório.'));
+        die();
+    }
+
     $fileTmpPath = $_FILES['csv_file']['tmp_name'];
     $fileName = $_FILES['csv_file']['name'];
     $fileSize = $_FILES['csv_file']['size'];
@@ -94,9 +102,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
         // Contador de registros processados
         $count = 0;
 
-        // Prepara a query de Upsert (INSERT ... ON DUPLICATE KEY UPDATE)
-        $query = "INSERT INTO resultados (ra, periodo, respostas, notas_finais)
-                  VALUES (:ra, :periodo, :respostas, :notas_finais)
+        // Prepara a query de Upsert (INSERT ... ON DUPLICATE KEY UPDATE) com nome_avaliacao
+        $query = "INSERT INTO resultados (ra, periodo, nome_avaliacao, respostas, notas_finais)
+                  VALUES (:ra, :periodo, :nome_avaliacao, :respostas, :notas_finais)
                   ON DUPLICATE KEY UPDATE
                   respostas = VALUES(respostas), notas_finais = VALUES(notas_finais), updated_at = CURRENT_TIMESTAMP";
         $stmt = $conn->prepare($query);
@@ -144,6 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
             try {
                 $stmt->bindParam(':ra', $ra);
                 $stmt->bindParam(':periodo', $periodo);
+                $stmt->bindParam(':nome_avaliacao', $nomeAvaliacao);
                 $stmt->bindParam(':respostas', $respostasJson);
                 $stmt->bindParam(':notas_finais', $notasFinaisJson);
                 $stmt->execute();
