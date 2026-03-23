@@ -1,130 +1,52 @@
 <?php
-require_once 'includes/header.php';
-require_once '../includes/Database.php';
+// Mock parameters so we can see the full dashboard UI
+$totalAlunos = 1500;
+$totalRegistros = 4500;
+$totalPeriodos = 3;
+$filtroAvaliacao = 'Simulado ENEM 2024';
 
-$db = new Database();
-$conn = $db->getConnection();
+$avaliacoesDisponiveis = ['Simulado ENEM 2024', 'Prova Bimestral - T1'];
 
-// Lógica de Filtro
-$filtroAvaliacao = $_GET['avaliacao'] ?? '';
+$totalComAcertos = 1500;
+$mediaGeralAcertos = 68.5;
+$totalComNotaGeral = 1500;
+$mediaNotaGeral = 685.40;
 
-$avaliacoesDisponiveis = [];
-try {
-    $stmtAval = $conn->query("SELECT DISTINCT nome_avaliacao FROM resultados ORDER BY nome_avaliacao ASC");
-    $avaliacoesDisponiveis = $stmtAval->fetchAll(PDO::FETCH_COLUMN);
-} catch (PDOException $e) {}
-
-// Queries para as estatísticas
-$totalAlunos = 0;
-$totalRegistros = 0;
-$totalPeriodos = 0;
-$resultadosFiltrados = [];
-
-try {
-    $whereClause = "";
-    $params = [];
-
-    if (!empty($filtroAvaliacao)) {
-        $whereClause = "WHERE nome_avaliacao = :avaliacao";
-        $params[':avaliacao'] = $filtroAvaliacao;
-    }
-
-    // Total de RAs únicos (Alunos)
-    $queryAlunos = "SELECT COUNT(DISTINCT ra) AS total FROM resultados $whereClause";
-    $stmt = $conn->prepare($queryAlunos);
-    $stmt->execute($params);
-    $totalAlunos = $stmt->fetch()['total'] ?? 0;
-
-    // Total de Registros
-    $queryRegs = "SELECT COUNT(*) AS total FROM resultados $whereClause";
-    $stmt = $conn->prepare($queryRegs);
-    $stmt->execute($params);
-    $totalRegistros = $stmt->fetch()['total'] ?? 0;
-
-    // Total de Períodos cadastrados
-    $queryPer = "SELECT COUNT(DISTINCT periodo) AS total FROM resultados $whereClause";
-    $stmt = $conn->prepare($queryPer);
-    $stmt->execute($params);
-    $totalPeriodos = $stmt->fetch()['total'] ?? 0;
-
-    // Buscar todos os resultados se houver filtro, para processar médias
-    if (!empty($filtroAvaliacao)) {
-        $stmt = $conn->prepare("SELECT ra, notas_finais FROM resultados WHERE nome_avaliacao = :avaliacao");
-        $stmt->execute([':avaliacao' => $filtroAvaliacao]);
-        $resultadosFiltrados = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-
-} catch (PDOException $e) {
-    error_log("Erro ao carregar dashboard: " . $e->getMessage());
-}
-
-// Lógica para extrair médias (Percentuais, Notas Totais) dos campos JSON flexíveis
-$mediaGeralAcertos = 0;
-$somaAcertos = 0;
-$totalComAcertos = 0;
-
-$mediaNotaGeral = 0;
-$somaNotaGeral = 0;
-$totalComNotaGeral = 0;
-
-$topAlunos = [];
-
-if (!empty($resultadosFiltrados)) {
-    foreach ($resultadosFiltrados as $res) {
-        $notasFinais = json_decode($res['notas_finais'] ?? '{}', true);
-        if (!$notasFinais) continue;
-
-        $notaRanking = 0; // Para ordenar top alunos
-        $temNota = false;
-
-        foreach ($notasFinais as $key => $val) {
-            $keyLower = strtolower($key);
-            $numericVal = floatval(str_replace(['%', ','], ['', '.'], $val));
-
-            // Tentar identificar coluna de Percentual
-            if (str_contains($keyLower, 'percent') || str_contains($keyLower, '%') || str_contains($keyLower, 'acerto')) {
-                $somaAcertos += $numericVal;
-                $totalComAcertos++;
-                $notaRanking = $numericVal; // Prioridade para rank
-                $temNota = true;
-            }
-            // Tentar identificar coluna de Nota Final
-            elseif (str_contains($keyLower, 'nota') || str_contains($keyLower, 'total') || str_contains($keyLower, 'final')) {
-                $somaNotaGeral += $numericVal;
-                $totalComNotaGeral++;
-                if (!$temNota) {
-                    $notaRanking = $numericVal;
-                    $temNota = true;
+$topAlunos = [
+    ['ra' => '12345', 'nota' => 950.0],
+    ['ra' => '12346', 'nota' => 920.5],
+    ['ra' => '12347', 'nota' => 890.0],
+    ['ra' => '12348', 'nota' => 885.5],
+    ['ra' => '12349', 'nota' => 880.0],
+];
+?>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Administrativo - Resultados DI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#00b48d',
+                        secondary: '#f8fafc',
+                        dark: '#1e293b',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
                 }
             }
         }
-
-        if ($temNota) {
-            $topAlunos[] = [
-                'ra' => $res['ra'],
-                'nota' => $notaRanking
-            ];
-        }
-    }
-
-    if ($totalComAcertos > 0) {
-        $mediaGeralAcertos = round($somaAcertos / $totalComAcertos, 1);
-    }
-
-    if ($totalComNotaGeral > 0) {
-        $mediaNotaGeral = round($somaNotaGeral / $totalComNotaGeral, 2);
-    }
-
-    // Sort Top Alunos descendente
-    usort($topAlunos, function($a, $b) {
-        return $b['nota'] <=> $a['nota'];
-    });
-
-    // Pegar apenas top 5
-    $topAlunos = array_slice($topAlunos, 0, 5);
-}
-
-?>
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 p-8">
 
 <div class="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
     <div>
@@ -149,13 +71,13 @@ if (!empty($resultadosFiltrados)) {
                 </div>
             </div>
             <?php if (!empty($filtroAvaliacao)): ?>
-                <a href="index.php" class="ml-2 text-slate-400 hover:text-red-500 transition-colors" title="Limpar Filtro">
+                <a href="#" class="ml-2 text-slate-400 hover:text-red-500 transition-colors" title="Limpar Filtro">
                     <i class="ph-bold ph-x-circle text-xl"></i>
                 </a>
             <?php endif; ?>
         </form>
 
-        <a href="upload_form.php" class="bg-primary hover:bg-emerald-600 text-white px-4 py-2 rounded-lg shadow-sm font-medium transition-colors flex items-center">
+        <a href="#" class="bg-primary hover:bg-emerald-600 text-white px-4 py-2 rounded-lg shadow-sm font-medium transition-colors flex items-center">
             <i class="ph-bold ph-plus mr-2"></i> Novo Upload
         </a>
     </div>
@@ -289,10 +211,10 @@ if (!empty($resultadosFiltrados)) {
                     </p>
 
                     <div class="flex flex-wrap gap-4 mt-4">
-                        <a href="resultados.php?avaliacao=<?= urlencode($filtroAvaliacao) ?>" class="bg-primary hover:bg-emerald-600 text-white px-6 py-3 rounded-lg shadow-sm font-bold transition-colors flex items-center w-max">
+                        <a href="#" class="bg-primary hover:bg-emerald-600 text-white px-6 py-3 rounded-lg shadow-sm font-bold transition-colors flex items-center w-max">
                             <i class="ph-bold ph-list-magnifying-glass mr-2"></i> Ver Tabela Completa
                         </a>
-                        <a href="avaliacoes.php" class="bg-slate-800 hover:bg-slate-700 text-white px-6 py-3 rounded-lg shadow-sm font-bold border border-slate-700 transition-colors flex items-center w-max">
+                        <a href="#" class="bg-slate-800 hover:bg-slate-700 text-white px-6 py-3 rounded-lg shadow-sm font-bold border border-slate-700 transition-colors flex items-center w-max">
                             <i class="ph-bold ph-exam mr-2"></i> Gerenciar Gabarito
                         </a>
                     </div>
@@ -307,28 +229,5 @@ if (!empty($resultadosFiltrados)) {
 
     </div>
 <?php endif; ?>
-
-<!-- Bem-vindo (mostrado se não houver filtro) -->
-<?php if (empty($filtroAvaliacao)): ?>
-<div class="bg-white rounded-xl shadow-sm border border-slate-100 p-8 text-center sm:text-left flex flex-col sm:flex-row items-center gap-8">
-    <div class="w-32 h-32 bg-slate-50 rounded-full flex items-center justify-center shrink-0 border border-slate-100 shadow-inner">
-        <i class="ph-fill ph-rocket-launch text-6xl text-primary animate-pulse"></i>
-    </div>
-    <div>
-        <h2 class="text-2xl font-bold text-slate-800 mb-2">Painel de Controle Ativo</h2>
-        <p class="text-slate-600 mb-5 max-w-2xl leading-relaxed">
-            Use o menu lateral ou os atalhos abaixo para gerenciar o sistema. O filtro no topo desta página permite analisar o desempenho geral por avaliação.
-        </p>
-        <div class="flex flex-wrap gap-3 justify-center sm:justify-start">
-            <a href="resultados.php" class="bg-white border border-slate-300 hover:border-primary hover:text-primary text-slate-700 font-bold px-5 py-2.5 rounded-lg transition-all shadow-sm">
-                <i class="ph-bold ph-table mr-1"></i> Explorar Resultados
-            </a>
-            <a href="upload_gabarito.php" class="bg-white border border-slate-300 hover:border-primary hover:text-primary text-slate-700 font-bold px-5 py-2.5 rounded-lg transition-all shadow-sm">
-                <i class="ph-bold ph-check-square-offset mr-1"></i> Importar Gabaritos
-            </a>
-        </div>
-    </div>
-</div>
-<?php endif; ?>
-
-<?php require_once 'includes/footer.php'; ?>
+</body>
+</html>

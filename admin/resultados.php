@@ -40,6 +40,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'truncate_db') {
 // Filtros
 $searchRa = $_GET['search'] ?? '';
 $filterPeriodo = $_GET['periodo'] ?? '';
+$filterAvaliacao = $_GET['avaliacao'] ?? '';
 
 // Paginação
 $limit = 20;
@@ -60,12 +61,16 @@ $where = [];
 $params = [];
 
 if (!empty($searchRa)) {
-    $where[] = "ra LIKE :ra";
+    $where[] = "r.ra LIKE :ra";
     $params[':ra'] = "%$searchRa%";
 }
 if (!empty($filterPeriodo)) {
-    $where[] = "periodo = :periodo";
+    $where[] = "r.periodo = :periodo";
     $params[':periodo'] = $filterPeriodo;
+}
+if (!empty($filterAvaliacao)) {
+    $where[] = "r.nome_avaliacao = :avaliacao";
+    $params[':avaliacao'] = $filterAvaliacao;
 }
 
 $whereSql = count($where) > 0 ? "WHERE " . implode(" AND ", $where) : "";
