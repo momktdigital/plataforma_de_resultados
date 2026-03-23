@@ -90,7 +90,7 @@ $totalPages = ceil($totalRows / $limit);
 $resultados = [];
 try {
 // Query para corrigir o JOIN do Gabarito no Admin
-$sql = "SELECT r.id, r.ra, r.periodo, r.nome_avaliacao, r.respostas, r.notas_finais, r.updated_at, g.respostas AS gabarito
+$sql = "SELECT r.id, r.ra, r.periodo, r.nome_avaliacao, r.respostas, r.notas_finais, r.updated_at, g.respostas AS gabarito, g.link_comentado
         FROM resultados r
         LEFT JOIN gabaritos g ON r.nome_avaliacao = g.nome_avaliacao
         $whereSql
@@ -212,9 +212,10 @@ $sql = "SELECT r.id, r.ra, r.periodo, r.nome_avaliacao, r.respostas, r.notas_fin
                                         data-ra="<?= htmlspecialchars($row['ra']) ?>"
                                         data-avaliacao="<?= htmlspecialchars($row['nome_avaliacao']) ?>"
                                         data-periodo="<?= htmlspecialchars($row['periodo']) ?>"
-                                        data-respostas='<?= htmlspecialchars($row['respostas_aluno'], ENT_QUOTES, 'UTF-8') ?>'
+                                        data-respostas='<?= htmlspecialchars($row['respostas'], ENT_QUOTES, 'UTF-8') ?>'
                                         data-gabarito='<?= htmlspecialchars($row['gabarito'], ENT_QUOTES, 'UTF-8') ?>'
                                         data-notas='<?= htmlspecialchars($row['notas_finais'], ENT_QUOTES, 'UTF-8') ?>'
+                                        data-link='<?= htmlspecialchars($row['link_comentado'], ENT_QUOTES, 'UTF-8') ?>'
                                         class="text-primary hover:text-emerald-700 transition-colors flex items-center justify-end w-full">
                                     <i class="ph ph-eye text-lg mr-1"></i> Visualizar
                                 </button>
@@ -291,6 +292,7 @@ $sql = "SELECT r.id, r.ra, r.periodo, r.nome_avaliacao, r.respostas, r.notas_fin
             <h4 class="text-sm font-bold text-slate-500 uppercase mb-4 flex items-center"><i class="ph-fill ph-list-checks mr-2 text-primary"></i> Gabarito de Respostas</h4>
 
             <!-- Grid das Respostas (Pílulas) -->
+            <div id="modal-container-botoes" class="mb-4 flex flex-col md:flex-row gap-4 items-center justify-center md:justify-start"></div>
             <div id="modal-respostas" class="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-2 bg-white p-4 rounded-xl border border-slate-200 shadow-inner">
                 <!-- Preenchido via JS -->
             </div>
@@ -522,6 +524,21 @@ function viewDetails(buttonElement) {
 
     if (!hasAnswers) {
         containerRespostas.innerHTML = '<div class="col-span-full p-4 text-sm text-slate-500 text-center w-full">Nenhum gabarito registrado.</div>';
+    }
+
+    // Extrai Link
+    const linkComentado = buttonElement.getAttribute('data-link');
+    const containerBotoes = document.getElementById('modal-container-botoes');
+    if (containerBotoes) {
+        containerBotoes.innerHTML = '';
+        if (linkComentado && linkComentado.trim() !== '') {
+            containerBotoes.innerHTML = `
+                <a href="${linkComentado}" target="_blank" class="w-full md:w-auto inline-flex items-center justify-center px-6 py-2 bg-primary hover:bg-emerald-600 text-white font-bold rounded-lg shadow-sm transition-all">
+                    <i class="ph-bold ph-link text-xl mr-2"></i>
+                    Acessar Gabarito Comentado
+                </a>
+            `;
+        }
     }
 
     // 6. Mostrar Modal
