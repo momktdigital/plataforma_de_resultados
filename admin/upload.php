@@ -170,7 +170,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
         try {
             $stmtGab = $conn->prepare("INSERT INTO gabaritos (nome_avaliacao, link_comentado)
                                        VALUES (:nome, :link)
-                                       ON DUPLICATE KEY UPDATE link_comentado = VALUES(link_comentado)");
+                                       ON DUPLICATE KEY UPDATE link_comentado = COALESCE(VALUES(link_comentado), link_comentado)");
             $stmtGab->bindParam(':nome', $nomeAvaliacao);
             $stmtGab->bindParam(':link', $linkComentado);
             $stmtGab->execute();

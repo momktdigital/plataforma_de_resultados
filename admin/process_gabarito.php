@@ -124,7 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
             $query = "INSERT INTO gabaritos (nome_avaliacao, respostas, link_comentado)
                       VALUES (:nome_avaliacao, :respostas, :link_comentado)
                       ON DUPLICATE KEY UPDATE
-                      respostas = VALUES(respostas), link_comentado = VALUES(link_comentado), updated_at = CURRENT_TIMESTAMP";
+                      respostas = VALUES(respostas), link_comentado = COALESCE(VALUES(link_comentado), link_comentado), updated_at = CURRENT_TIMESTAMP";
 
             $stmt = $conn->prepare($query);
             $stmt->bindParam(':nome_avaliacao', $nomeAvaliacao);

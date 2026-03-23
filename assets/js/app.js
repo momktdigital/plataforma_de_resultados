@@ -105,7 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 cardGeral.className = 'col-span-full bg-slate-800 rounded-2xl p-6 md:p-8 shadow-md flex flex-col sm:flex-row items-center justify-between border-l-8 border-primary transition-transform hover:-translate-y-1';
                 cardGeral.innerHTML = `
                     <div class="flex items-center mb-4 sm:mb-0">
-                        <div class="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mr-6">
+                        <div class="w-16 h-16 rounded-full bg-[#00b48d]/20 flex items-center justify-center mr-6">
                             <i class="ph-fill ph-trophy text-primary text-4xl"></i>
                         </div>
                         <div>
@@ -200,7 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
             containerBotoes.innerHTML = ''; // Limpa botões antigos
             if (item.link_comentado && item.link_comentado.trim() !== '') {
                 containerBotoes.innerHTML = `
-                    <a href="${item.link_comentado}" target="_blank" class="w-full md:w-auto inline-flex items-center justify-center px-6 py-3 bg-primary hover:bg-emerald-600 text-white font-bold rounded-lg shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5">
+                    <a href="${item.link_comentado}" target="_blank" class="w-full md:w-auto inline-flex items-center justify-center px-6 py-3 bg-[#00b48d] hover:bg-emerald-600 text-white font-bold rounded-lg shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5">
                         <i class="ph-bold ph-link text-xl mr-2"></i>
                         Acessar Gabarito Comentado
                     </a>
