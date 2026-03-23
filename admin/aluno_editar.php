@@ -18,17 +18,32 @@ if ($idAluno <= 0) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_aluno') {
     $novoRa = trim($_POST['ra'] ?? '');
     $novoPeriodo = trim($_POST['periodo'] ?? '');
-    $jsonNotasRaw = $_POST['notas_finais_json'] ?? '{}';
-    $jsonRespostasRaw = $_POST['respostas_json'] ?? '{}';
 
-    // Validar JSON
-    $notasOk = json_decode($jsonNotasRaw, true);
-    $respostasOk = json_decode($jsonRespostasRaw, true);
+    // Montar JSON de Notas Finais baseado nos inputs
+    $notasFinais = [];
+    if (isset($_POST['nota_keys']) && is_array($_POST['nota_keys'])) {
+        for ($i = 0; $i < count($_POST['nota_keys']); $i++) {
+            $k = trim($_POST['nota_keys'][$i]);
+            $v = trim($_POST['nota_values'][$i] ?? '');
+            if (!empty($k)) {
+                $notasFinais[$k] = $v;
+            }
+        }
+    }
+    $jsonNotasRaw = json_encode($notasFinais);
 
-    if (json_last_error() !== JSON_ERROR_NONE) {
-        $mensagem = "Erro de Sintaxe no JSON. Verifique as aspas e vírgulas. A alteração não foi salva.";
-        $tipoMensagem = 'error';
-    } elseif (empty($novoRa) || empty($novoPeriodo)) {
+    // Montar JSON de Respostas baseado no Grid Manual Q1-Q100
+    $respostasCorretas = [];
+    for ($i = 1; $i <= 100; $i++) {
+        $q = "Q$i";
+        $val = trim($_POST[$q] ?? '');
+        if ($val !== '') {
+            $respostasCorretas[$q] = mb_strtoupper($val, 'UTF-8');
+        }
+    }
+    $jsonRespostasRaw = json_encode($respostasCorretas);
+
+    if (empty($novoRa) || empty($novoPeriodo)) {
         $mensagem = "Os campos RA e Período são obrigatórios.";
         $tipoMensagem = 'error';
     } else {
@@ -68,9 +83,9 @@ try {
     }
 } catch (PDOException $e) {}
 
-// Formatar JSON bonito para o textarea
-$prettyRespostas = json_encode(json_decode($aluno['respostas']), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-$prettyNotas = json_encode(json_decode($aluno['notas_finais']), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+// Decode
+$respostasAluno = json_decode($aluno['respostas'], true) ?: [];
+$notasFinais = json_decode($aluno['notas_finais'], true) ?: [];
 
 ?>
 
@@ -93,83 +108,124 @@ $prettyNotas = json_encode(json_decode($aluno['notas_finais']), JSON_PRETTY_PRIN
     </div>
 <?php endif; ?>
 
-<form method="POST" action="" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<form method="POST" action="" class="flex flex-col gap-6">
     <input type="hidden" name="action" value="update_aluno">
     <input type="hidden" name="id" value="<?= $idAluno ?>">
 
-    <!-- Coluna 1: Dados Básicos -->
-    <div class="lg:col-span-1 flex flex-col gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Coluna 1: Dados Básicos e Notas Finais -->
+        <div class="lg:col-span-1 flex flex-col gap-6">
 
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div class="px-6 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-                <h3 class="font-bold text-slate-800"><i class="ph-fill ph-identification-card text-primary mr-2"></i> Identificação</h3>
-                <span class="text-xs text-slate-400 font-mono">ID: #<?= $aluno['id'] ?></span>
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                    <h3 class="font-bold text-slate-800"><i class="ph-fill ph-identification-card text-primary mr-2"></i> Identificação</h3>
+                    <span class="text-xs text-slate-400 font-mono">ID: #<?= $aluno['id'] ?></span>
+                </div>
+
+                <div class="p-6 space-y-4">
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Registro Acadêmico (RA)</label>
+                        <input type="text" name="ra" value="<?= htmlspecialchars($aluno['ra']) ?>" required class="block w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary focus:bg-white transition-colors">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Período</label>
+                        <input type="text" name="periodo" value="<?= htmlspecialchars($aluno['periodo']) ?>" required class="block w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary focus:bg-white transition-colors">
+                    </div>
+
+                    <div class="pt-4 border-t border-slate-100">
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Avaliação Vinculada</label>
+                        <input type="text" disabled value="<?= htmlspecialchars($aluno['nome_avaliacao']) ?>" class="block w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm font-medium text-slate-500 cursor-not-allowed">
+                        <p class="text-[10px] text-slate-400 mt-1">Para mover o aluno de avaliação, edite no CSV e reimporte.</p>
+                    </div>
+
+                    <div class="text-xs text-slate-400 flex items-center justify-center mt-2 p-2 bg-slate-50 rounded border border-slate-100">
+                        <i class="ph ph-clock-counter-clockwise mr-1 text-slate-400"></i> Atualizado em <?= date('d/m/Y H:i', strtotime($aluno['updated_at'])) ?>
+                    </div>
+
+                </div>
             </div>
 
-            <div class="p-6 space-y-4">
-
-                <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Registro Acadêmico (RA)</label>
-                    <input type="text" name="ra" value="<?= htmlspecialchars($aluno['ra']) ?>" required class="block w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary focus:bg-white transition-colors">
+            <!-- Editor de Notas Finais Dinâmico -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col flex-1">
+                <div class="px-6 py-4 border-b border-slate-100 bg-amber-50 flex items-center">
+                    <h3 class="font-bold text-amber-900"><i class="ph-fill ph-star text-amber-500 mr-2"></i> Editor de Notas Finais</h3>
                 </div>
+                <div class="p-6 flex-1 flex flex-col">
+                    <p class="text-xs text-slate-500 mb-4">Edite os valores (Totais ou Percentuais) extraídos diretamente do CSV.</p>
 
-                <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Período</label>
-                    <input type="text" name="periodo" value="<?= htmlspecialchars($aluno['periodo']) ?>" required class="block w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary focus:bg-white transition-colors">
+                    <div id="notas-container" class="space-y-3 overflow-y-auto max-h-[350px] pr-2">
+                        <?php if (empty($notasFinais)): ?>
+                            <div class="text-sm text-slate-400 text-center py-4">Nenhuma nota final importada do CSV.</div>
+                        <?php else: ?>
+                            <?php foreach($notasFinais as $key => $val): ?>
+                                <div class="flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200 group">
+                                    <input type="text" name="nota_keys[]" value="<?= htmlspecialchars($key) ?>" readonly class="w-2/3 bg-transparent text-xs font-bold text-slate-600 focus:outline-none cursor-not-allowed truncate" title="<?= htmlspecialchars($key) ?>">
+                                    <input type="text" name="nota_values[]" value="<?= htmlspecialchars($val) ?>" class="w-1/3 px-2 py-1 text-sm font-bold text-primary text-center border border-slate-300 rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary bg-white">
+                                    <button type="button" onclick="this.parentElement.remove()" class="text-slate-300 hover:text-red-500 transition-colors" title="Remover esta nota"><i class="ph-bold ph-x"></i></button>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+
+                    <button type="button" onclick="addNovaNota()" class="mt-4 w-full py-2 border-2 border-dashed border-slate-200 text-slate-500 hover:text-primary hover:border-primary hover:bg-emerald-50 rounded-lg text-xs font-bold transition-colors flex items-center justify-center">
+                        <i class="ph-bold ph-plus mr-1"></i> Adicionar Nova Métrica
+                    </button>
                 </div>
-
-                <div class="pt-4 border-t border-slate-100">
-                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Avaliação Vinculada</label>
-                    <input type="text" disabled value="<?= htmlspecialchars($aluno['nome_avaliacao']) ?>" class="block w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm font-medium text-slate-500 cursor-not-allowed">
-                    <p class="text-[10px] text-slate-400 mt-1">Para mover o aluno de avaliação, edite no CSV e reimporte, ou mude o Período.</p>
-                </div>
-
-                <div class="text-xs text-slate-400 flex items-center justify-center mt-2 p-2 bg-slate-50 rounded border border-slate-100">
-                    <i class="ph ph-clock-counter-clockwise mr-1 text-slate-400"></i> Atualizado em <?= date('d/m/Y H:i', strtotime($aluno['updated_at'])) ?>
-                </div>
-
             </div>
 
-            <div class="p-4 bg-slate-50 border-t border-slate-100">
-                <button type="submit" class="w-full bg-primary hover:bg-emerald-600 text-white font-bold py-3 px-4 rounded-lg transition-colors shadow-sm flex items-center justify-center">
-                    <i class="ph-bold ph-floppy-disk text-lg mr-2"></i> Salvar Edição Completa
-                </button>
-            </div>
         </div>
 
+        <!-- Coluna 2 e 3: Editor de Gabarito Manual (Alunos) -->
+        <div class="lg:col-span-2">
+
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
+                <div class="px-6 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                    <h3 class="font-bold text-slate-800"><i class="ph-fill ph-list-checks text-primary mr-2"></i> Respostas do Aluno (Q1 a Q100)</h3>
+                    <span class="text-xs font-medium bg-white px-2 py-1 rounded border border-slate-200 text-slate-500">Editor Visual</span>
+                </div>
+                <div class="p-6 flex flex-col flex-1">
+                    <p class="text-sm text-slate-500 mb-6">Corrija ou insira a alternativa marcada pelo aluno (A, B, C, D, E). Deixe em branco se a questão foi anulada ou não existe nesta prova.</p>
+
+                    <div class="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-3 overflow-y-auto mb-6 pr-2" style="max-height: calc(100vh - 250px);">
+                        <?php for ($i = 1; $i <= 100; $i++):
+                            $qKey = "Q$i";
+                            $val = $respostasAluno[$qKey] ?? '';
+                        ?>
+                            <div class="flex flex-col border border-slate-200 rounded overflow-hidden focus-within:ring-2 focus-within:ring-primary focus-within:border-primary transition-all">
+                                <label class="bg-slate-100 text-[10px] text-center font-bold text-slate-500 py-1 border-b border-slate-200"><?= $qKey ?></label>
+                                <input type="text" name="<?= $qKey ?>" value="<?= htmlspecialchars($val) ?>" maxlength="1" class="w-full text-center py-3 h-12 font-bold text-xl text-slate-800 focus:outline-none uppercase bg-white">
+                            </div>
+                        <?php endfor; ?>
+                    </div>
+                </div>
+
+                <div class="p-4 bg-slate-50 border-t border-slate-100 mt-auto">
+                    <button type="submit" class="w-full bg-primary hover:bg-emerald-600 text-white font-bold py-3 px-4 rounded-lg transition-colors shadow-sm flex items-center justify-center">
+                        <i class="ph-bold ph-floppy-disk text-lg mr-2"></i> Salvar Todas as Edições do Aluno
+                    </button>
+                </div>
+            </div>
+
+        </div>
     </div>
-
-    <!-- Coluna 2 e 3: Edição Avançada JSON -->
-    <div class="lg:col-span-2 flex flex-col gap-6">
-
-        <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start shadow-sm">
-            <i class="ph-fill ph-warning-circle text-blue-500 text-2xl mr-3 mt-0.5"></i>
-            <div>
-                <h4 class="font-bold text-blue-900 text-sm">Edição em Formato JSON</h4>
-                <p class="text-xs text-blue-800 mt-1">As notas e gabaritos estão armazenados estruturalmente. Você pode alterar os valores (à direita dos dois pontos) livremente, mas <strong>NÃO</strong> quebre a sintaxe das aspas (<code>""</code>) ou chaves (<code>{}</code>).</p>
-            </div>
-        </div>
-
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
-            <div class="px-6 py-4 border-b border-slate-100 bg-slate-50 flex items-center">
-                <h3 class="font-bold text-slate-800"><i class="ph-fill ph-star text-amber-400 mr-2"></i> Editar Notas Finais</h3>
-            </div>
-            <div class="p-4 flex-1">
-                <textarea name="notas_finais_json" rows="10" class="w-full h-full min-h-[250px] p-4 bg-slate-900 text-emerald-400 font-mono text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-primary shadow-inner resize-y" spellcheck="false"><?= $prettyNotas ?></textarea>
-            </div>
-        </div>
-
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
-            <div class="px-6 py-4 border-b border-slate-100 bg-slate-50 flex items-center">
-                <h3 class="font-bold text-slate-800"><i class="ph-fill ph-list-checks text-primary mr-2"></i> Editar Respostas (Gabarito Pessoal)</h3>
-            </div>
-            <div class="p-4 flex-1">
-                <textarea name="respostas_json" rows="10" class="w-full h-full min-h-[250px] p-4 bg-slate-900 text-blue-400 font-mono text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-primary shadow-inner resize-y" spellcheck="false"><?= $prettyRespostas ?></textarea>
-            </div>
-        </div>
-
-    </div>
-
 </form>
+
+<script>
+function addNovaNota() {
+    const container = document.getElementById('notas-container');
+    const div = document.createElement('div');
+    div.className = 'flex items-center gap-2 bg-emerald-50 p-2 rounded-lg border border-emerald-200 group animate-pulse';
+    setTimeout(() => div.classList.remove('animate-pulse'), 1000);
+
+    div.innerHTML = `
+        <input type="text" name="nota_keys[]" placeholder="Nome da Métrica" class="w-2/3 px-2 py-1 bg-white text-xs font-bold text-slate-800 border border-slate-300 rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary">
+        <input type="text" name="nota_values[]" placeholder="0" class="w-1/3 px-2 py-1 text-sm font-bold text-primary text-center border border-slate-300 rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary bg-white">
+        <button type="button" onclick="this.parentElement.remove()" class="text-slate-400 hover:text-red-500 transition-colors" title="Remover"><i class="ph-bold ph-x"></i></button>
+    `;
+    container.appendChild(div);
+}
+</script>
 
 <?php require_once 'includes/footer.php'; ?>

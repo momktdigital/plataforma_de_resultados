@@ -65,6 +65,15 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     <a href="index.php" class="flex items-center px-3 py-2.5 rounded-lg transition-colors <?= $current_page === 'index.php' ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-slate-800 hover:text-white' ?>">
                         <i class="ph ph-squares-four text-xl mr-3 <?= $current_page === 'index.php' ? 'text-primary' : '' ?>"></i> Dashboard
                     </a>
+
+                </li>
+
+                <li>
+
+                    <a href="avaliacoes.php" class="flex items-center px-3 py-2.5 rounded-lg transition-colors <?= $current_page === 'avaliacoes.php' ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-slate-800 hover:text-white' ?>">
+
+                        <i class="ph ph-exam text-xl mr-3 <?= $current_page === 'avaliacoes.php' ? 'text-primary' : '' ?>"></i> Avaliações
+                    </a>
                 </li>
                 <li>
                     <a href="resultados.php" class="flex items-center px-3 py-2.5 rounded-lg transition-colors <?= $current_page === 'resultados.php' ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-slate-800 hover:text-white' ?>">

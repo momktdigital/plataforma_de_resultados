@@ -264,7 +264,7 @@ try {
                     ?>
                         <div class="flex flex-col border border-slate-200 rounded overflow-hidden focus-within:ring-2 focus-within:ring-primary focus-within:border-primary transition-all">
                             <label class="bg-slate-100 text-[10px] text-center font-bold text-slate-500 py-1 border-b border-slate-200"><?= $qKey ?></label>
-                            <input type="text" name="<?= $qKey ?>" value="<?= htmlspecialchars($val) ?>" maxlength="1" class="w-full text-center py-2 font-bold text-lg text-slate-800 focus:outline-none uppercase bg-white">
+                            <input type="text" name="<?= $qKey ?>" value="<?= htmlspecialchars($val) ?>" maxlength="1" class="w-full text-center py-3 h-12 font-bold text-xl text-slate-800 focus:outline-none uppercase bg-white">
                         </div>
                     <?php endfor; ?>
                 </div>
