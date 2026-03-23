@@ -8,3 +8,9 @@
 [Mon Mar 23 12:52:50 2026] [::1]:55484 Accepted
 [Mon Mar 23 12:52:50 2026] [::1]:55484 [200]: GET /admin/index_mock_2.php
 [Mon Mar 23 12:52:50 2026] [::1]:55484 Closing
+[Mon Mar 23 17:39:15 2026] [::1]:36106 Accepted
+[Mon Mar 23 17:39:15 2026] [::1]:36106 [404]: GET /admin/index_mock_chart.php - No such file or directory
+[Mon Mar 23 17:39:15 2026] [::1]:36106 Closing
+[Mon Mar 23 17:41:08 2026] [::1]:42856 Accepted
+[Mon Mar 23 17:41:08 2026] [::1]:42856 [200]: GET /admin/index_mock_chart.php
+[Mon Mar 23 17:41:08 2026] [::1]:42856 Closing

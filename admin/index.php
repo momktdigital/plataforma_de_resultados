@@ -69,6 +69,17 @@ $totalComNotaGeral = 0;
 
 $topAlunos = [];
 
+// Variáveis para Gráficos
+$materiasAcertosSoma = [];
+$materiasAcertosCount = [];
+$distribuicaoNotas = [
+    '0-20' => 0,
+    '21-40' => 0,
+    '41-60' => 0,
+    '61-80' => 0,
+    '81-100' => 0,
+];
+
 if (!empty($resultadosFiltrados)) {
     foreach ($resultadosFiltrados as $res) {
         $notasFinais = json_decode($res['notas_finais'] ?? '{}', true);
@@ -77,26 +88,44 @@ if (!empty($resultadosFiltrados)) {
         $notaRanking = 0; // Para ordenar top alunos
         $temNota = false;
 
+        // Extract values
         foreach ($notasFinais as $key => $val) {
-            $keyLower = strtolower($key);
+            $keyLower = strtolower(trim($key));
             $numericVal = floatval(str_replace(['%', ','], ['', '.'], $val));
 
-            // Tentar identificar coluna de Percentual
+            // Logic to calculate global averages (Media Geral)
             if (str_contains($keyLower, 'percent') || str_contains($keyLower, '%') || str_contains($keyLower, 'acerto')) {
-                $somaAcertos += $numericVal;
-                $totalComAcertos++;
-                $notaRanking = $numericVal; // Prioridade para rank
-                $temNota = true;
-            }
-            // Tentar identificar coluna de Nota Final
-            elseif (str_contains($keyLower, 'nota') || str_contains($keyLower, 'total') || str_contains($keyLower, 'final')) {
-                $somaNotaGeral += $numericVal;
-                $totalComNotaGeral++;
-                if (!$temNota) {
-                    $notaRanking = $numericVal;
-                    $temNota = true;
+                // Se não tiver hífen, provavelmente é o percentual geral
+                if (!str_contains($keyLower, '-')) {
+                    $somaAcertos += $numericVal;
+                    $totalComAcertos++;
                 }
             }
+            elseif (str_contains($keyLower, 'nota') || str_contains($keyLower, 'total') || str_contains($keyLower, 'final') || str_contains($keyLower, 'pontuação')) {
+                // Ignore specific subjects for general average if they have dashes
+                if (!str_contains($keyLower, '-')) {
+                    $somaNotaGeral += $numericVal;
+                    $totalComNotaGeral++;
+                }
+            }
+
+            // Explicit Logic for Ranking: Only use "Total"
+            if ($keyLower === 'total' || $keyLower === 'pontuação final' || $keyLower === 'nota final') {
+                $notaRanking = $numericVal;
+                $temNota = true;
+            }
+        }
+
+        // Fallback for ranking if 'Total' exact match isn't found
+        if (!$temNota) {
+             foreach ($notasFinais as $key => $val) {
+                 $keyLower = strtolower(trim($key));
+                 $numericVal = floatval(str_replace(['%', ','], ['', '.'], $val));
+                 if ($keyLower === 'nota' || str_contains($keyLower, 'pontuação') || !str_contains($keyLower, '-')) {
+                     $notaRanking = max($notaRanking, $numericVal);
+                     $temNota = true;
+                 }
+             }
         }
 
         if ($temNota) {
@@ -104,6 +133,33 @@ if (!empty($resultadosFiltrados)) {
                 'ra' => $res['ra'],
                 'nota' => $notaRanking
             ];
+
+            // Populate distribution based on ranking score
+            $score = $notaRanking;
+            if ($score <= 20) $distribuicaoNotas['0-20']++;
+            elseif ($score <= 40) $distribuicaoNotas['21-40']++;
+            elseif ($score <= 60) $distribuicaoNotas['41-60']++;
+            elseif ($score <= 80) $distribuicaoNotas['61-80']++;
+            else $distribuicaoNotas['81-100']++;
+        }
+
+        // Populate subject stats
+        foreach ($notasFinais as $key => $val) {
+            $keyLower = strtolower(trim($key));
+            $numericVal = floatval(str_replace(['%', ','], ['', '.'], $val));
+
+            // Check if it's a specific subject score (user format: "Materia - Total de acertos")
+            if (str_contains($keyLower, '- total') || str_contains($keyLower, '- percentual') || str_contains($keyLower, '- acertos')) {
+                $materiaNome = explode('-', $key)[0];
+                $materiaNome = trim($materiaNome);
+
+                if (!isset($materiasAcertosSoma[$materiaNome])) {
+                    $materiasAcertosSoma[$materiaNome] = 0;
+                    $materiasAcertosCount[$materiaNome] = 0;
+                }
+                $materiasAcertosSoma[$materiaNome] += $numericVal;
+                $materiasAcertosCount[$materiaNome]++;
+            }
         }
     }
 
@@ -122,7 +178,24 @@ if (!empty($resultadosFiltrados)) {
 
     // Pegar apenas top 5
     $topAlunos = array_slice($topAlunos, 0, 5);
+
+    // Process Materias Data for Chart
+    $chartMateriasLabels = [];
+    $chartMateriasData = [];
+    foreach ($materiasAcertosSoma as $materia => $soma) {
+        if ($materiasAcertosCount[$materia] > 0) {
+            $chartMateriasLabels[] = $materia;
+            $chartMateriasData[] = round($soma / $materiasAcertosCount[$materia], 2);
+        }
+    }
 }
+
+// Convert to JSON for JS scripts
+$distribuicaoJson = json_encode(array_values($distribuicaoNotas ?? []));
+$distribuicaoLabelsJson = json_encode(array_keys($distribuicaoNotas ?? []));
+
+$chartMateriasLabelsJson = json_encode($chartMateriasLabels ?? []);
+$chartMateriasDataJson = json_encode($chartMateriasData ?? []);
 
 ?>
 
@@ -266,44 +339,66 @@ if (!empty($resultadosFiltrados)) {
             </div>
         </div>
 
-        <!-- Estatísticas da Prova -->
-        <div class="lg:col-span-2 bg-slate-900 rounded-xl shadow-md overflow-hidden text-slate-100 relative">
-            <div class="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
-                <i class="ph-fill ph-chart-line-up text-9xl"></i>
+        <!-- Seção de Gráficos (Colspan 2) -->
+        <div class="lg:col-span-2 flex flex-col gap-6">
+
+            <!-- Curva de Distribuição de Notas -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
+                <div class="px-6 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                    <h3 class="font-bold text-slate-800 flex items-center">
+                        <i class="ph-fill ph-chart-bar text-primary text-xl mr-2"></i>
+                        Distribuição de Notas (Top Scores)
+                    </h3>
+                </div>
+                <div class="p-6 flex-1 min-h-[250px] relative">
+                    <canvas id="chartDistribuicao"></canvas>
+                </div>
             </div>
 
-            <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between relative z-10">
-                <h3 class="font-bold text-white flex items-center">
-                    <i class="ph-fill ph-presentation-chart text-primary text-xl mr-2"></i>
-                    Resumo: <?= htmlspecialchars($filtroAvaliacao) ?>
+        </div>
+    </div>
+
+    <!-- Linha Extra de Gráficos (Matérias) se houver dados -->
+    <?php if (count($chartMateriasLabels ?? []) > 0): ?>
+    <div class="grid grid-cols-1 mb-8">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+            <div class="px-6 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                <h3 class="font-bold text-slate-800 flex items-center">
+                    <i class="ph-fill ph-radar text-blue-500 text-xl mr-2"></i>
+                    Média de Acertos por Matéria
                 </h3>
             </div>
-
-            <div class="p-8 relative z-10 flex flex-col justify-center h-[calc(100%-60px)]">
-                <?php if ($totalRegistros > 0): ?>
-                    <p class="text-slate-400 mb-6 text-lg max-w-2xl leading-relaxed">
-                        Foram processados <strong class="text-white"><?= $totalRegistros ?> registros</strong> para a avaliação selecionada.
-                        <?php if ($totalComAcertos > 0): ?>
-                            A média de desempenho da turma foi de <strong class="text-primary"><?= $mediaGeralAcertos ?>% de acertos</strong>.
-                        <?php endif; ?>
-                    </p>
-
-                    <div class="flex flex-wrap gap-4 mt-4">
-                        <a href="resultados.php?avaliacao=<?= urlencode($filtroAvaliacao) ?>" class="bg-primary hover:bg-emerald-600 text-white px-6 py-3 rounded-lg shadow-sm font-bold transition-colors flex items-center w-max">
-                            <i class="ph-bold ph-list-magnifying-glass mr-2"></i> Ver Tabela Completa
-                        </a>
-                        <a href="avaliacoes.php" class="bg-slate-800 hover:bg-slate-700 text-white px-6 py-3 rounded-lg shadow-sm font-bold border border-slate-700 transition-colors flex items-center w-max">
-                            <i class="ph-bold ph-exam mr-2"></i> Gerenciar Gabarito
-                        </a>
-                    </div>
-                <?php else: ?>
-                    <div class="text-center py-8">
-                        <i class="ph ph-empty text-5xl text-slate-700 mb-3"></i>
-                        <p class="text-slate-400">Nenhum dado encontrado para esta avaliação.</p>
-                    </div>
-                <?php endif; ?>
+            <div class="p-6 h-[400px] flex justify-center w-full relative">
+                <canvas id="chartMaterias" class="max-w-4xl mx-auto"></canvas>
             </div>
         </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- Painel Resumo Black -->
+    <div class="bg-slate-900 rounded-xl shadow-md overflow-hidden text-slate-100 relative mb-8">
+        <div class="px-6 py-6 sm:px-8 sm:py-8 relative z-10 flex flex-col sm:flex-row items-center justify-between">
+            <div>
+                <h3 class="font-bold text-white flex items-center text-xl mb-2">
+                    <i class="ph-fill ph-presentation-chart text-primary mr-2"></i>
+                    Resumo: <?= htmlspecialchars($filtroAvaliacao) ?>
+                </h3>
+                <p class="text-slate-400 text-sm max-w-2xl leading-relaxed">
+                    Foram processados <strong class="text-white"><?= $totalRegistros ?> registros</strong>. A média de desempenho da turma foi de <strong class="text-primary"><?= $mediaGeralAcertos ?>% de acertos</strong>.
+                </p>
+            </div>
+
+            <div class="flex gap-3 mt-4 sm:mt-0 shrink-0">
+                <a href="resultados.php?avaliacao=<?= urlencode($filtroAvaliacao) ?>" class="bg-primary hover:bg-emerald-600 text-white px-5 py-2.5 rounded-lg shadow-sm font-bold transition-colors flex items-center text-sm">
+                    <i class="ph-bold ph-table mr-2"></i> Ver Tabela
+                </a>
+                <a href="avaliacoes.php" class="bg-slate-800 hover:bg-slate-700 text-white px-5 py-2.5 rounded-lg shadow-sm font-bold border border-slate-700 transition-colors flex items-center text-sm">
+                    <i class="ph-bold ph-exam mr-2"></i> Gabaritos
+                </a>
+            </div>
+        </div>
+    </div>
+
 
     </div>
 <?php endif; ?>
@@ -330,5 +425,87 @@ if (!empty($resultadosFiltrados)) {
     </div>
 </div>
 <?php endif; ?>
+
+<!-- Chart.js and Custom Script -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const hasData = <?= !empty($filtroAvaliacao) && !empty($resultadosFiltrados) ? 'true' : 'false' ?>;
+    if (!hasData) return;
+
+    // Distribution Chart (Bar)
+    const ctxDist = document.getElementById('chartDistribuicao');
+    if (ctxDist) {
+        new Chart(ctxDist, {
+            type: 'bar',
+            data: {
+                labels: <?= $distribuicaoLabelsJson ?>,
+                datasets: [{
+                    label: 'Quantidade de Alunos',
+                    data: <?= $distribuicaoJson ?>,
+                    backgroundColor: 'rgba(0, 180, 141, 0.2)', // primary color
+                    borderColor: 'rgba(0, 180, 141, 1)',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    // Subjects Performance Chart (Radar/Bar)
+    const ctxMaterias = document.getElementById('chartMaterias');
+    const labelsMaterias = <?= $chartMateriasLabelsJson ?>;
+    const dataMaterias = <?= $chartMateriasDataJson ?>;
+
+    if (ctxMaterias && labelsMaterias.length > 0) {
+        // Use Bar chart if there are few subjects, Radar if there are many to look better
+        const chartType = labelsMaterias.length > 3 ? 'radar' : 'bar';
+
+        new Chart(ctxMaterias, {
+            type: chartType,
+            data: {
+                labels: labelsMaterias,
+                datasets: [{
+                    label: 'Média de Acertos',
+                    data: dataMaterias,
+                    backgroundColor: chartType === 'radar' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.7)', // Blue
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    borderWidth: 2,
+                    pointBackgroundColor: 'rgba(59, 130, 246, 1)'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: chartType === 'radar' }
+                },
+                scales: chartType === 'radar' ? {
+                    r: {
+                        beginAtZero: true,
+                        angleLines: { color: 'rgba(0,0,0,0.1)' },
+                        grid: { color: 'rgba(0,0,0,0.1)' },
+                        pointLabels: { font: { size: 11 } }
+                    }
+                } : {
+                    y: { beginAtZero: true },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+});
+</script>
 
 <?php require_once 'includes/footer.php'; ?>
