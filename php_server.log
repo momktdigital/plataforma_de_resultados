@@ -1,0 +1,4 @@
+[Mon Mar 23 12:01:50 2026] PHP 8.3.6 Development Server (http://localhost:8000) started
+[Mon Mar 23 12:05:09 2026] [::1]:44092 Accepted
+[Mon Mar 23 12:05:09 2026] [::1]:44092 [200]: GET /admin/aluno_editar_mock.php
+[Mon Mar 23 12:05:09 2026] [::1]:44092 Closing

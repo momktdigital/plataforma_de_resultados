@@ -65,9 +65,8 @@ require_once 'includes/header.php';
                 <p class="text-xs text-slate-500 mt-2">Se você tiver um link de arquivo PDF ou vídeo com a resolução das questões, cole aqui para disponibilizá-lo junto aos resultados dessa avaliação.</p>
             </div>
 
-            <div class="mb-8">
-                <label class="block text-sm font-bold text-slate-700 mb-3">3. Selecione o arquivo .CSV <span class="text-red-500">*</span></label>
-                <label class="block text-sm font-bold text-slate-700 mb-2">1. Nome da Avaliação <span class="text-red-500">*</span></label>
+            <div class="mb-8 border border-dashed border-slate-300 rounded-xl p-8 hover:bg-slate-50 transition-colors group">
+                <label class="block text-sm font-bold text-slate-700 mb-3 text-center">3. Selecione o arquivo .CSV <span class="text-red-500">*</span></label>
                     <div class="space-y-2 text-center">
                         <i class="ph-fill ph-cloud-arrow-up text-5xl text-slate-400 group-hover:text-primary transition-colors mb-4 block"></i>
                         <div class="flex text-sm text-slate-600 justify-center">

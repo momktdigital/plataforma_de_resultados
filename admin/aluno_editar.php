@@ -188,14 +188,14 @@ $notasFinais = json_decode($aluno['notas_finais'], true) ?: [];
                 <div class="p-6 flex flex-col flex-1">
                     <p class="text-sm text-slate-500 mb-6">Corrija ou insira a alternativa marcada pelo aluno (A, B, C, D, E). Deixe em branco se a questão foi anulada ou não existe nesta prova.</p>
 
-                    <div class="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-3 overflow-y-auto mb-6 pr-2" style="max-height: calc(100vh - 250px);">
+                    <div class="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-3 overflow-y-auto mb-6 pr-2" style="max-height: calc(100vh - 200px); align-content: start;">
                         <?php for ($i = 1; $i <= 100; $i++):
                             $qKey = "Q$i";
                             $val = $respostasAluno[$qKey] ?? '';
                         ?>
-                            <div class="flex flex-col border border-slate-200 rounded overflow-hidden focus-within:ring-2 focus-within:ring-primary focus-within:border-primary transition-all">
-                                <label class="bg-slate-100 text-[10px] text-center font-bold text-slate-500 py-1 border-b border-slate-200"><?= $qKey ?></label>
-                                <input type="text" name="<?= $qKey ?>" value="<?= htmlspecialchars($val) ?>" maxlength="1" class="w-full text-center py-2 min-h-[40px] font-bold text-lg text-slate-800 focus:outline-none uppercase bg-white">
+                            <div class="flex flex-col border border-slate-200 rounded overflow-hidden focus-within:ring-2 focus-within:ring-primary focus-within:border-primary transition-all shrink-0 bg-white">
+                                <label class="block w-full bg-slate-100 text-[10px] text-center font-bold text-slate-500 py-1 border-b border-slate-200 m-0"><?= $qKey ?></label>
+                                <input type="text" name="<?= $qKey ?>" value="<?= htmlspecialchars($val) ?>" maxlength="1" class="block w-full text-center py-2 text-2xl leading-[1] font-black text-slate-800 focus:outline-none uppercase bg-white m-0 border-0">
                             </div>
                         <?php endfor; ?>
                     </div>
