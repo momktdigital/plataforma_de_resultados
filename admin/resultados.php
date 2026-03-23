@@ -207,18 +207,23 @@ $sql = "SELECT r.id, r.ra, r.periodo, r.nome_avaliacao, r.respostas, r.notas_fin
                                 <?= date('d/m/Y H:i', strtotime($row['updated_at'])) ?>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <!-- Passando os dados via data-* para não poluir o HTML diretamente -->
-                                <button onclick='viewDetails(this)'
-                                        data-ra="<?= htmlspecialchars($row['ra']) ?>"
-                                        data-avaliacao="<?= htmlspecialchars($row['nome_avaliacao']) ?>"
-                                        data-periodo="<?= htmlspecialchars($row['periodo']) ?>"
-                                        data-respostas='<?= htmlspecialchars($row['respostas'], ENT_QUOTES, 'UTF-8') ?>'
-                                        data-gabarito='<?= htmlspecialchars($row['gabarito'], ENT_QUOTES, 'UTF-8') ?>'
-                                        data-notas='<?= htmlspecialchars($row['notas_finais'], ENT_QUOTES, 'UTF-8') ?>'
-                                        data-link='<?= htmlspecialchars($row['link_comentado'], ENT_QUOTES, 'UTF-8') ?>'
-                                        class="text-primary hover:text-emerald-700 transition-colors flex items-center justify-end w-full">
-                                    <i class="ph ph-eye text-lg mr-1"></i> Visualizar
-                                </button>
+                                <div class="flex items-center justify-end gap-3">
+                                    <button onclick='viewDetails(this)'
+                                            data-ra="<?= htmlspecialchars($row['ra']) ?>"
+                                            data-avaliacao="<?= htmlspecialchars($row['nome_avaliacao']) ?>"
+                                            data-periodo="<?= htmlspecialchars($row['periodo']) ?>"
+                                            data-respostas='<?= htmlspecialchars($row['respostas'], ENT_QUOTES, 'UTF-8') ?>'
+                                            data-gabarito='<?= htmlspecialchars($row['gabarito'], ENT_QUOTES, 'UTF-8') ?>'
+                                            data-notas='<?= htmlspecialchars($row['notas_finais'], ENT_QUOTES, 'UTF-8') ?>'
+                                            data-link='<?= htmlspecialchars($row['link_comentado'], ENT_QUOTES, 'UTF-8') ?>'
+                                            class="text-primary hover:text-emerald-700 transition-colors flex items-center" title="Visualizar Relatório">
+                                        <i class="ph ph-eye text-xl"></i>
+                                    </button>
+
+                                    <a href="aluno_editar.php?id=<?= $row['id'] ?>" class="text-slate-400 hover:text-blue-600 transition-colors flex items-center" title="Editar Registro do Aluno">
+                                        <i class="ph ph-pencil-simple text-xl"></i>
+                                    </a>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>
