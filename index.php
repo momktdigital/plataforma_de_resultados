@@ -1,3 +1,13 @@
+<?php
+require_once 'includes/Database.php';
+require_once 'admin/includes/config_helper.php';
+
+$db = new Database();
+$conn = $db->getConnection();
+
+$recaptchaAtivo = getConfig($conn, 'recaptcha_ativo') === '1';
+$siteKey = getConfig($conn, 'recaptcha_site_key');
+?>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -22,9 +32,14 @@
             }
         }
     </script>
-    <!-- Phosphor Icons (para ícones modernos e limpos) -->
+    <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <!-- Custom CSS para pequenas animações -->
+    <?php if ($recaptchaAtivo && !empty($siteKey)): ?>
+        <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+    <?php endif; ?>
+    <!-- IMask para as máscaras de CPF e Data de Nascimento -->
+    <script src="https://unpkg.com/imask"></script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
@@ -38,7 +53,6 @@
 
         .hidden-view { display: none !important; }
 
-        /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
@@ -47,50 +61,67 @@
 </head>
 <body class="bg-secondary text-dark min-h-screen flex flex-col items-center justify-center p-4">
 
-    <!-- Navbar simplificada (apenas logo) -->
+    <!-- Navbar -->
     <div class="fixed top-0 left-0 w-full bg-white shadow-sm z-50">
         <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
             <div class="flex items-center gap-2">
                 <i class="ph-fill ph-student text-primary text-3xl"></i>
                 <h1 class="font-bold text-xl tracking-tight text-slate-800">Resultados <span class="text-primary">DI</span></h1>
             </div>
-            <!-- Botão Admin Invisível ou discreto (opcional) -->
             <a href="admin/login.php" class="text-slate-400 hover:text-primary transition-colors text-sm flex items-center gap-1" title="Acesso Restrito">
                  <i class="ph ph-lock-key"></i> <span class="hidden sm:inline">Admin</span>
             </a>
         </div>
     </div>
 
-    <!-- VIEW 1: TELA DE BUSCA (Centralizada, muito whitespace) -->
+    <!-- VIEW 1: TELA DE BUSCA -->
     <div id="view-search" class="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-8 sm:p-10 fade-in mt-16">
         <div class="text-center mb-8">
             <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-50 mb-4">
                 <i class="ph ph-magnifying-glass text-3xl text-primary"></i>
             </div>
             <h2 class="text-2xl font-bold mb-2">Consulte seu Resultado</h2>
-            <p class="text-slate-500 text-sm">Digite seu Registro Acadêmico (RA) para acessar o seu desempenho detalhado.</p>
+            <p class="text-slate-500 text-sm">Digite seu CPF e sua Data de Nascimento para acessar seu desempenho detalhado.</p>
         </div>
 
         <form id="search-form" class="space-y-6">
             <div>
-                <label for="ra_input" class="block text-sm font-medium text-slate-700 mb-1 ml-1">Seu RA</label>
+                <label for="cpf_input" class="block text-sm font-bold text-slate-700 mb-1 ml-1">Seu CPF</label>
                 <div class="relative">
                     <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                         <i class="ph ph-identification-card text-slate-400 text-xl"></i>
                     </div>
-                    <input type="text" id="ra_input" name="ra" required
+                    <input type="tel" id="cpf_input" name="cpf" required
                            class="block w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-xl text-lg font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all shadow-inner"
-                           placeholder="Ex: 123456789">
+                           placeholder="000.000.000-00">
                 </div>
             </div>
+
+            <div>
+                <label for="nascimento_input" class="block text-sm font-bold text-slate-700 mb-1 ml-1">Data de Nascimento</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <i class="ph ph-calendar-blank text-slate-400 text-xl"></i>
+                    </div>
+                    <input type="tel" id="nascimento_input" name="data_nascimento" required
+                           class="block w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-xl text-lg font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all shadow-inner"
+                           placeholder="DD/MM/AAAA">
+                </div>
+            </div>
+
+            <?php if ($recaptchaAtivo && !empty($siteKey)): ?>
+                <div class="flex justify-center my-4">
+                    <div class="g-recaptcha" data-sitekey="<?= htmlspecialchars($siteKey) ?>"></div>
+                </div>
+            <?php endif; ?>
 
             <!-- Mensagem de erro dinâmica -->
             <div id="error-message" class="hidden rounded-lg bg-red-50 p-4 border border-red-100 flex items-start gap-3">
                 <i class="ph-fill ph-warning-circle text-red-500 text-xl mt-0.5"></i>
-                <p class="text-sm text-red-700" id="error-text">RA não encontrado. Verifique e tente novamente.</p>
+                <p class="text-sm text-red-700 font-medium" id="error-text">Aluno não encontrado. Verifique os dados.</p>
             </div>
 
-            <button type="submit" id="btn-submit" class="w-full flex justify-center items-center py-4 px-4 border border-transparent rounded-xl shadow-md text-base font-bold text-white bg-primary hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors disabled:opacity-70">
+            <button type="submit" id="btn-submit" class="w-full flex justify-center items-center py-4 px-4 border border-transparent rounded-xl shadow-md text-base font-bold text-white bg-primary hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all hover:-translate-y-0.5 disabled:opacity-70 disabled:hover:translate-y-0">
                 <span>Consultar Resultado</span>
                 <i class="ph-bold ph-arrow-right ml-2 text-lg"></i>
             </button>
@@ -99,16 +130,16 @@
 
     <!-- VIEW 2: TELA DE RESULTADOS (Dashboard) -->
     <div id="view-results" class="hidden-view w-full max-w-5xl fade-in mt-20 mb-10">
-
-        <!-- Header (Back button e Título) -->
+        <!-- Header -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
             <div>
                 <button id="btn-back" class="inline-flex items-center text-sm font-medium text-slate-500 hover:text-primary transition-colors bg-white px-4 py-2 rounded-full shadow-sm border border-slate-200 mb-3">
-                    <i class="ph-bold ph-arrow-left mr-2"></i> Voltar à busca
+                    <i class="ph-bold ph-arrow-left mr-2"></i> Nova consulta
                 </button>
                 <h2 class="text-3xl font-bold text-slate-800 flex items-center gap-2">
                     <i class="ph-fill ph-chart-bar text-primary"></i> Meu Boletim
                 </h2>
+                <!-- Agora exibe o RA e o Nome Oculto (opcional), mas vamos manter apenas o RA por privacidade da tela de resultados -->
                 <p class="text-slate-500 mt-1">RA: <span id="display-ra" class="font-bold text-slate-700">---</span></p>
             </div>
 
@@ -126,12 +157,12 @@
             </div>
         </div>
 
-        <!-- Painel de Resumo (Notas Finais) -->
+        <!-- Painel de Resumo -->
         <div id="summary-panel" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             <!-- Cards injetados via JS -->
         </div>
 
-        <!-- Grid de Respostas (Q1-Q100) -->
+        <!-- Grid de Respostas -->
         <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div class="px-6 py-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                 <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
@@ -140,7 +171,6 @@
                 <div id="container-botoes-extras"></div>
             </div>
             <div class="p-6">
-                <!-- Grid CSS Responsivo para "pílulas" -->
                 <div id="answers-grid" class="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-8 lg:grid-cols-10 gap-3">
                     <!-- Badges injetadas via JS -->
                 </div>
@@ -148,7 +178,37 @@
         </div>
     </div>
 
-    <!-- Script de lógica da Interface -->
+    <!-- Script de lógica da Interface e Máscaras -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // Aplica Máscaras
+            const cpfInputEl = document.getElementById('cpf_input');
+            const dataInputEl = document.getElementById('nascimento_input');
+
+            if(cpfInputEl) IMask(cpfInputEl, { mask: '000.000.000-00' });
+            if(dataInputEl) IMask(dataInputEl, {
+                mask: Date,
+                pattern: 'd/m/Y',
+                blocks: {
+                    d: { mask: IMask.MaskedRange, from: 1, to: 31, maxLength: 2 },
+                    m: { mask: IMask.MaskedRange, from: 1, to: 12, maxLength: 2 },
+                    Y: { mask: IMask.MaskedRange, from: 1900, to: 2999 }
+                },
+                format: function (date) {
+                    var day = date.getDate();
+                    var month = date.getMonth() + 1;
+                    var year = date.getFullYear();
+                    if (day < 10) day = "0" + day;
+                    if (month < 10) month = "0" + month;
+                    return [day, month, year].join('/');
+                },
+                parse: function (str) {
+                    var yearMonthDay = str.split('/');
+                    return new Date(yearMonthDay[2], yearMonthDay[1] - 1, yearMonthDay[0]);
+                }
+            });
+        });
+    </script>
     <script src="assets/js/app.js"></script>
 
 </body>

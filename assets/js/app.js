@@ -1,146 +1,146 @@
-/**
- * Lógica da Interface do Aluno - Resultados DI
- */
-
 document.addEventListener('DOMContentLoaded', () => {
+
+    const searchForm = document.getElementById('search-form');
+    const cpfInput = document.getElementById('cpf_input');
+    const nascimentoInput = document.getElementById('nascimento_input');
+    const btnSubmit = document.getElementById('btn-submit');
+
+    const errorMessage = document.getElementById('error-message');
+    const errorText = document.getElementById('error-text');
 
     const viewSearch = document.getElementById('view-search');
     const viewResults = document.getElementById('view-results');
-    const searchForm = document.getElementById('search-form');
-    const raInput = document.getElementById('ra_input');
-    const btnSubmit = document.getElementById('btn-submit');
-    const errorMessage = document.getElementById('error-message');
-    const errorText = document.getElementById('error-text');
     const btnBack = document.getElementById('btn-back');
+
     const displayRa = document.getElementById('display-ra');
-    const periodSelectorContainer = document.getElementById('period-selector-container');
-    const periodSelect = document.getElementById('period_select');
     const summaryPanel = document.getElementById('summary-panel');
     const answersGrid = document.getElementById('answers-grid');
 
-    let allData = []; // Armazena todos os períodos do RA consultado
+    const periodSelectorContainer = document.getElementById('period-selector-container');
+    const periodSelect = document.getElementById('period_select');
 
-    // Função para exibir erro na tela de busca
+    let allData = []; // Armazena todos os períodos do aluno consultado
+
+    // --- Funções Auxiliares ---
+
     const showError = (msg) => {
         errorText.textContent = msg;
         errorMessage.classList.remove('hidden');
-        btnSubmit.disabled = false;
-        btnSubmit.innerHTML = '<span>Consultar Resultado</span><i class="ph-bold ph-arrow-right ml-2 text-lg"></i>';
     };
 
-    // Função para esconder erro
     const hideError = () => {
         errorMessage.classList.add('hidden');
     };
 
-    // Alternar entre visões (Busca / Resultados)
-    const switchView = (toResults = true) => {
-        if (toResults) {
+    const switchView = (showResults) => {
+        if (showResults) {
             viewSearch.classList.add('hidden-view');
             viewResults.classList.remove('hidden-view');
-            viewResults.classList.add('fade-in');
         } else {
             viewResults.classList.add('hidden-view');
             viewSearch.classList.remove('hidden-view');
-            viewSearch.classList.add('fade-in');
-            raInput.value = '';
+
+            // Limpa o formulário e recarrega recaptcha se necessário
+            cpfInput.value = '';
+            nascimentoInput.value = '';
             hideError();
+            if (typeof grecaptcha !== 'undefined') {
+                grecaptcha.reset();
+            }
         }
     };
 
-    // Renderizar Dashboard de um período específico
+    // --- Lógica de Renderização do Dashboard ---
     const renderDashboard = (index) => {
         const item = allData[index];
         if (!item) return;
 
         // Atualiza RA no topo
-        displayRa.textContent = item.ra || raInput.value;
+        displayRa.textContent = item.ra;
 
-        // Limpa painéis anteriores
+        // Limpa painéis
         summaryPanel.innerHTML = '';
         answersGrid.innerHTML = '';
 
-        // 1. Renderizar Notas Finais (Summary com Agrupamento por Disciplina)
+        // 1. Renderizar Notas Finais (Resumo)
         const notas = item.notas_finais || {};
 
-        if (Object.keys(notas).length === 0) {
-             summaryPanel.innerHTML = '<div class="col-span-full p-4 bg-slate-50 rounded text-slate-500 text-center text-sm border border-slate-200">Nenhum resumo de notas disponível.</div>';
-        } else {
-            let disciplinas = {};
-            let notaGeral = '';
+        let notaGeral = '';
+        let disciplinas = {};
 
-            for (const [key, val] of Object.entries(notas)) {
-                const upperKey = key.toUpperCase().trim();
+        // Processa as notas para agrupar totais e percentuais
+        for (const [key, val] of Object.entries(notas)) {
+            const keyLower = key.toLowerCase();
 
-                // Verifica se a chave original é o "Total" geral
-                if (upperKey === 'TOTAL' || upperKey === 'NOTA FINAL' || upperKey === 'PONTUAÇÃO FINAL') {
-                    notaGeral = val;
-                    continue;
-                }
-
-                // Separa Disciplina do Tipo usando hífen (-)
-                if (key.includes('-')) {
-                    const parts = key.split('-');
-                    const disciplinaNome = parts.slice(0, -1).join('-').trim();
-                    const tipoNota = parts[parts.length - 1].toLowerCase().trim();
-
-                    if (!disciplinas[disciplinaNome]) {
-                        disciplinas[disciplinaNome] = { total: '-', percentual: '-' };
-                    }
-
-                    if (tipoNota.includes('percentual') || tipoNota.includes('%')) {
-                        disciplinas[disciplinaNome].percentual = val;
-                    } else if (tipoNota.includes('total') || tipoNota.includes('acerto') || tipoNota.includes('nota')) {
-                        disciplinas[disciplinaNome].total = val;
-                    }
-                } else {
-                    // Se não tem hífen e não é "Total" geral, adiciona direto
-                    disciplinas[key.trim()] = { total: val, percentual: '' };
-                }
+            // Ignora se for o Total que queremos destacar
+            if (keyLower === 'total' || keyLower === 'pontuação final' || keyLower === 'nota final' || keyLower === 'total de acertos') {
+                notaGeral = val;
+                continue;
             }
 
-            // Renderizar Nota Geral no Topo (Card Expandido)
-            if (notaGeral !== '') {
-                const cardGeral = document.createElement('div');
-                cardGeral.className = 'col-span-full bg-slate-800 rounded-2xl p-6 md:p-8 shadow-md flex flex-col sm:flex-row items-center justify-between border-l-8 border-primary transition-transform hover:-translate-y-1';
-                cardGeral.innerHTML = `
-                    <div class="flex items-center mb-4 sm:mb-0">
-                        <div class="w-16 h-16 rounded-full bg-[#00b48d]/20 flex items-center justify-center mr-6">
-                            <i class="ph-fill ph-trophy text-primary text-4xl"></i>
-                        </div>
-                        <div>
-                            <span class="text-sm font-bold text-slate-400 uppercase tracking-widest block mb-1">Total de Acertos</span>
-                            <span class="text-5xl font-black text-white">${notaGeral}</span>
-                        </div>
-                    </div>
-                `;
-                summaryPanel.appendChild(cardGeral);
-            }
+            // Tenta identificar se é uma disciplina (ex: "Clínica Médica - Total de acertos" ou "Cirurgia - Percentual")
+            if (key.includes('-')) {
+                const parts = key.split('-');
+                const disciplinaNome = parts.slice(0, -1).join('-').trim();
+                const tipoNota = parts[parts.length - 1].toLowerCase().trim();
 
-            // Renderizar Disciplinas (Cards)
-            for (const [disciplina, dados] of Object.entries(disciplinas)) {
-                const displayTotal = (dados.total === '' || dados.total === null || dados.total === '-') ? '-' : dados.total;
-                let displayPercent = (dados.percentual === '' || dados.percentual === null || dados.percentual === '-') ? '' : dados.percentual;
-
-                // Adiciona o símbolo de porcentagem se for um número e não tiver o símbolo
-                if (displayPercent !== '' && !displayPercent.toString().includes('%')) {
-                    displayPercent += '%';
+                if (!disciplinas[disciplinaNome]) {
+                    disciplinas[disciplinaNome] = { total: '-', percentual: '-' };
                 }
 
-                let percentHtml = displayPercent ? `<span class="text-lg text-slate-400 ml-1 font-medium">(${displayPercent})</span>` : '';
-
-                const card = document.createElement('div');
-                card.className = 'bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between transition-transform hover:-translate-y-1 hover:border-primary/40 hover:shadow-md';
-                card.innerHTML = `
-                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 leading-snug break-words" title="${disciplina}">${disciplina}</span>
-                    <div class="flex items-baseline mt-auto">
-                        <span class="text-3xl font-black text-[#00b48d]">${displayTotal}</span>
-                        ${percentHtml}
-                    </div>
-                `;
-                summaryPanel.appendChild(card);
+                if (tipoNota.includes('percentual') || tipoNota.includes('%')) {
+                    disciplinas[disciplinaNome].percentual = val;
+                } else if (tipoNota.includes('total') || tipoNota.includes('acerto') || tipoNota.includes('nota')) {
+                    disciplinas[disciplinaNome].total = val;
+                }
+            } else {
+                // Se não tem hífen e não é "Total" geral, adiciona direto
+                disciplinas[key.trim()] = { total: val, percentual: '' };
             }
         }
+
+        // Renderizar Nota Geral no Topo (Card Expandido)
+        if (notaGeral !== '') {
+            const cardGeral = document.createElement('div');
+            cardGeral.className = 'col-span-full bg-slate-800 rounded-2xl p-6 md:p-8 shadow-md flex flex-col sm:flex-row items-center justify-between border-l-8 border-primary transition-transform hover:-translate-y-1';
+            cardGeral.innerHTML = `
+                <div class="flex items-center mb-4 sm:mb-0">
+                    <div class="w-16 h-16 rounded-full bg-[#00b48d]/20 flex items-center justify-center mr-6">
+                        <i class="ph-fill ph-trophy text-primary text-4xl"></i>
+                    </div>
+                    <div>
+                        <span class="text-sm font-bold text-slate-400 uppercase tracking-widest block mb-1">Total de Acertos</span>
+                        <span class="text-5xl font-black text-white">${notaGeral}</span>
+                    </div>
+                </div>
+            `;
+            summaryPanel.appendChild(cardGeral);
+        }
+
+        // Renderizar Disciplinas (Cards)
+        for (const [disciplina, dados] of Object.entries(disciplinas)) {
+            const displayTotal = (dados.total === '' || dados.total === null || dados.total === '-') ? '-' : dados.total;
+            let displayPercent = (dados.percentual === '' || dados.percentual === null || dados.percentual === '-') ? '' : dados.percentual;
+
+            // Adiciona o símbolo de porcentagem se for um número e não tiver o símbolo
+            if (displayPercent !== '' && !displayPercent.toString().includes('%')) {
+                displayPercent += '%';
+            }
+
+            let percentHtml = displayPercent ? `<span class="text-lg text-slate-400 ml-1 font-medium">(${displayPercent})</span>` : '';
+
+            const card = document.createElement('div');
+            card.className = 'bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between transition-transform hover:-translate-y-1 hover:border-primary/40 hover:shadow-md';
+            card.innerHTML = `
+                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 leading-snug break-words" title="${disciplina}">${disciplina}</span>
+                <div class="flex items-baseline mt-auto">
+                    <span class="text-3xl font-black text-[#00b48d]">${displayTotal}</span>
+                    ${percentHtml}
+                </div>
+            `;
+            summaryPanel.appendChild(card);
+        }
+
         // 2. Renderizar Respostas (Q1-Q100) com Comparação de Gabarito
         const respostas = item.respostas_aluno || {};
         const gabarito = item.gabarito || {};
@@ -208,13 +208,32 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     };
+
     // Evento de Submissão do Formulário de Busca
     searchForm.addEventListener('submit', async (e) => {
         e.preventDefault();
 
-        const ra = raInput.value.trim();
-        if (!ra) {
-            showError('Por favor, digite o seu RA.');
+        const cpf = cpfInput.value.replace(/\D/g, ''); // Remove pontuação para enviar limpo
+        const data_nascimento = nascimentoInput.value.trim();
+
+        // Verifica se o reCAPTCHA existe e se foi marcado
+        let recaptchaResponse = '';
+        if (typeof grecaptcha !== 'undefined') {
+            recaptchaResponse = grecaptcha.getResponse();
+            // Se o widget estiver renderizado mas não marcado
+            if (document.querySelector('.g-recaptcha') && !recaptchaResponse) {
+                showError('Por favor, confirme que você não é um robô.');
+                return;
+            }
+        }
+
+        if (cpf.length !== 11) {
+            showError('Por favor, digite um CPF válido.');
+            return;
+        }
+
+        if (data_nascimento.length !== 10) {
+            showError('Por favor, digite uma Data de Nascimento válida (DD/MM/AAAA).');
             return;
         }
 
@@ -226,11 +245,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // Chamada à API (Fetch)
-            const response = await fetch(`api/consulta.php?ra=${encodeURIComponent(ra)}`);
+            const formData = new FormData();
+            formData.append('cpf', cpf);
+            formData.append('data_nascimento', data_nascimento);
+            if (recaptchaResponse) {
+                formData.append('g-recaptcha-response', recaptchaResponse);
+            }
+
+            const response = await fetch('api/consulta.php', {
+                method: 'POST',
+                body: formData
+            });
             const json = await response.json();
 
             if (response.ok && json.status === 'success') {
-                allData = json.data; // Array de resultados (ordenados do mais recente ao mais antigo)
+                allData = json.data; // Array de resultados
 
                 // Preenche o seletor de períodos se houver mais de um
                 periodSelect.innerHTML = '';
@@ -242,7 +271,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         periodSelect.appendChild(option);
                     });
 
-                    // Exibe o dropdown se houver múltiplos, esconde se for apenas um
                     if (allData.length > 1) {
                         periodSelectorContainer.classList.remove('hidden');
                         periodSelectorContainer.classList.add('block');
@@ -251,19 +279,21 @@ document.addEventListener('DOMContentLoaded', () => {
                         periodSelectorContainer.classList.remove('block');
                     }
 
-                    // Renderiza o primeiro item (o mais recente pela ordenação da API)
+                    // Renderiza o primeiro item
                     renderDashboard(0);
                     switchView(true);
                 } else {
                      showError('Dados não encontrados no formato esperado.');
                 }
             } else {
-                // Erro 404 ou 400
-                showError(json.message || 'RA não encontrado na base de dados.');
+                // Erro (ex: não encontrou, recaptcha inválido)
+                showError(json.message || 'Aluno ou resultados não encontrados.');
+                if (typeof grecaptcha !== 'undefined') grecaptcha.reset();
             }
         } catch (err) {
             showError('Erro de conexão com o servidor. Tente novamente mais tarde.');
             console.error('Fetch error:', err);
+            if (typeof grecaptcha !== 'undefined') grecaptcha.reset();
         } finally {
             if (!viewSearch.classList.contains('hidden-view')) {
                 // Restaura botão se ainda estiver na tela de busca
@@ -282,6 +312,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Botão Voltar
     btnBack.addEventListener('click', () => {
         switchView(false);
+        // Reseta o botão principal para seu estado original
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = '<span>Consultar Resultado</span><i class="ph-bold ph-arrow-right ml-2 text-lg"></i>';
     });
 
 });

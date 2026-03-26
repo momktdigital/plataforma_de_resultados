@@ -65,13 +65,14 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     <a href="index.php" class="flex items-center px-3 py-2.5 rounded-lg transition-colors <?= $current_page === 'index.php' ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-slate-800 hover:text-white' ?>">
                         <i class="ph ph-squares-four text-xl mr-3 <?= $current_page === 'index.php' ? 'text-primary' : '' ?>"></i> Dashboard
                     </a>
-
                 </li>
-
                 <li>
-
+                    <a href="alunos.php" class="flex items-center px-3 py-2.5 rounded-lg transition-colors <?= $current_page === 'alunos.php' ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-slate-800 hover:text-white' ?>">
+                        <i class="ph ph-identification-card text-xl mr-3 <?= $current_page === 'alunos.php' ? 'text-primary' : '' ?>"></i> Alunos
+                    </a>
+                </li>
+                <li>
                     <a href="avaliacoes.php" class="flex items-center px-3 py-2.5 rounded-lg transition-colors <?= $current_page === 'avaliacoes.php' ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-slate-800 hover:text-white' ?>">
-
                         <i class="ph ph-exam text-xl mr-3 <?= $current_page === 'avaliacoes.php' ? 'text-primary' : '' ?>"></i> Avaliações
                     </a>
                 </li>
@@ -82,12 +83,17 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 </li>
                 <li>
                     <a href="upload_form.php" class="flex items-center px-3 py-2.5 rounded-lg transition-colors <?= $current_page === 'upload_form.php' ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-slate-800 hover:text-white' ?>">
-                        <i class="ph ph-cloud-arrow-up text-xl mr-3 <?= $current_page === 'upload_form.php' ? 'text-primary' : '' ?>"></i> Upload de CSV
+                        <i class="ph ph-cloud-arrow-up text-xl mr-3 <?= $current_page === 'upload_form.php' ? 'text-primary' : '' ?>"></i> Upload de Notas
                     </a>
                 </li>
                 <li>
                     <a href="upload_gabarito.php" class="flex items-center px-3 py-2.5 rounded-lg transition-colors <?= $current_page === 'upload_gabarito.php' ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-slate-800 hover:text-white' ?>">
                         <i class="ph ph-check-square-offset text-xl mr-3 <?= $current_page === 'upload_gabarito.php' ? 'text-primary' : '' ?>"></i> Gabaritos
+                    </a>
+                </li>
+                <li>
+                    <a href="configuracoes.php" class="flex items-center px-3 py-2.5 rounded-lg transition-colors <?= $current_page === 'configuracoes.php' ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-slate-800 hover:text-white' ?>">
+                        <i class="ph ph-gear text-xl mr-3 <?= $current_page === 'configuracoes.php' ? 'text-primary' : '' ?>"></i> Configurações
                     </a>
                 </li>
                 <li>

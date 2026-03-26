@@ -5,25 +5,96 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST');
 
 require_once '../includes/Database.php';
+require_once '../admin/includes/config_helper.php';
 
-// Pega o RA via GET ou POST
-$ra = $_REQUEST['ra'] ?? '';
-$ra = trim($ra);
+$db = new Database();
+$conn = $db->getConnection();
 
-// Validação simples
-if (empty($ra)) {
+// --- 1. Validar reCAPTCHA se ativo ---
+$recaptchaAtivo = getConfig($conn, 'recaptcha_ativo') === '1';
+if ($recaptchaAtivo) {
+    $recaptchaResponse = $_POST['g-recaptcha-response'] ?? '';
+    if (empty($recaptchaResponse)) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => 'Por favor, confirme que você não é um robô.']);
+        die();
+    }
+
+    $secretKey = getConfig($conn, 'recaptcha_secret_key');
+    if (!empty($secretKey)) {
+        $verifyUrl = 'https://www.google.com/recaptcha/api/siteverify';
+        $data = [
+            'secret' => $secretKey,
+            'response' => $recaptchaResponse
+        ];
+
+        $options = [
+            'http' => [
+                'header'  => "Content-type: application/x-www-form-urlencoded\r\n",
+                'method'  => 'POST',
+                'content' => http_build_query($data)
+            ]
+        ];
+        $context  = stream_context_create($options);
+        $result = file_get_contents($verifyUrl, false, $context);
+        $recaptchaData = json_decode($result, true);
+
+        if (!$recaptchaData || !$recaptchaData['success']) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Falha na validação do reCAPTCHA. Tente novamente.']);
+            die();
+        }
+    }
+}
+
+// --- 2. Coletar e Validar Dados (CPF e Nascimento) ---
+$cpf = $_POST['cpf'] ?? '';
+$data_nascimento_br = $_POST['data_nascimento'] ?? ''; // Vem como DD/MM/AAAA
+
+// Remove pontuação do CPF (caso frontend tenha falhado)
+$cpf = preg_replace('/[^0-9]/', '', $cpf);
+
+if (empty($cpf) || empty($data_nascimento_br) || strlen($cpf) !== 11) {
     http_response_code(400); // Bad Request
     echo json_encode([
         'status' => 'error',
-        'message' => 'Por favor, informe o RA.'
+        'message' => 'Por favor, informe um CPF e Data de Nascimento válidos.'
     ]);
     die();
 }
 
-try {
-    $db = new Database();
-    $conn = $db->getConnection();
+// Converter DD/MM/AAAA para YYYY-MM-DD
+$data_nascimento = null;
+if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $data_nascimento_br, $matches)) {
+    $data_nascimento = "{$matches[3]}-{$matches[2]}-{$matches[1]}";
+} else {
+    http_response_code(400);
+    echo json_encode(['status' => 'error', 'message' => 'Formato de data inválido. Use DD/MM/AAAA.']);
+    die();
+}
 
+
+try {
+    // --- 3. Buscar o Aluno pelo CPF e Data de Nascimento ---
+    $queryAluno = "SELECT ra, nome FROM alunos WHERE cpf = :cpf AND data_nascimento = :data_nascimento LIMIT 1";
+    $stmtAluno = $conn->prepare($queryAluno);
+    $stmtAluno->bindParam(':cpf', $cpf, PDO::PARAM_STR);
+    $stmtAluno->bindParam(':data_nascimento', $data_nascimento, PDO::PARAM_STR);
+    $stmtAluno->execute();
+
+    if ($stmtAluno->rowCount() === 0) {
+        http_response_code(404); // Not Found
+        echo json_encode([
+            'status' => 'error',
+            'message' => "Nenhum aluno encontrado com este CPF e Data de Nascimento."
+        ]);
+        die();
+    }
+
+    $alunoRow = $stmtAluno->fetch(PDO::FETCH_ASSOC);
+    $ra = $alunoRow['ra'];
+
+    // --- 4. Consultar os Resultados pelo RA (Lógica Original) ---
     // Consulta os resultados pelo RA fazendo JOIN no gabarito apenas pela nome_avaliacao
     $query = "SELECT
                 r.*,
@@ -56,7 +127,7 @@ try {
         http_response_code(200); // OK
         echo json_encode([
             'status' => 'success',
-            'ra' => $ra,
+            'ra' => $ra, // Devolve o RA só para exibir na tela (o aluno não digita mais)
             'data' => $resultados
         ]);
 
@@ -64,14 +135,13 @@ try {
         http_response_code(404); // Not Found
         echo json_encode([
             'status' => 'error',
-            'message' => "Nenhum resultado encontrado para o RA: $ra."
+            'message' => "Você não possui resultados cadastrados no momento."
         ]);
     }
 
 } catch (PDOException $e) {
     http_response_code(500); // Internal Server Error
 
-    // Agora retornamos o erro real no JSON para facilitar o debug (embora em produção não seja ideal)
     echo json_encode([
         'status' => 'error',
         'message' => 'Erro interno ao consultar o banco de dados.',

@@ -43,3 +43,30 @@ CREATE TABLE IF NOT EXISTS `gabaritos` (
     UNIQUE KEY `uk_avaliacao` (`nome_avaliacao`)
 
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Tabela de Alunos
+CREATE TABLE IF NOT EXISTS `alunos` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `ra` VARCHAR(50) NOT NULL UNIQUE,
+    `cpf` VARCHAR(20) NOT NULL UNIQUE,
+    `data_nascimento` DATE NOT NULL,
+    `nome` VARCHAR(255) NULL,
+    `curso` VARCHAR(255) NULL,
+    `campus` VARCHAR(255) NULL,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Tabela de Configurações
+CREATE TABLE IF NOT EXISTS `configuracoes` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `chave` VARCHAR(100) NOT NULL UNIQUE,
+    `valor` TEXT NULL,
+    `descricao` VARCHAR(255) NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Inserindo configurações padrão do reCAPTCHA
+INSERT IGNORE INTO `configuracoes` (`chave`, `valor`, `descricao`) VALUES
+('recaptcha_ativo', '0', 'Ativar reCAPTCHA (1 = Sim, 0 = Não)'),
+('recaptcha_site_key', '', 'Chave de Site (Site Key) do Google reCAPTCHA v2'),
+('recaptcha_secret_key', '', 'Chave Secreta (Secret Key) do Google reCAPTCHA v2');
