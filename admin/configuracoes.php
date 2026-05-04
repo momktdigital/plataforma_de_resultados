@@ -49,6 +49,15 @@ try {
 $recaptchaAtivo = ($configuracoes['recaptcha_ativo'] ?? '0') === '1';
 $siteKey = $configuracoes['recaptcha_site_key'] ?? '';
 $secretKey = $configuracoes['recaptcha_secret_key'] ?? '';
+
+$smtpAtivo = ($configuracoes['smtp_ativo'] ?? '0') === '1';
+$smtpHost = $configuracoes['smtp_host'] ?? '';
+$smtpPort = $configuracoes['smtp_port'] ?? '';
+$smtpUser = $configuracoes['smtp_user'] ?? '';
+$smtpFromEmail = $configuracoes['smtp_from_email'] ?? '';
+$smtpFromName = $configuracoes['smtp_from_name'] ?? '';
+$smtpPassExists = !empty($configuracoes['smtp_pass']);
+$form_type = $_POST['form_type'] ?? '';
 ?>
 
 <div class="mb-8 flex items-center justify-between">
