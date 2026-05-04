@@ -4,6 +4,11 @@ header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST');
 
+require '../vendor/autoload.php';
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+use PHPMailer\PHPMailer\SMTP;
+
 require_once '../includes/Database.php';
 require_once '../admin/includes/config_helper.php';
 
@@ -76,7 +81,7 @@ if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $data_nascimento_br, $matches)) 
 
 try {
     // --- 3. Buscar o Aluno pelo CPF e Data de Nascimento ---
-    $queryAluno = "SELECT ra, nome FROM alunos WHERE cpf = :cpf AND data_nascimento = :data_nascimento LIMIT 1";
+    $queryAluno = "SELECT ra, nome, email FROM alunos WHERE cpf = :cpf AND data_nascimento = :data_nascimento LIMIT 1";
     $stmtAluno = $conn->prepare($queryAluno);
     $stmtAluno->bindParam(':cpf', $cpf, PDO::PARAM_STR);
     $stmtAluno->bindParam(':data_nascimento', $data_nascimento, PDO::PARAM_STR);
@@ -93,6 +98,78 @@ try {
 
     $alunoRow = $stmtAluno->fetch(PDO::FETCH_ASSOC);
     $ra = $alunoRow['ra'];
+    $email = $alunoRow['email'];
+
+    // --- 3.5. Verifica se o 2FA está ativo ---
+    $smtpAtivo = getConfig($conn, 'smtp_ativo') === '1';
+    if ($smtpAtivo) {
+        if (empty($email)) {
+            http_response_code(400);
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'O 2FA está ativo, mas você não tem e-mail cadastrado. Contate a secretaria.'
+            ]);
+            die();
+        }
+
+        // Gerar código aleatório de 6 dígitos
+        $codigo = sprintf("%06d", mt_rand(0, 999999));
+        $expira_em = date('Y-m-d H:i:s', strtotime('+10 minutes'));
+
+        // Limpar códigos antigos do CPF e inserir o novo
+        $conn->prepare("DELETE FROM verificacoes_email WHERE cpf = ?")->execute([$cpf]);
+        $stmt = $conn->prepare("INSERT INTO verificacoes_email (cpf, codigo, expira_em, vezes_reenviado) VALUES (?, ?, ?, 0)");
+        $stmt->execute([$cpf, $codigo, $expira_em]);
+
+        // Enviar E-mail via SMTP usando PHPMailer
+        $mail = new PHPMailer(true);
+        try {
+            $mail->isSMTP();
+            $mail->Host       = getConfig($conn, 'smtp_host');
+            $mail->SMTPAuth   = true;
+            $mail->Username   = getConfig($conn, 'smtp_user');
+            $mail->Password   = getConfig($conn, 'smtp_pass');
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Port       = getConfig($conn, 'smtp_port');
+            $mail->CharSet    = 'UTF-8';
+
+            $fromEmail = getConfig($conn, 'smtp_from_email');
+            $fromName = getConfig($conn, 'smtp_from_name');
+            $mail->setFrom($fromEmail, $fromName);
+            $mail->addAddress($email);
+
+            $mail->isHTML(true);
+            $mail->Subject = 'Seu código de acesso aos resultados';
+            $mail->Body    = "Olá,<br><br>Seu código de verificação é: <b>$codigo</b><br><br>Este código expira em 10 minutos.<br><br>Se você não solicitou este acesso, por favor ignore este e-mail.";
+            $mail->AltBody = "Seu código de verificação é: $codigo. Este código expira em 10 minutos.";
+
+            $mail->send();
+
+            // Ocultar email parcialmente para exibição segura
+            $emailParts = explode('@', $email);
+            $emailOculto = substr($emailParts[0], 0, 3) . '***@' . $emailParts[1];
+
+            http_response_code(200);
+            echo json_encode([
+                'status' => 'require_2fa',
+                'message' => 'Código enviado para o e-mail cadastrado.',
+                'email_hint' => $emailOculto,
+                // pass these securely without sending real values just format confirmation
+                'cpf' => $cpf,
+                'data_nascimento' => $data_nascimento_br
+            ]);
+            die();
+
+        } catch (Exception $e) {
+            error_log("Erro PHPMailer: {$mail->ErrorInfo}");
+            http_response_code(500);
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Erro ao enviar o e-mail de verificação. Tente novamente mais tarde.'
+            ]);
+            die();
+        }
+    }
 
     // --- 4. Consultar os Resultados pelo RA (Lógica Original) ---
     // Consulta os resultados pelo RA fazendo JOIN no gabarito apenas pela nome_avaliacao

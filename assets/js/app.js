@@ -10,6 +10,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const viewSearch = document.getElementById('view-search');
     const viewResults = document.getElementById('view-results');
+    const view2fa = document.getElementById('view-2fa');
+
+    // Elementos do 2FA
+    const form2fa = document.getElementById('2fa-form');
+    const displayEmail = document.getElementById('display-email');
+    const btnSubmit2fa = document.getElementById('btn-submit-2fa');
+    const errorMsg2fa = document.getElementById('error-message-2fa');
+    const errorText2fa = document.getElementById('error-text-2fa');
+    const btnResend = document.getElementById('btn-resend');
+    const resendText = document.getElementById('resend-text');
+    const resendTimer = document.getElementById('resend-timer');
+    const codigoInput = document.getElementById('codigo_input');
+    const btnCancel2fa = document.getElementById('btn-cancel-2fa');
+
     const btnBack = document.getElementById('btn-back');
 
     const displayRa = document.getElementById('display-ra');
@@ -32,21 +46,93 @@ document.addEventListener('DOMContentLoaded', () => {
         errorMessage.classList.add('hidden');
     };
 
-    const switchView = (showResults) => {
-        if (showResults) {
-            viewSearch.classList.add('hidden-view');
-            viewResults.classList.remove('hidden-view');
-        } else {
-            viewResults.classList.add('hidden-view');
-            viewSearch.classList.remove('hidden-view');
+    const switchView = (targetView) => {
+        viewSearch.classList.add('hidden-view');
+        view2fa.classList.add('hidden-view');
+        viewResults.classList.add('hidden-view');
 
-            // Limpa o formulário e recarrega recaptcha se necessário
+        if (targetView === 'results') {
             cpfInput.value = '';
             nascimentoInput.value = '';
-            hideError();
-            if (typeof grecaptcha !== 'undefined') {
-                grecaptcha.reset();
+            if (typeof grecaptcha !== 'undefined') grecaptcha.reset();
+            viewResults.classList.remove('hidden-view');
+            codigoInput.value = '';
+        } else if (targetView === '2fa') {
+            view2fa.classList.remove('hidden-view');
+            codigoInput.focus();
+        } else if (targetView === 'search') {
+            if (typeof grecaptcha !== 'undefined') grecaptcha.reset();
+            viewSearch.classList.remove('hidden-view');
+            cpfInput.focus();
+        }
+    };
+
+    const showError2fa = (msg) => {
+        errorText2fa.textContent = msg;
+        errorMsg2fa.classList.remove('hidden');
+    };
+    const hideError2fa = () => {
+        errorMsg2fa.classList.add('hidden');
+        errorText2fa.textContent = '';
+    };
+
+    let resendInterval;
+    const startResendTimer = (minutes) => {
+        clearInterval(resendInterval);
+        let time = minutes * 60;
+        btnResend.disabled = true;
+        resendTimer.classList.remove('hidden');
+
+        resendInterval = setInterval(() => {
+            let m = Math.floor(time / 60);
+            let s = time % 60;
+            resendTimer.textContent = `(${m}:${s < 10 ? '0' : ''}${s})`;
+            time--;
+
+            if (time < 0) {
+                clearInterval(resendInterval);
+                btnResend.disabled = false;
+                resendTimer.classList.add('hidden');
+                resendText.textContent = 'Reenviar código';
             }
+        }, 1000);
+    };
+
+    const checkBlock = () => {
+        const blockedUntil = localStorage.getItem('2fa_block_until');
+        if (blockedUntil && Date.now() < parseInt(blockedUntil, 10)) {
+            const remainingMinutes = Math.ceil((parseInt(blockedUntil, 10) - Date.now()) / 60000);
+            showError(`Dispositivo bloqueado. Tente novamente em ${remainingMinutes} minuto(s).`);
+            btnSubmit.disabled = true;
+            return true;
+        }
+        if (blockedUntil && Date.now() >= parseInt(blockedUntil, 10)) {
+             localStorage.removeItem('2fa_block_until');
+             btnSubmit.disabled = false;
+        }
+        return false;
+    };
+    checkBlock();
+
+    const setupDashboard = (json) => {
+        allData = json.data;
+        periodSelect.innerHTML = '';
+        if (allData.length > 0) {
+            allData.forEach((item, idx) => {
+                const option = document.createElement('option');
+                option.value = idx;
+                option.textContent = item.periodo;
+                periodSelect.appendChild(option);
+            });
+            if (allData.length > 1) {
+                periodSelectorContainer.classList.remove('hidden');
+                periodSelectorContainer.classList.add('block');
+            } else {
+                periodSelectorContainer.classList.add('hidden');
+                periodSelectorContainer.classList.remove('block');
+            }
+            renderDashboard(0);
+            switchView('results');
         }
     };
 
@@ -216,6 +302,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const cpf = cpfInput.value.replace(/\D/g, ''); // Remove pontuação para enviar limpo
         const data_nascimento = nascimentoInput.value.trim();
 
+        if(checkBlock()) return;
+
         // Verifica se o reCAPTCHA existe e se foi marcado
         let recaptchaResponse = '';
         if (typeof grecaptcha !== 'undefined') {
@@ -258,32 +346,19 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const json = await response.json();
 
-            if (response.ok && json.status === 'success') {
-                allData = json.data; // Array de resultados
-
-                // Preenche o seletor de períodos se houver mais de um
-                periodSelect.innerHTML = '';
-                if (allData.length > 0) {
-                    allData.forEach((item, idx) => {
-                        const option = document.createElement('option');
-                        option.value = idx;
-                        option.textContent = item.periodo;
-                        periodSelect.appendChild(option);
-                    });
-
-                    if (allData.length > 1) {
-                        periodSelectorContainer.classList.remove('hidden');
-                        periodSelectorContainer.classList.add('block');
-                    } else {
-                        periodSelectorContainer.classList.add('hidden');
-                        periodSelectorContainer.classList.remove('block');
-                    }
-
-                    // Renderiza o primeiro item
-                    renderDashboard(0);
-                    switchView(true);
+            if (response.ok) {
+                if (json.status === 'success') {
+                    setupDashboard(json);
+                } else if (json.status === 'require_2fa') {
+                    document.getElementById('temp_cpf').value = json.cpf;
+                    document.getElementById('temp_data_nascimento').value = json.data_nascimento;
+                    displayEmail.textContent = json.email_hint;
+                    hideError2fa();
+                    codigoInput.value = '';
+                    switchView('2fa');
+                    startResendTimer(1);
                 } else {
-                     showError('Dados não encontrados no formato esperado.');
+                    showError(json.message || 'Dados não encontrados no formato esperado.');
                 }
             } else {
                 // Erro (ex: não encontrou, recaptcha inválido)
@@ -311,10 +386,83 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Botão Voltar
     btnBack.addEventListener('click', () => {
-        switchView(false);
+        switchView('search');
         // Reseta o botão principal para seu estado original
         btnSubmit.disabled = false;
         btnSubmit.innerHTML = '<span>Consultar Resultado</span><i class="ph-bold ph-arrow-right ml-2 text-lg"></i>';
     });
 
+
+    form2fa.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        hideError2fa();
+
+        const cpf = document.getElementById('temp_cpf').value;
+        const codigo = codigoInput.value.trim().toUpperCase();
+
+        if(codigo.length !== 6) {
+            showError2fa("O código deve ter 6 dígitos.");
+            return;
+        }
+
+        btnSubmit2fa.disabled = true;
+        btnSubmit2fa.innerHTML = '<i class="ph-bold ph-spinner animate-spin text-xl"></i>';
+
+        try {
+            const fd = new FormData();
+            fd.append('cpf', cpf);
+            fd.append('codigo', codigo);
+
+            const response = await fetch('api/verify_2fa.php', { method: 'POST', body: fd });
+            const json = await response.json();
+
+            if(response.ok && json.status === 'success') {
+                setupDashboard(json);
+            } else {
+                if (json.status === 'blocked') {
+                    localStorage.setItem('2fa_block_until', Date.now() + 3600000);
+                    switchView('search');
+                    checkBlock();
+                } else {
+                    showError2fa(json.message || 'Código inválido.');
+                }
+            }
+        } catch(e) {
+            showError2fa('Erro ao validar código. Tente novamente.');
+        } finally {
+            btnSubmit2fa.disabled = false;
+            btnSubmit2fa.innerHTML = '<span>Confirmar Código</span><i class="ph-bold ph-check ml-2 text-lg"></i>';
+        }
+    });
+
+    btnCancel2fa.addEventListener('click', () => {
+        switchView('search');
+    });
+
+    btnResend.addEventListener('click', async () => {
+        const cpf = document.getElementById('temp_cpf').value;
+        try {
+            const fd = new FormData();
+            fd.append('cpf', cpf);
+            const response = await fetch('api/resend_2fa.php', { method: 'POST', body: fd });
+            const json = await response.json();
+
+            if(response.ok) {
+                showError2fa('Código reenviado com sucesso.');
+                errorMsg2fa.classList.replace('bg-red-50', 'bg-emerald-50');
+                errorMsg2fa.classList.replace('border-red-100', 'border-emerald-100');
+                errorText2fa.classList.replace('text-red-700', 'text-emerald-700');
+                setTimeout(() => {
+                    errorMsg2fa.classList.replace('bg-emerald-50', 'bg-red-50');
+                    errorMsg2fa.classList.replace('border-emerald-100', 'border-red-100');
+                    errorText2fa.classList.replace('text-emerald-700', 'text-red-700');
+                    hideError2fa();
+                }, 3000);
+                const waitTime = json.espera_minutos || 1;
+                startResendTimer(waitTime);
+            } else {
+                showError2fa(json.message || 'Erro ao reenviar.');
+            }
+        } catch(e) {}
+    });
 });

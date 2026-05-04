@@ -59,6 +59,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
         // Campus: CÂMPUS/POLO, CAMPUS, POLO
         $idxCampus = $colIndex['CÂMPUS/POLO'] ?? ($colIndex['CAMPUS'] ?? ($colIndex['POLO'] ?? null));
 
+        // Email: EMAIL, E-MAIL
+        $idxEmail = $colIndex['EMAIL'] ?? ($colIndex['E-MAIL'] ?? null);
+
         // Validação das colunas obrigatórias
         if ($idxRA === null || $idxCPF === null || $idxDataNascimento === null) {
             header('Location: upload_alunos.php?error=1&msg=' . urlencode('As colunas RA, CPF e Dt. Nascimento são obrigatórias.'));
@@ -75,11 +78,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
 
         // Query de Upsert (A regra diz: atualizar se o RA já existir)
         // OBS: o MySQL vai reclamar de CPF duplicado se tentar atualizar RA e colocar CPF de outro.
-        $query = "INSERT INTO alunos (ra, nome, cpf, data_nascimento, curso, campus)
-                  VALUES (:ra, :nome, :cpf, :data_nascimento, :curso, :campus)
+        $query = "INSERT INTO alunos (ra, nome, cpf, data_nascimento, curso, campus, email)
+                  VALUES (:ra, :nome, :cpf, :data_nascimento, :curso, :campus, :email)
                   ON DUPLICATE KEY UPDATE
                   nome = VALUES(nome), cpf = VALUES(cpf), data_nascimento = VALUES(data_nascimento),
-                  curso = VALUES(curso), campus = VALUES(campus), updated_at = CURRENT_TIMESTAMP";
+                  curso = VALUES(curso), campus = VALUES(campus), email = VALUES(email), updated_at = CURRENT_TIMESTAMP";
         $stmt = $conn->prepare($query);
 
         while (($data = fgetcsv($handle, 10000, $delimiter)) !== FALSE) {
@@ -91,6 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
             $nome = $idxNome !== null && isset($data[$idxNome]) ? trim($data[$idxNome]) : null;
             $curso = $idxCurso !== null && isset($data[$idxCurso]) ? trim($data[$idxCurso]) : null;
             $campus = $idxCampus !== null && isset($data[$idxCampus]) ? trim($data[$idxCampus]) : null;
+            $email = $idxEmail !== null && isset($data[$idxEmail]) ? trim($data[$idxEmail]) : null;
 
             if (empty($ra) || empty($cpfRaw) || empty($dataNascimentoRaw)) {
                 $countErrors++;
@@ -122,6 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
                 $stmt->bindParam(':data_nascimento', $dataNascimento);
                 $stmt->bindParam(':curso', $curso);
                 $stmt->bindParam(':campus', $campus);
+                $stmt->bindParam(':email', $email);
                 $stmt->execute();
                 $countSuccess++;
             } catch (PDOException $e) {

@@ -128,6 +128,52 @@ $siteKey = getConfig($conn, 'recaptcha_site_key');
         </form>
     </div>
 
+    <!-- VIEW 1.5: TELA DE 2FA -->
+    <div id="view-2fa" class="hidden-view w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-8 sm:p-10 fade-in mt-16">
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-50 mb-4">
+                <i class="ph ph-envelope-open text-3xl text-primary"></i>
+            </div>
+            <h2 class="text-2xl font-bold mb-2">Verificação de Segurança</h2>
+            <p class="text-slate-500 text-sm">Enviamos um código de 6 dígitos para o seu e-mail <br><strong id="display-email" class="text-slate-700"></strong>.</p>
+        </div>
+
+        <form id="2fa-form" class="space-y-6">
+            <input type="hidden" id="temp_cpf">
+            <input type="hidden" id="temp_data_nascimento">
+
+            <div>
+                <label for="codigo_input" class="block text-sm font-bold text-slate-700 mb-1 ml-1 text-center">Código de Verificação</label>
+                <input type="text" id="codigo_input" name="codigo" required maxlength="6"
+                       class="block w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-xl text-3xl font-bold text-center tracking-[0.5em] text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all shadow-inner uppercase"
+                       placeholder="------" autocomplete="one-time-code">
+            </div>
+
+            <!-- Mensagem de erro dinâmica -->
+            <div id="error-message-2fa" class="hidden rounded-lg bg-red-50 p-4 border border-red-100 flex items-start gap-3">
+                <i class="ph-fill ph-warning-circle text-red-500 text-xl mt-0.5"></i>
+                <p class="text-sm text-red-700 font-medium" id="error-text-2fa">Código incorreto.</p>
+            </div>
+
+            <button type="submit" id="btn-submit-2fa" class="w-full flex justify-center items-center py-4 px-4 border border-transparent rounded-xl shadow-md text-base font-bold text-white bg-primary hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all hover:-translate-y-0.5 disabled:opacity-70 disabled:hover:translate-y-0">
+                <span>Confirmar Código</span>
+                <i class="ph-bold ph-check ml-2 text-lg"></i>
+            </button>
+
+            <div class="text-center mt-6">
+                <button type="button" id="btn-resend" class="text-sm font-medium text-slate-500 hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span id="resend-text">Reenviar código</span>
+                    <span id="resend-timer" class="hidden font-mono ml-1"></span>
+                </button>
+            </div>
+            <div class="text-center mt-2">
+                 <button type="button" id="btn-cancel-2fa" class="text-xs text-slate-400 hover:text-slate-600 underline">
+                    Cancelar e voltar
+                </button>
+            </div>
+        </form>
+    </div>
+
     <!-- VIEW 2: TELA DE RESULTADOS (Dashboard) -->
     <div id="view-results" class="hidden-view w-full max-w-5xl fade-in mt-20 mb-10">
         <!-- Header -->
