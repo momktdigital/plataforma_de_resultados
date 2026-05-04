@@ -81,6 +81,7 @@ $secretKey = $configuracoes['recaptcha_secret_key'] ?? '';
         <?php endif; ?>
 
         <form method="POST" action="">
+            <input type="hidden" name="form_type" value="recaptcha">
             <div class="mb-8">
                 <label class="flex items-center cursor-pointer p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
                     <div class="relative">

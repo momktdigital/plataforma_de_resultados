@@ -53,8 +53,21 @@ CREATE TABLE IF NOT EXISTS `alunos` (
     `nome` VARCHAR(255) NULL,
     `curso` VARCHAR(255) NULL,
     `campus` VARCHAR(255) NULL,
+    `email` VARCHAR(255) NULL, -- Added to support 2FA
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Tabela de Verificações de E-mail 2FA
+CREATE TABLE IF NOT EXISTS `verificacoes_email` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `cpf` VARCHAR(20) NOT NULL,
+    `codigo` VARCHAR(10) NOT NULL,
+    `tentativas_falhas` INT DEFAULT 0,
+    `vezes_reenviado` INT DEFAULT 0,
+    `ultimo_reenvio` TIMESTAMP NULL,
+    `expira_em` TIMESTAMP NOT NULL,
+    `criado_em` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Tabela de Configurações
@@ -65,8 +78,15 @@ CREATE TABLE IF NOT EXISTS `configuracoes` (
     `descricao` VARCHAR(255) NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Inserindo configurações padrão do reCAPTCHA
+-- Inserindo configurações padrão
 INSERT IGNORE INTO `configuracoes` (`chave`, `valor`, `descricao`) VALUES
 ('recaptcha_ativo', '0', 'Ativar reCAPTCHA (1 = Sim, 0 = Não)'),
 ('recaptcha_site_key', '', 'Chave de Site (Site Key) do Google reCAPTCHA v2'),
-('recaptcha_secret_key', '', 'Chave Secreta (Secret Key) do Google reCAPTCHA v2');
+('recaptcha_secret_key', '', 'Chave Secreta (Secret Key) do Google reCAPTCHA v2'),
+('smtp_ativo', '0', 'Ativar envio de email 2FA (1 = Sim, 0 = Não)'),
+('smtp_host', 'email-smtp.sa-east-1.amazonaws.com', 'Host do SMTP'),
+('smtp_port', '587', 'Porta do SMTP'),
+('smtp_user', '', 'Usuário do SMTP'),
+('smtp_pass', '', 'Senha do SMTP'),
+('smtp_from_email', 'no-reply@seudominio.com.br', 'Email do remetente'),
+('smtp_from_name', 'Resultados DI', 'Nome do remetente');
