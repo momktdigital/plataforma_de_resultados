@@ -283,6 +283,26 @@ $form_type = $_POST['form_type'] ?? '';
 </style>
 
 <script>
+function showTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(el => {
+        el.classList.add('hidden');
+        el.classList.remove('block');
+    });
+    document.querySelectorAll('.tab-btn').forEach(el => {
+        el.classList.remove('border-primary', 'text-primary');
+        el.classList.add('border-transparent', 'text-slate-500', 'hover:text-slate-700', 'hover:border-slate-300');
+    });
+    const content = document.getElementById(tabId);
+    if(content) {
+        content.classList.remove('hidden');
+        content.classList.add('block');
+    }
+    const btn = document.querySelector(`button[onclick="showTab('${tabId}')"]`);
+    if(btn) {
+        btn.classList.remove('border-transparent', 'text-slate-500', 'hover:text-slate-700', 'hover:border-slate-300');
+        btn.classList.add('border-primary', 'text-primary');
+    }
+}
 function toggleFields() {
     const isChecked = document.getElementById('recaptcha_ativo').checked;
     const fields = document.getElementById('recaptcha-fields');
@@ -341,7 +361,7 @@ async function sendTestEmail() {
         } else {
             showTestMsg(json.message || "Erro ao enviar.", "error");
         }
-    } catch(e) { showTestMsg("Erro interno.", "error"); }
+    } catch(e) { showTestMsg("Erro interno. Verifique o console.", "error"); console.error(e); }
     btn.disabled = false; btn.textContent = "Enviar Código";
 }
 
@@ -365,7 +385,7 @@ async function verifyTestCode() {
         } else {
             showTestMsg(json.message || "Código inválido.", "error");
         }
-    } catch(e) { showTestMsg("Erro interno.", "error"); }
+    } catch(e) { showTestMsg("Erro interno. Verifique o console.", "error"); console.error(e); }
     btn.disabled = false; btn.textContent = "Validar Código";
 }
 </script>
