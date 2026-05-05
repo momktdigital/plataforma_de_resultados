@@ -5,14 +5,14 @@
 ![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.x-38B2AC.svg?logo=tailwind-css&logoColor=white)
 ![Chart.js](https://img.shields.io/badge/Chart.js-4.x-FF6384.svg?logo=chart.js&logoColor=white)
 
-Um sistema web completo, responsivo e seguro focado na publicação e análise de resultados de simulados, provas e avaliações acadêmicas. O sistema garante a privacidade do aluno exibindo notas mediante validação de CPF e Data de Nascimento (com suporte a 2FA), e oferece um Dashboard Administrativo repleto de recursos de *Business Intelligence* (BI) para o corpo docente.
+Um sistema web completo, responsivo e seguro focado na publicação e análise de resultados de simulados, provas e avaliações acadêmicas. O sistema garante a privacidade do aluno exibindo o número de acertos mediante validação de CPF e Data de Nascimento (com suporte a 2FA), e oferece um Dashboard Administrativo repleto de recursos de *Business Intelligence* (BI) para o corpo docente.
 
 ---
 
 ## 🚀 Funcionalidades Principais
 
 ### Para o Aluno (Front-End)
-* **Acesso Seguro e 2FA:** A consulta aos boletins é feita utilizando CPF e Data de Nascimento. O sistema suporta validação em duas etapas (2FA) enviando um código de 6 dígitos para o e-mail cadastrado do aluno, garantindo total privacidade das notas.
+* **Acesso Seguro e 2FA:** A consulta aos boletins é feita utilizando CPF e Data de Nascimento. O sistema suporta validação em duas etapas (2FA) enviando um código de 6 dígitos para o e-mail cadastrado do aluno, garantindo total privacidade do seu desempenho.
 * **Acessibilidade Completa:** O sistema é totalmente inclusivo, contando com:
   * Redimensionamento dinâmico de texto (A+ e A-).
   * Temas visuais configuráveis (Modo Claro, Modo Escuro e Alto Contraste).
@@ -23,13 +23,13 @@ Um sistema web completo, responsivo e seguro focado na publicação e análise d
 
 ### Para o Administrador (Back-End)
 * **Painel de Configurações Globais:** Permite alterar o Título do Site, o Logotipo (upload de arquivo de imagem) e configurar integrações anti-bot (Google reCAPTCHA v2 e hCaptcha) diretamente pela interface gráfica, sem necessidade de editar o código fonte.
-* **Upsert Dinâmico via CSV:** Processamento inteligente de CSVs. O algoritmo lê vírgula ou ponto-e-vírgula e mapeia colunas. A operação permite que professores subam planilhas repetidas para corrigir notas específicas sem duplicar os registros no banco.
+* **Upsert Dinâmico via CSV:** Processamento inteligente de CSVs. O algoritmo lê vírgula ou ponto-e-vírgula e mapeia colunas. A operação permite que professores subam planilhas repetidas para corrigir métricas e acertos específicos sem duplicar os registros no banco.
 * **Parse Flexível de Colunas:** Colunas contendo "Q1", "Q2"... são separadas como mapa de respostas do aluno, enquanto colunas finais ("Clínica Médica - Total de acertos", "Nota de Redação", "Total") são empacotadas de forma não-relacional num campo `JSON`, permitindo armazenar provas de diferentes estruturas na mesma tabela de resultados.
 * **BI e Analytics Inteligentes:** O Dashboard escaneia as chaves JSON para construir gráficos em tempo real:
-  * Histograma de Distribuição em barras (Faixas de notas).
+  * Histograma de Distribuição em barras (Faixas de Acertos).
   * Gráficos em Teia (Radar) do desempenho médio da turma por Matéria.
   * Top 5 Alunos de cada Simulado.
-* **CRUDs Completos:** Gerenciamento de Alunos, Administradores, Edição de Perfil, alteração em tempo real de notas/respostas do aluno (Editor Visual) e alteração do Gabarito Oficial.
+* **CRUDs Completos:** Gerenciamento de Alunos, Administradores, Edição de Perfil, alteração em tempo real de acertos/respostas do aluno (Editor Visual) e alteração do Gabarito Oficial.
 
 ---
 
@@ -38,7 +38,7 @@ Um sistema web completo, responsivo e seguro focado na publicação e análise d
 A aplicação foi projetada sem o uso de *frameworks heavy-weight* para manter a alta performance, reduzir a complexidade e facilitar a hospedagem em qualquer ambiente.
 
 * **Back-end:** PHP Moderno (Orientado a Objetos e Funcional) com `PDO` para segurança nativa contra *SQL Injection*.
-* **Database:** MySQL. A modelagem híbrida armazena dados relacionais vitais (RA, Período, Avaliação, CPF, Email) em colunas isoladas, e as notas mutáveis condensadas em colunas nativas do tipo `JSON`, aliviando drasticamente a sobrecarga e o tamanho do banco de dados.
+* **Database:** MySQL. A modelagem híbrida armazena dados relacionais vitais (RA, Período, Avaliação, CPF, Email) em colunas isoladas, e as métricas de acertos condensadas em colunas nativas do tipo `JSON`, aliviando drasticamente a sobrecarga e o tamanho do banco de dados.
 * **Segurança:** Hashes de senha via `password_hash()`. Controle estrito de sessão (`SESSION`). Verificação de bots na área pública e administrativa.
 * **Front-end UI:** TailwindCSS compilado em tempo de execução via CDN, garantindo CSS utility-first de forma modular.
 * **Data-Viz:** Integração com Chart.js.
@@ -105,7 +105,7 @@ O algoritmo do sistema varre os arquivos dinamicamente, mas espera algumas conve
 - **Identificação Obrigatória:** É necessário ter colunas para identificar o aluno de forma única (ex: `RA`, `CPF`, `Email`, `Data de Nascimento`).
 - **Agrupamentos:** `Período` e `Avaliação` são essenciais para separar e organizar os dados inseridos.
 - **Questões:** Nomear as colunas do gabarito do aluno como `Q1`, `Q2`, `Q3`...
-- **Gráficos e Ranking:** O Dashboard procura especificamente por uma coluna final chamada `Total`, `Nota Final` ou `Pontuação Final` para montar o **Ranking dos Melhores**.
+- **Gráficos e Ranking:** O Dashboard procura especificamente por uma coluna final chamada `Total`, `Acertos Totais` ou `Pontuação Final` para montar o **Ranking dos Melhores**.
 - **Gráficos por Matéria:** O algoritmo tenta identificar "Matérias" cortando o título da coluna antes de um hífen. Exemplo: Se tiver uma coluna chamada `Cirurgia - Total de acertos`, ele agrupará os dados no eixo "Cirurgia" para o gráfico de Radar.
 
 ### Arquivo de Gabaritos

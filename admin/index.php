@@ -9,9 +9,17 @@ $conn = $db->getConnection();
 $filtroAvaliacao = $_GET['avaliacao'] ?? '';
 
 $avaliacoesDisponiveis = [];
+$periodosDisponiveis = [];
+
 try {
     $stmtAval = $conn->query("SELECT DISTINCT nome_avaliacao FROM resultados ORDER BY nome_avaliacao ASC");
     $avaliacoesDisponiveis = $stmtAval->fetchAll(PDO::FETCH_COLUMN);
+
+    if (!empty($filtroAvaliacao)) {
+        $stmtPer = $conn->prepare("SELECT DISTINCT periodo FROM resultados WHERE nome_avaliacao = :avaliacao ORDER BY periodo ASC");
+        $stmtPer->execute([':avaliacao' => $filtroAvaliacao]);
+        $periodosDisponiveis = $stmtPer->fetchAll(PDO::FETCH_COLUMN);
+    }
 } catch (PDOException $e) {}
 
 // Queries para as estatísticas
@@ -24,9 +32,16 @@ try {
     $whereClause = "";
     $params = [];
 
+    $filtroPeriodo = $_GET['periodo'] ?? '';
+
     if (!empty($filtroAvaliacao)) {
         $whereClause = "WHERE nome_avaliacao = :avaliacao";
         $params[':avaliacao'] = $filtroAvaliacao;
+
+        if (!empty($filtroPeriodo)) {
+            $whereClause .= " AND periodo = :periodo";
+            $params[':periodo'] = $filtroPeriodo;
+        }
     }
 
     // Total de RAs únicos (Alunos)
@@ -49,8 +64,21 @@ try {
 
     // Buscar todos os resultados se houver filtro, para processar médias
     if (!empty($filtroAvaliacao)) {
-        $stmt = $conn->prepare("SELECT ra, notas_finais FROM resultados WHERE nome_avaliacao = :avaliacao");
-        $stmt->execute([':avaliacao' => $filtroAvaliacao]);
+        $sqlRes = "
+            SELECT r.ra, r.notas_finais, r.periodo, a.nome 
+            FROM resultados r 
+            LEFT JOIN alunos a ON r.ra = a.ra 
+            WHERE r.nome_avaliacao = :avaliacao
+        ";
+        $paramsRes = [':avaliacao' => $filtroAvaliacao];
+        
+        if (!empty($filtroPeriodo)) {
+            $sqlRes .= " AND r.periodo = :periodo";
+            $paramsRes[':periodo'] = $filtroPeriodo;
+        }
+
+        $stmt = $conn->prepare($sqlRes);
+        $stmt->execute($paramsRes);
         $resultadosFiltrados = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -131,6 +159,8 @@ if (!empty($resultadosFiltrados)) {
         if ($temNota) {
             $topAlunos[] = [
                 'ra' => $res['ra'],
+                'nome' => !empty($res['nome']) ? $res['nome'] : 'Aluno',
+                'periodo' => $res['periodo'],
                 'nota' => $notaRanking
             ];
 
@@ -221,7 +251,25 @@ $chartMateriasDataJson = json_encode($chartMateriasData ?? []);
                     <i class="ph-bold ph-caret-down text-xs"></i>
                 </div>
             </div>
-            <?php if (!empty($filtroAvaliacao)): ?>
+            
+            <?php if (!empty($filtroAvaliacao) && !empty($periodosDisponiveis)): ?>
+            <div class="relative flex items-center bg-white border border-slate-300 rounded-lg shadow-sm focus-within:ring-2 focus-within:ring-primary focus-within:border-primary transition-all ml-2">
+                <i class="ph ph-users-three text-slate-400 absolute left-3"></i>
+                <select name="periodo" onchange="this.form.submit()" class="pl-9 pr-8 py-2 bg-transparent text-sm text-slate-700 font-medium focus:outline-none appearance-none cursor-pointer">
+                    <option value="">Todas as Turmas</option>
+                    <?php foreach ($periodosDisponiveis as $per): ?>
+                        <option value="<?= htmlspecialchars($per) ?>" <?= $filtroPeriodo === $per ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($per) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
+                    <i class="ph-bold ph-caret-down text-xs"></i>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <?php if (!empty($filtroAvaliacao) || !empty($filtroPeriodo)): ?>
                 <a href="index.php" class="ml-2 text-slate-400 hover:text-red-500 transition-colors" title="Limpar Filtro">
                     <i class="ph-bold ph-x-circle text-xl"></i>
                 </a>
@@ -268,25 +316,27 @@ $chartMateriasDataJson = json_encode($chartMateriasData ?? []);
             </div>
         </div>
     <?php else: ?>
+        <?php if ($totalComAcertos > 0): ?>
         <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6 flex items-start group hover:border-primary/50 transition-colors">
             <div class="bg-purple-50 text-purple-500 rounded-lg p-3 mr-4 group-hover:bg-purple-500 group-hover:text-white transition-colors">
                 <i class="ph-fill ph-target text-2xl"></i>
             </div>
             <div>
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Média de Acertos</p>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Aproveitamento (%)</p>
                 <div class="flex items-end gap-1">
-                    <h3 class="text-3xl font-black text-slate-800 leading-none"><?= $totalComAcertos > 0 ? $mediaGeralAcertos : '--' ?></h3>
-                    <span class="text-lg font-bold text-slate-500 mb-0.5"><?= $totalComAcertos > 0 ? '%' : '' ?></span>
+                    <h3 class="text-3xl font-black text-slate-800 leading-none"><?= $mediaGeralAcertos ?></h3>
+                    <span class="text-lg font-bold text-slate-500 mb-0.5">%</span>
                 </div>
             </div>
         </div>
+        <?php endif; ?>
 
-        <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6 flex items-start group hover:border-primary/50 transition-colors">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6 flex items-start group hover:border-primary/50 transition-colors <?= $totalComAcertos === 0 ? 'lg:col-span-2' : '' ?>">
             <div class="bg-orange-50 text-orange-500 rounded-lg p-3 mr-4 group-hover:bg-orange-500 group-hover:text-white transition-colors">
                 <i class="ph-fill ph-exam text-2xl"></i>
             </div>
             <div>
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Média de Notas</p>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Média de Acertos (Absoluto)</p>
                 <h3 class="text-3xl font-black text-slate-800 leading-none"><?= $totalComNotaGeral > 0 ? $mediaNotaGeral : '--' ?></h3>
             </div>
         </div>
@@ -310,7 +360,7 @@ $chartMateriasDataJson = json_encode($chartMateriasData ?? []);
                 <?php if (empty($topAlunos)): ?>
                     <div class="p-6 flex flex-col items-center justify-center text-center h-full text-slate-500">
                         <i class="ph ph-ghost text-4xl mb-2 text-slate-300"></i>
-                        <p class="text-sm">Não há notas numéricas formatadas nesta avaliação para gerar o ranking.</p>
+                        <p class="text-sm">Não há métricas numéricas cadastradas nesta avaliação para gerar o ranking.</p>
                     </div>
                 <?php else: ?>
                     <ul class="divide-y divide-slate-100">
@@ -324,8 +374,8 @@ $chartMateriasDataJson = json_encode($chartMateriasData ?? []);
                                     <?= $index + 1 ?>º
                                 </div>
                                 <div>
-                                    <p class="text-xs text-slate-500 uppercase font-bold mb-0.5">RA do Aluno</p>
-                                    <p class="font-mono text-sm font-semibold text-slate-800"><?= htmlspecialchars($aluno['ra']) ?></p>
+                                    <p class="text-xs text-slate-500 uppercase font-bold mb-0.5 truncate max-w-[150px] sm:max-w-[180px]" title="<?= htmlspecialchars($aluno['nome']) ?>"><?= htmlspecialchars($aluno['nome']) ?></p>
+                                    <p class="text-[11px] font-medium text-slate-400"><?= htmlspecialchars($aluno['periodo']) ?> • RA: <?= htmlspecialchars($aluno['ra']) ?></p>
                                 </div>
                             </div>
                             <div class="text-right flex items-center gap-2">
@@ -347,7 +397,7 @@ $chartMateriasDataJson = json_encode($chartMateriasData ?? []);
                 <div class="px-6 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
                     <h3 class="font-bold text-slate-800 flex items-center">
                         <i class="ph-fill ph-chart-bar text-primary text-xl mr-2"></i>
-                        Distribuição de Notas (Top Scores)
+                        Distribuição de Acertos Totais
                     </h3>
                 </div>
                 <div class="p-6 flex-1 min-h-[250px] relative">
@@ -365,7 +415,7 @@ $chartMateriasDataJson = json_encode($chartMateriasData ?? []);
             <div class="px-6 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
                 <h3 class="font-bold text-slate-800 flex items-center">
                     <i class="ph-fill ph-radar text-blue-500 text-xl mr-2"></i>
-                    Média de Acertos por Matéria
+                    Média de Acertos por Área
                 </h3>
             </div>
             <div class="p-6 h-[400px] flex justify-center w-full relative">
@@ -384,7 +434,12 @@ $chartMateriasDataJson = json_encode($chartMateriasData ?? []);
                     Resumo: <?= htmlspecialchars($filtroAvaliacao) ?>
                 </h3>
                 <p class="text-slate-400 text-sm max-w-2xl leading-relaxed">
-                    Foram processados <strong class="text-white"><?= $totalRegistros ?> registros</strong>. A média de desempenho da turma foi de <strong class="text-primary"><?= $mediaGeralAcertos ?>% de acertos</strong>.
+                    Foram processados <strong class="text-white"><?= $totalRegistros ?> registros</strong>. 
+                    <?php if ($totalComAcertos > 0): ?>
+                        A média de desempenho da turma foi de <strong class="text-primary"><?= $mediaGeralAcertos ?>% de aproveitamento</strong>.
+                    <?php elseif ($totalComNotaGeral > 0): ?>
+                        A média de acertos totais foi de <strong class="text-primary"><?= $mediaNotaGeral ?></strong>.
+                    <?php endif; ?>
                 </p>
             </div>
 
