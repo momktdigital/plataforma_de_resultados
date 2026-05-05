@@ -361,7 +361,7 @@ async function sendTestEmail() {
         } else {
             showTestMsg(json.message || "Erro ao enviar.", "error");
         }
-    } catch(e) { showTestMsg("Erro interno. Verifique o console.", "error"); console.error(e); }
+    } catch(e) { showTestMsg("Erro: falha ao processar a resposta do servidor. Verifique o console.", "error"); console.error(e); }
     btn.disabled = false; btn.textContent = "Enviar Código";
 }
 
@@ -385,7 +385,7 @@ async function verifyTestCode() {
         } else {
             showTestMsg(json.message || "Código inválido.", "error");
         }
-    } catch(e) { showTestMsg("Erro interno. Verifique o console.", "error"); console.error(e); }
+    } catch(e) { showTestMsg("Erro: falha ao processar a resposta do servidor. Verifique o console.", "error"); console.error(e); }
     btn.disabled = false; btn.textContent = "Validar Código";
 }
 </script>

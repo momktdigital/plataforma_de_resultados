@@ -1,8 +1,16 @@
 <?php
 session_start();
-error_reporting(0);
+error_reporting(E_ALL);
 ini_set('display_errors', '0');
 ob_start();
+register_shutdown_function(function() {
+    $err = error_get_last();
+    if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        http_response_code(500);
+        while (ob_get_level()) { ob_end_clean(); }
+        echo json_encode(['status' => 'error', 'message' => 'Erro fatal no PHP: ' . $err['message'] . ' em ' . $err['file'] . ':' . $err['line']]);
+    }
+});
 
 // Ensure admin is logged in
 if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
@@ -69,5 +77,5 @@ try {
     error_log("Erro PHPMailer (Teste SMTP): {$mail->ErrorInfo}");
     http_response_code(500);
     ob_end_clean();
-    echo json_encode(['status' => 'error', 'message' => 'Falha no envio: ' . $mail->ErrorInfo]);
+    echo json_encode(['status' => 'error', 'message' => 'Falha no envio: ' . ($mail->ErrorInfo ?: $e->getMessage())]);
 }
