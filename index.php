@@ -9,13 +9,15 @@ $recaptchaAtivo = getConfig($conn, 'recaptcha_ativo') === '1';
 $siteKey = getConfig($conn, 'recaptcha_site_key');
 $hcaptchaAtivo = getConfig($conn, 'hcaptcha_ativo') === '1';
 $hSiteKey = getConfig($conn, 'hcaptcha_site_key');
+$siteTitle = getConfig($conn, 'site_title', 'Resultados DI');
+$siteLogo = getConfig($conn, 'site_logo', '');
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Consulta de Resultados - DI</title>
+    <title><?= htmlspecialchars($siteTitle) ?></title>
     <!-- TailwindCSS via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -70,8 +72,12 @@ $hSiteKey = getConfig($conn, 'hcaptcha_site_key');
     <div class="fixed top-0 left-0 w-full bg-white shadow-sm z-50">
         <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
             <div class="flex items-center gap-2">
-                <i class="ph-fill ph-student text-primary text-3xl"></i>
-                <h1 class="font-bold text-xl tracking-tight text-slate-800">Resultados <span class="text-primary">DI</span></h1>
+                <?php if (!empty($siteLogo)): ?>
+                    <img src="<?= htmlspecialchars($siteLogo) ?>" alt="<?= htmlspecialchars($siteTitle) ?>" class="h-8 object-contain">
+                <?php else: ?>
+                    <i class="ph-fill ph-student text-primary text-3xl"></i>
+                    <h1 class="font-bold text-xl tracking-tight text-slate-800"><?= htmlspecialchars($siteTitle) ?></h1>
+                <?php endif; ?>
             </div>
             <a href="admin/login.php" class="text-slate-400 hover:text-primary transition-colors text-sm flex items-center gap-1" title="Acesso Restrito">
                  <i class="ph ph-lock-key"></i> <span class="hidden sm:inline">Admin</span>

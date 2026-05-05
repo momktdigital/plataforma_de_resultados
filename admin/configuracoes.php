@@ -76,6 +76,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (PDOException $e) {
             $erro = "Erro ao salvar: " . $e->getMessage();
         }
+    } elseif ($form_type === 'appearance') {
+        $site_title = trim($_POST['site_title'] ?? '');
+        $chaves_valores = [
+            'site_title' => $site_title
+        ];
+
+        if (isset($_FILES['site_logo']) && $_FILES['site_logo']['error'] === UPLOAD_ERR_OK) {
+            $uploadDir = '../assets/img/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0777, true);
+            }
+            $fileName = time() . '_' . basename($_FILES['site_logo']['name']);
+            $uploadFile = $uploadDir . $fileName;
+
+            $imageFileType = strtolower(pathinfo($uploadFile, PATHINFO_EXTENSION));
+            $allowedTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
+
+            if (in_array($imageFileType, $allowedTypes)) {
+                if (move_uploaded_file($_FILES['site_logo']['tmp_name'], $uploadFile)) {
+                    $chaves_valores['site_logo'] = 'assets/img/' . $fileName;
+                } else {
+                    $erro = "Erro ao fazer upload da logo.";
+                }
+            } else {
+                $erro = "Tipo de arquivo inválido para a logo.";
+            }
+        }
+
+        if (empty($erro)) {
+            try {
+                foreach ($chaves_valores as $chave => $valor) {
+                    $stmt = $conn->prepare("UPDATE configuracoes SET valor = :valor WHERE chave = :chave");
+                    $stmt->execute([':valor' => $valor, ':chave' => $chave]);
+
+                    if ($stmt->rowCount() === 0) {
+                        $checkStmt = $conn->prepare("SELECT 1 FROM configuracoes WHERE chave = :chave");
+                        $checkStmt->execute([':chave' => $chave]);
+                        if ($checkStmt->rowCount() === 0) {
+                            $insertStmt = $conn->prepare("INSERT INTO configuracoes (chave, valor) VALUES (:chave, :valor)");
+                            $insertStmt->execute([':chave' => $chave, ':valor' => $valor]);
+                        }
+                    }
+                }
+                $sucesso = "Configurações de aparência salvas com sucesso.";
+            } catch (PDOException $e) {
+                $erro = "Erro ao salvar: " . $e->getMessage();
+            }
+        }
     }
 }
 
@@ -105,6 +153,8 @@ $smtpUser = $configuracoes['smtp_user'] ?? '';
 $smtpFromEmail = $configuracoes['smtp_from_email'] ?? '';
 $smtpFromName = $configuracoes['smtp_from_name'] ?? '';
 $smtpPassExists = !empty($configuracoes['smtp_pass']);
+$siteTitle = $configuracoes['site_title'] ?? 'Resultados DI';
+$siteLogo = $configuracoes['site_logo'] ?? '';
 $form_type = $_POST['form_type'] ?? '';
 ?>
 
@@ -112,6 +162,59 @@ $form_type = $_POST['form_type'] ?? '';
     <div>
         <h1 class="text-3xl font-bold text-slate-800 tracking-tight">Configurações do Sistema</h1>
         <p class="text-slate-500 mt-1">Gerencie chaves de API e recursos de segurança</p>
+    </div>
+</div>
+
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden max-w-4xl mx-auto mb-8">
+    <div class="px-6 py-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+        <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+            <i class="ph-fill ph-palette text-[#00b48d]"></i> Aparência Geral
+        </h2>
+    </div>
+
+    <div class="p-6 sm:p-8">
+        <?php if ($erro && $form_type === 'appearance'): ?>
+            <div class="mb-6 bg-red-50 border border-red-200 text-red-800 p-4 rounded-lg shadow-sm flex items-start">
+                <i class="ph-fill ph-warning-circle text-red-500 text-xl mr-3 mt-0.5"></i>
+                <p class="text-sm font-medium"><?= htmlspecialchars($erro) ?></p>
+            </div>
+        <?php endif; ?>
+
+        <?php if ($sucesso && $form_type === 'appearance'): ?>
+            <div class="mb-6 bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-lg shadow-sm flex items-start">
+                <i class="ph-fill ph-check-circle text-emerald-500 text-xl mr-3 mt-0.5"></i>
+                <p class="text-sm font-medium"><?= htmlspecialchars($sucesso) ?></p>
+            </div>
+        <?php endif; ?>
+
+        <form method="POST" action="" enctype="multipart/form-data">
+            <input type="hidden" name="form_type" value="appearance">
+
+            <div class="space-y-4">
+                <div>
+                    <label for="site_title" class="block text-sm font-bold text-slate-700 mb-1">Título do Site</label>
+                    <input type="text" id="site_title" name="site_title" value="<?= htmlspecialchars($siteTitle) ?>" class="block w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+                    <p class="text-xs text-slate-500 mt-1">Exibido na aba do navegador e no menu, caso não tenha uma logo.</p>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Logo do Site</label>
+                    <?php if (!empty($siteLogo)): ?>
+                        <div class="mb-3">
+                            <img src="../<?= htmlspecialchars($siteLogo) ?>" alt="Logo Atual" class="h-12 object-contain border border-slate-200 rounded p-1">
+                        </div>
+                    <?php endif; ?>
+                    <input type="file" id="site_logo" name="site_logo" accept="image/*" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all">
+                    <p class="text-xs text-slate-500 mt-1">Formatos aceitos: JPG, PNG, GIF, WEBP, SVG.</p>
+                </div>
+            </div>
+
+            <div class="mt-8 flex justify-start pt-5 border-t border-slate-100 gap-2">
+                <button type="submit" class="px-6 py-2 bg-primary text-white rounded text-sm font-bold shadow-sm hover:bg-emerald-600 focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all">
+                    Salvar
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 

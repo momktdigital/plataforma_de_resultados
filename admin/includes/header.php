@@ -10,13 +10,20 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
 
 // Determinar a página atual para o menu ativo
 $current_page = basename($_SERVER['PHP_SELF']);
+
+require_once __DIR__ . '/../../includes/Database.php';
+require_once __DIR__ . '/config_helper.php';
+$header_db = new Database();
+$header_conn = $header_db->getConnection();
+$siteTitle = getConfig($header_conn, 'site_title', 'Resultados DI');
+$siteLogo = getConfig($header_conn, 'site_logo', '');
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel Administrativo - Resultados DI</title>
+    <title>Painel Administrativo - <?= htmlspecialchars($siteTitle) ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -55,8 +62,12 @@ $current_page = basename($_SERVER['PHP_SELF']);
     <!-- Sidebar -->
     <aside id="sidebar" class="sidebar w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0">
         <div class="h-16 flex items-center px-6 border-b border-slate-800 bg-slate-950">
-            <i class="ph-fill ph-student text-primary text-2xl mr-2"></i>
-            <span class="text-lg font-bold text-white tracking-wide">Resultados <span class="text-primary">DI</span></span>
+            <?php if (!empty($siteLogo)): ?>
+                <img src="../<?= htmlspecialchars($siteLogo) ?>" alt="<?= htmlspecialchars($siteTitle) ?>" class="h-8 object-contain">
+            <?php else: ?>
+                <i class="ph-fill ph-student text-primary text-2xl mr-2"></i>
+                <span class="text-lg font-bold text-white tracking-wide"><?= htmlspecialchars($siteTitle) ?></span>
+            <?php endif; ?>
         </div>
 
         <nav class="flex-1 overflow-y-auto py-4">

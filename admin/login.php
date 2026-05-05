@@ -21,6 +21,8 @@ $hcaptchaAtivo = getConfig($conn, 'hcaptcha_ativo') === '1';
 $hSiteKey = getConfig($conn, 'hcaptcha_site_key');
 $hSecretKey = getConfig($conn, 'hcaptcha_secret_key');
 
+$siteTitle = getConfig($conn, 'site_title', 'Resultados DI');
+
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -126,7 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login Administrativo - Resultados DI</title>
+    <title>Login Administrativo - <?= htmlspecialchars($siteTitle) ?></title>
     <!-- TailwindCSS via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
