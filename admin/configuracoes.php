@@ -8,30 +8,46 @@ $conn = $db->getConnection();
 $erro = '';
 $sucesso = '';
 
-// Atualiza as configurações
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $recaptcha_ativo = isset($_POST['recaptcha_ativo']) ? '1' : '0';
-    $recaptcha_site_key = trim($_POST['recaptcha_site_key'] ?? '');
-    $recaptcha_secret_key = trim($_POST['recaptcha_secret_key'] ?? '');
+    $form_type = $_POST['form_type'] ?? '';
 
-    try {
-        $stmt = $conn->prepare("UPDATE configuracoes SET valor = :valor WHERE chave = :chave");
+    if ($form_type === 'recaptcha') {
+        $recaptcha_ativo = isset($_POST['recaptcha_ativo']) ? '1' : '0';
+        $recaptcha_site_key = trim($_POST['recaptcha_site_key'] ?? '');
+        $recaptcha_secret_key = trim($_POST['recaptcha_secret_key'] ?? '');
+        try {
+            $stmt = $conn->prepare("UPDATE configuracoes SET valor = :valor WHERE chave = :chave");
+            $stmt->execute([':valor' => $recaptcha_ativo, ':chave' => 'recaptcha_ativo']);
+            $stmt->execute([':valor' => $recaptcha_site_key, ':chave' => 'recaptcha_site_key']);
+            $stmt->execute([':valor' => $recaptcha_secret_key, ':chave' => 'recaptcha_secret_key']);
+            $sucesso = "Configurações de reCAPTCHA salvas com sucesso.";
+        } catch (PDOException $e) {
+            $erro = "Erro ao salvar: " . $e->getMessage();
+        }
+    } elseif ($form_type === 'smtp') {
+        $smtp_ativo = isset($_POST['smtp_ativo']) ? '1' : '0';
+        $smtp_host = trim($_POST['smtp_host'] ?? '');
+        $smtp_port = trim($_POST['smtp_port'] ?? '');
+        $smtp_user = trim($_POST['smtp_user'] ?? '');
+        $smtp_pass = trim($_POST['smtp_pass'] ?? '');
+        $smtp_from_email = trim($_POST['smtp_from_email'] ?? '');
+        $smtp_from_name = trim($_POST['smtp_from_name'] ?? '');
 
-        $stmt->bindParam(':valor', $recaptcha_ativo, PDO::PARAM_STR);
-        $stmt->bindValue(':chave', 'recaptcha_ativo', PDO::PARAM_STR);
-        $stmt->execute();
-
-        $stmt->bindParam(':valor', $recaptcha_site_key, PDO::PARAM_STR);
-        $stmt->bindValue(':chave', 'recaptcha_site_key', PDO::PARAM_STR);
-        $stmt->execute();
-
-        $stmt->bindParam(':valor', $recaptcha_secret_key, PDO::PARAM_STR);
-        $stmt->bindValue(':chave', 'recaptcha_secret_key', PDO::PARAM_STR);
-        $stmt->execute();
-
-        $sucesso = "Configurações salvas com sucesso.";
-    } catch (PDOException $e) {
-        $erro = "Erro ao salvar configurações: " . $e->getMessage();
+        try {
+            $stmt = $conn->prepare("UPDATE configuracoes SET valor = :valor WHERE chave = :chave");
+            $stmt->execute([':valor' => $smtp_ativo, ':chave' => 'smtp_ativo']);
+            $stmt->execute([':valor' => $smtp_host, ':chave' => 'smtp_host']);
+            $stmt->execute([':valor' => $smtp_port, ':chave' => 'smtp_port']);
+            $stmt->execute([':valor' => $smtp_user, ':chave' => 'smtp_user']);
+            if (!empty($smtp_pass)) {
+                $stmt->execute([':valor' => $smtp_pass, ':chave' => 'smtp_pass']);
+            }
+            $stmt->execute([':valor' => $smtp_from_email, ':chave' => 'smtp_from_email']);
+            $stmt->execute([':valor' => $smtp_from_name, ':chave' => 'smtp_from_name']);
+            $sucesso = "Configurações de e-mail (SMTP) salvas com sucesso.";
+        } catch (PDOException $e) {
+            $erro = "Erro ao salvar: " . $e->getMessage();
+        }
     }
 }
 

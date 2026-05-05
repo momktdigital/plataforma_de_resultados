@@ -4,7 +4,9 @@ header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST');
 
-require '../vendor/autoload.php';
+require_once '../includes/PHPMailer/Exception.php';
+require_once '../includes/PHPMailer/PHPMailer.php';
+require_once '../includes/PHPMailer/SMTP.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 use PHPMailer\PHPMailer\SMTP;
@@ -112,7 +114,32 @@ try {
             die();
         }
 
-        // Gerar código aleatório de 6 dígitos
+        // Check if there is already a valid code to reuse and respect timers
+        $stmtCheck = $conn->prepare("SELECT * FROM verificacoes_email WHERE cpf = ? ORDER BY id DESC LIMIT 1");
+        $stmtCheck->execute([$cpf]);
+        $existing = $stmtCheck->fetch(PDO::FETCH_ASSOC);
+
+        if ($existing && strtotime($existing['expira_em']) > time()) {
+            // Already has a valid code. Reuse it.
+            $codigo = $existing['codigo'];
+
+            // Do not resend immediately if within cooldown. Just prompt the user to use what they have or wait.
+            // Let the frontend show the "Resend" button and they will hit resend_2fa.php which manages the cooldown.
+            $emailParts = explode('@', $email);
+            $emailOculto = substr($emailParts[0], 0, 3) . '***@' . $emailParts[1];
+
+            http_response_code(200);
+            echo json_encode([
+                'status' => 'require_2fa',
+                'message' => 'Você já possui um código ativo. Verifique seu e-mail.',
+                'email_hint' => $emailOculto,
+                'cpf' => $cpf,
+                'data_nascimento' => $data_nascimento_br
+            ]);
+            die();
+        }
+
+        // Se nao tem codigo ou expirou
         $codigo = sprintf("%06d", random_int(0, 999999));
         $expira_em = date('Y-m-d H:i:s', strtotime('+10 minutes'));
 
