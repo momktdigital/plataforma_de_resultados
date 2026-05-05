@@ -55,6 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
             cpfInput.value = '';
             nascimentoInput.value = '';
             if (typeof grecaptcha !== 'undefined') grecaptcha.reset();
+            if (typeof hcaptcha !== 'undefined') hcaptcha.reset();
             viewResults.classList.remove('hidden-view');
             codigoInput.value = '';
         } else if (targetView === '2fa') {
@@ -62,6 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
             codigoInput.focus();
         } else if (targetView === 'search') {
             if (typeof grecaptcha !== 'undefined') grecaptcha.reset();
+            if (typeof hcaptcha !== 'undefined') hcaptcha.reset();
             viewSearch.classList.remove('hidden-view');
             cpfInput.focus();
         }
@@ -304,12 +306,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if(checkBlock()) return;
 
-        // Verifica se o reCAPTCHA existe e se foi marcado
+        // Verifica se os CAPTCHAs existem e se foram marcados
         let recaptchaResponse = '';
         if (typeof grecaptcha !== 'undefined') {
             recaptchaResponse = grecaptcha.getResponse();
             // Se o widget estiver renderizado mas não marcado
             if (document.querySelector('.g-recaptcha') && !recaptchaResponse) {
+                showError('Por favor, confirme que você não é um robô.');
+                return;
+            }
+        }
+
+        let hcaptchaResponse = '';
+        if (typeof hcaptcha !== 'undefined') {
+            hcaptchaResponse = hcaptcha.getResponse();
+            if (document.querySelector('.h-captcha') && !hcaptchaResponse) {
                 showError('Por favor, confirme que você não é um robô.');
                 return;
             }
@@ -339,6 +350,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (recaptchaResponse) {
                 formData.append('g-recaptcha-response', recaptchaResponse);
             }
+            if (hcaptchaResponse) {
+                formData.append('h-captcha-response', hcaptchaResponse);
+            }
 
             const response = await fetch('api/consulta.php', {
                 method: 'POST',
@@ -364,11 +378,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Erro (ex: não encontrou, recaptcha inválido)
                 showError(json.message || 'Aluno ou resultados não encontrados.');
                 if (typeof grecaptcha !== 'undefined') grecaptcha.reset();
+                if (typeof hcaptcha !== 'undefined') hcaptcha.reset();
             }
         } catch (err) {
             showError('Erro de conexão com o servidor. Tente novamente mais tarde.');
             console.error('Fetch error:', err);
             if (typeof grecaptcha !== 'undefined') grecaptcha.reset();
+            if (typeof hcaptcha !== 'undefined') hcaptcha.reset();
         } finally {
             if (!viewSearch.classList.contains('hidden-view')) {
                 // Restaura botão se ainda estiver na tela de busca

@@ -17,19 +17,23 @@ $recaptchaAtivo = getConfig($conn, 'recaptcha_ativo') === '1';
 $siteKey = getConfig($conn, 'recaptcha_site_key');
 $secretKey = getConfig($conn, 'recaptcha_secret_key');
 
+$hcaptchaAtivo = getConfig($conn, 'hcaptcha_ativo') === '1';
+$hSiteKey = getConfig($conn, 'hcaptcha_site_key');
+$hSecretKey = getConfig($conn, 'hcaptcha_secret_key');
+
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
 
-    // --- Validar reCAPTCHA se ativo ---
-    $recaptchaValido = true;
+    // --- Validar CAPTCHA se ativo ---
+    $captchaValido = true;
     if ($recaptchaAtivo && !empty($secretKey)) {
         $recaptchaResponse = $_POST['g-recaptcha-response'] ?? '';
         if (empty($recaptchaResponse)) {
             $error = 'Por favor, confirme que você não é um robô.';
-            $recaptchaValido = false;
+            $captchaValido = false;
         } else {
             $verifyUrl = 'https://www.google.com/recaptcha/api/siteverify';
             $data = [
@@ -50,12 +54,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if (!$recaptchaData || !$recaptchaData['success']) {
                 $error = 'Falha na validação do reCAPTCHA.';
-                $recaptchaValido = false;
+                $captchaValido = false;
+            }
+        }
+    } elseif ($hcaptchaAtivo && !empty($hSecretKey)) {
+        $hcaptchaResponse = $_POST['h-captcha-response'] ?? '';
+        if (empty($hcaptchaResponse)) {
+            $error = 'Por favor, confirme que você não é um robô.';
+            $captchaValido = false;
+        } else {
+            $verifyUrl = 'https://hcaptcha.com/siteverify';
+            $data = [
+                'secret' => $hSecretKey,
+                'response' => $hcaptchaResponse
+            ];
+
+            $options = [
+                'http' => [
+                    'header'  => "Content-type: application/x-www-form-urlencoded\r\n",
+                    'method'  => 'POST',
+                    'content' => http_build_query($data)
+                ]
+            ];
+            $context  = stream_context_create($options);
+            $result = file_get_contents($verifyUrl, false, $context);
+            $hcaptchaData = json_decode($result, true);
+
+            if (!$hcaptchaData || !$hcaptchaData['success']) {
+                $error = 'Falha na validação do hCaptcha.';
+                $captchaValido = false;
             }
         }
     }
 
-    if ($recaptchaValido) {
+    if ($captchaValido) {
         if (empty($username) || empty($password)) {
             $error = 'Por favor, preencha usuário e senha.';
         } else {
@@ -118,6 +150,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <?php if ($recaptchaAtivo && !empty($siteKey)): ?>
         <script src="https://www.google.com/recaptcha/api.js" async defer></script>
     <?php endif; ?>
+    <?php if ($hcaptchaAtivo && !empty($hSiteKey)): ?>
+        <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+    <?php endif; ?>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
@@ -175,6 +210,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <div class="flex justify-center my-4">
                             <!-- Tema escuro (opcional, pode ser data-theme="dark") -->
                             <div class="g-recaptcha" data-sitekey="<?= htmlspecialchars($siteKey) ?>" data-theme="dark"></div>
+                        </div>
+                    <?php elseif ($hcaptchaAtivo && !empty($hSiteKey)): ?>
+                        <div class="flex justify-center my-4">
+                            <div class="h-captcha" data-sitekey="<?= htmlspecialchars($hSiteKey) ?>" data-theme="dark"></div>
                         </div>
                     <?php endif; ?>
 

@@ -7,6 +7,8 @@ $conn = $db->getConnection();
 
 $recaptchaAtivo = getConfig($conn, 'recaptcha_ativo') === '1';
 $siteKey = getConfig($conn, 'recaptcha_site_key');
+$hcaptchaAtivo = getConfig($conn, 'hcaptcha_ativo') === '1';
+$hSiteKey = getConfig($conn, 'hcaptcha_site_key');
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -36,6 +38,9 @@ $siteKey = getConfig($conn, 'recaptcha_site_key');
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <?php if ($recaptchaAtivo && !empty($siteKey)): ?>
         <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+    <?php endif; ?>
+    <?php if ($hcaptchaAtivo && !empty($hSiteKey)): ?>
+        <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
     <?php endif; ?>
     <!-- IMask para as máscaras de CPF e Data de Nascimento -->
     <script src="https://unpkg.com/imask"></script>
@@ -112,6 +117,10 @@ $siteKey = getConfig($conn, 'recaptcha_site_key');
             <?php if ($recaptchaAtivo && !empty($siteKey)): ?>
                 <div class="flex justify-center my-4">
                     <div class="g-recaptcha" data-sitekey="<?= htmlspecialchars($siteKey) ?>"></div>
+                </div>
+            <?php elseif ($hcaptchaAtivo && !empty($hSiteKey)): ?>
+                <div class="flex justify-center my-4">
+                    <div class="h-captcha" data-sitekey="<?= htmlspecialchars($hSiteKey) ?>"></div>
                 </div>
             <?php endif; ?>
 

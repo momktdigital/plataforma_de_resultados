@@ -11,16 +11,44 @@ $sucesso = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $form_type = $_POST['form_type'] ?? '';
 
-    if ($form_type === 'recaptcha') {
-        $recaptcha_ativo = isset($_POST['recaptcha_ativo']) ? '1' : '0';
+    if ($form_type === 'captcha') {
+        $captcha_type = $_POST['captcha_type'] ?? 'none';
+
+        $recaptcha_ativo = ($captcha_type === 'recaptcha') ? '1' : '0';
+        $hcaptcha_ativo = ($captcha_type === 'hcaptcha') ? '1' : '0';
+
         $recaptcha_site_key = trim($_POST['recaptcha_site_key'] ?? '');
         $recaptcha_secret_key = trim($_POST['recaptcha_secret_key'] ?? '');
+        $hcaptcha_site_key = trim($_POST['hcaptcha_site_key'] ?? '');
+        $hcaptcha_secret_key = trim($_POST['hcaptcha_secret_key'] ?? '');
+
+        $chaves_valores = [
+            'recaptcha_ativo' => $recaptcha_ativo,
+            'recaptcha_site_key' => $recaptcha_site_key,
+            'recaptcha_secret_key' => $recaptcha_secret_key,
+            'hcaptcha_ativo' => $hcaptcha_ativo,
+            'hcaptcha_site_key' => $hcaptcha_site_key,
+            'hcaptcha_secret_key' => $hcaptcha_secret_key
+        ];
+
         try {
-            $stmt = $conn->prepare("UPDATE configuracoes SET valor = :valor WHERE chave = :chave");
-            $stmt->execute([':valor' => $recaptcha_ativo, ':chave' => 'recaptcha_ativo']);
-            $stmt->execute([':valor' => $recaptcha_site_key, ':chave' => 'recaptcha_site_key']);
-            $stmt->execute([':valor' => $recaptcha_secret_key, ':chave' => 'recaptcha_secret_key']);
-            $sucesso = "Configurações de reCAPTCHA salvas com sucesso.";
+            foreach ($chaves_valores as $chave => $valor) {
+                // Tenta fazer o update primeiro
+                $stmt = $conn->prepare("UPDATE configuracoes SET valor = :valor WHERE chave = :chave");
+                $stmt->execute([':valor' => $valor, ':chave' => $chave]);
+
+                // Se nada foi atualizado (pode ser que a chave não exista em bd antigos)
+                if ($stmt->rowCount() === 0) {
+                    // Verifica se a chave realmente não existe
+                    $checkStmt = $conn->prepare("SELECT 1 FROM configuracoes WHERE chave = :chave");
+                    $checkStmt->execute([':chave' => $chave]);
+                    if ($checkStmt->rowCount() === 0) {
+                        $insertStmt = $conn->prepare("INSERT INTO configuracoes (chave, valor) VALUES (:chave, :valor)");
+                        $insertStmt->execute([':chave' => $chave, ':valor' => $valor]);
+                    }
+                }
+            }
+            $sucesso = "Configurações de CAPTCHA salvas com sucesso.";
         } catch (PDOException $e) {
             $erro = "Erro ao salvar: " . $e->getMessage();
         }
@@ -65,6 +93,10 @@ try {
 $recaptchaAtivo = ($configuracoes['recaptcha_ativo'] ?? '0') === '1';
 $siteKey = $configuracoes['recaptcha_site_key'] ?? '';
 $secretKey = $configuracoes['recaptcha_secret_key'] ?? '';
+
+$hcaptchaAtivo = ($configuracoes['hcaptcha_ativo'] ?? '0') === '1';
+$hSiteKey = $configuracoes['hcaptcha_site_key'] ?? '';
+$hSecretKey = $configuracoes['hcaptcha_secret_key'] ?? '';
 
 $smtpAtivo = ($configuracoes['smtp_ativo'] ?? '0') === '1';
 $smtpHost = $configuracoes['smtp_host'] ?? '';
@@ -220,19 +252,19 @@ $form_type = $_POST['form_type'] ?? '';
 <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden max-w-4xl mx-auto">
     <div class="px-6 py-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
         <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <i class="ph-fill ph-shield-check text-[#00b48d]"></i> Segurança e Anti-Bot (reCAPTCHA v2)
+            <i class="ph-fill ph-shield-check text-[#00b48d]"></i> Segurança e Anti-Bot (CAPTCHA)
         </h2>
     </div>
 
     <div class="p-6 sm:p-8">
-        <?php if ($erro && (!isset($form_type) || $form_type === 'recaptcha')): ?>
+        <?php if ($erro && (!isset($form_type) || $form_type === 'captcha')): ?>
             <div class="mb-6 bg-red-50 border border-red-200 text-red-800 p-4 rounded-lg shadow-sm flex items-start">
                 <i class="ph-fill ph-warning-circle text-red-500 text-xl mr-3 mt-0.5"></i>
                 <p class="text-sm font-medium"><?= htmlspecialchars($erro) ?></p>
             </div>
         <?php endif; ?>
 
-        <?php if ($sucesso && (!isset($form_type) || $form_type === 'recaptcha')): ?>
+        <?php if ($sucesso && (!isset($form_type) || $form_type === 'captcha')): ?>
             <div class="mb-6 bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-lg shadow-sm flex items-start">
                 <i class="ph-fill ph-check-circle text-emerald-500 text-xl mr-3 mt-0.5"></i>
                 <p class="text-sm font-medium"><?= htmlspecialchars($sucesso) ?></p>
@@ -240,37 +272,77 @@ $form_type = $_POST['form_type'] ?? '';
         <?php endif; ?>
 
         <form method="POST" action="">
-            <input type="hidden" name="form_type" value="recaptcha">
-            <div class="mb-8">
-                <label class="flex items-center cursor-pointer p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
-                    <div class="relative">
-                        <input type="checkbox" name="recaptcha_ativo" id="recaptcha_ativo" class="sr-only" <?= $recaptchaAtivo ? 'checked' : '' ?> onchange="toggleFields()">
-                        <div class="block bg-slate-200 w-14 h-8 rounded-full shadow-inner transition-colors duration-300" id="toggle-bg"></div>
-                        <div class="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition transform duration-300 shadow" id="toggle-dot"></div>
+            <input type="hidden" name="form_type" value="captcha">
+
+            <div class="mb-8 space-y-4">
+                <p class="text-sm text-slate-600 mb-4">Escolha o serviço de CAPTCHA para proteger o login do Admin e a consulta do Aluno contra ataques de força bruta. Apenas um pode estar ativo por vez.</p>
+
+                <label class="flex items-start p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer <?= (!$recaptchaAtivo && !$hcaptchaAtivo) ? 'ring-2 ring-primary border-primary bg-slate-50' : '' ?>" id="label_captcha_none">
+                    <div class="flex items-center h-5">
+                        <input type="radio" name="captcha_type" value="none" class="w-4 h-4 text-primary bg-gray-100 border-gray-300 focus:ring-primary" <?= (!$recaptchaAtivo && !$hcaptchaAtivo) ? 'checked' : '' ?> onchange="toggleCaptchaFields()">
                     </div>
-                    <div class="ml-4">
-                        <span class="block text-sm font-bold text-slate-800">Ativar Google reCAPTCHA v2</span>
-                        <span class="block text-xs text-slate-500 mt-0.5">Se ativo, protege o login do Admin e a consulta do Aluno contra ataques de força bruta.</span>
+                    <div class="ml-3 text-sm">
+                        <span class="block font-bold text-slate-800">Desativado</span>
+                        <span class="block text-xs text-slate-500">Nenhum CAPTCHA será exigido.</span>
+                    </div>
+                </label>
+
+                <label class="flex items-start p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer <?= $recaptchaAtivo ? 'ring-2 ring-primary border-primary bg-slate-50' : '' ?>" id="label_captcha_recaptcha">
+                    <div class="flex items-center h-5">
+                        <input type="radio" name="captcha_type" value="recaptcha" class="w-4 h-4 text-primary bg-gray-100 border-gray-300 focus:ring-primary" <?= $recaptchaAtivo ? 'checked' : '' ?> onchange="toggleCaptchaFields()">
+                    </div>
+                    <div class="ml-3 text-sm">
+                        <span class="block font-bold text-slate-800">Google reCAPTCHA v2</span>
+                        <span class="block text-xs text-slate-500">Caixa de seleção "Não sou um robô".</span>
+                    </div>
+                </label>
+
+                <label class="flex items-start p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer <?= $hcaptchaAtivo ? 'ring-2 ring-primary border-primary bg-slate-50' : '' ?>" id="label_captcha_hcaptcha">
+                    <div class="flex items-center h-5">
+                        <input type="radio" name="captcha_type" value="hcaptcha" class="w-4 h-4 text-primary bg-gray-100 border-gray-300 focus:ring-primary" <?= $hcaptchaAtivo ? 'checked' : '' ?> onchange="toggleCaptchaFields()">
+                    </div>
+                    <div class="ml-3 text-sm">
+                        <span class="block font-bold text-slate-800">hCaptcha</span>
+                        <span class="block text-xs text-slate-500">Alternativa com foco em privacidade.</span>
                     </div>
                 </label>
             </div>
 
-            <div id="recaptcha-fields" class="space-y-6 <?= $recaptchaAtivo ? 'block' : 'hidden' ?> transition-all duration-300">
+            <div id="recaptcha-fields" class="space-y-6 <?= $recaptchaAtivo ? 'block' : 'hidden' ?> transition-all duration-300 mt-6 pt-6 border-t border-slate-100">
                 <div class="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg shadow-sm text-sm">
                     <i class="ph-fill ph-info mr-1 text-blue-500"></i> Para obter essas chaves, acesse o painel do <strong>Google reCAPTCHA</strong>, crie um projeto usando a versão <strong>v2 (Caixa de seleção "Não sou um robô")</strong> e adicione o seu domínio.
                 </div>
 
                 <div>
-                    <label for="recaptcha_site_key" class="block text-sm font-bold text-slate-700 mb-1">Chave de Site (Site Key)</label>
+                    <label for="recaptcha_site_key" class="block text-sm font-bold text-slate-700 mb-1">Chave de Site (Site Key) - reCAPTCHA</label>
                     <input type="text" id="recaptcha_site_key" name="recaptcha_site_key" value="<?= htmlspecialchars($siteKey) ?>"
                            class="block w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary font-mono text-slate-600 shadow-inner">
                 </div>
 
                 <div>
-                    <label for="recaptcha_secret_key" class="block text-sm font-bold text-slate-700 mb-1">Chave Secreta (Secret Key)</label>
+                    <label for="recaptcha_secret_key" class="block text-sm font-bold text-slate-700 mb-1">Chave Secreta (Secret Key) - reCAPTCHA</label>
                     <input type="password" id="recaptcha_secret_key" name="recaptcha_secret_key" value="<?= htmlspecialchars($secretKey) ?>"
                            class="block w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary font-mono text-slate-600 shadow-inner">
                     <p class="text-xs text-slate-500 mt-1">Mantenha esta chave confidencial. Ela é usada para comunicação segura com os servidores do Google.</p>
+                </div>
+            </div>
+
+            <div id="hcaptcha-fields" class="space-y-6 <?= $hcaptchaAtivo ? 'block' : 'hidden' ?> transition-all duration-300 mt-6 pt-6 border-t border-slate-100">
+                <div class="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg shadow-sm text-sm">
+                    <i class="ph-fill ph-info mr-1 text-blue-500"></i> Para obter essas chaves, acesse o painel do <strong>hCaptcha</strong>, crie um novo site e obtenha a Sitekey e a Secret key.
+                </div>
+
+                <div>
+                    <label for="hcaptcha_site_key" class="block text-sm font-bold text-slate-700 mb-1">Chave de Site (Sitekey) - hCaptcha</label>
+                    <input type="text" id="hcaptcha_site_key" name="hcaptcha_site_key" value="<?= htmlspecialchars($hSiteKey) ?>"
+                           class="block w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary font-mono text-slate-600 shadow-inner">
+                </div>
+
+                <div>
+                    <label for="hcaptcha_secret_key" class="block text-sm font-bold text-slate-700 mb-1">Chave Secreta (Secret key) - hCaptcha</label>
+                    <input type="password" id="hcaptcha_secret_key" name="hcaptcha_secret_key" value="<?= htmlspecialchars($hSecretKey) ?>"
+                           class="block w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary font-mono text-slate-600 shadow-inner">
+                    <p class="text-xs text-slate-500 mt-1">Mantenha esta chave confidencial.</p>
                 </div>
             </div>
 
@@ -319,15 +391,35 @@ function showTab(tabId) {
         btn.classList.add('border-primary', 'text-primary');
     }
 }
-function toggleFields() {
-    const isChecked = document.getElementById('recaptcha_ativo').checked;
-    const fields = document.getElementById('recaptcha-fields');
-    if (isChecked) {
-        fields.classList.remove('hidden');
-        fields.classList.add('block');
+function toggleCaptchaFields() {
+    const selected = document.querySelector('input[name="captcha_type"]:checked').value;
+
+    const recaptchaFields = document.getElementById('recaptcha-fields');
+    const hcaptchaFields = document.getElementById('hcaptcha-fields');
+
+    // Reset classes
+    document.getElementById('label_captcha_none').classList.remove('ring-2', 'ring-primary', 'border-primary', 'bg-slate-50');
+    document.getElementById('label_captcha_recaptcha').classList.remove('ring-2', 'ring-primary', 'border-primary', 'bg-slate-50');
+    document.getElementById('label_captcha_hcaptcha').classList.remove('ring-2', 'ring-primary', 'border-primary', 'bg-slate-50');
+
+    // Add selected classes
+    document.getElementById(`label_captcha_${selected}`).classList.add('ring-2', 'ring-primary', 'border-primary', 'bg-slate-50');
+
+    if (selected === 'recaptcha') {
+        recaptchaFields.classList.remove('hidden');
+        recaptchaFields.classList.add('block');
+        hcaptchaFields.classList.remove('block');
+        hcaptchaFields.classList.add('hidden');
+    } else if (selected === 'hcaptcha') {
+        hcaptchaFields.classList.remove('hidden');
+        hcaptchaFields.classList.add('block');
+        recaptchaFields.classList.remove('block');
+        recaptchaFields.classList.add('hidden');
     } else {
-        fields.classList.remove('block');
-        fields.classList.add('hidden');
+        recaptchaFields.classList.remove('block');
+        recaptchaFields.classList.add('hidden');
+        hcaptchaFields.classList.remove('block');
+        hcaptchaFields.classList.add('hidden');
     }
 }
 

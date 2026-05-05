@@ -17,8 +17,10 @@ require_once '../admin/includes/config_helper.php';
 $db = new Database();
 $conn = $db->getConnection();
 
-// --- 1. Validar reCAPTCHA se ativo ---
+// --- 1. Validar CAPTCHA se ativo ---
 $recaptchaAtivo = getConfig($conn, 'recaptcha_ativo') === '1';
+$hcaptchaAtivo = getConfig($conn, 'hcaptcha_ativo') === '1';
+
 if ($recaptchaAtivo) {
     $recaptchaResponse = $_POST['g-recaptcha-response'] ?? '';
     if (empty($recaptchaResponse)) {
@@ -49,6 +51,39 @@ if ($recaptchaAtivo) {
         if (!$recaptchaData || !$recaptchaData['success']) {
             http_response_code(400);
             echo json_encode(['status' => 'error', 'message' => 'Falha na validação do reCAPTCHA. Tente novamente.']);
+            die();
+        }
+    }
+} elseif ($hcaptchaAtivo) {
+    $hcaptchaResponse = $_POST['h-captcha-response'] ?? '';
+    if (empty($hcaptchaResponse)) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => 'Por favor, confirme que você não é um robô.']);
+        die();
+    }
+
+    $hSecretKey = getConfig($conn, 'hcaptcha_secret_key');
+    if (!empty($hSecretKey)) {
+        $verifyUrl = 'https://hcaptcha.com/siteverify';
+        $data = [
+            'secret' => $hSecretKey,
+            'response' => $hcaptchaResponse
+        ];
+
+        $options = [
+            'http' => [
+                'header'  => "Content-type: application/x-www-form-urlencoded\r\n",
+                'method'  => 'POST',
+                'content' => http_build_query($data)
+            ]
+        ];
+        $context  = stream_context_create($options);
+        $result = file_get_contents($verifyUrl, false, $context);
+        $hcaptchaData = json_decode($result, true);
+
+        if (!$hcaptchaData || !$hcaptchaData['success']) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Falha na validação do hCaptcha. Tente novamente.']);
             die();
         }
     }
