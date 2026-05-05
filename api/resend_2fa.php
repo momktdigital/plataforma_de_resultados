@@ -3,7 +3,9 @@ header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST');
 
-require '../vendor/autoload.php';
+require_once '../includes/PHPMailer/Exception.php';
+require_once '../includes/PHPMailer/PHPMailer.php';
+require_once '../includes/PHPMailer/SMTP.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 use PHPMailer\PHPMailer\SMTP;
@@ -44,7 +46,9 @@ try {
     $nextMinutosEspera = $esperas[min($verificacao['vezes_reenviado'] + 1, 3)];
 
     if ($verificacao['ultimo_reenvio']) {
-        $tempoPassado = time() - strtotime($verificacao['ultimo_reenvio']);
+        $ultimoReenvio = strtotime($verificacao['ultimo_reenvio']);
+        $agora = strtotime('now');
+        $tempoPassado = $agora - $ultimoReenvio;
         $tempoFaltando = ($minutosEspera * 60) - $tempoPassado;
 
         if ($tempoFaltando > 0) {
@@ -58,7 +62,9 @@ try {
         }
     } else {
          // primeira vez - foi enviado a menos de 1 minuto (já foi enviado ao logar)
-         $tempoPassado = time() - strtotime($verificacao['criado_em']);
+         $criadoEm = strtotime($verificacao['criado_em']);
+         $agora = strtotime('now');
+         $tempoPassado = $agora - $criadoEm;
          $tempoFaltando = (1 * 60) - $tempoPassado;
          if ($tempoFaltando > 0) {
             http_response_code(429);

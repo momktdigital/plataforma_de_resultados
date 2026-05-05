@@ -46,6 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $data_nascimento_br = trim($_POST['data_nascimento'] ?? '');
     $curso = trim($_POST['curso'] ?? '');
     $campus = trim($_POST['campus'] ?? '');
+    $email = trim($_POST['email'] ?? '');
 
     // Validação básica
     if (empty($ra) || empty($cpf) || empty($data_nascimento_br)) {
@@ -65,10 +66,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$erro) {
             try {
                 if ($isEdit) {
-                    $stmt = $conn->prepare("UPDATE alunos SET ra = :ra, nome = :nome, cpf = :cpf, data_nascimento = :data_nascimento, curso = :curso, campus = :campus WHERE id = :id");
+                    $stmt = $conn->prepare("UPDATE alunos SET ra = :ra, nome = :nome, cpf = :cpf, data_nascimento = :data_nascimento, curso = :curso, campus = :campus, email = :email WHERE id = :id");
                     $stmt->bindParam(':id', $id, PDO::PARAM_INT);
                 } else {
-                    $stmt = $conn->prepare("INSERT INTO alunos (ra, nome, cpf, data_nascimento, curso, campus) VALUES (:ra, :nome, :cpf, :data_nascimento, :curso, :campus)");
+                    $stmt = $conn->prepare("INSERT INTO alunos (ra, nome, cpf, data_nascimento, curso, campus, email) VALUES (:ra, :nome, :cpf, :data_nascimento, :curso, :campus, :email)");
                 }
 
                 $stmt->bindParam(':ra', $ra, PDO::PARAM_STR);
@@ -77,6 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->bindParam(':data_nascimento', $data_nascimento, PDO::PARAM_STR);
                 $stmt->bindParam(':curso', $curso, PDO::PARAM_STR);
                 $stmt->bindParam(':campus', $campus, PDO::PARAM_STR);
+                $stmt->bindParam(':email', $email, PDO::PARAM_STR);
 
                 $stmt->execute();
 
@@ -168,6 +170,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div>
                     <label for="campus" class="block text-sm font-bold text-slate-700 mb-1">Câmpus / Polo</label>
                     <input type="text" id="campus" name="campus" value="<?= htmlspecialchars($aluno['campus'] ?? ($_POST['campus'] ?? '')) ?>"
+                           class="block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+                </div>
+
+                <!-- E-mail -->
+                <div>
+                    <label for="email" class="block text-sm font-bold text-slate-700 mb-1">E-mail</label>
+                    <input type="email" id="email" name="email" value="<?= htmlspecialchars($aluno['email'] ?? ($_POST['email'] ?? '')) ?>"
                            class="block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
                 </div>
             </div>
