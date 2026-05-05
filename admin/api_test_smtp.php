@@ -1,9 +1,13 @@
 <?php
 session_start();
+error_reporting(0);
+ini_set('display_errors', '0');
+ob_start();
 
 // Ensure admin is logged in
 if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
     http_response_code(403);
+    ob_end_clean();
     echo json_encode(['status' => 'error', 'message' => 'Não autorizado.']);
     die();
 }
@@ -24,6 +28,7 @@ $email = filter_var($_POST['email'] ?? '', FILTER_VALIDATE_EMAIL);
 
 if (!$email) {
     http_response_code(400);
+    ob_end_clean();
     echo json_encode(['status' => 'error', 'message' => 'E-mail inválido.']);
     die();
 }
@@ -57,10 +62,12 @@ try {
     $mail->send();
 
     http_response_code(200);
+    ob_end_clean();
     echo json_encode(['status' => 'success']);
 
 } catch (Exception $e) {
     error_log("Erro PHPMailer (Teste SMTP): {$mail->ErrorInfo}");
     http_response_code(500);
+    ob_end_clean();
     echo json_encode(['status' => 'error', 'message' => 'Falha no envio: ' . $mail->ErrorInfo]);
 }
