@@ -139,8 +139,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
 
         $msg = "$countSuccess registros processados com sucesso.";
         if ($countErrors > 0) {
-            $msg .= " $countErrors erros encontrados (veja o log do sistema ou verifique CPFs/Datas inválidas).";
+            $msg .= " $countErrors erros encontrados (veja o log abaixo ou verifique CPFs/Datas inválidas).";
             error_log("Erros Importação Alunos: " . implode(" | ", array_slice($errorsList, 0, 10)));
+            $_SESSION['upload_errors'] = $errorsList;
+        } else {
+            unset($_SESSION['upload_errors']);
         }
 
         header("Location: upload_alunos.php?success=1&msg=" . urlencode($msg));

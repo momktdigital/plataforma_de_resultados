@@ -23,10 +23,21 @@ require_once 'includes/header.php';
         <?php if (isset($_GET['success'])): ?>
             <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 mb-8 rounded-lg shadow-sm flex items-start" role="alert">
                 <i class="ph-fill ph-check-circle text-emerald-500 text-2xl mr-3 mt-0.5"></i>
-                <div>
+                <div class="w-full">
                     <h4 class="font-bold text-emerald-900 mb-1">Arquivo processado com sucesso!</h4>
                     <?php if(isset($_GET['msg'])): ?>
-                        <p class="text-sm"><?= htmlspecialchars($_GET['msg']) ?></p>
+                        <p class="text-sm mb-2"><?= htmlspecialchars($_GET['msg']) ?></p>
+                    <?php endif; ?>
+
+                    <?php if (isset($_SESSION['upload_errors']) && !empty($_SESSION['upload_errors'])): ?>
+                        <div class="mt-4 bg-white rounded border border-emerald-200 p-3 max-h-64 overflow-y-auto">
+                            <p class="text-xs font-bold text-slate-700 mb-2">Detalhes dos erros (<?= count($_SESSION['upload_errors']) ?>):</p>
+                            <ul class="list-disc list-inside text-xs text-red-600 space-y-1">
+                                <?php foreach ($_SESSION['upload_errors'] as $errorMsg): ?>
+                                    <li><?= htmlspecialchars($errorMsg) ?></li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </div>
                     <?php endif; ?>
                 </div>
             </div>
