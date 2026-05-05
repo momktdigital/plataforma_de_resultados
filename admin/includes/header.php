@@ -53,6 +53,7 @@ $siteLogo = getConfig($header_conn, 'site_logo', '');
             .overlay.open { display: block; }
         }
     </style>
+    <link rel="stylesheet" href="../assets/css/accessibility.css">
 </head>
 <body class="bg-slate-50 text-slate-800 h-screen flex overflow-hidden">
 
@@ -136,10 +137,18 @@ $siteLogo = getConfig($header_conn, 'site_logo', '');
                 <i class="ph-fill ph-student text-primary text-2xl mr-2"></i>
                 <span class="font-bold text-slate-800">Admin</span>
             </div>
-            <button onclick="toggleSidebar()" class="text-slate-500 hover:text-primary focus:outline-none">
-                <i class="ph ph-list text-2xl"></i>
-            </button>
+            <div class="flex items-center gap-2">
+                <div class="accessibility-container"></div>
+                <button onclick="toggleSidebar()" class="text-slate-500 hover:text-primary focus:outline-none">
+                    <i class="ph ph-list text-2xl"></i>
+                </button>
+            </div>
         </header>
+
+        <!-- Topbar desktop accessibility -->
+        <div class="bg-white border-b border-slate-200 px-6 h-14 flex justify-end shrink-0 hidden md:flex items-center">
+            <div class="accessibility-container"></div>
+        </div>
 
         <!-- Main Scrollable Area -->
         <main class="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 p-4 sm:p-6 lg:p-8">

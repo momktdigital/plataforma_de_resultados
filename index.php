@@ -65,6 +65,7 @@ $siteLogo = getConfig($conn, 'site_logo', '');
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
+    <link rel="stylesheet" href="assets/css/accessibility.css">
 </head>
 <body class="bg-secondary text-dark min-h-screen flex flex-col items-center justify-center p-4">
 
@@ -79,9 +80,12 @@ $siteLogo = getConfig($conn, 'site_logo', '');
                     <h1 class="font-bold text-xl tracking-tight text-slate-800"><?= htmlspecialchars($siteTitle) ?></h1>
                 <?php endif; ?>
             </div>
-            <a href="admin/login.php" class="text-slate-400 hover:text-primary transition-colors text-sm flex items-center gap-1" title="Acesso Restrito">
-                 <i class="ph ph-lock-key"></i> <span class="hidden sm:inline">Admin</span>
-            </a>
+            <div class="flex items-center">
+                <div class="accessibility-container"></div>
+                <a href="admin/login.php" class="text-slate-400 hover:text-primary transition-colors text-sm flex items-center gap-1" title="Acesso Restrito">
+                     <i class="ph ph-lock-key"></i> <span class="hidden sm:inline">Admin</span>
+                </a>
+            </div>
         </div>
     </div>
 
@@ -270,6 +274,7 @@ $siteLogo = getConfig($conn, 'site_logo', '');
             });
         });
     </script>
+    <script src="assets/js/accessibility.js"></script>
     <script src="assets/js/app.js"></script>
 
 </body>

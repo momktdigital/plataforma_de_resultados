@@ -9,5 +9,6 @@
             overlay.classList.toggle('open');
         }
     </script>
+    <script src="../assets/js/accessibility.js"></script>
 </body>
 </html>
