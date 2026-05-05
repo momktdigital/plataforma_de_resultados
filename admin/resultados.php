@@ -440,8 +440,12 @@ function viewDetails(buttonElement) {
                     disciplinas[disciplinaNome].total = val;
                 }
             } else {
-                // Se não tem hífen e não é "Total" geral, adiciona direto
-                disciplinas[key.trim()] = { total: val, percentual: '' };
+                // Se não tem hífen e não é "Total" geral, adiciona direto (sem sobrescrever se já existir)
+                const disciplinaSemHifen = key.trim();
+                if (!disciplinas[disciplinaSemHifen]) {
+                    disciplinas[disciplinaSemHifen] = { total: '-', percentual: '' };
+                }
+                disciplinas[disciplinaSemHifen].total = val;
             }
         }
 

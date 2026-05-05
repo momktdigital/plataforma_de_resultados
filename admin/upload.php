@@ -13,7 +13,12 @@ require_once '../includes/Database.php';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FILES['csv_file']['error'] === UPLOAD_ERR_OK) {
 
     // Captura e sanitiza o nome da avaliação
-    $nomeAvaliacao = trim($_POST['nome_avaliacao'] ?? '');
+    $tipoAvaliacao = $_POST['tipo_avaliacao'] ?? 'nova';
+    if ($tipoAvaliacao === 'existente') {
+        $nomeAvaliacao = trim($_POST['avaliacao_existente'] ?? '');
+    } else {
+        $nomeAvaliacao = trim($_POST['nova_avaliacao'] ?? '');
+    }
 
     if (empty($nomeAvaliacao)) {
         header('Location: upload_form.php?error=1&msg=' . urlencode('O nome da avaliação é obrigatório.'));
