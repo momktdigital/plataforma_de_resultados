@@ -82,25 +82,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'site_title' => $site_title
         ];
 
-        if (isset($_FILES['site_logo']) && $_FILES['site_logo']['error'] === UPLOAD_ERR_OK) {
-            $uploadDir = '../assets/img/';
-            if (!is_dir($uploadDir)) {
-                mkdir($uploadDir, 0777, true);
-            }
-            $fileName = time() . '_' . basename($_FILES['site_logo']['name']);
-            $uploadFile = $uploadDir . $fileName;
+        if (isset($_FILES['site_logo']) && !empty($_FILES['site_logo']['name'])) {
+            if ($_FILES['site_logo']['error'] === UPLOAD_ERR_OK) {
+                $uploadDir = '../assets/img/';
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0777, true);
+                }
+                $fileName = time() . '_' . basename($_FILES['site_logo']['name']);
+                $uploadFile = $uploadDir . $fileName;
 
-            $imageFileType = strtolower(pathinfo($uploadFile, PATHINFO_EXTENSION));
-            $allowedTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
+                $imageFileType = strtolower(pathinfo($uploadFile, PATHINFO_EXTENSION));
+                $allowedTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
 
-            if (in_array($imageFileType, $allowedTypes)) {
-                if (move_uploaded_file($_FILES['site_logo']['tmp_name'], $uploadFile)) {
-                    $chaves_valores['site_logo'] = 'assets/img/' . $fileName;
+                if (in_array($imageFileType, $allowedTypes)) {
+                    if (move_uploaded_file($_FILES['site_logo']['tmp_name'], $uploadFile)) {
+                        $chaves_valores['site_logo'] = 'assets/img/' . $fileName;
+                    } else {
+                        $lastError = error_get_last();
+                        $detalhe = $lastError ? $lastError['message'] : 'Desconhecido. Verifique permissões na pasta de destino.';
+                        $erro = "Erro ao mover o arquivo para a pasta 'assets/img/'. Detalhe PHP: " . $detalhe;
+                    }
                 } else {
-                    $erro = "Erro ao fazer upload da logo.";
+                    $erro = "Tipo de arquivo inválido para a logo. Permitido: jpg, png, gif, webp, svg.";
                 }
             } else {
-                $erro = "Tipo de arquivo inválido para a logo.";
+                $uploadErrors = [
+                    UPLOAD_ERR_INI_SIZE => 'O arquivo excede o limite (upload_max_filesize) do php.ini.',
+                    UPLOAD_ERR_FORM_SIZE => 'O arquivo excede o limite (MAX_FILE_SIZE) do formulário.',
+                    UPLOAD_ERR_PARTIAL => 'O upload foi feito parcialmente.',
+                    UPLOAD_ERR_NO_FILE => 'Nenhum arquivo foi enviado.',
+                    UPLOAD_ERR_NO_TMP_DIR => 'Pasta temporária ausente no servidor.',
+                    UPLOAD_ERR_CANT_WRITE => 'Falha ao escrever o arquivo em disco (permissão na pasta tmp).',
+                    UPLOAD_ERR_EXTENSION => 'Uma extensão do PHP interrompeu o upload.'
+                ];
+                $code = $_FILES['site_logo']['error'];
+                $erro = "Erro no upload do arquivo: " . ($uploadErrors[$code] ?? "Código de erro desconhecido: $code");
             }
         }
 
