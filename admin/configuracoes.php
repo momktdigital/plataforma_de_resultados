@@ -98,6 +98,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (in_array($imageFileType, $allowedTypes)) {
                     if (move_uploaded_file($_FILES['site_logo']['tmp_name'], $uploadFile)) {
                         $chaves_valores['site_logo'] = 'assets/img/' . $fileName;
+                    } elseif (copy($_FILES['site_logo']['tmp_name'], $uploadFile)) {
+                        // Fallback: alguns servidores (CageFS, suPHP) podem bloquear move_uploaded_file, mas permitir copy
+                        $chaves_valores['site_logo'] = 'assets/img/' . $fileName;
                     } else {
                         $lastError = error_get_last();
                         $detalhe = $lastError ? $lastError['message'] : 'Desconhecido. Verifique permissões na pasta de destino.';
