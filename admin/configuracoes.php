@@ -84,7 +84,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (isset($_FILES['site_logo']) && !empty($_FILES['site_logo']['name'])) {
             if ($_FILES['site_logo']['error'] === UPLOAD_ERR_OK) {
-                $uploadDir = '../assets/img/';
+                // Usando caminho absoluto para evitar problemas de resolução de diretório no Linux
+                $uploadDir = realpath(__DIR__ . '/../assets') . '/img/';
                 if (!is_dir($uploadDir)) {
                     mkdir($uploadDir, 0777, true);
                 }
