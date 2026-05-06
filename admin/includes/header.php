@@ -17,6 +17,7 @@ $header_db = new Database();
 $header_conn = $header_db->getConnection();
 $siteTitle = getConfig($header_conn, 'site_title', 'Resultados DI');
 $siteLogo = getConfig($header_conn, 'site_logo', '');
+$siteLogoDark = getConfig($header_conn, 'site_logo_dark', '');
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -63,7 +64,9 @@ $siteLogo = getConfig($header_conn, 'site_logo', '');
     <!-- Sidebar -->
     <aside id="sidebar" class="sidebar w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0">
         <div class="h-16 flex items-center px-6 border-b border-slate-800 bg-slate-950">
-            <?php if (!empty($siteLogo)): ?>
+            <?php if (!empty($siteLogoDark)): ?>
+                <img src="../<?= htmlspecialchars($siteLogoDark) ?>" alt="<?= htmlspecialchars($siteTitle) ?>" class="h-8 object-contain">
+            <?php elseif (!empty($siteLogo)): ?>
                 <img src="../<?= htmlspecialchars($siteLogo) ?>" alt="<?= htmlspecialchars($siteTitle) ?>" class="h-8 object-contain">
             <?php else: ?>
                 <i class="ph-fill ph-student text-primary text-2xl mr-2"></i>

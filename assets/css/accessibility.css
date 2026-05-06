@@ -34,3 +34,14 @@ html.theme-high-contrast iframe,
 html.theme-high-contrast [vw-plugin-wrapper] {
      filter: invert(1) contrast(0.66) grayscale(1);
 }
+
+/* Tratamento para exibir a logo clara/escura dinamicamente */
+html.theme-dark .logo-light, 
+html.theme-high-contrast .logo-light {
+    display: none !important;
+}
+
+html.theme-dark .logo-dark, 
+html.theme-high-contrast .logo-dark {
+    display: block !important;
+}

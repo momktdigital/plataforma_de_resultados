@@ -11,6 +11,7 @@ $hcaptchaAtivo = getConfig($conn, 'hcaptcha_ativo') === '1';
 $hSiteKey = getConfig($conn, 'hcaptcha_site_key');
 $siteTitle = getConfig($conn, 'site_title', 'Resultados DI');
 $siteLogo = getConfig($conn, 'site_logo', '');
+$siteLogoDark = getConfig($conn, 'site_logo_dark', '');
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -73,8 +74,13 @@ $siteLogo = getConfig($conn, 'site_logo', '');
     <div class="fixed top-0 left-0 w-full bg-white shadow-sm z-50">
         <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
             <div class="flex items-center gap-2">
-                <?php if (!empty($siteLogo)): ?>
-                    <img src="<?= htmlspecialchars($siteLogo) ?>" alt="<?= htmlspecialchars($siteTitle) ?>" class="h-8 object-contain">
+                <?php if (!empty($siteLogo) || !empty($siteLogoDark)): ?>
+                    <?php if (!empty($siteLogo)): ?>
+                        <img src="<?= htmlspecialchars($siteLogo) ?>" alt="<?= htmlspecialchars($siteTitle) ?>" class="h-8 object-contain logo-light">
+                    <?php endif; ?>
+                    <?php if (!empty($siteLogoDark)): ?>
+                        <img src="<?= htmlspecialchars($siteLogoDark) ?>" alt="<?= htmlspecialchars($siteTitle) ?>" class="h-8 object-contain logo-dark" <?= !empty($siteLogo) ? 'style="display: none;"' : '' ?>>
+                    <?php endif; ?>
                 <?php else: ?>
                     <i class="ph-fill ph-student text-primary text-3xl"></i>
                     <h1 class="font-bold text-xl tracking-tight text-slate-800"><?= htmlspecialchars($siteTitle) ?></h1>

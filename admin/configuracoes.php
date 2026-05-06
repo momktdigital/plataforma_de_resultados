@@ -89,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!is_dir($uploadDir)) {
                     mkdir($uploadDir, 0777, true);
                 }
-                $fileName = time() . '_' . basename($_FILES['site_logo']['name']);
+                $fileName = time() . '_light_' . basename($_FILES['site_logo']['name']);
                 $uploadFile = $uploadDir . $fileName;
 
                 $imageFileType = strtolower(pathinfo($uploadFile, PATHINFO_EXTENSION));
@@ -107,7 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $erro = "Erro ao mover o arquivo para a pasta 'assets/img/'. Detalhe PHP: " . $detalhe;
                     }
                 } else {
-                    $erro = "Tipo de arquivo inválido para a logo. Permitido: jpg, png, gif, webp, svg.";
+                    $erro = "Tipo de arquivo inválido para a logo normal. Permitido: jpg, png, gif, webp, svg.";
                 }
             } else {
                 $uploadErrors = [
@@ -120,7 +120,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     UPLOAD_ERR_EXTENSION => 'Uma extensão do PHP interrompeu o upload.'
                 ];
                 $code = $_FILES['site_logo']['error'];
-                $erro = "Erro no upload do arquivo: " . ($uploadErrors[$code] ?? "Código de erro desconhecido: $code");
+                $erro = "Erro no upload do arquivo (Logo Normal): " . ($uploadErrors[$code] ?? "Código de erro desconhecido: $code");
+            }
+        }
+
+        // Upload da logo escura
+        if (empty($erro) && isset($_FILES['site_logo_dark']) && !empty($_FILES['site_logo_dark']['name'])) {
+            if ($_FILES['site_logo_dark']['error'] === UPLOAD_ERR_OK) {
+                $uploadDir = realpath(__DIR__ . '/../assets') . '/img/';
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0777, true);
+                }
+                $fileNameDark = time() . '_dark_' . basename($_FILES['site_logo_dark']['name']);
+                $uploadFileDark = $uploadDir . $fileNameDark;
+
+                $imageFileType = strtolower(pathinfo($uploadFileDark, PATHINFO_EXTENSION));
+                $allowedTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
+
+                if (in_array($imageFileType, $allowedTypes)) {
+                    if (move_uploaded_file($_FILES['site_logo_dark']['tmp_name'], $uploadFileDark)) {
+                        $chaves_valores['site_logo_dark'] = 'assets/img/' . $fileNameDark;
+                    } elseif (copy($_FILES['site_logo_dark']['tmp_name'], $uploadFileDark)) {
+                        $chaves_valores['site_logo_dark'] = 'assets/img/' . $fileNameDark;
+                    } else {
+                        $lastError = error_get_last();
+                        $detalhe = $lastError ? $lastError['message'] : 'Desconhecido.';
+                        $erro = "Erro ao mover a Logo Escura para 'assets/img/'. Detalhe: " . $detalhe;
+                    }
+                } else {
+                    $erro = "Tipo de arquivo inválido para a Logo Escura.";
+                }
+            } else {
+                $code = $_FILES['site_logo_dark']['error'];
+                $erro = "Erro no upload da Logo Escura (Código: $code).";
             }
         }
 
@@ -175,6 +207,7 @@ $smtpFromName = $configuracoes['smtp_from_name'] ?? '';
 $smtpPassExists = !empty($configuracoes['smtp_pass']);
 $siteTitle = $configuracoes['site_title'] ?? 'Resultados DI';
 $siteLogo = $configuracoes['site_logo'] ?? '';
+$siteLogoDark = $configuracoes['site_logo_dark'] ?? '';
 $form_type = $_POST['form_type'] ?? '';
 ?>
 
@@ -218,14 +251,25 @@ $form_type = $_POST['form_type'] ?? '';
                 </div>
                 
                 <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Logo do Site</label>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Logo do Site (Fundo Claro)</label>
                     <?php if (!empty($siteLogo)): ?>
                         <div class="mb-3">
-                            <img src="../<?= htmlspecialchars($siteLogo) ?>" alt="Logo Atual" class="h-12 object-contain border border-slate-200 rounded p-1">
+                            <img src="../<?= htmlspecialchars($siteLogo) ?>" alt="Logo Atual" class="h-12 object-contain border border-slate-200 rounded p-1 bg-white">
                         </div>
                     <?php endif; ?>
                     <input type="file" id="site_logo" name="site_logo" accept="image/*" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all">
-                    <p class="text-xs text-slate-500 mt-1">Formatos aceitos: JPG, PNG, GIF, WEBP, SVG.</p>
+                    <p class="text-xs text-slate-500 mt-1">Exibida na tela de consulta de resultados quando no Modo Claro.</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Logo do Site (Fundo Escuro)</label>
+                    <?php if (!empty($siteLogoDark)): ?>
+                        <div class="mb-3">
+                            <img src="../<?= htmlspecialchars($siteLogoDark) ?>" alt="Logo Dark Atual" class="h-12 object-contain border border-slate-600 rounded p-1 bg-slate-800">
+                        </div>
+                    <?php endif; ?>
+                    <input type="file" id="site_logo_dark" name="site_logo_dark" accept="image/*" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all">
+                    <p class="text-xs text-slate-500 mt-1">Usada no menu do painel Admin e na tela de resultados no Modo Escuro (use uma logo branca/clara).</p>
                 </div>
             </div>
 
