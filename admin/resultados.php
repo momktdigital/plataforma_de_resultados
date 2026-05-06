@@ -13,7 +13,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'delete_periodo') {
     $periodoDel = $_POST['periodo_delete'] ?? '';
     if (!empty($periodoDel)) {
         try {
-            $stmt = $conn->prepare("DELETE FROM resultados r LEFT JOIN gabaritos g ON r.nome_avaliacao = g.nome_avaliacao WHERE periodo = :periodo");
+            $stmt = $conn->prepare("UPDATE resultados SET deleted_at = CURRENT_TIMESTAMP WHERE periodo = :periodo AND deleted_at IS NULL");
             $stmt->bindParam(':periodo', $periodoDel);
             $stmt->execute();
             $mensagem = "Período '$periodoDel' excluído com sucesso!";
@@ -50,14 +50,14 @@ $offset = ($page - 1) * $limit;
 // Buscar lista de períodos para o select filter
 $periodosList = [];
 try {
-    $stmt = $conn->query("SELECT DISTINCT periodo FROM resultados r LEFT JOIN gabaritos g ON r.nome_avaliacao = g.nome_avaliacao ORDER BY periodo DESC");
+    $stmt = $conn->query("SELECT DISTINCT periodo FROM resultados WHERE deleted_at IS NULL ORDER BY periodo DESC");
     $periodosList = $stmt->fetchAll(PDO::FETCH_COLUMN);
 } catch (PDOException $e) {
     // Ignorar ou logar erro
 }
 
 // Montar query principal com filtros
-$where = [];
+$where = ["r.deleted_at IS NULL"];
 $params = [];
 
 if (!empty($searchRa)) {
@@ -78,7 +78,7 @@ $whereSql = count($where) > 0 ? "WHERE " . implode(" AND ", $where) : "";
 // Contar total para paginação
 $totalRows = 0;
 try {
-    $countSql = "SELECT COUNT(*) AS total FROM resultados r LEFT JOIN gabaritos g ON r.nome_avaliacao = g.nome_avaliacao $whereSql";
+    $countSql = "SELECT COUNT(*) AS total FROM resultados r LEFT JOIN gabaritos g ON r.nome_avaliacao = g.nome_avaliacao AND g.deleted_at IS NULL $whereSql";
     $stmtCount = $conn->prepare($countSql);
     foreach ($params as $key => $val) {
         $stmtCount->bindValue($key, $val);
@@ -97,7 +97,7 @@ try {
 // Query para corrigir o JOIN do Gabarito no Admin
 $sql = "SELECT r.id, r.ra, r.periodo, r.nome_avaliacao, r.respostas, r.notas_finais, r.updated_at, g.respostas AS gabarito, g.link_comentado
         FROM resultados r
-        LEFT JOIN gabaritos g ON r.nome_avaliacao = g.nome_avaliacao
+        LEFT JOIN gabaritos g ON r.nome_avaliacao = g.nome_avaliacao AND g.deleted_at IS NULL
         $whereSql
         ORDER BY r.updated_at DESC
         LIMIT :limit OFFSET :offset";

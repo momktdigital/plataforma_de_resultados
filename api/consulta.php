@@ -136,6 +136,7 @@ try {
     $alunoRow = $stmtAluno->fetch(PDO::FETCH_ASSOC);
     $ra = $alunoRow['ra'];
     $email = $alunoRow['email'];
+    $nomeAluno = $alunoRow['nome'] ?? 'Aluno';
 
     // --- 3.5. Verifica se o 2FA está ativo ---
     $smtpAtivo = getConfig($conn, 'smtp_ativo') === '1';
@@ -200,10 +201,16 @@ try {
             $mail->setFrom($fromEmail, $fromName);
             $mail->addAddress($email);
 
+            $templateSubject = getConfig($conn, 'email_template_subject', 'Seu código de acesso aos resultados');
+            $templateBody = getConfig($conn, 'email_template_body', 'Olá [NOME_DO_ALUNO],<br><br>Seu código de verificação é: <b>[CODIGO]</b><br><br>Este código expira em 10 minutos.<br><br>Se você não solicitou este acesso, por favor ignore este e-mail.');
+
+            $subject = str_replace(['[NOME_DO_ALUNO]', '[CODIGO]'], [$nomeAluno, $codigo], $templateSubject);
+            $body = str_replace(['[NOME_DO_ALUNO]', '[CODIGO]'], [$nomeAluno, $codigo], $templateBody);
+
             $mail->isHTML(true);
-            $mail->Subject = 'Seu código de acesso aos resultados';
-            $mail->Body    = "Olá,<br><br>Seu código de verificação é: <b>$codigo</b><br><br>Este código expira em 10 minutos.<br><br>Se você não solicitou este acesso, por favor ignore este e-mail.";
-            $mail->AltBody = "Seu código de verificação é: $codigo. Este código expira em 10 minutos.";
+            $mail->Subject = $subject;
+            $mail->Body    = $body;
+            $mail->AltBody = strip_tags($body);
 
             $mail->send();
 
@@ -239,8 +246,8 @@ try {
                 r.*,
                 g.respostas AS gabarito_respostas, g.link_comentado
               FROM resultados r
-              LEFT JOIN gabaritos g ON r.nome_avaliacao = g.nome_avaliacao
-              WHERE r.ra = :ra
+              LEFT JOIN gabaritos g ON r.nome_avaliacao = g.nome_avaliacao AND g.deleted_at IS NULL
+              WHERE r.ra = :ra AND r.deleted_at IS NULL
               ORDER BY r.id DESC";
 
     $stmt = $conn->prepare($query);

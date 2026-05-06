@@ -15,13 +15,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'delete_avaliacao') {
         try {
             $conn->beginTransaction();
 
-            // Exclui os alunos
-            $stmt1 = $conn->prepare("DELETE FROM resultados WHERE nome_avaliacao = :nome");
+            // Marca como excluído os resultados
+            $stmt1 = $conn->prepare("UPDATE resultados SET deleted_at = CURRENT_TIMESTAMP WHERE nome_avaliacao = :nome");
             $stmt1->bindParam(':nome', $avDelete);
             $stmt1->execute();
 
-            // Exclui o gabarito associado
-            $stmt2 = $conn->prepare("DELETE FROM gabaritos WHERE nome_avaliacao = :nome");
+            // Marca como excluído o gabarito
+            $stmt2 = $conn->prepare("UPDATE gabaritos SET deleted_at = CURRENT_TIMESTAMP WHERE nome_avaliacao = :nome");
             $stmt2->bindParam(':nome', $avDelete);
             $stmt2->execute();
 
@@ -49,7 +49,8 @@ try {
             MAX(g.link_comentado) as link_comentado,
             MAX(g.respostas) as gabarito_respostas
         FROM resultados r
-        LEFT JOIN gabaritos g ON r.nome_avaliacao = g.nome_avaliacao
+        LEFT JOIN gabaritos g ON r.nome_avaliacao = g.nome_avaliacao AND g.deleted_at IS NULL
+        WHERE r.deleted_at IS NULL
         GROUP BY nome
 
         UNION
@@ -63,8 +64,8 @@ try {
             g.link_comentado,
             g.respostas as gabarito_respostas
         FROM gabaritos g
-        LEFT JOIN resultados r ON g.nome_avaliacao = r.nome_avaliacao
-        WHERE r.nome_avaliacao IS NULL
+        LEFT JOIN resultados r ON g.nome_avaliacao = r.nome_avaliacao AND r.deleted_at IS NULL
+        WHERE r.nome_avaliacao IS NULL AND g.deleted_at IS NULL
 
         ORDER BY nome ASC
     ";

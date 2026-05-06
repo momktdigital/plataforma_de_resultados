@@ -60,6 +60,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $smtp_pass = trim($_POST['smtp_pass'] ?? '');
         $smtp_from_email = trim($_POST['smtp_from_email'] ?? '');
         $smtp_from_name = trim($_POST['smtp_from_name'] ?? '');
+        $email_template_subject = trim($_POST['email_template_subject'] ?? 'Seu código de acesso aos resultados');
+        $email_template_body = trim($_POST['email_template_body'] ?? 'Olá [NOME_DO_ALUNO],<br><br>Seu código de verificação é: <b>[CODIGO]</b><br><br>Este código expira em 10 minutos.<br><br>Se você não solicitou este acesso, por favor ignore este e-mail.');
 
         try {
             $stmt = $conn->prepare("UPDATE configuracoes SET valor = :valor WHERE chave = :chave");
@@ -72,6 +74,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $stmt->execute([':valor' => $smtp_from_email, ':chave' => 'smtp_from_email']);
             $stmt->execute([':valor' => $smtp_from_name, ':chave' => 'smtp_from_name']);
+            
+            // Templates - Tentar atualizar, se não existir (rowCount 0), inserir
+            $templates = [
+                'email_template_subject' => $email_template_subject,
+                'email_template_body' => $email_template_body
+            ];
+            foreach ($templates as $chave => $valor) {
+                $stmt->execute([':valor' => $valor, ':chave' => $chave]);
+                if ($stmt->rowCount() === 0) {
+                    $checkStmt = $conn->prepare("SELECT 1 FROM configuracoes WHERE chave = :chave");
+                    $checkStmt->execute([':chave' => $chave]);
+                    if ($checkStmt->rowCount() === 0) {
+                        $insertStmt = $conn->prepare("INSERT INTO configuracoes (chave, valor) VALUES (:chave, :valor)");
+                        $insertStmt->execute([':chave' => $chave, ':valor' => $valor]);
+                    }
+                }
+            }
+            
             $sucesso = "Configurações de e-mail (SMTP) salvas com sucesso.";
         } catch (PDOException $e) {
             $erro = "Erro ao salvar: " . $e->getMessage();
@@ -205,6 +225,8 @@ $smtpUser = $configuracoes['smtp_user'] ?? '';
 $smtpFromEmail = $configuracoes['smtp_from_email'] ?? '';
 $smtpFromName = $configuracoes['smtp_from_name'] ?? '';
 $smtpPassExists = !empty($configuracoes['smtp_pass']);
+$emailTemplateSubject = $configuracoes['email_template_subject'] ?? 'Seu código de acesso aos resultados';
+$emailTemplateBody = $configuracoes['email_template_body'] ?? 'Olá [NOME_DO_ALUNO],<br><br>Seu código de verificação é: <b>[CODIGO]</b><br><br>Este código expira em 10 minutos.<br><br>Se você não solicitou este acesso, por favor ignore este e-mail.';
 $siteTitle = $configuracoes['site_title'] ?? 'Resultados DI';
 $siteLogo = $configuracoes['site_logo'] ?? '';
 $siteLogoDark = $configuracoes['site_logo_dark'] ?? '';
@@ -316,6 +338,9 @@ $form_type = $_POST['form_type'] ?? '';
                     <button type="button" class="tab-btn border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" onclick="showTab('tab-smtp')">
                         SMTP
                     </button>
+                    <button type="button" class="tab-btn border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" onclick="showTab('tab-templates')">
+                        Templates
+                    </button>
                 </nav>
             </div>
 
@@ -355,6 +380,20 @@ $form_type = $_POST['form_type'] ?? '';
                 <div>
                     <label for="smtp_port" class="block text-sm font-bold text-slate-700 mb-1">Porta*</label>
                     <input type="text" id="smtp_port" name="smtp_port" value="<?= htmlspecialchars($smtpPort) ?>" class="block w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+                </div>
+            </div>
+
+            <div id="tab-templates" class="tab-content hidden space-y-4">
+                <div class="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg shadow-sm text-sm mb-4">
+                    <i class="ph-fill ph-info mr-1 text-blue-500"></i> Variáveis disponíveis: <strong>[NOME_DO_ALUNO]</strong> e <strong>[CODIGO]</strong>
+                </div>
+                <div>
+                    <label for="email_template_subject" class="block text-sm font-bold text-slate-700 mb-1">Assunto do E-mail</label>
+                    <input type="text" id="email_template_subject" name="email_template_subject" value="<?= htmlspecialchars($emailTemplateSubject) ?>" class="block w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+                </div>
+                <div>
+                    <label for="email_template_body" class="block text-sm font-bold text-slate-700 mb-1">Corpo do E-mail (HTML)</label>
+                    <textarea id="email_template_body" name="email_template_body" rows="6" class="block w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"><?= htmlspecialchars($emailTemplateBody) ?></textarea>
                 </div>
             </div>
 
@@ -519,6 +558,25 @@ $form_type = $_POST['form_type'] ?? '';
                 </button>
             </div>
         </form>
+    </div>
+</div>
+
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden max-w-4xl mx-auto mb-8">
+    <div class="px-6 py-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+        <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+            <i class="ph-fill ph-database text-blue-500"></i> Ferramentas do Sistema
+        </h2>
+    </div>
+    <div class="p-6 sm:p-8">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-slate-50 border border-slate-200 rounded-lg p-5">
+            <div>
+                <h3 class="font-bold text-slate-800">Backup Automático do Banco</h3>
+                <p class="text-sm text-slate-500 mt-1">Gera um arquivo .sql com toda a estrutura e dados das avaliações, alunos e notas para você guardar com segurança.</p>
+            </div>
+            <a href="backup.php" target="_blank" class="mt-4 sm:mt-0 flex items-center px-6 py-3 bg-slate-800 text-white rounded-lg text-sm font-bold shadow-sm hover:bg-slate-700 focus:ring-2 focus:ring-slate-500 transition-all whitespace-nowrap">
+                <i class="ph-bold ph-download-simple mr-2 text-lg"></i> Gerar Backup (.sql)
+            </a>
+        </div>
     </div>
 </div>
 

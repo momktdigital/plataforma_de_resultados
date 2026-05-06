@@ -47,6 +47,8 @@ $siteLogoDark = getConfig($conn, 'site_logo_dark', '');
     <?php endif; ?>
     <!-- IMask para as máscaras de CPF e Data de Nascimento -->
     <script src="https://unpkg.com/imask"></script>
+    <!-- HTML2PDF para geração do Boletim -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -204,9 +206,14 @@ $siteLogoDark = getConfig($conn, 'site_logo_dark', '');
         <!-- Header -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
             <div>
-                <button id="btn-back" class="inline-flex items-center text-sm font-medium text-slate-500 hover:text-primary transition-colors bg-white px-4 py-2 rounded-full shadow-sm border border-slate-200 mb-3">
-                    <i class="ph-bold ph-arrow-left mr-2"></i> Nova consulta
-                </button>
+                <div class="flex gap-2 mb-3">
+                    <button id="btn-back" class="inline-flex items-center text-sm font-medium text-slate-500 hover:text-primary transition-colors bg-white px-4 py-2 rounded-full shadow-sm border border-slate-200">
+                        <i class="ph-bold ph-arrow-left mr-2"></i> Nova consulta
+                    </button>
+                    <button onclick="gerarPDFBoletim()" id="btn-pdf" class="inline-flex items-center text-sm font-medium text-white bg-slate-800 hover:bg-slate-700 transition-colors px-4 py-2 rounded-full shadow-sm border border-slate-800">
+                        <i class="ph-bold ph-file-pdf mr-2 text-red-400"></i> Baixar PDF
+                    </button>
+                </div>
                 <h2 class="text-3xl font-bold text-slate-800 flex items-center gap-2">
                     <i class="ph-fill ph-chart-bar text-primary"></i> Meu Boletim
                 </h2>
@@ -279,6 +286,82 @@ $siteLogoDark = getConfig($conn, 'site_logo_dark', '');
                 }
             });
         });
+
+        function gerarPDFBoletim() {
+            const btnPdf = document.getElementById('btn-pdf');
+            const originalText = btnPdf.innerHTML;
+            btnPdf.innerHTML = '<i class="ph-bold ph-spinner animate-spin mr-2"></i> Gerando...';
+            btnPdf.disabled = true;
+
+            // Prepara a tela para o PDF (esconde botões, ajusta layout)
+            const element = document.getElementById('view-results');
+            const btnBack = document.getElementById('btn-back');
+            const periodSelector = document.getElementById('period-selector-container');
+            const botoesExtras = document.getElementById('container-botoes-extras');
+            
+            // Ocultar elementos interativos
+            btnBack.style.display = 'none';
+            btnPdf.style.display = 'none';
+            if(periodSelector) periodSelector.style.display = 'none';
+            if(botoesExtras) botoesExtras.style.display = 'none';
+            
+            // Adicionar logo no PDF se não estiver visível na Navbar (A Navbar não entra no print)
+            const headerLogoHtml = document.querySelector('.logo-dark') ? document.querySelector('.logo-dark').src : (document.querySelector('.logo-light') ? document.querySelector('.logo-light').src : '');
+            
+            let printHeader = document.createElement('div');
+            printHeader.id = 'pdf-header';
+            printHeader.className = 'flex justify-between items-center mb-6 pb-4 border-b border-slate-200';
+            
+            let logoImg = headerLogoHtml ? `<img src="${headerLogoHtml}" class="h-10 object-contain">` : `<h1 class="font-bold text-xl">${document.title}</h1>`;
+            
+            printHeader.innerHTML = `
+                <div>${logoImg}</div>
+                <div class="text-right">
+                    <p class="text-xs text-slate-500">Documento gerado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}</p>
+                </div>
+            `;
+            element.insertBefore(printHeader, element.firstChild);
+
+            const opt = {
+                margin:       [10, 10, 10, 10],
+                filename:     'Boletim_Resultados.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true, logging: false },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            // Remove a classe fade-in e as margens para não cortar
+            const originalClasses = element.className;
+            element.classList.remove('mt-20', 'mb-10');
+            
+            html2pdf().set(opt).from(element).save().then(() => {
+                // Restaura o estado
+                btnBack.style.display = '';
+                btnPdf.style.display = '';
+                if(periodSelector) periodSelector.style.display = '';
+                if(botoesExtras) botoesExtras.style.display = '';
+                
+                element.className = originalClasses;
+                printHeader.remove();
+                
+                btnPdf.innerHTML = originalText;
+                btnPdf.disabled = false;
+            }).catch(err => {
+                console.error("Erro ao gerar PDF: ", err);
+                alert("Ocorreu um erro ao gerar o PDF.");
+                
+                // Restaura em caso de erro
+                btnBack.style.display = '';
+                btnPdf.style.display = '';
+                if(periodSelector) periodSelector.style.display = '';
+                if(botoesExtras) botoesExtras.style.display = '';
+                element.className = originalClasses;
+                if(printHeader) printHeader.remove();
+                
+                btnPdf.innerHTML = originalText;
+                btnPdf.disabled = false;
+            });
+        }
     </script>
     <script src="assets/js/accessibility.js"></script>
     <script src="assets/js/app.js"></script>

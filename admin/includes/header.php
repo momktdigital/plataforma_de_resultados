@@ -112,6 +112,11 @@ $siteLogoDark = getConfig($header_conn, 'site_logo_dark', '');
                     </a>
                 </li>
                 <li>
+                    <a href="lixeira.php" class="flex items-center px-3 py-2.5 rounded-lg transition-colors <?= $current_page === 'lixeira.php' ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-slate-800 hover:text-white' ?>">
+                        <i class="ph ph-trash text-xl mr-3 <?= $current_page === 'lixeira.php' ? 'text-primary' : '' ?>"></i> Lixeira
+                    </a>
+                </li>
+                <li>
                     <a href="usuarios.php" class="flex items-center px-3 py-2.5 rounded-lg transition-colors <?= $current_page === 'usuarios.php' ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-slate-800 hover:text-white' ?>">
                         <i class="ph ph-users text-xl mr-3 <?= $current_page === 'usuarios.php' ? 'text-primary' : '' ?>"></i> Administradores
                     </a>

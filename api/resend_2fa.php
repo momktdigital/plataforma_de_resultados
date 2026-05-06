@@ -25,7 +25,7 @@ if (empty($cpf)) {
 }
 
 try {
-    $stmt = $conn->prepare("SELECT v.*, a.email FROM verificacoes_email v JOIN alunos a ON v.cpf = a.cpf WHERE v.cpf = ? ORDER BY v.id DESC LIMIT 1");
+    $stmt = $conn->prepare("SELECT v.*, a.email, a.nome FROM verificacoes_email v JOIN alunos a ON v.cpf = a.cpf WHERE v.cpf = ? ORDER BY v.id DESC LIMIT 1");
     $stmt->execute([$cpf]);
 
     if ($stmt->rowCount() === 0) {
@@ -36,6 +36,7 @@ try {
 
     $verificacao = $stmt->fetch(PDO::FETCH_ASSOC);
     $email = $verificacao['email'];
+    $nomeAluno = $verificacao['nome'] ?? 'Aluno';
 
     // Calcular tempo de espera baseado nas vezes reenviado
     // 0 = 1 min, 1 = 2 min, 2 = 5 min, 3 = 10 min
@@ -100,10 +101,18 @@ try {
         $mail->setFrom($fromEmail, $fromName);
         $mail->addAddress($email);
 
+        $templateSubject = getConfig($conn, 'email_template_subject', 'Seu código de acesso aos resultados');
+        $templateBody = getConfig($conn, 'email_template_body', 'Olá [NOME_DO_ALUNO],<br><br>Seu código de verificação é: <b>[CODIGO]</b><br><br>Este código expira em 10 minutos.<br><br>Se você não solicitou este acesso, por favor ignore este e-mail.');
+
+        $subject = str_replace(['[NOME_DO_ALUNO]', '[CODIGO]'], [$nomeAluno, $codigo], $templateSubject);
+        $body = str_replace(['[NOME_DO_ALUNO]', '[CODIGO]'], [$nomeAluno, $codigo], $templateBody);
+
+        // Se for reenvio, podemos adicionar um (Reenvio) no assunto se o admin quiser saber, 
+        // mas é melhor respeitar o template fielmente ou adicionar a flag no início/fim.
         $mail->isHTML(true);
-        $mail->Subject = 'Seu código de acesso aos resultados (Reenvio)';
-        $mail->Body    = "Olá,<br><br>Seu código de verificação é: <b>$codigo</b><br><br>Este código expira em 10 minutos.<br><br>Se você não solicitou este acesso, por favor ignore este e-mail.";
-        $mail->AltBody = "Seu código de verificação é: $codigo. Este código expira em 10 minutos.";
+        $mail->Subject = '[Reenvio] ' . $subject;
+        $mail->Body    = $body;
+        $mail->AltBody = strip_tags($body);
 
         $mail->send();
 
