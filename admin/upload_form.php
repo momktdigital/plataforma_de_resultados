@@ -145,11 +145,25 @@ try {
                     <li class="flex items-start"><i class="ph-bold ph-check text-emerald-500 mt-0.5 mr-2 shrink-0"></i> <span>As questões devem ser nomeadas exatamente como <strong>Q1, Q2, Q3… Q100</strong>. O valor de cada célula deve ser a alternativa marcada (ex: <code class="bg-slate-200 px-1 rounded">A</code>, <code class="bg-slate-200 px-1 rounded">B</code>, <code class="bg-slate-200 px-1 rounded">C</code>, <code class="bg-slate-200 px-1 rounded">D</code> ou <code class="bg-slate-200 px-1 rounded">E</code>).</span></li>
                 </ul>
 
-                <p class="font-semibold text-slate-600 mb-2">Caixas de totais (Notas Finais):</p>
-                <ul class="space-y-1.5 pl-2 mb-4">
-                    <li class="flex items-start"><i class="ph-bold ph-check text-emerald-500 mt-0.5 mr-2 shrink-0"></i> <span>Qualquer coluna que <strong>não</strong> seja RA, Período ou questão (Qn) será exibida como uma <strong>caixa de total</strong> na tela de resultados. O nome da coluna vira o rótulo da caixa (ex: <code class="bg-slate-200 px-1 rounded">Clínica Médica</code>, <code class="bg-slate-200 px-1 rounded">Nota Redação</code>, <code class="bg-slate-200 px-1 rounded">Nota Objetiva</code>).</span></li>
-                    <li class="flex items-start"><i class="ph-bold ph-star text-amber-400 mt-0.5 mr-2 shrink-0"></i> <span><strong>Total em destaque:</strong> a coluna nomeada <code class="bg-slate-200 px-1 rounded">Total</code>, <code class="bg-slate-200 px-1 rounded">Nota Final</code>, <code class="bg-slate-200 px-1 rounded">Total de Acertos</code> ou <code class="bg-slate-200 px-1 rounded">Pontuação Final</code> é exibida separadamente no <strong>card de destaque escuro</strong> no topo do relatório do aluno.</span></li>
-                    <li class="flex items-start"><i class="ph-bold ph-info text-blue-400 mt-0.5 mr-2 shrink-0"></i> <span>A coluna <strong>NOME1</strong>, se presente, é lida e descartada — nunca é gravada, garantindo a privacidade dos dados.</span></li>
+                <p class="font-semibold text-slate-600 mb-2">Cards de resultado:</p>
+                <ul class="space-y-2 pl-2 mb-4">
+                    <li class="flex items-start">
+                        <i class="ph-bold ph-star text-amber-400 mt-0.5 mr-2 shrink-0"></i>
+                        <span><strong>Card de destaque</strong> (card escuro no topo): a coluna cujo nome seja exatamente <code class="bg-slate-200 px-1 rounded">Total</code>, <code class="bg-slate-200 px-1 rounded">Nota Final</code>, <code class="bg-slate-200 px-1 rounded">Total de Acertos</code> ou <code class="bg-slate-200 px-1 rounded">Pontuação Final</code> é exibida com destaque no topo do relatório.</span>
+                    </li>
+                    <li class="flex items-start">
+                        <i class="ph-bold ph-cards text-blue-500 mt-0.5 mr-2 shrink-0"></i>
+                        <span><strong>Cards de disciplina com total + percentual:</strong> use o padrão <code class="bg-slate-200 px-1 rounded">[Disciplina] - Total de acertos</code> e <code class="bg-slate-200 px-1 rounded">[Disciplina] - Percentual de Acertos</code>. O sistema agrupa as duas colunas em um único card mostrando o número de acertos e o percentual entre parênteses.<br>
+                        <span class="text-slate-500 text-xs">Ex: colunas <code class="bg-slate-200 px-1 rounded">Clínica Médica - Total de acertos</code> e <code class="bg-slate-200 px-1 rounded">Clínica Médica - Percentual de Acertos</code> geram um card <strong>Clínica Médica</strong> com o total em verde e o percentual ao lado.</span></span>
+                    </li>
+                    <li class="flex items-start">
+                        <i class="ph-bold ph-check text-emerald-500 mt-0.5 mr-2 shrink-0"></i>
+                        <span><strong>Card simples:</strong> qualquer outra coluna que não seja RA, Período, questão (Qn) ou NOME1 vira um card simples mostrando apenas o valor. Ex: <code class="bg-slate-200 px-1 rounded">Nota Redação</code>, <code class="bg-slate-200 px-1 rounded">Nota Objetiva</code>.</span>
+                    </li>
+                    <li class="flex items-start">
+                        <i class="ph-bold ph-info text-blue-400 mt-0.5 mr-2 shrink-0"></i>
+                        <span>A coluna <strong>NOME1</strong>, se presente, é lida e descartada — nunca é gravada, garantindo a privacidade dos dados.</span>
+                    </li>
                 </ul>
 
                 <p class="font-semibold text-slate-600 mb-2">Outras regras:</p>
@@ -166,13 +180,15 @@ try {
                                 <tr>
                                     <th class="px-2 py-1.5 border-r border-slate-300">RA</th>
                                     <th class="px-2 py-1.5 border-r border-slate-300">Período</th>
-                                    <th class="px-2 py-1.5 border-r border-slate-300">NOME1</th>
+                                    <th class="px-2 py-1.5 border-r border-slate-300 text-slate-400">NOME1</th>
                                     <th class="px-2 py-1.5 border-r border-slate-300">Q1</th>
                                     <th class="px-2 py-1.5 border-r border-slate-300">Q2</th>
                                     <th class="px-2 py-1.5 border-r border-slate-300">…</th>
-                                    <th class="px-2 py-1.5 border-r border-slate-300">Clínica Médica</th>
-                                    <th class="px-2 py-1.5 border-r border-slate-300">Cirurgia Geral</th>
-                                    <th class="px-2 py-1.5 border-r border-slate-300 bg-amber-50 text-amber-700" title="Exibido no card de destaque">Total ★</th>
+                                    <th class="px-2 py-1.5 border-r border-slate-300 bg-blue-50 text-blue-700" title="Card de disciplina — número grande">Clínica Médica - Total de acertos</th>
+                                    <th class="px-2 py-1.5 border-r border-slate-300 bg-blue-50 text-blue-700" title="Card de disciplina — percentual">Clínica Médica - Percentual de Acertos</th>
+                                    <th class="px-2 py-1.5 border-r border-slate-300 bg-blue-50 text-blue-700" title="Card de disciplina — número grande">Cirurgia Geral - Total de acertos</th>
+                                    <th class="px-2 py-1.5 border-r border-slate-300 bg-blue-50 text-blue-700" title="Card de disciplina — percentual">Cirurgia Geral - Percentual de Acertos</th>
+                                    <th class="px-2 py-1.5 border-r border-slate-300 bg-amber-50 text-amber-700" title="Card de destaque escuro no topo">Total de Acertos ★</th>
                                 </tr>
                             </thead>
                             <tbody class="font-mono text-slate-600">
@@ -183,8 +199,10 @@ try {
                                     <td class="px-2 py-1.5 border-r border-slate-200">A</td>
                                     <td class="px-2 py-1.5 border-r border-slate-200">C</td>
                                     <td class="px-2 py-1.5 border-r border-slate-200 text-slate-400">…</td>
-                                    <td class="px-2 py-1.5 border-r border-slate-200">3</td>
-                                    <td class="px-2 py-1.5 border-r border-slate-200">6</td>
+                                    <td class="px-2 py-1.5 border-r border-slate-200 bg-blue-50">3</td>
+                                    <td class="px-2 py-1.5 border-r border-slate-200 bg-blue-50">30%</td>
+                                    <td class="px-2 py-1.5 border-r border-slate-200 bg-blue-50">6</td>
+                                    <td class="px-2 py-1.5 border-r border-slate-200 bg-blue-50">60%</td>
                                     <td class="px-2 py-1.5 bg-amber-50">38</td>
                                 </tr>
                                 <tr class="bg-slate-50 border-t border-slate-200">
@@ -194,14 +212,20 @@ try {
                                     <td class="px-2 py-1.5 border-r border-slate-200">B</td>
                                     <td class="px-2 py-1.5 border-r border-slate-200">A</td>
                                     <td class="px-2 py-1.5 border-r border-slate-200 text-slate-400">…</td>
-                                    <td class="px-2 py-1.5 border-r border-slate-200">4</td>
-                                    <td class="px-2 py-1.5 border-r border-slate-200">5</td>
+                                    <td class="px-2 py-1.5 border-r border-slate-200 bg-blue-50">4</td>
+                                    <td class="px-2 py-1.5 border-r border-slate-200 bg-blue-50">40%</td>
+                                    <td class="px-2 py-1.5 border-r border-slate-200 bg-blue-50">5</td>
+                                    <td class="px-2 py-1.5 border-r border-slate-200 bg-blue-50">50%</td>
                                     <td class="px-2 py-1.5 bg-amber-50">42</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
-                    <p class="text-xs text-slate-400 mt-2 italic">★ A coluna <strong>Total</strong> (ou "Nota Final", "Total de Acertos", "Pontuação Final") aparece no card de destaque escuro no topo do relatório. NOME1 é sempre descartado.</p>
+                    <p class="text-xs text-slate-400 mt-2 italic">
+                        <span class="inline-block w-3 h-3 rounded-sm bg-amber-100 border border-amber-300 mr-1 align-middle"></span> ★ Card de destaque escuro no topo.
+                        <span class="inline-block w-3 h-3 rounded-sm bg-blue-100 border border-blue-300 ml-3 mr-1 align-middle"></span> Cards de disciplina: par de colunas com <strong>- Total de acertos</strong> e <strong>- Percentual de Acertos</strong> após o nome da disciplina.
+                        NOME1 é sempre descartado.
+                    </p>
                 </details>
             </div>
 

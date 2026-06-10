@@ -21,27 +21,20 @@ CREATE TABLE IF NOT EXISTS `resultados` (
     `notas_finais` JSON,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted_at` TIMESTAMP NULL DEFAULT NULL,
     UNIQUE KEY `uk_ra_periodo_avaliacao` (`ra`, `periodo`, `nome_avaliacao`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Tabela de Gabaritos
--- Tabela de Gabaritos
-
 CREATE TABLE IF NOT EXISTS `gabaritos` (
-
     `id` INT AUTO_INCREMENT PRIMARY KEY,
-
     `nome_avaliacao` VARCHAR(150) NOT NULL,
-
     `respostas` JSON,
     `link_comentado` VARCHAR(255) NULL,
-
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-
+    `deleted_at` TIMESTAMP NULL DEFAULT NULL,
     UNIQUE KEY `uk_avaliacao` (`nome_avaliacao`)
-
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Tabela de Alunos
