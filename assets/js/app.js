@@ -167,15 +167,9 @@ document.addEventListener('DOMContentLoaded', () => {
         allData = json.data;
         if (allData.length === 0) return;
 
-        if (allData.length > 1) {
-            renderSelectionCards();
-            btnBackToSelection.classList.add('hidden');
-            switchView('selection');
-        } else {
-            btnBackToSelection.classList.add('hidden');
-            renderDashboard(0);
-            switchView('results');
-        }
+        renderSelectionCards();
+        btnBackToSelection.classList.add('hidden');
+        switchView('selection');
     };
 
     // --- Lógica de Renderização do Dashboard ---

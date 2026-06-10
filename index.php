@@ -208,7 +208,7 @@ $siteLogoDark = getConfig($conn, 'site_logo_dark', '');
                 <i class="ph-fill ph-clipboard-text text-primary text-3xl"></i>
             </div>
             <h2 class="text-2xl font-bold text-slate-800 mb-2">Suas Avaliações</h2>
-            <p class="text-slate-500 text-sm">Encontramos mais de um resultado. Selecione qual avaliação você deseja visualizar.</p>
+            <p class="text-slate-500 text-sm">Selecione qual avaliação você deseja visualizar.</p>
         </div>
         <div id="selection-cards-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
             <!-- Cards injetados via JS -->
