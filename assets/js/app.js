@@ -30,8 +30,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const summaryPanel = document.getElementById('summary-panel');
     const answersGrid = document.getElementById('answers-grid');
 
-    const periodSelectorContainer = document.getElementById('period-selector-container');
-    const periodSelect = document.getElementById('period_select');
+    const viewSelection = document.getElementById('view-selection');
+    const selectionCardsGrid = document.getElementById('selection-cards-grid');
+    const btnBackSelection = document.getElementById('btn-back-selection');
+    const btnBackToSelection = document.getElementById('btn-back-to-selection');
 
     let allData = []; // Armazena todos os períodos do aluno consultado
 
@@ -50,18 +52,19 @@ document.addEventListener('DOMContentLoaded', () => {
         viewSearch.classList.add('hidden-view');
         view2fa.classList.add('hidden-view');
         viewResults.classList.add('hidden-view');
+        viewSelection.classList.add('hidden-view');
 
         if (targetView === 'results') {
-            cpfInput.value = '';
-            nascimentoInput.value = '';
-            if (typeof grecaptcha !== 'undefined') grecaptcha.reset();
-            if (typeof hcaptcha !== 'undefined') hcaptcha.reset();
             viewResults.classList.remove('hidden-view');
-            codigoInput.value = '';
+        } else if (targetView === 'selection') {
+            viewSelection.classList.remove('hidden-view');
         } else if (targetView === '2fa') {
             view2fa.classList.remove('hidden-view');
             codigoInput.focus();
         } else if (targetView === 'search') {
+            cpfInput.value = '';
+            nascimentoInput.value = '';
+            codigoInput.value = '';
             if (typeof grecaptcha !== 'undefined') grecaptcha.reset();
             if (typeof hcaptcha !== 'undefined') hcaptcha.reset();
             viewSearch.classList.remove('hidden-view');
@@ -116,23 +119,60 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     checkBlock();
 
+    const getTotalScore = (notas_finais) => {
+        const notas = notas_finais || {};
+        for (const [key, val] of Object.entries(notas)) {
+            const k = key.toLowerCase();
+            if (k === 'total' || k === 'pontuação final' || k === 'nota final' || k === 'total de acertos') {
+                return val;
+            }
+        }
+        return null;
+    };
+
+    const renderSelectionCards = () => {
+        selectionCardsGrid.innerHTML = '';
+        allData.forEach((item, idx) => {
+            const notaGeral = getTotalScore(item.notas_finais);
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = 'group w-full text-left bg-white rounded-2xl shadow-sm border border-slate-200 p-6 hover:border-primary hover:shadow-md transition-all hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-primary';
+            card.innerHTML = `
+                <div class="flex items-start justify-between gap-4">
+                    <div class="flex items-center gap-4 min-w-0">
+                        <div class="flex-shrink-0 w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center">
+                            <i class="ph-fill ph-exam text-primary text-2xl"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">${item.periodo || ''}</p>
+                            <p class="font-bold text-slate-800 text-base leading-tight">${item.nome_avaliacao || 'Avaliação'}</p>
+                            ${notaGeral !== null ? `<p class="text-sm text-slate-500 mt-1.5">Total: <span class="font-bold text-primary">${notaGeral}</span></p>` : ''}
+                        </div>
+                    </div>
+                    <div class="flex-shrink-0 text-slate-300 group-hover:text-primary transition-colors mt-1">
+                        <i class="ph-bold ph-arrow-right text-xl"></i>
+                    </div>
+                </div>
+            `;
+            card.addEventListener('click', () => {
+                btnBackToSelection.classList.remove('hidden');
+                renderDashboard(idx);
+                switchView('results');
+            });
+            selectionCardsGrid.appendChild(card);
+        });
+    };
+
     const setupDashboard = (json) => {
         allData = json.data;
-        periodSelect.innerHTML = '';
-        if (allData.length > 0) {
-            allData.forEach((item, idx) => {
-                const option = document.createElement('option');
-                option.value = idx;
-                option.textContent = item.periodo;
-                periodSelect.appendChild(option);
-            });
-            if (allData.length > 1) {
-                periodSelectorContainer.classList.remove('hidden');
-                periodSelectorContainer.classList.add('block');
-            } else {
-                periodSelectorContainer.classList.add('hidden');
-                periodSelectorContainer.classList.remove('block');
-            }
+        if (allData.length === 0) return;
+
+        if (allData.length > 1) {
+            renderSelectionCards();
+            btnBackToSelection.classList.add('hidden');
+            switchView('selection');
+        } else {
+            btnBackToSelection.classList.add('hidden');
             renderDashboard(0);
             switchView('results');
         }
@@ -394,16 +434,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Evento para alternar entre períodos no select
-    periodSelect.addEventListener('change', (e) => {
-        const selectedIndex = parseInt(e.target.value, 10);
-        renderDashboard(selectedIndex);
+    // Botão Voltar (Nova consulta) — sempre vai para a busca
+    btnBack.addEventListener('click', () => {
+        allData = [];
+        switchView('search');
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = '<span>Consultar Resultado</span><i class="ph-bold ph-arrow-right ml-2 text-lg"></i>';
     });
 
-    // Botão Voltar
-    btnBack.addEventListener('click', () => {
+    // Botão Outras avaliações — volta para a tela de seleção
+    btnBackToSelection.addEventListener('click', () => {
+        switchView('selection');
+    });
+
+    // Botão Nova consulta da tela de seleção
+    btnBackSelection.addEventListener('click', () => {
+        allData = [];
         switchView('search');
-        // Reseta o botão principal para seu estado original
         btnSubmit.disabled = false;
         btnSubmit.innerHTML = '<span>Consultar Resultado</span><i class="ph-bold ph-arrow-right ml-2 text-lg"></i>';
     });

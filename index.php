@@ -201,6 +201,25 @@ $siteLogoDark = getConfig($conn, 'site_logo_dark', '');
         </form>
     </div>
 
+    <!-- VIEW 1.7: SELEÇÃO DE AVALIAÇÃO -->
+    <div id="view-selection" class="hidden-view w-full max-w-3xl fade-in mt-20 mb-10">
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-50 mb-4">
+                <i class="ph-fill ph-clipboard-text text-primary text-3xl"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-slate-800 mb-2">Suas Avaliações</h2>
+            <p class="text-slate-500 text-sm">Encontramos mais de um resultado. Selecione qual avaliação você deseja visualizar.</p>
+        </div>
+        <div id="selection-cards-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+            <!-- Cards injetados via JS -->
+        </div>
+        <div class="text-center">
+            <button id="btn-back-selection" class="inline-flex items-center text-sm font-medium text-slate-500 hover:text-primary transition-colors bg-white px-4 py-2 rounded-full shadow-sm border border-slate-200">
+                <i class="ph-bold ph-arrow-left mr-2"></i> Nova consulta
+            </button>
+        </div>
+    </div>
+
     <!-- VIEW 2: TELA DE RESULTADOS (Dashboard) -->
     <div id="view-results" class="hidden-view w-full max-w-5xl fade-in mt-20 mb-10">
         <!-- Header -->
@@ -209,6 +228,9 @@ $siteLogoDark = getConfig($conn, 'site_logo_dark', '');
                 <div class="flex gap-2 mb-3">
                     <button id="btn-back" class="inline-flex items-center text-sm font-medium text-slate-500 hover:text-primary transition-colors bg-white px-4 py-2 rounded-full shadow-sm border border-slate-200">
                         <i class="ph-bold ph-arrow-left mr-2"></i> Nova consulta
+                    </button>
+                    <button id="btn-back-to-selection" class="hidden inline-flex items-center text-sm font-medium text-slate-500 hover:text-primary transition-colors bg-white px-4 py-2 rounded-full shadow-sm border border-slate-200">
+                        <i class="ph-bold ph-list mr-2"></i> Outras avaliações
                     </button>
                     <button onclick="gerarPDFBoletim()" id="btn-pdf" class="inline-flex items-center text-sm font-medium text-white bg-slate-800 hover:bg-slate-700 transition-colors px-4 py-2 rounded-full shadow-sm border border-slate-800">
                         <i class="ph-bold ph-file-pdf mr-2 text-red-400"></i> Baixar PDF
