@@ -386,7 +386,7 @@ $siteLogoDark = getConfig($conn, 'site_logo_dark', '');
         }
     </script>
     <script src="assets/js/accessibility.js"></script>
-    <script src="assets/js/app.js"></script>
+    <script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
 
 </body>
 </html>
