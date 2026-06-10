@@ -93,14 +93,14 @@ CREATE TABLE IF NOT EXISTS `configuracoes` (
 -- Índices para performance
 -- (ra e cpf em `alunos` já têm índice via UNIQUE; nome_avaliacao em `gabaritos` também)
 ALTER TABLE `resultados`
-    ADD INDEX IF NOT EXISTS `idx_nome_avaliacao`    (`nome_avaliacao`),
-    ADD INDEX IF NOT EXISTS `idx_periodo`           (`periodo`),
-    ADD INDEX IF NOT EXISTS `idx_deleted_at`        (`deleted_at`),
-    ADD INDEX IF NOT EXISTS `idx_aval_deleted`      (`nome_avaliacao`, `deleted_at`),
-    ADD INDEX IF NOT EXISTS `idx_periodo_deleted`   (`periodo`, `deleted_at`);
+    ADD INDEX `idx_nome_avaliacao`  (`nome_avaliacao`),
+    ADD INDEX `idx_periodo`         (`periodo`),
+    ADD INDEX `idx_deleted_at`      (`deleted_at`),
+    ADD INDEX `idx_aval_deleted`    (`nome_avaliacao`, `deleted_at`),
+    ADD INDEX `idx_periodo_deleted` (`periodo`, `deleted_at`);
 
 ALTER TABLE `verificacoes_email`
-    ADD INDEX IF NOT EXISTS `idx_cpf_verif`         (`cpf`);
+    ADD INDEX `idx_cpf_verif` (`cpf`);
 
 -- Inserindo configurações padrão
 INSERT IGNORE INTO `configuracoes` (`chave`, `valor`, `descricao`) VALUES
