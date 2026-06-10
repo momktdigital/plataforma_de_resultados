@@ -8,7 +8,7 @@ $conn = $db->getConnection();
 // Buscar todos os (nome_avaliacao) únicos já cadastrados
 $avaliacoesList = [];
 try {
-    $stmt = $conn->query("SELECT DISTINCT nome_avaliacao FROM resultados ORDER BY nome_avaliacao ASC");
+    $stmt = $conn->query("SELECT DISTINCT nome_avaliacao FROM resultados WHERE deleted_at IS NULL ORDER BY nome_avaliacao ASC");
     $avaliacoesList = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     // Ignorar ou logar erro
