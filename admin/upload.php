@@ -113,7 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FIL
         $query = "INSERT INTO resultados (ra, periodo, nome_avaliacao, respostas, notas_finais)
                   VALUES (:ra, :periodo, :nome_avaliacao, :respostas, :notas_finais)
                   ON DUPLICATE KEY UPDATE
-                  respostas = VALUES(respostas), notas_finais = VALUES(notas_finais), updated_at = CURRENT_TIMESTAMP";
+                  respostas = VALUES(respostas), notas_finais = VALUES(notas_finais), updated_at = CURRENT_TIMESTAMP, deleted_at = NULL";
         $stmt = $conn->prepare($query);
 
         // Processa cada linha do CSV
