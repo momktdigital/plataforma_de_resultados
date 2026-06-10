@@ -10,6 +10,7 @@ $tipoMensagem = '';
 
 // Exclusão de Avaliação Inteira
 if (isset($_POST['action']) && $_POST['action'] === 'delete_avaliacao') {
+    csrf_validate();
     $avDelete = $_POST['nome_avaliacao'] ?? '';
     if (!empty($avDelete)) {
         try {
@@ -182,6 +183,7 @@ try {
 
 <!-- Form Invisível p/ Excluir -->
 <form id="delete-form" method="POST" action="avaliacoes.php" class="hidden">
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="delete_avaliacao">
     <input type="hidden" name="nome_avaliacao" id="delete-nome">
 </form>

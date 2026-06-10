@@ -61,6 +61,7 @@ try {
         <?php endif; ?>
 
         <form action="upload.php" method="POST" enctype="multipart/form-data">
+            <?= csrf_field() ?>
 
             <div class="mb-6">
                 <label class="block text-sm font-bold text-slate-700 mb-2">1. Avaliação <span class="text-red-500">*</span></label>
@@ -131,14 +132,77 @@ try {
             </div>
 
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-6 mb-8 text-sm text-slate-700 shadow-inner">
-                <h4 class="font-bold flex items-center mb-3 text-slate-800 text-base"><i class="ph-fill ph-info mr-2 text-blue-500"></i> Regras Importantes do CSV:</h4>
-                <ul class="space-y-2 pl-2">
-                    <li class="flex items-start"><i class="ph-bold ph-check text-emerald-500 mt-0.5 mr-2"></i> <span>O arquivo DEVE conter as colunas <strong>RA</strong> e <strong>Período</strong>.</span></li>
-                    <li class="flex items-start"><i class="ph-bold ph-check text-emerald-500 mt-0.5 mr-2"></i> <span>A coluna <strong>NOME1</strong> será lida mas ignorada na gravação, garantindo privacidade.</span></li>
-                    <li class="flex items-start"><i class="ph-bold ph-check text-emerald-500 mt-0.5 mr-2"></i> <span>As colunas das questões devem estar nomeadas exatamente como <strong>Q1, Q2... Q100</strong>.</span></li>
-                    <li class="flex items-start"><i class="ph-bold ph-check text-emerald-500 mt-0.5 mr-2"></i> <span>Qualquer outra coluna após Q100 será automaticamente agrupada em "Notas Finais".</span></li>
-                    <li class="flex items-start"><i class="ph-bold ph-arrows-clockwise text-blue-500 mt-0.5 mr-2"></i> <span>Se um RA já existir no mesmo Período e Avaliação, os dados serão <strong>atualizados (Upsert)</strong>.</span></li>
+                <h4 class="font-bold flex items-center mb-3 text-slate-800 text-base"><i class="ph-fill ph-info mr-2 text-blue-500"></i> Regras do CSV:</h4>
+
+                <p class="font-semibold text-slate-600 mb-2 mt-1">Colunas obrigatórias:</p>
+                <ul class="space-y-1.5 pl-2 mb-4">
+                    <li class="flex items-start"><i class="ph-bold ph-check text-emerald-500 mt-0.5 mr-2 shrink-0"></i> <span><strong>RA</strong> — Registro Acadêmico do aluno.</span></li>
+                    <li class="flex items-start"><i class="ph-bold ph-check text-emerald-500 mt-0.5 mr-2 shrink-0"></i> <span><strong>Período</strong> — Período do curso em que o aluno se encontra (ex: <code class="bg-slate-200 px-1 rounded">1º</code>, <code class="bg-slate-200 px-1 rounded">3º</code>, <code class="bg-slate-200 px-1 rounded">7º</code>). Não é o semestre letivo.</span></li>
                 </ul>
+
+                <p class="font-semibold text-slate-600 mb-2">Colunas de questões:</p>
+                <ul class="space-y-1.5 pl-2 mb-4">
+                    <li class="flex items-start"><i class="ph-bold ph-check text-emerald-500 mt-0.5 mr-2 shrink-0"></i> <span>As questões devem ser nomeadas exatamente como <strong>Q1, Q2, Q3… Q100</strong>. O valor de cada célula deve ser a alternativa marcada (ex: <code class="bg-slate-200 px-1 rounded">A</code>, <code class="bg-slate-200 px-1 rounded">B</code>, <code class="bg-slate-200 px-1 rounded">C</code>, <code class="bg-slate-200 px-1 rounded">D</code> ou <code class="bg-slate-200 px-1 rounded">E</code>).</span></li>
+                </ul>
+
+                <p class="font-semibold text-slate-600 mb-2">Caixas de totais (Notas Finais):</p>
+                <ul class="space-y-1.5 pl-2 mb-4">
+                    <li class="flex items-start"><i class="ph-bold ph-check text-emerald-500 mt-0.5 mr-2 shrink-0"></i> <span>Qualquer coluna que <strong>não</strong> seja RA, Período ou questão (Qn) será exibida como uma <strong>caixa de total</strong> na tela de resultados. O nome da coluna vira o rótulo da caixa (ex: <code class="bg-slate-200 px-1 rounded">Clínica Médica</code>, <code class="bg-slate-200 px-1 rounded">Nota Redação</code>, <code class="bg-slate-200 px-1 rounded">Nota Objetiva</code>).</span></li>
+                    <li class="flex items-start"><i class="ph-bold ph-star text-amber-400 mt-0.5 mr-2 shrink-0"></i> <span><strong>Total em destaque:</strong> a coluna nomeada <code class="bg-slate-200 px-1 rounded">Total</code>, <code class="bg-slate-200 px-1 rounded">Nota Final</code>, <code class="bg-slate-200 px-1 rounded">Total de Acertos</code> ou <code class="bg-slate-200 px-1 rounded">Pontuação Final</code> é exibida separadamente no <strong>card de destaque escuro</strong> no topo do relatório do aluno.</span></li>
+                    <li class="flex items-start"><i class="ph-bold ph-info text-blue-400 mt-0.5 mr-2 shrink-0"></i> <span>A coluna <strong>NOME1</strong>, se presente, é lida e descartada — nunca é gravada, garantindo a privacidade dos dados.</span></li>
+                </ul>
+
+                <p class="font-semibold text-slate-600 mb-2">Outras regras:</p>
+                <ul class="space-y-1.5 pl-2 mb-4">
+                    <li class="flex items-start"><i class="ph-bold ph-arrows-clockwise text-blue-500 mt-0.5 mr-2 shrink-0"></i> <span>Se um RA já existir no mesmo Período e Avaliação, os dados serão <strong>atualizados</strong> automaticamente.</span></li>
+                    <li class="flex items-start"><i class="ph-bold ph-check text-emerald-500 mt-0.5 mr-2 shrink-0"></i> <span>O delimitador pode ser <strong>vírgula</strong> (<code class="bg-slate-200 px-1 rounded">,</code>) ou <strong>ponto e vírgula</strong> (<code class="bg-slate-200 px-1 rounded">;</code>) — ambos são detectados automaticamente.</span></li>
+                </ul>
+
+                <details class="mt-2">
+                    <summary class="cursor-pointer text-primary font-semibold text-xs hover:underline flex items-center gap-1"><i class="ph-bold ph-table mr-1"></i> Ver exemplo de CSV</summary>
+                    <div class="mt-3 overflow-x-auto rounded-lg border border-slate-200">
+                        <table class="text-xs w-full text-left">
+                            <thead class="bg-slate-200 text-slate-700 font-mono">
+                                <tr>
+                                    <th class="px-2 py-1.5 border-r border-slate-300">RA</th>
+                                    <th class="px-2 py-1.5 border-r border-slate-300">Período</th>
+                                    <th class="px-2 py-1.5 border-r border-slate-300">NOME1</th>
+                                    <th class="px-2 py-1.5 border-r border-slate-300">Q1</th>
+                                    <th class="px-2 py-1.5 border-r border-slate-300">Q2</th>
+                                    <th class="px-2 py-1.5 border-r border-slate-300">…</th>
+                                    <th class="px-2 py-1.5 border-r border-slate-300">Clínica Médica</th>
+                                    <th class="px-2 py-1.5 border-r border-slate-300">Cirurgia Geral</th>
+                                    <th class="px-2 py-1.5 border-r border-slate-300 bg-amber-50 text-amber-700" title="Exibido no card de destaque">Total ★</th>
+                                </tr>
+                            </thead>
+                            <tbody class="font-mono text-slate-600">
+                                <tr class="bg-white border-t border-slate-200">
+                                    <td class="px-2 py-1.5 border-r border-slate-200">123456</td>
+                                    <td class="px-2 py-1.5 border-r border-slate-200">7º</td>
+                                    <td class="px-2 py-1.5 border-r border-slate-200 text-slate-400 italic">João Silva</td>
+                                    <td class="px-2 py-1.5 border-r border-slate-200">A</td>
+                                    <td class="px-2 py-1.5 border-r border-slate-200">C</td>
+                                    <td class="px-2 py-1.5 border-r border-slate-200 text-slate-400">…</td>
+                                    <td class="px-2 py-1.5 border-r border-slate-200">3</td>
+                                    <td class="px-2 py-1.5 border-r border-slate-200">6</td>
+                                    <td class="px-2 py-1.5 bg-amber-50">38</td>
+                                </tr>
+                                <tr class="bg-slate-50 border-t border-slate-200">
+                                    <td class="px-2 py-1.5 border-r border-slate-200">789012</td>
+                                    <td class="px-2 py-1.5 border-r border-slate-200">3º</td>
+                                    <td class="px-2 py-1.5 border-r border-slate-200 text-slate-400 italic">Maria Souza</td>
+                                    <td class="px-2 py-1.5 border-r border-slate-200">B</td>
+                                    <td class="px-2 py-1.5 border-r border-slate-200">A</td>
+                                    <td class="px-2 py-1.5 border-r border-slate-200 text-slate-400">…</td>
+                                    <td class="px-2 py-1.5 border-r border-slate-200">4</td>
+                                    <td class="px-2 py-1.5 border-r border-slate-200">5</td>
+                                    <td class="px-2 py-1.5 bg-amber-50">42</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-2 italic">★ A coluna <strong>Total</strong> (ou "Nota Final", "Total de Acertos", "Pontuação Final") aparece no card de destaque escuro no topo do relatório. NOME1 é sempre descartado.</p>
+                </details>
             </div>
 
             <div class="flex justify-end pt-4 border-t border-slate-100">

@@ -10,6 +10,7 @@ $tipoMensagem = '';
 
 // Lógica de Exclusão por Período
 if (isset($_POST['action']) && $_POST['action'] === 'delete_periodo') {
+    csrf_validate();
     $periodoDel = $_POST['periodo_delete'] ?? '';
     if (!empty($periodoDel)) {
         try {
@@ -330,6 +331,7 @@ $sql = "SELECT r.id, r.ra, r.periodo, r.nome_avaliacao, r.respostas, r.notas_fin
             <p class="text-sm text-center text-slate-500 mb-6">Selecione o período que deseja remover permanentemente do banco de dados. Esta ação não pode ser desfeita.</p>
 
             <form method="POST" action="resultados.php">
+                <?= csrf_field() ?>
                 <input type="hidden" name="action" value="delete_periodo">
                 <div class="mb-6">
                     <label class="block text-sm font-medium text-slate-700 mb-2">Período para excluir:</label>
@@ -367,6 +369,7 @@ $sql = "SELECT r.id, r.ra, r.periodo, r.nome_avaliacao, r.respostas, r.notas_fin
             </div>
 
             <form method="POST" action="resultados.php">
+                <?= csrf_field() ?>
                 <input type="hidden" name="action" value="truncate_db">
                 <div class="mb-6">
                     <label class="block text-sm font-medium text-slate-700 mb-2">Para confirmar, digite "LIMPAR BANCO":</label>

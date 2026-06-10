@@ -9,6 +9,7 @@ $mensagem = '';
 $tipoMensagem = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_validate();
     $action = $_POST['action'] ?? '';
     $id_tipo = $_POST['id_tipo'] ?? ''; // ex: "resultado_15" ou "gabarito_3"
 
@@ -89,12 +90,14 @@ try {
     <?php if (count($itensLixeira) > 0): ?>
     <div class="flex gap-3">
         <form method="POST" action="" class="inline">
+            <?= csrf_field() ?>
             <input type="hidden" name="action" value="restore_all">
             <button type="submit" class="bg-blue-50 text-blue-600 hover:bg-blue-100 px-4 py-2 rounded-lg shadow-sm font-medium transition-colors flex items-center">
                 <i class="ph-bold ph-arrow-counter-clockwise mr-2"></i> Restaurar Tudo
             </button>
         </form>
         <form method="POST" action="" class="inline" onsubmit="return confirm('Tem certeza que deseja esvaziar a lixeira? Os dados não poderão ser recuperados.')">
+            <?= csrf_field() ?>
             <input type="hidden" name="action" value="empty_trash">
             <button type="submit" class="bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2 rounded-lg shadow-sm font-medium transition-colors flex items-center">
                 <i class="ph-bold ph-trash mr-2"></i> Esvaziar Lixeira
@@ -136,6 +139,7 @@ try {
                             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                 <div class="flex items-center justify-end gap-3">
                                     <form method="POST" action="" class="inline">
+                                        <?= csrf_field() ?>
                                         <input type="hidden" name="action" value="restore">
                                         <input type="hidden" name="id_tipo" value="<?= $item['id_tipo'] ?>">
                                         <button type="submit" class="text-blue-500 hover:text-blue-700 flex items-center" title="Restaurar">
@@ -143,6 +147,7 @@ try {
                                         </button>
                                     </form>
                                     <form method="POST" action="" class="inline" onsubmit="return confirm('Excluir definitivamente?')">
+                                        <?= csrf_field() ?>
                                         <input type="hidden" name="action" value="force_delete">
                                         <input type="hidden" name="id_tipo" value="<?= $item['id_tipo'] ?>">
                                         <button type="submit" class="text-red-400 hover:text-red-600 flex items-center" title="Excluir Permanente">

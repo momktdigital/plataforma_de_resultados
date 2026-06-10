@@ -11,6 +11,7 @@ $loggedAdminId = $_SESSION['admin_id'];
 
 // Ação: Alterar Senha
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'change_password') {
+    csrf_validate();
     $currentPassword = $_POST['current_password'] ?? '';
     $newPassword = $_POST['new_password'] ?? '';
     $confirmPassword = $_POST['confirm_password'] ?? '';
@@ -89,6 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         </div>
 
         <form method="POST" action="">
+            <?= csrf_field() ?>
             <input type="hidden" name="action" value="change_password">
 
             <div class="space-y-5">

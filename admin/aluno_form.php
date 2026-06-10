@@ -40,6 +40,7 @@ if ($id) {
 $erro = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_validate();
     $ra = trim($_POST['ra'] ?? '');
     $nome = trim($_POST['nome'] ?? '');
     $cpf = preg_replace('/[^0-9]/', '', $_POST['cpf'] ?? ''); // Remove máscara
@@ -125,6 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php endif; ?>
 
         <form method="POST" action="">
+            <?= csrf_field() ?>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <!-- RA -->
                 <div>

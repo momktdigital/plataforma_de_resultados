@@ -13,6 +13,7 @@ $loggedAdminId = $_SESSION['admin_id'];
 
 // Ação: Criar Usuário
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'create_admin') {
+    csrf_validate();
     $username = trim($_POST['new_username'] ?? '');
     $password = $_POST['new_password'] ?? '';
 
@@ -43,6 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
 // Ação: Excluir Usuário
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete_admin') {
+    csrf_validate();
     $idDelete = (int)($_POST['admin_id'] ?? 0);
 
     if ($idDelete > 0) {
@@ -132,6 +134,7 @@ try {
                                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                     <?php if ($admin['id'] != $loggedAdminId): ?>
                                         <form method="POST" onsubmit="return confirm('Tem certeza que deseja excluir o administrador <?= htmlspecialchars($admin['username']) ?>?');" class="inline">
+                                            <?= csrf_field() ?>
                                             <input type="hidden" name="action" value="delete_admin">
                                             <input type="hidden" name="admin_id" value="<?= $admin['id'] ?>">
                                             <button type="submit" class="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-md transition-colors flex items-center">
@@ -158,6 +161,7 @@ try {
             </div>
 
             <form method="POST" class="p-6">
+                <?= csrf_field() ?>
                 <input type="hidden" name="action" value="create_admin">
 
                 <div class="mb-4">

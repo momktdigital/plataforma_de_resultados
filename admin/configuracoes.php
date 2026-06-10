@@ -9,6 +9,7 @@ $erro = '';
 $sucesso = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_validate();
     $form_type = $_POST['form_type'] ?? '';
 
     if ($form_type === 'captcha') {
@@ -102,78 +103,84 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'site_title' => $site_title
         ];
 
-        if (isset($_FILES['site_logo']) && !empty($_FILES['site_logo']['name'])) {
-            if ($_FILES['site_logo']['error'] === UPLOAD_ERR_OK) {
-                // Usando caminho absoluto para evitar problemas de resolução de diretório no Linux
-                $uploadDir = realpath(__DIR__ . '/../assets') . '/img/';
-                if (!is_dir($uploadDir)) {
-                    mkdir($uploadDir, 0777, true);
-                }
-                $fileName = time() . '_light_' . basename($_FILES['site_logo']['name']);
-                $uploadFile = $uploadDir . $fileName;
+        /**
+         * Valida e salva um arquivo de logo enviado via upload.
+         * Verifica extensão, MIME real (finfo) e integridade de imagem (getimagesize).
+         * Retorna o caminho relativo salvo ou string vazia se não havia arquivo.
+         * Lança InvalidArgumentException em caso de arquivo inválido.
+         */
+        $processarLogo = function (array $fileField, string $sufixo) use (&$erro): string {
+            if (empty($fileField['name'])) return '';
 
-                $imageFileType = strtolower(pathinfo($uploadFile, PATHINFO_EXTENSION));
-                $allowedTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
+            $uploadErrors = [
+                UPLOAD_ERR_INI_SIZE  => 'O arquivo excede o limite do php.ini.',
+                UPLOAD_ERR_FORM_SIZE => 'O arquivo excede o limite do formulário.',
+                UPLOAD_ERR_PARTIAL   => 'Upload parcial. Tente novamente.',
+                UPLOAD_ERR_NO_TMP_DIR => 'Pasta temporária ausente.',
+                UPLOAD_ERR_CANT_WRITE => 'Falha ao gravar em disco.',
+                UPLOAD_ERR_EXTENSION  => 'Uma extensão PHP interrompeu o upload.',
+            ];
 
-                if (in_array($imageFileType, $allowedTypes)) {
-                    if (move_uploaded_file($_FILES['site_logo']['tmp_name'], $uploadFile)) {
-                        $chaves_valores['site_logo'] = 'assets/img/' . $fileName;
-                    } elseif (copy($_FILES['site_logo']['tmp_name'], $uploadFile)) {
-                        // Fallback: alguns servidores (CageFS, suPHP) podem bloquear move_uploaded_file, mas permitir copy
-                        $chaves_valores['site_logo'] = 'assets/img/' . $fileName;
-                    } else {
-                        $lastError = error_get_last();
-                        $detalhe = $lastError ? $lastError['message'] : 'Desconhecido. Verifique permissões na pasta de destino.';
-                        $erro = "Erro ao mover o arquivo para a pasta 'assets/img/'. Detalhe PHP: " . $detalhe;
-                    }
-                } else {
-                    $erro = "Tipo de arquivo inválido para a logo normal. Permitido: jpg, png, gif, webp, svg.";
-                }
-            } else {
-                $uploadErrors = [
-                    UPLOAD_ERR_INI_SIZE => 'O arquivo excede o limite (upload_max_filesize) do php.ini.',
-                    UPLOAD_ERR_FORM_SIZE => 'O arquivo excede o limite (MAX_FILE_SIZE) do formulário.',
-                    UPLOAD_ERR_PARTIAL => 'O upload foi feito parcialmente.',
-                    UPLOAD_ERR_NO_FILE => 'Nenhum arquivo foi enviado.',
-                    UPLOAD_ERR_NO_TMP_DIR => 'Pasta temporária ausente no servidor.',
-                    UPLOAD_ERR_CANT_WRITE => 'Falha ao escrever o arquivo em disco (permissão na pasta tmp).',
-                    UPLOAD_ERR_EXTENSION => 'Uma extensão do PHP interrompeu o upload.'
-                ];
-                $code = $_FILES['site_logo']['error'];
-                $erro = "Erro no upload do arquivo (Logo Normal): " . ($uploadErrors[$code] ?? "Código de erro desconhecido: $code");
+            if ($fileField['error'] !== UPLOAD_ERR_OK) {
+                $erro = "Erro no upload ($sufixo): " . ($uploadErrors[$fileField['error']] ?? "Código {$fileField['error']}");
+                return '';
             }
-        }
 
-        // Upload da logo escura
-        if (empty($erro) && isset($_FILES['site_logo_dark']) && !empty($_FILES['site_logo_dark']['name'])) {
-            if ($_FILES['site_logo_dark']['error'] === UPLOAD_ERR_OK) {
-                $uploadDir = realpath(__DIR__ . '/../assets') . '/img/';
-                if (!is_dir($uploadDir)) {
-                    mkdir($uploadDir, 0777, true);
-                }
-                $fileNameDark = time() . '_dark_' . basename($_FILES['site_logo_dark']['name']);
-                $uploadFileDark = $uploadDir . $fileNameDark;
+            $tmpPath = $fileField['tmp_name'];
+            $ext = strtolower(pathinfo($fileField['name'], PATHINFO_EXTENSION));
+            $allowedExt = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
 
-                $imageFileType = strtolower(pathinfo($uploadFileDark, PATHINFO_EXTENSION));
-                $allowedTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
-
-                if (in_array($imageFileType, $allowedTypes)) {
-                    if (move_uploaded_file($_FILES['site_logo_dark']['tmp_name'], $uploadFileDark)) {
-                        $chaves_valores['site_logo_dark'] = 'assets/img/' . $fileNameDark;
-                    } elseif (copy($_FILES['site_logo_dark']['tmp_name'], $uploadFileDark)) {
-                        $chaves_valores['site_logo_dark'] = 'assets/img/' . $fileNameDark;
-                    } else {
-                        $lastError = error_get_last();
-                        $detalhe = $lastError ? $lastError['message'] : 'Desconhecido.';
-                        $erro = "Erro ao mover a Logo Escura para 'assets/img/'. Detalhe: " . $detalhe;
-                    }
-                } else {
-                    $erro = "Tipo de arquivo inválido para a Logo Escura.";
-                }
-            } else {
-                $code = $_FILES['site_logo_dark']['error'];
-                $erro = "Erro no upload da Logo Escura (Código: $code).";
+            // 1. Extensão na whitelist
+            if (!in_array($ext, $allowedExt, true)) {
+                $erro = "Tipo de arquivo inválido ($sufixo). Permitido: jpg, png, gif, webp, svg.";
+                return '';
             }
+
+            // 2. MIME real via finfo
+            $allowedMimes = [
+                'image/jpeg', 'image/png', 'image/gif',
+                'image/webp', 'image/svg+xml', 'text/html', // SVG às vezes é detectado como text/html
+            ];
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $realMime = finfo_file($finfo, $tmpPath);
+            finfo_close($finfo);
+
+            if (!in_array($realMime, $allowedMimes, true)) {
+                $erro = "O conteúdo do arquivo ($sufixo) não é uma imagem válida (MIME: $realMime).";
+                return '';
+            }
+
+            // 3. Para imagens raster (não SVG), verifica integridade com getimagesize
+            if ($ext !== 'svg' && $realMime !== 'image/svg+xml') {
+                if (getimagesize($tmpPath) === false) {
+                    $erro = "O arquivo ($sufixo) não é uma imagem válida ou está corrompido.";
+                    return '';
+                }
+            }
+
+            // 4. Salva com nome aleatório (sem usar o nome original)
+            $uploadDir = realpath(__DIR__ . '/../assets') . '/img/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+            $safeName = time() . '_' . $sufixo . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
+            $destPath  = $uploadDir . $safeName;
+
+            if (!move_uploaded_file($tmpPath, $destPath) && !copy($tmpPath, $destPath)) {
+                $lastError = error_get_last();
+                $erro = "Erro ao salvar ($sufixo): " . ($lastError['message'] ?? 'Verifique permissões da pasta assets/img/.');
+                return '';
+            }
+
+            return 'assets/img/' . $safeName;
+        };
+
+        $logoPath = $processarLogo($_FILES['site_logo'] ?? [], 'logo_light');
+        if (!empty($logoPath)) $chaves_valores['site_logo'] = $logoPath;
+
+        if (empty($erro)) {
+            $logoDarkPath = $processarLogo($_FILES['site_logo_dark'] ?? [], 'logo_dark');
+            if (!empty($logoDarkPath)) $chaves_valores['site_logo_dark'] = $logoDarkPath;
         }
 
         if (empty($erro)) {
@@ -263,6 +270,7 @@ $form_type = $_POST['form_type'] ?? '';
         <?php endif; ?>
 
         <form method="POST" action="" enctype="multipart/form-data">
+            <?= csrf_field() ?>
             <input type="hidden" name="form_type" value="appearance">
 
             <div class="space-y-4">
@@ -327,6 +335,7 @@ $form_type = $_POST['form_type'] ?? '';
         <?php endif; ?>
 
         <form method="POST" action="">
+            <?= csrf_field() ?>
             <input type="hidden" name="form_type" value="smtp">
 
             <!-- TABS -->
@@ -478,6 +487,7 @@ $form_type = $_POST['form_type'] ?? '';
         <?php endif; ?>
 
         <form method="POST" action="">
+            <?= csrf_field() ?>
             <input type="hidden" name="form_type" value="captcha">
 
             <div class="mb-8 space-y-4">

@@ -7,8 +7,10 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
 }
 
 require_once '../includes/Database.php';
+require_once '../includes/csrf_helper.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FILES['csv_file']['error'] === UPLOAD_ERR_OK) {
+    csrf_validate();
     $fileTmpPath = $_FILES['csv_file']['tmp_name'];
     $fileName = $_FILES['csv_file']['name'];
     $fileExtension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));

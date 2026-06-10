@@ -8,9 +8,11 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
 }
 
 require_once '../includes/Database.php';
+require_once '../includes/csrf_helper.php';
 
 // Verifica se o formulário foi enviado e se o arquivo existe
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && $_FILES['csv_file']['error'] === UPLOAD_ERR_OK) {
+    csrf_validate();
 
     // Captura e sanitiza o nome da avaliação
     $tipoAvaliacao = $_POST['tipo_avaliacao'] ?? 'nova';

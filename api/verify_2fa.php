@@ -4,6 +4,7 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST');
 
 require_once '../includes/Database.php';
+require_once '../includes/rate_limit_helper.php';
 
 $db = new Database();
 $conn = $db->getConnection();
@@ -14,6 +15,13 @@ $codigo = $_POST['codigo'] ?? '';
 if (empty($cpf) || empty($codigo)) {
     http_response_code(400);
     echo json_encode(['status' => 'error', 'message' => 'CPF ou código inválidos.']);
+    die();
+}
+
+// Verifica bloqueio por IP antes de qualquer consulta
+if (rate_limit_check($conn)) {
+    http_response_code(429);
+    echo json_encode(['status' => 'blocked', 'message' => 'Muitas tentativas deste dispositivo. Tente novamente em 1 hora.']);
     die();
 }
 
@@ -36,6 +44,7 @@ try {
     }
 
     if ($verificacao['tentativas_falhas'] >= 3) {
+        rate_limit_record_failure($conn);
         http_response_code(403);
         echo json_encode(['status' => 'blocked', 'message' => 'Muitas tentativas falhas. Bloqueado por 1 hora.']);
         die();
@@ -44,19 +53,22 @@ try {
     if ($verificacao['codigo'] !== $codigo) {
         $novaTentativa = $verificacao['tentativas_falhas'] + 1;
         $conn->prepare("UPDATE verificacoes_email SET tentativas_falhas = ? WHERE id = ?")->execute([$novaTentativa, $verificacao['id']]);
+        rate_limit_record_failure($conn);
 
         if ($novaTentativa >= 3) {
             http_response_code(403);
             echo json_encode(['status' => 'blocked', 'message' => 'Código incorreto 3 vezes. Dispositivo bloqueado por 1h.']);
         } else {
+            $restantes = 3 - $novaTentativa;
             http_response_code(400);
-            echo json_encode(['status' => 'error', 'message' => "Código incorreto. Tentativa $novaTentativa de 3."]);
+            echo json_encode(['status' => 'error', 'message' => "Código incorreto. Você tem mais $restantes tentativa(s)."]);
         }
         die();
     }
 
-    // Sucesso - Limpar verificação e retornar resultados
+    // Sucesso — limpa verificação e reseta contador do IP
     $conn->prepare("DELETE FROM verificacoes_email WHERE id = ?")->execute([$verificacao['id']]);
+    rate_limit_reset($conn);
 
     // Obter RA do aluno
     $stmtAluno = $conn->prepare("SELECT ra FROM alunos WHERE cpf = ? LIMIT 1");

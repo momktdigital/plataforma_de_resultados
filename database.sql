@@ -70,6 +70,18 @@ CREATE TABLE IF NOT EXISTS `verificacoes_email` (
     `criado_em` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Tabela de Rate Limiting por IP para o 2FA
+-- Bloqueia IPs que acumulam muitas tentativas falhas independente do CPF
+CREATE TABLE IF NOT EXISTS `rate_limit_2fa` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `ip_address` VARCHAR(45) NOT NULL,
+    `tentativas` INT NOT NULL DEFAULT 1,
+    `bloqueado_ate` TIMESTAMP NULL DEFAULT NULL,
+    `ultima_tentativa` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY `uk_ip` (`ip_address`),
+    INDEX `idx_ip_bloqueado` (`ip_address`, `bloqueado_ate`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Tabela de Configurações
 CREATE TABLE IF NOT EXISTS `configuracoes` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -77,6 +89,18 @@ CREATE TABLE IF NOT EXISTS `configuracoes` (
     `valor` TEXT NULL,
     `descricao` VARCHAR(255) NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Índices para performance
+-- (ra e cpf em `alunos` já têm índice via UNIQUE; nome_avaliacao em `gabaritos` também)
+ALTER TABLE `resultados`
+    ADD INDEX IF NOT EXISTS `idx_nome_avaliacao`    (`nome_avaliacao`),
+    ADD INDEX IF NOT EXISTS `idx_periodo`           (`periodo`),
+    ADD INDEX IF NOT EXISTS `idx_deleted_at`        (`deleted_at`),
+    ADD INDEX IF NOT EXISTS `idx_aval_deleted`      (`nome_avaliacao`, `deleted_at`),
+    ADD INDEX IF NOT EXISTS `idx_periodo_deleted`   (`periodo`, `deleted_at`);
+
+ALTER TABLE `verificacoes_email`
+    ADD INDEX IF NOT EXISTS `idx_cpf_verif`         (`cpf`);
 
 -- Inserindo configurações padrão
 INSERT IGNORE INTO `configuracoes` (`chave`, `valor`, `descricao`) VALUES

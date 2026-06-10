@@ -12,7 +12,9 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
 $current_page = basename($_SERVER['PHP_SELF']);
 
 require_once __DIR__ . '/../../includes/Database.php';
+require_once __DIR__ . '/../../includes/csrf_helper.php';
 require_once __DIR__ . '/config_helper.php';
+csrf_generate();
 $header_db = new Database();
 $header_conn = $header_db->getConnection();
 $siteTitle = getConfig($header_conn, 'site_title', 'Resultados DI');

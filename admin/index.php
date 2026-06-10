@@ -44,42 +44,57 @@ try {
         }
     }
 
+    // Limite de registros processados no dashboard para evitar timeout
+    define('DASHBOARD_MAX_ROWS', 3000);
+    $dashboardTruncado = false;
+
+    // Soft-delete sempre excluído das contagens
+    $baseWhere = empty($whereClause)
+        ? "WHERE deleted_at IS NULL"
+        : "$whereClause AND deleted_at IS NULL";
+
     // Total de RAs únicos (Alunos)
-    $queryAlunos = "SELECT COUNT(DISTINCT ra) AS total FROM resultados $whereClause";
-    $stmt = $conn->prepare($queryAlunos);
+    $stmt = $conn->prepare("SELECT COUNT(DISTINCT ra) AS total FROM resultados $baseWhere");
     $stmt->execute($params);
     $totalAlunos = $stmt->fetch()['total'] ?? 0;
 
     // Total de Registros
-    $queryRegs = "SELECT COUNT(*) AS total FROM resultados $whereClause";
-    $stmt = $conn->prepare($queryRegs);
+    $stmt = $conn->prepare("SELECT COUNT(*) AS total FROM resultados $baseWhere");
     $stmt->execute($params);
     $totalRegistros = $stmt->fetch()['total'] ?? 0;
 
     // Total de Períodos cadastrados
-    $queryPer = "SELECT COUNT(DISTINCT periodo) AS total FROM resultados $whereClause";
-    $stmt = $conn->prepare($queryPer);
+    $stmt = $conn->prepare("SELECT COUNT(DISTINCT periodo) AS total FROM resultados $baseWhere");
     $stmt->execute($params);
     $totalPeriodos = $stmt->fetch()['total'] ?? 0;
 
-    // Buscar todos os resultados se houver filtro, para processar médias
+    // Buscar resultados para cálculos (limitado para evitar timeout em volumes grandes)
     if (!empty($filtroAvaliacao)) {
         $sqlRes = "
-            SELECT r.ra, r.notas_finais, r.periodo, a.nome 
-            FROM resultados r 
-            LEFT JOIN alunos a ON r.ra = a.ra 
+            SELECT r.ra, r.notas_finais, r.periodo, a.nome
+            FROM resultados r
+            LEFT JOIN alunos a ON r.ra = a.ra
             WHERE r.nome_avaliacao = :avaliacao
+              AND r.deleted_at IS NULL
         ";
         $paramsRes = [':avaliacao' => $filtroAvaliacao];
-        
+
         if (!empty($filtroPeriodo)) {
             $sqlRes .= " AND r.periodo = :periodo";
             $paramsRes[':periodo'] = $filtroPeriodo;
         }
 
+        $sqlRes .= " LIMIT " . (DASHBOARD_MAX_ROWS + 1);
+
         $stmt = $conn->prepare($sqlRes);
         $stmt->execute($paramsRes);
         $resultadosFiltrados = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Se veio mais do que o limite, trunca e avisa
+        if (count($resultadosFiltrados) > DASHBOARD_MAX_ROWS) {
+            $resultadosFiltrados = array_slice($resultadosFiltrados, 0, DASHBOARD_MAX_ROWS);
+            $dashboardTruncado = true;
+        }
     }
 
 } catch (PDOException $e) {
@@ -343,6 +358,17 @@ $chartMateriasDataJson = json_encode($chartMateriasData ?? []);
     <?php endif; ?>
 
 </div>
+
+<?php if ($dashboardTruncado ?? false): ?>
+<div class="mb-6 flex items-start gap-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-5 py-4 text-sm shadow-sm">
+    <i class="ph-fill ph-warning text-amber-500 text-xl shrink-0 mt-0.5"></i>
+    <span>
+        <strong>Análise parcial:</strong> esta avaliação tem mais de <?= number_format(DASHBOARD_MAX_ROWS, 0, ',', '.') ?> registros.
+        Os gráficos e médias foram calculados sobre os primeiros <?= number_format(DASHBOARD_MAX_ROWS, 0, ',', '.') ?> resultados.
+        Os totais nos cards acima refletem o valor real completo.
+    </span>
+</div>
+<?php endif; ?>
 
 <?php if (!empty($filtroAvaliacao)): ?>
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">

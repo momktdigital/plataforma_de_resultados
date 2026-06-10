@@ -7,6 +7,7 @@ $conn = $db->getConnection();
 
 // --- Lógica de Exclusão ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete') {
+    csrf_validate();
     $idDelete = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
     if ($idDelete) {
         try {
@@ -147,6 +148,7 @@ try {
                                     <i class="ph-bold ph-pencil-simple text-lg"></i>
                                 </a>
                                 <form method="POST" class="inline-block" onsubmit="return confirm('Tem certeza que deseja excluir o aluno <?= htmlspecialchars($aluno['nome'] ?: $aluno['ra']) ?>? Esta ação não removerá os resultados dele, apenas o cadastro de acesso.');">
+                                    <?= csrf_field() ?>
                                     <input type="hidden" name="action" value="delete">
                                     <input type="hidden" name="id" value="<?= $aluno['id'] ?>">
                                     <button type="submit" class="text-red-500 hover:text-red-700" title="Excluir">

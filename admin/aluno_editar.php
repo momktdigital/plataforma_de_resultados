@@ -16,6 +16,7 @@ if ($idAluno <= 0) {
 
 // Processar Update de Aluno
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_aluno') {
+    csrf_validate();
     $novoRa = trim($_POST['ra'] ?? '');
     $novoPeriodo = trim($_POST['periodo'] ?? '');
 
@@ -109,6 +110,7 @@ $notasFinais = json_decode($aluno['notas_finais'], true) ?: [];
 <?php endif; ?>
 
 <form method="POST" action="" class="flex flex-col gap-6">
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="update_aluno">
     <input type="hidden" name="id" value="<?= $idAluno ?>">
 

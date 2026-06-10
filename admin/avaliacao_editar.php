@@ -16,6 +16,7 @@ if (empty($nomeAvaliacaoAtual)) {
 
 // Processar Update de Configurações Básicas
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_basic') {
+    csrf_validate();
     $novoNome = trim($_POST['novo_nome']);
     $linkComentado = trim($_POST['link_comentado']);
     if (empty($linkComentado)) $linkComentado = null;
@@ -187,6 +188,7 @@ try {
                 <h3 class="font-bold text-slate-800 flex items-center"><i class="ph-fill ph-gear text-primary mr-2"></i> Configurações</h3>
             </div>
             <form method="POST" class="p-6">
+                <?= csrf_field() ?>
                 <input type="hidden" name="action" value="update_basic">
                 <input type="hidden" name="nome_atual" value="<?= htmlspecialchars($nomeAvaliacaoAtual) ?>">
 
@@ -252,6 +254,7 @@ try {
             </div>
 
             <form method="POST" class="p-6 flex-1 flex flex-col">
+                <?= csrf_field() ?>
                 <input type="hidden" name="action" value="update_gabarito">
                 <input type="hidden" name="nome_atual" value="<?= htmlspecialchars($nomeAvaliacaoAtual) ?>">
 

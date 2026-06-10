@@ -55,6 +55,7 @@ try {
         <?php endif; ?>
 
         <form action="process_gabarito.php" method="POST" enctype="multipart/form-data">
+            <?= csrf_field() ?>
 
             <div class="mb-6">
                 <label class="block text-sm font-bold text-slate-700 mb-2">1. Selecione a Avaliação <span class="text-red-500">*</span></label>
@@ -95,11 +96,40 @@ try {
 
             <div class="bg-blue-50 border border-blue-200 rounded-xl p-6 mb-8 text-sm text-blue-800 shadow-inner">
                 <h4 class="font-bold flex items-center mb-3 text-blue-900 text-base"><i class="ph-fill ph-info mr-2 text-blue-600"></i> Como formatar o Gabarito:</h4>
-                <ul class="space-y-2 pl-2">
-                    <li class="flex items-start"><i class="ph-bold ph-check text-blue-500 mt-0.5 mr-2"></i> <span>A <strong>primeira linha</strong> deve ser o cabeçalho contendo "Q1, Q2, Q3...". (Outras colunas, como "Período", serão ignoradas).</span></li>
-                    <li class="flex items-start"><i class="ph-bold ph-check text-blue-500 mt-0.5 mr-2"></i> <span>A <strong>segunda linha</strong> deve conter as respostas corretas correspondentes a cada questão (ex: A, B, C, D, E).</span></li>
-                    <li class="flex items-start"><i class="ph-bold ph-arrows-clockwise text-blue-500 mt-0.5 mr-2"></i> <span>Se você subir um novo gabarito para a mesma Avaliação, ele substituirá o anterior.</span></li>
+
+                <p class="font-semibold text-blue-700 mb-2">Estrutura do arquivo:</p>
+                <ul class="space-y-1.5 pl-2 mb-4">
+                    <li class="flex items-start"><i class="ph-bold ph-check text-blue-500 mt-0.5 mr-2 shrink-0"></i> <span>O arquivo deve ter <strong>duas colunas</strong> e <strong>uma linha por questão</strong>, conforme o modelo ao lado.</span></li>
+                    <li class="flex items-start"><i class="ph-bold ph-check text-blue-500 mt-0.5 mr-2 shrink-0"></i> <span>Coluna da questão — nomeie como: <code class="bg-blue-100 px-1 rounded">Questão</code>, <code class="bg-blue-100 px-1 rounded">Questao</code>, <code class="bg-blue-100 px-1 rounded">Número</code>, <code class="bg-blue-100 px-1 rounded">Numero</code> ou <code class="bg-blue-100 px-1 rounded">#</code>.</span></li>
+                    <li class="flex items-start"><i class="ph-bold ph-check text-blue-500 mt-0.5 mr-2 shrink-0"></i> <span>Coluna da resposta — nomeie como: <code class="bg-blue-100 px-1 rounded">Gabarito</code>, <code class="bg-blue-100 px-1 rounded">Resposta</code>, <code class="bg-blue-100 px-1 rounded">Alternativa</code>, <code class="bg-blue-100 px-1 rounded">Letra</code> ou <code class="bg-blue-100 px-1 rounded">Correta</code>.</span></li>
+                    <li class="flex items-start"><i class="ph-bold ph-check text-blue-500 mt-0.5 mr-2 shrink-0"></i> <span>A resposta de cada questão deve ser uma única letra: <code class="bg-blue-100 px-1 rounded">A</code>, <code class="bg-blue-100 px-1 rounded">B</code>, <code class="bg-blue-100 px-1 rounded">C</code>, <code class="bg-blue-100 px-1 rounded">D</code> ou <code class="bg-blue-100 px-1 rounded">E</code>. Deixe em branco para questão anulada.</span></li>
+                    <li class="flex items-start"><i class="ph-bold ph-arrows-clockwise text-blue-500 mt-0.5 mr-2 shrink-0"></i> <span>Se subir um novo gabarito para a mesma Avaliação, ele <strong>substituirá</strong> o anterior.</span></li>
                 </ul>
+
+                <details class="mt-1">
+                    <summary class="cursor-pointer text-blue-700 font-semibold text-xs hover:underline flex items-center gap-1"><i class="ph-bold ph-table mr-1"></i> Ver exemplo de CSV</summary>
+                    <div class="mt-3 flex gap-6 items-start flex-wrap">
+                        <div class="overflow-x-auto rounded-lg border border-blue-200">
+                            <table class="text-xs text-left font-mono">
+                                <thead class="bg-blue-100 text-blue-800">
+                                    <tr>
+                                        <th class="px-3 py-1.5 border-r border-blue-200">Questão</th>
+                                        <th class="px-3 py-1.5">Gabarito</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="text-slate-700">
+                                    <tr class="bg-white border-t border-blue-100"><td class="px-3 py-1 border-r border-blue-100 text-center">1</td><td class="px-3 py-1 text-center">B</td></tr>
+                                    <tr class="bg-blue-50 border-t border-blue-100"><td class="px-3 py-1 border-r border-blue-100 text-center">2</td><td class="px-3 py-1 text-center">C</td></tr>
+                                    <tr class="bg-white border-t border-blue-100"><td class="px-3 py-1 border-r border-blue-100 text-center">3</td><td class="px-3 py-1 text-center">A</td></tr>
+                                    <tr class="bg-blue-50 border-t border-blue-100"><td class="px-3 py-1 border-r border-blue-100 text-center">4</td><td class="px-3 py-1 text-center">B</td></tr>
+                                    <tr class="bg-white border-t border-blue-100"><td class="px-3 py-1 border-r border-blue-100 text-center">5</td><td class="px-3 py-1 text-center">A</td></tr>
+                                    <tr class="bg-blue-50 border-t border-blue-100"><td class="px-3 py-1 border-r border-blue-100 text-center text-slate-400 italic" colspan="2">… (uma linha por questão)</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="text-xs text-blue-600 italic self-center max-w-xs">O arquivo deve ter exatamente este formato: cabeçalho na primeira linha e uma questão por linha abaixo, sem linhas em branco no meio.</p>
+                    </div>
+                </details>
             </div>
 
             <div class="flex justify-end pt-4 border-t border-slate-100">
