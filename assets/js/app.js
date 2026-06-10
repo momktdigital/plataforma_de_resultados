@@ -396,6 +396,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (response.ok) {
                 if (json.status === 'success') {
+                    sessionStorage.setItem('sess_cpf', cpf);
+                    sessionStorage.setItem('sess_nasc', data_nascimento);
                     setupDashboard(json);
                 } else if (json.status === 'require_2fa') {
                     document.getElementById('temp_cpf').value = json.cpf;
@@ -431,6 +433,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Botão Voltar (Nova consulta) — sempre vai para a busca
     btnBack.addEventListener('click', () => {
         allData = [];
+        sessionStorage.removeItem('sess_cpf');
+        sessionStorage.removeItem('sess_nasc');
         switchView('search');
         btnSubmit.disabled = false;
         btnSubmit.innerHTML = '<span>Consultar Resultado</span><i class="ph-bold ph-arrow-right ml-2 text-lg"></i>';
@@ -444,6 +448,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Botão Nova consulta da tela de seleção
     btnBackSelection.addEventListener('click', () => {
         allData = [];
+        sessionStorage.removeItem('sess_cpf');
+        sessionStorage.removeItem('sess_nasc');
         switchView('search');
         btnSubmit.disabled = false;
         btnSubmit.innerHTML = '<span>Consultar Resultado</span><i class="ph-bold ph-arrow-right ml-2 text-lg"></i>';
@@ -474,6 +480,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const json = await response.json();
 
             if(response.ok && json.status === 'success') {
+                sessionStorage.setItem('sess_cpf', cpf);
+                sessionStorage.setItem('sess_nasc', document.getElementById('temp_data_nascimento').value);
                 setupDashboard(json);
             } else {
                 if (json.status === 'blocked') {
@@ -495,6 +503,41 @@ document.addEventListener('DOMContentLoaded', () => {
     btnCancel2fa.addEventListener('click', () => {
         switchView('search');
     });
+
+    // Auto-restauração de sessão após F5 (só funciona sem CAPTCHA ativo)
+    const savedCpf = sessionStorage.getItem('sess_cpf');
+    const savedNasc = sessionStorage.getItem('sess_nasc');
+    const captchaActive = document.querySelector('.g-recaptcha') !== null || document.querySelector('.h-captcha') !== null;
+
+    if (savedCpf && savedNasc && !captchaActive) {
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = '<i class="ph-bold ph-spinner animate-spin text-xl"></i> <span class="ml-2">Restaurando...</span>';
+
+        const fd = new FormData();
+        fd.append('cpf', savedCpf);
+        fd.append('data_nascimento', savedNasc);
+
+        fetch('api/consulta.php', { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(json => {
+                if (json.status === 'success') {
+                    setupDashboard(json);
+                } else {
+                    sessionStorage.removeItem('sess_cpf');
+                    sessionStorage.removeItem('sess_nasc');
+                }
+            })
+            .catch(() => {
+                sessionStorage.removeItem('sess_cpf');
+                sessionStorage.removeItem('sess_nasc');
+            })
+            .finally(() => {
+                if (!viewSearch.classList.contains('hidden-view')) {
+                    btnSubmit.disabled = false;
+                    btnSubmit.innerHTML = '<span>Consultar Resultado</span><i class="ph-bold ph-arrow-right ml-2 text-lg"></i>';
+                }
+            });
+    }
 
     btnResend.addEventListener('click', async () => {
         const cpf = document.getElementById('temp_cpf').value;
