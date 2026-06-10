@@ -81,8 +81,8 @@ try {
                 r.*,
                 g.respostas AS gabarito_respostas, g.link_comentado
               FROM resultados r
-              LEFT JOIN gabaritos g ON r.nome_avaliacao = g.nome_avaliacao
-              WHERE r.ra = :ra
+              LEFT JOIN gabaritos g ON r.nome_avaliacao = g.nome_avaliacao AND g.deleted_at IS NULL
+              WHERE r.ra = :ra AND r.deleted_at IS NULL
               ORDER BY r.id DESC";
 
     $stmtResult = $conn->prepare($query);
