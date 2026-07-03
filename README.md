@@ -5,43 +5,56 @@
 ![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.x-38B2AC.svg?logo=tailwind-css&logoColor=white)
 ![Chart.js](https://img.shields.io/badge/Chart.js-4.x-FF6384.svg?logo=chart.js&logoColor=white)
 
-Um sistema web completo, responsivo e seguro focado na publicação e análise de resultados de simulados, provas e avaliações acadêmicas. O sistema garante a privacidade do aluno exibindo o número de acertos mediante validação de CPF e Data de Nascimento (com suporte a 2FA), e oferece um Dashboard Administrativo repleto de recursos de *Business Intelligence* (BI) para o corpo docente.
+Um sistema web completo, responsivo e seguro focado na publicação e análise de resultados de simulados, provas e avaliações acadêmicas (UNIFAA/FAA). O sistema garante a privacidade do aluno exigindo CPF + Data de Nascimento e, opcionalmente, um segundo fator de autenticação por e-mail (2FA), e oferece um Dashboard Administrativo com recursos de *Business Intelligence* (BI) para o corpo docente/coordenação.
 
 ---
 
 ## 🚀 Funcionalidades Principais
 
-### Para o Aluno (Front-End)
-* **Acesso Seguro e 2FA:** A consulta aos boletins é feita utilizando CPF e Data de Nascimento. O sistema suporta validação em duas etapas (2FA) enviando um código de 6 dígitos para o e-mail cadastrado do aluno, garantindo total privacidade do seu desempenho.
-* **Acessibilidade Completa:** O sistema é totalmente inclusivo, contando com:
-  * Redimensionamento dinâmico de texto (A+ e A-).
-  * Temas visuais configuráveis (Modo Claro, Modo Escuro e Alto Contraste).
-  * Integração nativa com o tradutor automático de **VLibras**.
-* **Layout Fluido:** Transições *Single Page Application* (SPA) com JavaScript Vanilla para navegação instantânea.
-* **Espelho de Desempenho:** Cards dinâmicos exibem a performance do aluno por disciplina comparando o Total contra o Percentual, além de um mapa de respostas detalhado (Q1 a Q100).
-* **Correção em Tempo Real:** Se houver um gabarito da avaliação carregado pelos professores, o front-end compara automaticamente a alternativa escolhida e gera *badges* coloridas (Verde = Acerto, Vermelho = Erro, Cinza = Anulada).
+### Para o Aluno (Front-End — `index.php`)
+* **Acesso Seguro:** Consulta por CPF e Data de Nascimento, com proteção anti-bot via **Google reCAPTCHA v2** ou **hCaptcha** (mutuamente exclusivos, configuráveis pelo painel).
+* **2FA por E-mail (opcional):** Quando ativado em Configurações, o sistema envia um código de 6 dígitos por e-mail (via SMTP/PHPMailer) antes de liberar o boletim. Inclui reenvio de código com cooldown progressivo (1, 2, 5, 10 min) e bloqueio por IP após tentativas malsucedidas (`api/consulta.php`, `api/verify_2fa.php`, `api/resend_2fa.php`).
+* **Acessibilidade Completa:** Redimensionamento dinâmico de texto (A+ / A-), temas Claro/Escuro/Alto Contraste (persistidos em `localStorage`) e integração com o tradutor **VLibras**.
+* **Layout Fluido:** SPA em JavaScript Vanilla (`assets/js/app.js`), sem reload de página entre busca, 2FA e resultado.
+* **Espelho de Desempenho:** Cards por disciplina (Total vs. Percentual), mapa de respostas detalhado (Q1 a Q100) e um **painel de estatísticas de desempenho** (% de acerto, corretas/erradas/brancas e breakdown por área/matéria) quando há gabarito vinculado.
+* **Correção em Tempo Real:** Comparação automática entre a resposta do aluno e o gabarito oficial, com badges coloridas (Verde = Acerto, Vermelho = Erro, Cinza = Anulada).
+* **Exportação em PDF:** Geração do boletim em PDF diretamente no navegador (html2pdf).
 
-### Para o Administrador (Back-End)
-* **Painel de Configurações Globais:** Permite alterar o Título do Site, o Logotipo (upload de arquivo de imagem) e configurar integrações anti-bot (Google reCAPTCHA v2 e hCaptcha) diretamente pela interface gráfica, sem necessidade de editar o código fonte.
-* **Upsert Dinâmico via CSV:** Processamento inteligente de CSVs. O algoritmo lê vírgula ou ponto-e-vírgula e mapeia colunas. A operação permite que professores subam planilhas repetidas para corrigir métricas e acertos específicos sem duplicar os registros no banco.
-* **Parse Flexível de Colunas:** Colunas contendo "Q1", "Q2"... são separadas como mapa de respostas do aluno, enquanto colunas finais ("Clínica Médica - Total de acertos", "Nota de Redação", "Total") são empacotadas de forma não-relacional num campo `JSON`, permitindo armazenar provas de diferentes estruturas na mesma tabela de resultados.
-* **BI e Analytics Inteligentes:** O Dashboard escaneia as chaves JSON para construir gráficos em tempo real:
-  * Histograma de Distribuição em barras (Faixas de Acertos).
-  * Gráficos em Teia (Radar) do desempenho médio da turma por Matéria.
-  * Top 5 Alunos de cada Simulado.
-* **CRUDs Completos:** Gerenciamento de Alunos, Administradores, Edição de Perfil, alteração em tempo real de acertos/respostas do aluno (Editor Visual) e alteração do Gabarito Oficial.
+### Para o Administrador (Back-End — `admin/`)
+* **Painel de Configurações Globais** (`configuracoes.php`): título do site, logotipo (versões clara e escura, com upload de imagem), reCAPTCHA/hCaptcha, SMTP para o 2FA (host, porta, usuário, senha, remetente) e template do e-mail de código (com placeholders `[NOME_DO_ALUNO]` e `[CODIGO]`) — com botão de teste de envio SMTP (`api_test_smtp.php` / `api_verify_test_smtp.php`).
+* **Upsert Dinâmico via CSV:** upload de resultados (`upload.php`) e de gabaritos (`process_gabarito.php`) lê vírgula ou ponto-e-vírgula, mapeia colunas automaticamente e permite reenviar planilhas para corrigir métricas sem duplicar registros.
+* **Parse Flexível de Colunas:** colunas `Q1`, `Q2`... viram o mapa de respostas do aluno; colunas finais (ex.: `Clínica Médica - Total de acertos`, `Nota de Redação`, `Total`) são empacotadas em `JSON` não-relacional, permitindo provas com estruturas diferentes na mesma tabela.
+* **BI e Analytics** (`index.php` do admin): histograma de distribuição de acertos, gráfico radar de desempenho médio por matéria e Top 5 alunos por avaliação (via Chart.js), com filtro por avaliação/período.
+* **CRUDs Completos:** Alunos (`alunos.php`, `aluno_form.php`, `aluno_editar.php`), Avaliações/Gabaritos (`avaliacoes.php`, `avaliacao_editar.php`), Resultados (`resultados.php`, com exclusão em massa por período/avaliação), Administradores (`usuarios.php`) e Perfil (`perfil.php`).
+* **Lixeira (Soft-Delete)** (`lixeira.php`): resultados e gabaritos excluídos vão para `deleted_at` em vez de serem apagados; permite restaurar individualmente, restaurar tudo ou excluir permanentemente.
+* **Backup Manual** (`backup.php`): gera e baixa um dump `.sql` completo do banco (estrutura + dados de todas as tabelas) sob demanda.
+
+### 🧪 Módulo DI — Importação por Excel (em desenvolvimento)
+Está em andamento uma evolução do cadastro de alunos para suportar planilhas Excel (`.xlsx`/`.xls`, além de `.csv`) com parsing 100% client-side (biblioteca [SheetJS/xlsx.js](https://github.com/SheetJS/sheetjs) via CDN + `admin/js/di_parser.js`), pensada para coordenadores de curso analisarem resultados "DI" por curso/período letivo.
+
+* `admin/upload_alunos.php` foi reescrito: agora lê o arquivo no navegador, mostra pré-visualização (contagens, cursos/períodos detectados, avisos) e envia os dados em lotes (`BATCH_SIZE = 200`) via `fetch`/JSON para `admin/alunos_di_process.php`, com barra de progresso.
+* Novas colunas mapeadas na matrícula: **Cód. Perfil, RA, Nome, Status, Per. Letivo, Curso, Turma, Período, Dt. Nascimento, CPF, Email** — com reconhecimento de várias grafias de cabeçalho (ex.: `RA`/`Matricula`/`MatriculaAluno`).
+* `admin/js/di_parser.js` já inclui, além do parser de matrícula (`parseMatriculas`, em uso), funções para importar **resultados por questão** (`parseAlunos`), **gabarito com metadados** (`parseQuestoes`: área, Bloom, competência, tema) e **âncoras de equalização** (`parseAncoras`) — essas três ainda não têm tela/endpoint de importação no admin.
+* Um esboço de controle de acesso por curso já existe no código (`$_SESSION['admin_role']` = `coordinator`/`superadmin` e `$_SESSION['admin_curso']` filtram o que é importado em `upload_alunos.php` e `alunos_di_process.php`), mas **ainda não há como definir essas sessões**: `admin/login.php` não as popula, a tabela `admins` não tem colunas `role`/`curso`, e o menu (`admin/includes/header.php`) ainda não filtra itens por perfil.
+
+> ⚠️ **Atenção — pendências de banco de dados:** para este módulo funcionar de ponta a ponta ainda faltam migrations que:
+> 1. Adicionem à tabela `alunos` as colunas `cod_perfil`, `status`, `periodo_letivo`, `periodo` e `turma`, usadas pelo `UPSERT` de `admin/alunos_di_process.php`;
+> 2. Criem a tabela `cursos` (referenciada no mesmo arquivo);
+> 3. Criem as tabelas `di_sessoes` e `di_questoes`, que `api/consulta.php` já tenta consultar (dentro de um `try/catch` silencioso) para enriquecer o payload com `questoes_meta` (área/Bloom/tema por questão).
+>
+> Sem essas tabelas/colunas, a importação de matrícula por Excel falha e o enriquecimento de metadados em `api/consulta.php` é simplesmente ignorado (sem erro visível).
 
 ---
 
 ## 🛠 Arquitetura e Stack Tecnológico
 
-A aplicação foi projetada sem o uso de *frameworks heavy-weight* para manter a alta performance, reduzir a complexidade e facilitar a hospedagem em qualquer ambiente.
-
-* **Back-end:** PHP Moderno (Orientado a Objetos e Funcional) com `PDO` para segurança nativa contra *SQL Injection*.
-* **Database:** MySQL. A modelagem híbrida armazena dados relacionais vitais (RA, Período, Avaliação, CPF, Email) em colunas isoladas, e as métricas de acertos condensadas em colunas nativas do tipo `JSON`, aliviando drasticamente a sobrecarga e o tamanho do banco de dados.
-* **Segurança:** Hashes de senha via `password_hash()`. Controle estrito de sessão (`SESSION`). Verificação de bots na área pública e administrativa.
-* **Front-end UI:** TailwindCSS compilado em tempo de execução via CDN, garantindo CSS utility-first de forma modular.
-* **Data-Viz:** Integração com Chart.js.
+* **Back-end:** PHP 8+ (Orientado a Objetos e Funcional) com `PDO` (prepared statements) contra *SQL Injection*.
+* **Database:** MySQL/MariaDB. Modelagem híbrida: dados relacionais (RA, Período, Avaliação, CPF, Email) em colunas isoladas; métricas de acertos condensadas em colunas `JSON`.
+* **Segurança:** `password_hash()`/`password_verify()`; sessão de admin protegida; **CSRF token** por sessão (`includes/csrf_helper.php`) em formulários administrativos; **rate limiting por IP** para o 2FA (`includes/rate_limit_helper.php`); reCAPTCHA v2 / hCaptcha na área pública e no login administrativo; arquivo de configuração de banco fora de acesso web direto (`.htaccess` com `Require all denied`).
+* **E-mail:** [PHPMailer](https://github.com/PHPMailer/PHPMailer) (`includes/PHPMailer/`) via SMTP (compatível com Amazon SES) para o envio dos códigos de 2FA.
+* **Front-end UI:** TailwindCSS via CDN + Phosphor Icons.
+* **Data-Viz:** Chart.js (dashboard administrativo) e parsing de planilhas com SheetJS (módulo DI).
+* **Front-end Público:** JavaScript Vanilla (SPA), IMask.js (máscaras de CPF/data) e html2pdf (exportação de boletim).
 
 ---
 
@@ -49,32 +62,87 @@ A aplicação foi projetada sem o uso de *frameworks heavy-weight* para manter a
 ```bash
 /
 ├── admin/
-│   ├── includes/           # Cabeçalhos, Menus, Rodapés e Helpers (config_helper.php)
-│   ├── index.php           # Dashboard BI e Gráficos (Chart.js)
-│   ├── login.php           # Entrada na área restrita
-│   ├── configuracoes.php   # Configurações Globais (Título, Logo, Captchas)
-│   ├── alunos.php          # Gestão de Alunos (CPF, Email, Data de Nasc.)
-│   ├── upload.php          # Lógica de processamento de CSVs (Alunos)
-│   ├── upload_gabarito.php # Lógica de processamento de CSVs (Gabaritos)
-│   ├── resultados.php      # Leitura e Exclusão de resultados
-│   ├── aluno_editar.php    # Editor UI para corrigir respostas isoladas
-│   ├── avaliacoes.php      # Controle dos Metadados e Gabaritos das Provas
-│   ├── usuarios.php        # Gerenciamento de Administradores
-│   └── perfil.php          # Edição de senha e dados do próprio perfil
+│   ├── includes/
+│   │   ├── config_helper.php   # getConfig()/setConfig() sobre a tabela `configuracoes`
+│   │   ├── header.php          # Layout + sidebar + sessão + CSRF
+│   │   └── footer.php          # Fecha layout + toggle do menu mobile
+│   ├── js/
+│   │   └── di_parser.js        # Parsing de Excel/CSV (matrícula, resultados, gabarito, âncoras) — módulo DI
+│   ├── index.php               # Dashboard BI e Gráficos (Chart.js)
+│   ├── login.php                # Entrada na área restrita (CAPTCHA opcional)
+│   ├── logout.php               # Encerra sessão
+│   ├── perfil.php               # Troca de senha do próprio admin
+│   ├── configuracoes.php        # Título, logos, reCAPTCHA/hCaptcha, SMTP e template do e-mail 2FA
+│   ├── usuarios.php             # CRUD de administradores
+│   ├── alunos.php               # Listagem/busca de alunos (RA, CPF, Nome)
+│   ├── aluno_form.php           # Formulário de criação/edição de aluno
+│   ├── aluno_novo.php           # Atalho para aluno_form.php
+│   ├── aluno_editar.php         # Editor de respostas/notas de um resultado específico
+│   ├── upload_alunos.php        # Importação de alunos (Excel/CSV, client-side) — módulo DI em construção
+│   ├── alunos_di_process.php    # Endpoint AJAX que grava o upsert de alunos em lote (JSON)
+│   ├── process_upload_alunos.php# Handler legado de CSV de alunos (upload direto ao servidor)
+│   ├── upload_form.php          # Formulário de upload de resultados (.csv)
+│   ├── upload.php               # Processa o CSV de resultados (Q1..Qn + notas finais)
+│   ├── upload_gabarito.php      # Formulário de upload do gabarito oficial (.csv)
+│   ├── process_gabarito.php     # Processa o CSV do gabarito
+│   ├── avaliacoes.php           # Lista avaliações/gabaritos com estatísticas
+│   ├── avaliacao_editar.php     # Edição manual do gabarito e estatísticas de erro por questão
+│   ├── resultados.php           # Listagem/filtro/exclusão de resultados
+│   ├── lixeira.php              # Restauração/expurgo de registros com soft-delete
+│   ├── backup.php               # Download de dump .sql completo do banco
+│   ├── api_test_smtp.php        # Envia e-mail de teste com código (config. SMTP)
+│   └── api_verify_test_smtp.php # Valida o código do e-mail de teste
 ├── api/
-│   └── consulta.php        # Endpoint REST JSON para consumo da SPA Pública
+│   ├── consulta.php             # Endpoint principal: valida CPF/Nascimento, CAPTCHA, dispara 2FA e retorna resultados
+│   ├── verify_2fa.php           # Valida o código de 2FA e retorna os resultados
+│   └── resend_2fa.php           # Reenvia o código de 2FA respeitando cooldown
 ├── assets/
 │   ├── css/
-│   │   └── accessibility.css # Regras visuais para Temas Escuro/Claro e Alto Contraste
+│   │   └── accessibility.css    # Temas Escuro/Alto Contraste
 │   ├── js/
-│   │   ├── app.js            # SPA Vanilla JS (Manipulação do DOM e Busca)
-│   │   └── accessibility.js  # Lógica de Redimensionamento, VLibras e Temas
-│   └── images/               # Logotipos e uploads do painel de configuração
+│   │   ├── app.js               # SPA pública: busca, 2FA, resultados, painel de estatísticas
+│   │   └── accessibility.js     # Fonte, temas e VLibras
+│   └── img/                     # Logotipos enviados via Configurações
+├── config/
+│   ├── db.config.php            # Credenciais de conexão (host, db, usuário, senha, charset)
+│   └── .htaccess                # Bloqueia acesso web direto à pasta
 ├── includes/
-│   └── Database.php        # Classe Singleton de Conexão com o Banco
-├── database.sql            # DDL (Criação das Tabelas e Schema)
-└── index.php               # Landing Page Pública (Busca com validação de CPF e Data de Nasc.)
+│   ├── Database.php             # Singleton/wrapper PDO, lê config/db.config.php
+│   ├── csrf_helper.php          # Geração/validação de token CSRF
+│   ├── rate_limit_helper.php    # Bloqueio por IP para tentativas de 2FA
+│   ├── PHPMailer/                # Biblioteca de envio de e-mail (SMTP)
+│   └── .htaccess                # Bloqueia acesso web direto à pasta
+├── migrations/
+│   ├── 001_add_performance_indexes.sql   # Índices em `resultados` e `verificacoes_email`
+│   └── 002_add_deleted_at_columns.sql    # Coluna `deleted_at` (soft-delete) em resultados/gabaritos
+├── database.sql                 # DDL completo (todas as tabelas + configurações padrão)
+├── index.php                    # Landing Page Pública / SPA do aluno
+├── pre_commit.php               # Script utilitário: valida a conexão com o banco
+├── test_cuj.py                  # Script Playwright ad-hoc (login admin → configurações)
+└── test_cuj2.py                 # Script Playwright ad-hoc (busca pública)
 ```
+
+---
+
+## 🗄️ Modelagem do Banco de Dados
+
+Tabelas criadas por `database.sql`:
+
+| Tabela | Finalidade |
+|---|---|
+| `admins` | Usuários do painel administrativo (`username`, `password_hash`). Usuário padrão `admin`/`admin` inserido via `INSERT IGNORE`. |
+| `alunos` | Cadastro do aluno: `ra`, `cpf`, `data_nascimento` (chave de consulta pública), `nome`, `curso`, `campus`, `email` (usado no 2FA). |
+| `resultados` | Um registro por aluno + período + avaliação (`UNIQUE (ra, periodo, nome_avaliacao)`). `respostas` e `notas_finais` em `JSON`. Suporta soft-delete (`deleted_at`). |
+| `gabaritos` | Gabarito oficial por avaliação (`UNIQUE nome_avaliacao`), respostas em `JSON`, suporta soft-delete. |
+| `verificacoes_email` | Códigos de 2FA emitidos por CPF (código, expiração, tentativas falhas, contagem de reenvios). |
+| `rate_limit_2fa` | Bloqueio por IP após tentativas de 2FA malsucedidas (`tentativas`, `bloqueado_ate`). |
+| `configuracoes` | Chave/valor genérico: CAPTCHA, SMTP, template de e-mail, título/logo do site. |
+
+**Migrations aplicadas depois do `database.sql`** (idempotentes, seguras para reexecutar):
+1. `migrations/001_add_performance_indexes.sql` — índices em `resultados` (avaliação, período, soft-delete) e `verificacoes_email` (CPF).
+2. `migrations/002_add_deleted_at_columns.sql` — adiciona `deleted_at` a `resultados`/`gabaritos` (só necessário se o banco já existia antes do soft-delete; `database.sql` novo já cria a coluna).
+
+> As tabelas `cursos`, `di_sessoes` e `di_questoes`, e as colunas extras de `alunos` (`cod_perfil`, `status`, `periodo_letivo`, `periodo`, `turma`) usadas pelo módulo DI em desenvolvimento **ainda não têm migration** — ver seção "Módulo DI" acima.
 
 ---
 
@@ -83,36 +151,45 @@ A aplicação foi projetada sem o uso de *frameworks heavy-weight* para manter a
 ### Requisitos:
 * PHP 8.0+
 * Servidor Web (Apache/Nginx/PHP Built-in)
-* Servidor MySQL 8.0+ ou MariaDB (Com suporte obrigatório à colunas `JSON`).
+* Servidor MySQL 8.0+ ou MariaDB (com suporte a colunas `JSON`)
+* (Opcional, para 2FA) Uma conta SMTP (ex.: Amazon SES)
 
 ### Passos:
 1. Clone este repositório para o diretório de execução do seu servidor web (`htdocs`, `www`, etc).
-2. Execute o script `database.sql` em seu servidor MySQL para criar o banco de dados e todas as tabelas (`admins`, `alunos`, `resultados`, `gabaritos`, `configuracoes`). O script SQL possui uma diretriz `CREATE DATABASE IF NOT EXISTS resultados_di;`.
-3. Edite a classe `/includes/Database.php` com as credenciais do seu MySQL local ou de Produção.
-4. Acesse o sistema via navegador: `http://localhost/seu-diretorio/`.
-5. Acesse o painel em `http://localhost/seu-diretorio/admin`.
+2. Execute o script `database.sql` no MySQL — ele cria o banco `resultados_di` (via `CREATE DATABASE IF NOT EXISTS`) e todas as tabelas.
+3. Execute, em ordem, as migrations em `migrations/` (`001_...` e depois `002_...`) — são seguras para rodar mesmo em bancos já existentes, pois verificam antes de alterar.
+4. Edite `config/db.config.php` com as credenciais do seu MySQL (host, `db_name`, `username`, `password`, `charset`). Em produção, mova este arquivo para fora do docroot e ajuste o caminho lido em `includes/Database.php`.
+5. Acesse o sistema via navegador: `http://localhost/seu-diretorio/`.
+6. Acesse o painel em `http://localhost/seu-diretorio/admin`.
    - **Usuário Padrão:** `admin`
    - **Senha Padrão:** `admin`
    - *(Recomenda-se ir em "Meu Perfil" e alterar a senha imediatamente após o primeiro acesso)*.
-6. Ajuste as configurações do site (como o título da instituição, o upload do logotipo e as chaves do Google reCAPTCHA) acessando o menu lateral **Configurações**.
+7. Em **Configurações**, ajuste título do site, logotipo (claro/escuro), reCAPTCHA/hCaptcha e, se desejar 2FA por e-mail, os dados de SMTP e o template do código (use o botão de teste de envio para validar as credenciais antes de ativar `smtp_ativo`).
 
 ---
 
-## 📄 Formatos de Arquivos Esperados (CSV)
+## 📄 Formatos de Arquivos Esperados
 
-### Arquivo de Alunos e Resultados
-O algoritmo do sistema varre os arquivos dinamicamente, mas espera algumas convenções:
-- **Identificação Obrigatória:** É necessário ter colunas para identificar o aluno de forma única (ex: `RA`, `CPF`, `Email`, `Data de Nascimento`).
-- **Agrupamentos:** `Período` e `Avaliação` são essenciais para separar e organizar os dados inseridos.
-- **Questões:** Nomear as colunas do gabarito do aluno como `Q1`, `Q2`, `Q3`...
-- **Gráficos e Ranking:** O Dashboard procura especificamente por uma coluna final chamada `Total`, `Acertos Totais` ou `Pontuação Final` para montar o **Ranking dos Melhores**.
-- **Gráficos por Matéria:** O algoritmo tenta identificar "Matérias" cortando o título da coluna antes de um hífen. Exemplo: Se tiver uma coluna chamada `Cirurgia - Total de acertos`, ele agrupará os dados no eixo "Cirurgia" para o gráfico de Radar.
+### CSV de Resultados (`admin/upload_form.php` → `upload.php`)
+- **Identificação Obrigatória:** colunas `RA` e `Período`.
+- **Questões:** colunas nomeadas `Q1`, `Q2`, `Q3`... viram o mapa de respostas do aluno.
+- **Notas/Ranking:** demais colunas finais (ex.: `Total`, `Acertos Totais`, `Pontuação Final`) são empacotadas em `notas_finais` (JSON) e usadas no Ranking dos Melhores.
+- **Gráficos por Matéria:** o algoritmo identifica a "matéria" cortando o título da coluna antes de um hífen (ex.: `Cirurgia - Total de acertos` → agrupa em "Cirurgia" no radar).
+- Cada upload é vinculado a uma **Avaliação** e **Período** escolhidos no formulário; reenviar o mesmo arquivo faz `UPSERT` (não duplica).
 
-### Arquivo de Gabaritos
-O upload do Gabarito Oficial da prova funciona de forma vertical (duas colunas):
-- Coluna 1: Título da Questão (ex: `Q1`)
-- Coluna 2: A Alternativa Correta (ex: `B`)
-*(Qualquer Questão que for enviada em branco na alternativa será automaticamente considerada como **Anulada** para todos os alunos).*
+### CSV do Gabarito (`admin/upload_gabarito.php` → `process_gabarito.php`)
+- Formato vertical: Coluna 1 = título da questão (`Q1`), Coluna 2 = alternativa correta (`B`).
+- Questão enviada em branco é tratada como **Anulada** para todos os alunos.
+
+### CSV de Alunos — legado (`admin/process_upload_alunos.php`, acionado a partir de `upload_alunos.php`)
+- Colunas obrigatórias: `RA`, `CPF`, `Dt. Nascimento` (DD/MM/AAAA).
+- Colunas opcionais: `Nome`, `Curso`, `Câmpus/Polo`, `Email` (necessário se o 2FA estiver ativo).
+- Aluno já existente (pelo RA) é atualizado (upsert).
+
+### Excel/CSV de Matrícula — módulo DI (`admin/upload_alunos.php`, novo fluxo client-side)
+- Colunas reconhecidas (com variações de grafia): `Cód. Perfil` (opcional), `RA`/`Matricula` (obrigatória), `Nome` (opcional), `Status`/`Situação` (opcional), `Per. Letivo` (obrigatória, ex. `2026/1`), `Curso` (obrigatória), `Turma` (opcional), `Período` (obrigatória, ex. `5º`), `Dt. Nascimento` (opcional), `CPF` (opcional), `Email` (opcional).
+- Todo o parsing acontece no navegador (SheetJS); o envio ao servidor é em lotes de 200 registros via JSON.
+- **Requer as migrations pendentes** descritas na seção "Módulo DI" para funcionar sem erro.
 
 ---
 

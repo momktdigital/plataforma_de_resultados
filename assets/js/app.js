@@ -184,6 +184,109 @@ document.addEventListener('DOMContentLoaded', () => {
         summaryPanel.innerHTML = '';
         answersGrid.innerHTML = '';
 
+        // 0. Estatísticas de desempenho (DI — usa gabarito + questoes_meta)
+        let _statsPanel = document.getElementById('stats-panel');
+        if (!_statsPanel) {
+            _statsPanel = document.createElement('div');
+            _statsPanel.id = 'stats-panel';
+            _statsPanel.style.marginBottom = '2rem';
+            if (summaryPanel && summaryPanel.parentNode) {
+                summaryPanel.parentNode.insertBefore(_statsPanel, summaryPanel.nextSibling);
+            }
+        }
+        _statsPanel.innerHTML = '';
+        _statsPanel.style.display = 'none';
+
+        const _res  = item.respostas_aluno || {};
+        const _gab  = item.gabarito || {};
+        const _meta = item.questoes_meta || {};
+        const _temGab = Object.keys(_gab).length > 0;
+
+        if (_temGab) {
+            let _corretas = 0, _erradas = 0, _brancos = 0;
+            for (const [qKey, gabResp] of Object.entries(_gab)) {
+                const aResp = _res[qKey];
+                if (!aResp || aResp === '' || aResp === null) _brancos++;
+                else if (aResp === gabResp) _corretas++;
+                else _erradas++;
+            }
+            const _total = Object.keys(_gab).length;
+            const _pct   = _total > 0 ? (_corretas / _total * 100).toFixed(1) : '0.0';
+            const _pctN  = parseFloat(_pct);
+            const _acertoCor = _pctN >= 70 ? '#16a34a' : _pctN >= 50 ? '#d97706' : '#dc2626';
+
+            // Breakdown por área
+            const _areas = {};
+            for (const [qKey, qMeta] of Object.entries(_meta)) {
+                const areaList = (qMeta.area || '').split(';').map(s => s.trim()).filter(Boolean);
+                for (const area of areaList) {
+                    if (!_areas[area]) _areas[area] = { corretas: 0, total: 0 };
+                    _areas[area].total++;
+                    const aResp = _res[qKey], gabResp = _gab[qKey];
+                    if (aResp && gabResp && aResp === gabResp) _areas[area].corretas++;
+                }
+            }
+            const _areaArr = Object.entries(_areas)
+                .map(([name, d]) => ({ name, ...d, pct: d.total > 0 ? d.corretas / d.total * 100 : 0 }))
+                .sort((a, b) => b.pct - a.pct);
+
+            const _cor = p => p >= 70 ? '#16a34a' : p >= 50 ? '#d97706' : '#dc2626';
+            const _bar = (p, c) => `<div style="height:6px;background:#E2E8F0;border-radius:9px;overflow:hidden"><div style="height:100%;width:${p.toFixed(0)}%;background:${c};border-radius:9px"></div></div>`;
+
+            let html = `
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="px-6 py-5 border-b border-slate-100 bg-slate-50">
+                    <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <i class="ph-fill ph-chart-pie-slice text-[#00b48d]"></i> Estatísticas de Desempenho
+                    </h3>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
+                        <div class="col-span-2 sm:col-span-1 rounded-xl p-4 text-center border" style="background:#F8FAFC;border-color:#E2E8F0">
+                            <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">% Acerto</div>
+                            <div class="text-4xl font-black" style="color:${_acertoCor}">${_pct}%</div>
+                            <div class="text-xs text-slate-400 mt-1">${_corretas} de ${_total} questões</div>
+                        </div>
+                        <div class="rounded-xl p-4 text-center border" style="background:#F0FDF4;border-color:#BBF7D0">
+                            <div class="text-xs font-bold uppercase tracking-wider mb-1" style="color:#15803D">Corretas</div>
+                            <div class="text-3xl font-black" style="color:#15803D">${_corretas}</div>
+                        </div>
+                        <div class="rounded-xl p-4 text-center border" style="background:#FEF2F2;border-color:#FECACA">
+                            <div class="text-xs font-bold uppercase tracking-wider mb-1" style="color:#B91C1C">Incorretas</div>
+                            <div class="text-3xl font-black" style="color:#B91C1C">${_erradas}</div>
+                        </div>
+                        <div class="rounded-xl p-4 text-center border" style="background:#F8FAFC;border-color:#CBD5E1">
+                            <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Em branco</div>
+                            <div class="text-3xl font-black text-slate-400">${_brancos}</div>
+                        </div>
+                    </div>
+                    <div style="height:12px;border-radius:9px;overflow:hidden;display:flex;background:#E2E8F0" class="mb-6">
+                        ${_corretas > 0 ? `<div style="flex:${_corretas};background:#16a34a" title="${_corretas} corretas"></div>` : ''}
+                        ${_erradas  > 0 ? `<div style="flex:${_erradas};background:#dc2626" title="${_erradas} incorretas"></div>` : ''}
+                        ${_brancos  > 0 ? `<div style="flex:${_brancos};background:#94a3b8" title="${_brancos} em branco"></div>` : ''}
+                    </div>
+            `;
+
+            if (_areaArr.length > 0) {
+                html += `<div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Desempenho por Área</div><div class="space-y-3">`;
+                for (const a of _areaArr) {
+                    const c = _cor(a.pct);
+                    html += `<div>
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-sm text-slate-700 font-medium">${a.name}</span>
+                            <span class="text-sm font-black" style="color:${c}">${a.pct.toFixed(1)}% <span class="text-xs font-normal text-slate-400">(${a.corretas}/${a.total})</span></span>
+                        </div>
+                        ${_bar(a.pct, c)}
+                    </div>`;
+                }
+                html += `</div>`;
+            }
+
+            html += `</div></div>`;
+            _statsPanel.innerHTML = html;
+            _statsPanel.style.display = 'block';
+        }
+
         // 1. Renderizar Notas Finais (Resumo)
         const notas = item.notas_finais || {};
 

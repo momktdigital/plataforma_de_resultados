@@ -262,6 +262,9 @@ $siteLogoDark = getConfig($conn, 'site_logo_dark', '');
             <!-- Cards injetados via JS -->
         </div>
 
+        <!-- Painel de Estatísticas (injetado via JS) -->
+        <div id="stats-panel" class="hidden mb-8"></div>
+
         <!-- Grid de Respostas -->
         <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div class="px-6 py-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">

@@ -267,6 +267,30 @@ try {
             unset($row['respostas']);
             unset($row['gabarito_respostas']);
 
+            // Busca metadados de questões (área, bloom, tema) para breakdown no portal
+            try {
+                $stmtMeta = $conn->prepare(
+                    "SELECT dq.numero, dq.area, dq.bloom, dq.tema
+                     FROM di_questoes dq
+                     JOIN di_sessoes ds ON dq.sessao_id = ds.id
+                     WHERE ds.nome = :nome AND ds.deleted_at IS NULL
+                     ORDER BY dq.numero ASC LIMIT 300"
+                );
+                $stmtMeta->execute([':nome' => $row['nome_avaliacao']]);
+                $metaRows = $stmtMeta->fetchAll(PDO::FETCH_ASSOC);
+                if (!empty($metaRows)) {
+                    $metaMap = [];
+                    foreach ($metaRows as $mRow) {
+                        $metaMap['Q' . $mRow['numero']] = [
+                            'area'  => $mRow['area']  ?? '',
+                            'bloom' => $mRow['bloom'] ?? '',
+                            'tema'  => $mRow['tema']  ?? '',
+                        ];
+                    }
+                    $row['questoes_meta'] = $metaMap;
+                }
+            } catch (PDOException $e) { /* silently skip */ }
+
             $resultados[] = $row;
         }
 
