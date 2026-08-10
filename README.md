@@ -29,20 +29,22 @@ Um sistema web completo, responsivo e seguro focado na publicação e análise d
 * **Lixeira (Soft-Delete)** (`lixeira.php`): resultados e gabaritos excluídos vão para `deleted_at` em vez de serem apagados; permite restaurar individualmente, restaurar tudo ou excluir permanentemente.
 * **Backup Manual** (`backup.php`): gera e baixa um dump `.sql` completo do banco (estrutura + dados de todas as tabelas) sob demanda.
 
-### 🧪 Módulo DI — Importação por Excel (em desenvolvimento)
-Está em andamento uma evolução do cadastro de alunos para suportar planilhas Excel (`.xlsx`/`.xls`, além de `.csv`) com parsing 100% client-side (biblioteca [SheetJS/xlsx.js](https://github.com/SheetJS/sheetjs) via CDN + `admin/js/di_parser.js`), pensada para coordenadores de curso analisarem resultados "DI" por curso/período letivo.
+### 🎓 Importação de matrícula por Excel (em desenvolvimento)
+Está em andamento uma evolução do cadastro de alunos para suportar planilhas Excel (`.xlsx`/`.xls`, além de `.csv`) com parsing 100% client-side (biblioteca [SheetJS/xlsx.js](https://github.com/SheetJS/sheetjs) via CDN + `admin/js/di_parser.js`), pensada para coordenadores de curso analisarem resultados por curso/período letivo.
 
 * `admin/upload_alunos.php` foi reescrito: agora lê o arquivo no navegador, mostra pré-visualização (contagens, cursos/períodos detectados, avisos) e envia os dados em lotes (`BATCH_SIZE = 200`) via `fetch`/JSON para `admin/alunos_di_process.php`, com barra de progresso.
 * Novas colunas mapeadas na matrícula: **Cód. Perfil, RA, Nome, Status, Per. Letivo, Curso, Turma, Período, Dt. Nascimento, CPF, Email** — com reconhecimento de várias grafias de cabeçalho (ex.: `RA`/`Matricula`/`MatriculaAluno`).
-* `admin/js/di_parser.js` já inclui, além do parser de matrícula (`parseMatriculas`, em uso), funções para importar **resultados por questão** (`parseAlunos`), **gabarito com metadados** (`parseQuestoes`: área, Bloom, competência, tema) e **âncoras de equalização** (`parseAncoras`) — essas três ainda não têm tela/endpoint de importação no admin.
 * Um esboço de controle de acesso por curso já existe no código (`$_SESSION['admin_role']` = `coordinator`/`superadmin` e `$_SESSION['admin_curso']` filtram o que é importado em `upload_alunos.php` e `alunos_di_process.php`), mas **ainda não há como definir essas sessões**: `admin/login.php` não as popula, a tabela `admins` não tem colunas `role`/`curso`, e o menu (`admin/includes/header.php`) ainda não filtra itens por perfil.
 
-> ⚠️ **Atenção — pendências de banco de dados:** para este módulo funcionar de ponta a ponta ainda faltam migrations que:
-> 1. Adicionem à tabela `alunos` as colunas `cod_perfil`, `status`, `periodo_letivo`, `periodo` e `turma`, usadas pelo `UPSERT` de `admin/alunos_di_process.php`;
-> 2. Criem a tabela `cursos` (referenciada no mesmo arquivo);
-> 3. Criem as tabelas `di_sessoes` e `di_questoes`, que `api/consulta.php` já tenta consultar (dentro de um `try/catch` silencioso) para enriquecer o payload com `questoes_meta` (área/Bloom/tema por questão).
->
-> Sem essas tabelas/colunas, a importação de matrícula por Excel falha e o enriquecimento de metadados em `api/consulta.php` é simplesmente ignorado (sem erro visível).
+> ⚠️ **Atenção — pendência de banco de dados:** para a importação de matrícula funcionar de ponta a ponta ainda falta uma migration que adicione à tabela `alunos` as colunas `cod_perfil`, `status`, `periodo_letivo`, `periodo` e `turma` (usadas pelo `UPSERT` de `admin/alunos_di_process.php`) e crie a tabela `cursos` (referenciada no mesmo arquivo). Sem isso, a importação de matrícula por Excel falha.
+
+> ℹ️ As funções de import de **gabarito com metadados** e **resultados por questão** que existiam aqui como protótipo (`parseQuestoes`/`parseAlunos` em `admin/js/di_parser.js`, tabelas `di_sessoes`/`di_questoes` nunca criadas) foram descontinuadas e substituídas pelo módulo **[Avaliações](avaliacoes/README.md)** — uma aplicação Laravel separada, que passou a cobrir Provas/Questões/Resultados de forma completa (schema normalizado, campos opcionais, imports com relatório de linhas ignoradas). O nome "DI" foi abandonado ali porque o sistema passou a suportar avaliações de vários tipos, não só o Diagnóstico Institucional. `api/consulta.php` ainda faz uma tentativa (silenciosa, em `try/catch`) de consultar `di_questoes` para enriquecer o portal do aluno — é código órfão, mantido por ora porque a integração do portal com os novos dados de Avaliações fica para uma etapa futura.
+
+---
+
+## 📊 Módulo de Avaliações (`avaliacoes/`)
+
+Aplicação **Laravel** separada, no diretório [`avaliacoes/`](avaliacoes/README.md), responsável pelo cadastro de Provas e pelo import de Questões/Gabarito e de Resultados. É onde o antigo protótipo "DI" de gabarito com metadados e resultados por questão foi reconstruído do zero — com schema normalizado (campos obrigatórios mínimos, todo o resto opcional) e boas práticas de import (upsert sem duplicar, relatório de linhas ignoradas). Compartilha o mesmo banco de dados desta aplicação (usa `admins` para login e `alunos` para resolver CPF/RA), mas roda como um app PHP/Laravel independente, com seu próprio document root (`avaliacoes/public/`) — ver [`avaliacoes/README.md`](avaliacoes/README.md) para instalação, modelagem de dados e formatos de import.
 
 ---
 
@@ -53,7 +55,7 @@ Está em andamento uma evolução do cadastro de alunos para suportar planilhas 
 * **Segurança:** `password_hash()`/`password_verify()`; sessão de admin protegida; **CSRF token** por sessão (`includes/csrf_helper.php`) em formulários administrativos; **rate limiting por IP** para o 2FA (`includes/rate_limit_helper.php`); reCAPTCHA v2 / hCaptcha na área pública e no login administrativo; arquivo de configuração de banco fora de acesso web direto (`.htaccess` com `Require all denied`).
 * **E-mail:** [PHPMailer](https://github.com/PHPMailer/PHPMailer) (`includes/PHPMailer/`) via SMTP (compatível com Amazon SES) para o envio dos códigos de 2FA.
 * **Front-end UI:** TailwindCSS via CDN + Phosphor Icons.
-* **Data-Viz:** Chart.js (dashboard administrativo) e parsing de planilhas com SheetJS (módulo DI).
+* **Data-Viz:** Chart.js (dashboard administrativo) e parsing de planilhas com SheetJS (importação de matrícula).
 * **Front-end Público:** JavaScript Vanilla (SPA), IMask.js (máscaras de CPF/data) e html2pdf (exportação de boletim).
 
 ---
@@ -142,7 +144,7 @@ Tabelas criadas por `database.sql`:
 1. `migrations/001_add_performance_indexes.sql` — índices em `resultados` (avaliação, período, soft-delete) e `verificacoes_email` (CPF).
 2. `migrations/002_add_deleted_at_columns.sql` — adiciona `deleted_at` a `resultados`/`gabaritos` (só necessário se o banco já existia antes do soft-delete; `database.sql` novo já cria a coluna).
 
-> As tabelas `cursos`, `di_sessoes` e `di_questoes`, e as colunas extras de `alunos` (`cod_perfil`, `status`, `periodo_letivo`, `periodo`, `turma`) usadas pelo módulo DI em desenvolvimento **ainda não têm migration** — ver seção "Módulo DI" acima.
+> A tabela `cursos` e as colunas extras de `alunos` (`cod_perfil`, `status`, `periodo_letivo`, `periodo`, `turma`) usadas pela importação de matrícula **ainda não têm migration** — ver seção "Importação de matrícula por Excel" acima. As tabelas `di_sessoes`/`di_questoes` que chegaram a ser cogitadas para gabarito com metadados nunca foram criadas e não serão — essa funcionalidade foi reconstruída no módulo [Avaliações](avaliacoes/README.md), com seu próprio schema (`provas`, `questoes`, `questao_matrizes`, `resultados`), documentado no README dentro de `avaliacoes/`.
 
 ---
 
