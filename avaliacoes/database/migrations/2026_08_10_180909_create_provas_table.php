@@ -12,6 +12,7 @@ return new class extends Migration
             $table->id('codigo');
             $table->string('nome')->nullable();
             $table->string('tipo')->nullable();
+            $table->string('link_comentado')->nullable();
             $table->foreignId('criado_por')->nullable()->constrained('admins')->nullOnDelete();
             $table->timestamps();
             $table->softDeletes();

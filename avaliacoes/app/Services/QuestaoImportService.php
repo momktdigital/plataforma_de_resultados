@@ -52,10 +52,7 @@ class QuestaoImportService
 
                 $atributos = $this->extrairMetadados($row);
 
-                $questao = Questao::updateOrCreate(
-                    ['prova_codigo' => $prova->codigo, 'numero' => $numero],
-                    array_merge($atributos, ['gabarito' => $gabarito]),
-                );
+                $questao = $this->salvarQuestao($prova, $numero, $gabarito, $atributos);
 
                 $questao->wasRecentlyCreated ? $resultado->registrarCriada() : $resultado->registrarAtualizada();
 
@@ -64,6 +61,31 @@ class QuestaoImportService
         });
 
         return $resultado;
+    }
+
+    /**
+     * updateOrCreate "manual" que também restaura uma questão excluída
+     * (soft-delete) em vez de colidir com o índice único (prova, número).
+     *
+     * @param  array<string, mixed>  $atributos
+     */
+    private function salvarQuestao(Prova $prova, int $numero, string $gabarito, array $atributos): Questao
+    {
+        $questao = Questao::withTrashed()
+            ->where('prova_codigo', $prova->codigo)
+            ->where('numero', $numero)
+            ->first();
+
+        if ($questao === null) {
+            $questao = new Questao(['prova_codigo' => $prova->codigo, 'numero' => $numero]);
+        } elseif ($questao->trashed()) {
+            $questao->restore();
+        }
+
+        $questao->fill(array_merge($atributos, ['gabarito' => $gabarito]));
+        $questao->save();
+
+        return $questao;
     }
 
     /** @return array<string, string|null> */

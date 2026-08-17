@@ -36,6 +36,7 @@ return new class extends Migration
             $table->string('ppc_d')->nullable();
 
             $table->timestamps();
+            $table->softDeletes();
 
             $table->unique(['prova_codigo', 'numero']);
         });

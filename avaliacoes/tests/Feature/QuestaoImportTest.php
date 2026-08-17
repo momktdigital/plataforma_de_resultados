@@ -82,4 +82,25 @@ class QuestaoImportTest extends TestCase
         $this->assertDatabaseCount('questoes', 1);
         $this->assertDatabaseHas('questoes', ['numero' => 1, 'gabarito' => 'C']);
     }
+
+    public function test_reimportar_apos_exclusao_restaura_em_vez_de_falhar(): void
+    {
+        $prova = Prova::create([]);
+        $admin = $this->admin();
+
+        $arquivo = UploadedFile::fake()->createWithContent('gabarito.csv', "Questão,Gabarito\n1,B\n");
+        $this->actingAs($admin, 'admin')
+            ->post("/provas/{$prova->codigo}/questoes/import", ['arquivo' => $arquivo]);
+
+        Questao::where('numero', 1)->first()->delete();
+        $this->assertSoftDeleted('questoes', ['numero' => 1]);
+
+        $reimportado = UploadedFile::fake()->createWithContent('gabarito.csv', "Questão,Gabarito\n1,B\n");
+        $response = $this->actingAs($admin, 'admin')
+            ->post("/provas/{$prova->codigo}/questoes/import", ['arquivo' => $reimportado]);
+
+        $response->assertSessionDoesntHaveErrors();
+        $this->assertDatabaseCount('questoes', 1);
+        $this->assertNotSoftDeleted('questoes', ['numero' => 1]);
+    }
 }

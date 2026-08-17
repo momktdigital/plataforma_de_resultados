@@ -16,16 +16,20 @@ adiciona as tabelas novas descritas abaixo.
 
 | Tabela | Campos obrigatórios | Observação |
 |---|---|---|
-| `provas` | — (código gerado automaticamente) | `nome`/`tipo` são só identificação, totalmente opcionais. |
-| `questoes` | `prova_codigo`, `numero`, `gabarito` | Todo o resto (Bloom, Miller, dificuldade, DCN, Portaria INEP, PPC, Matriz da Prova) é opcional e só é gravado quando a coluna existe no arquivo importado. |
+| `provas` | — (código gerado automaticamente) | `nome`/`tipo`/`link_comentado` são só identificação, totalmente opcionais. |
+| `questoes` | `prova_codigo`, `numero`, `gabarito` | Todo o resto (Bloom, Miller, dificuldade, DCN, Portaria INEP, PPC, Matriz da Prova) é opcional e só é gravado quando a coluna existe no arquivo importado. Suporta soft-delete. |
 | `questao_matrizes` | `questao_id` | Uma questão pode estar em mais de um período/disciplina/código de matriz — por isso é uma tabela filha (1:N), não colunas fixas. |
-| `resultados` | `prova_codigo`, (`ra` OU `cpf`), `questao_numero` | Formato longo: uma linha por resposta de um respondente a uma questão. `aluno_chave` é uma coluna gerada pelo banco (`COALESCE(cpf, ra)`) usada para o índice único que evita duplicar a mesma resposta num reimport. |
+| `respostas` | `prova_codigo`, (`ra` OU `cpf`), `questao_numero` | Formato longo: uma linha por resposta de um respondente a uma questão, num período (`periodo`, opcional — default `''`). `aluno_chave` é uma coluna gerada pelo banco (`COALESCE(cpf, ra)`) usada no índice único que evita duplicar a mesma resposta num reimport. Chama-se `respostas`, não `resultados`, porque a aplicação legada já tem uma tabela `resultados` no mesmo banco. |
+| `resultado_metricas` | `prova_codigo`, (`ra` OU `cpf`), `nome_metrica` | Métricas agregadas por aluno+prova+período que não são resposta de uma questão (ex.: "Nota de Redação", "Total") — equivalente ao antigo JSON `resultados.notas_finais`, como linhas em vez de colunas dinâmicas. |
 
-`admins` e `alunos` têm migrations próprias aqui, mas elas só criam a tabela
+`admins`, `alunos`, `gabaritos` e `resultados` (a tabela legada, não confundir
+com `respostas`) têm migrations próprias aqui, mas elas só criam a tabela
 **se ela ainda não existir** (`Schema::hasTable`) — em produção, onde essas
 tabelas já existem via `database.sql` da aplicação legada, elas são no-ops.
 Isso permite rodar `php artisan migrate` com segurança tanto em produção
-(banco já populado) quanto em um ambiente novo/de testes (banco vazio).
+(banco já populado) quanto em um ambiente novo/de testes (banco vazio, onde
+`gabaritos`/`resultados` legados ficam disponíveis para o comando de migração
+de dados abaixo poder ler algo).
 
 ## Autenticação
 
@@ -78,8 +82,31 @@ acento):
 Uma linha por resposta (formato longo, não uma coluna por questão):
 
 - **Obrigatórias:** `CPF` OU `RA` (ao menos uma), `Questão`, `Resposta` (pode vir vazia — significa que o respondente deixou em branco).
+- **Opcional:** `Período` (ex.: `2026/1`) — só é necessário se o mesmo aluno puder refazer a mesma prova em períodos diferentes; sem essa coluna, todas as respostas do aluno nesta prova contam como uma tentativa única.
 - Se o CPF/RA bater com um aluno já cadastrado em `alunos`, o resultado é vinculado a ele (`aluno_id`); caso contrário, fica registrado só com o identificador enviado, sem exigir que o aluno já esteja importado.
-- Reimportar a mesma combinação prova + identificador + questão **atualiza** em vez de duplicar.
+- Reimportar a mesma combinação prova + identificador + período + questão **atualiza** em vez de duplicar.
+
+## Migração dos dados legados
+
+```bash
+php artisan legado:importar --dry-run   # mostra o que seria migrado, sem gravar nada
+php artisan legado:importar             # migra de verdade
+```
+
+Lê as tabelas `gabaritos` e `resultados` da aplicação legada (só leitura —
+nunca grava, apaga ou altera nada nelas) e povoa `provas`, `questoes`,
+`respostas` e `resultado_metricas`:
+
+- Uma `Prova` é criada (ou reaproveitada) por `nome_avaliacao` distinto.
+- `gabaritos.respostas` (JSON) vira linhas em `questoes`; `gabaritos.link_comentado` vira `provas.link_comentado`.
+- `resultados.respostas` (JSON) vira linhas em `respostas`, carregando o `periodo` original.
+- `resultados.notas_finais` (JSON) vira linhas em `resultado_metricas`, uma por chave (ex.: "Nota de Redação", "Total").
+- Registros que já estavam na lixeira (`deleted_at` preenchido) são migrados como soft-deleted no schema novo — nada da lixeira se perde nem vira visível de repente.
+- **Idempotente:** pode rodar de novo a qualquer momento (ex.: depois de um novo upload na aplicação antiga) sem duplicar nada — encontra os registros existentes e atualiza.
+
+Nenhuma informação das duas tabelas legadas fica sem um lugar no schema novo:
+`ra`/`periodo`/`nome_avaliacao`/`respostas`/`notas_finais`/`link_comentado`
+(de ambas as tabelas) e o estado de exclusão são todos preservados.
 
 ## Deploy
 

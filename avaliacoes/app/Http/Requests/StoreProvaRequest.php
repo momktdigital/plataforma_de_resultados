@@ -20,6 +20,7 @@ class StoreProvaRequest extends FormRequest
         return [
             'nome' => ['nullable', 'string', 'max:255'],
             'tipo' => ['nullable', 'string', 'max:100'],
+            'link_comentado' => ['nullable', 'url', 'max:255'],
         ];
     }
 }

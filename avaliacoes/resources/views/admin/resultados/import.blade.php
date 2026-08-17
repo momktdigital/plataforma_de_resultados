@@ -23,6 +23,7 @@
 <div class="mt-6 max-w-2xl bg-blue-50 border border-blue-200 rounded-xl p-5 text-sm text-blue-900">
     <p class="font-semibold mb-2">Formato do arquivo (uma linha por resposta):</p>
     <p class="mb-2"><strong>Obrigatórias:</strong> CPF ou RA (ao menos uma das duas), Questão (número) e Resposta.</p>
-    <p>Reimportar a mesma combinação de aluno + questão nesta prova atualiza a resposta em vez de duplicar.</p>
+    <p class="mb-2"><strong>Opcional:</strong> Período (ex.: "2026/1") — só é necessário se o mesmo aluno puder refazer esta prova em períodos diferentes; sem essa coluna, todas as respostas do aluno nesta prova são tratadas como uma tentativa única.</p>
+    <p>Reimportar a mesma combinação de aluno + período + questão nesta prova atualiza a resposta em vez de duplicar.</p>
 </div>
 @endsection

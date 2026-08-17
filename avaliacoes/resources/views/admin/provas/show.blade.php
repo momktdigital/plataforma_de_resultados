@@ -9,6 +9,11 @@
     @if ($prova->tipo)
         <p class="text-slate-500">{{ $prova->tipo }}</p>
     @endif
+    @if ($prova->link_comentado)
+        <a href="{{ $prova->link_comentado }}" target="_blank" rel="noopener" class="text-sm text-emerald-700 hover:underline">
+            Gabarito comentado &nearr;
+        </a>
+    @endif
 </div>
 
 @if (session('importIgnoradas') && count(session('importIgnoradas')))
@@ -34,7 +39,12 @@
 
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
         <h2 class="font-semibold mb-1">Resultados</h2>
-        <p class="text-sm text-slate-500 mb-4">{{ $prova->resultados_count }} resposta(s) registrada(s).</p>
+        <p class="text-sm text-slate-500 mb-4">
+            {{ $prova->resultados_count }} resposta(s) registrada(s).
+            @if ($prova->metricas_count)
+                &middot; {{ $prova->metricas_count }} métrica(s) agregada(s) (ex.: notas finais).
+            @endif
+        </p>
         <a href="{{ route('provas.resultados.import', $prova) }}"
            class="inline-block bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-4 py-2 text-sm">
             Importar resultados

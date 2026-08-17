@@ -22,6 +22,7 @@ class Prova extends Model
     protected $fillable = [
         'nome',
         'tipo',
+        'link_comentado',
         'criado_por',
     ];
 
@@ -32,7 +33,12 @@ class Prova extends Model
 
     public function resultados(): HasMany
     {
-        return $this->hasMany(Resultado::class, 'prova_codigo', 'codigo');
+        return $this->hasMany(Resposta::class, 'prova_codigo', 'codigo');
+    }
+
+    public function metricas(): HasMany
+    {
+        return $this->hasMany(ResultadoMetrica::class, 'prova_codigo', 'codigo');
     }
 
     public function criadoPor(): BelongsTo

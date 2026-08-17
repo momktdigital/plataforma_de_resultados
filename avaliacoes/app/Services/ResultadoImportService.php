@@ -4,7 +4,7 @@ namespace App\Services;
 
 use App\Models\Aluno;
 use App\Models\Prova;
-use App\Models\Resultado;
+use App\Models\Resposta;
 use App\Support\HeaderResolver;
 use App\Support\ImportResult;
 use App\Support\SpreadsheetReader;
@@ -16,7 +16,8 @@ use RuntimeException;
  * Import de resultados no formato "longo": uma linha por resposta de um
  * respondente a uma questão. Únicos campos obrigatórios: CPF ou RA, Questão
  * e Resposta (a resposta pode ser vazia — significa que o aluno deixou em
- * branco — mas a coluna precisa existir).
+ * branco — mas a coluna precisa existir). Período é opcional: só existe para
+ * diferenciar tentativas do mesmo aluno na mesma prova em períodos diferentes.
  */
 class ResultadoImportService
 {
@@ -27,6 +28,8 @@ class ResultadoImportService
     private const NUMERO_PATTERNS = ['/^(questao|numero|item|q)$/', '/^quest/', '/^num/'];
 
     private const RESPOSTA_PATTERNS = ['/^(resposta|alternativa|letra|marcada)$/'];
+
+    private const PERIODO_PATTERNS = ['/^(periodo|periodo letivo|perletivo)$/'];
 
     public function importar(Prova $prova, UploadedFile $file): ImportResult
     {
@@ -49,6 +52,7 @@ class ResultadoImportService
                 $cpf = HeaderResolver::findValue($row, self::CPF_PATTERNS);
                 $numeroBruto = HeaderResolver::findValue($row, self::NUMERO_PATTERNS);
                 $resposta = HeaderResolver::findValue($row, self::RESPOSTA_PATTERNS);
+                $periodo = HeaderResolver::findValue($row, self::PERIODO_PATTERNS) ?? '';
 
                 if ($ra === null && $cpf === null) {
                     $resultado->ignorarLinha($linha, 'CPF e RA ausentes — ao menos um é obrigatório.');
@@ -72,24 +76,56 @@ class ResultadoImportService
                     ->when($ra, fn ($query) => $query->orWhere('ra', $ra))
                     ->value('id');
 
-                $registro = Resultado::updateOrCreate(
-                    [
-                        'prova_codigo' => $prova->codigo,
-                        'questao_numero' => $numero,
-                        'ra' => $ra,
-                        'cpf' => $cpf,
-                    ],
-                    [
-                        'resposta' => $resposta,
-                        'aluno_id' => $alunoId,
-                    ],
-                );
+                $criada = $this->salvarResposta($prova, $ra, $cpf, $periodo, $numero, $resposta, $alunoId);
 
-                $registro->wasRecentlyCreated ? $resultado->registrarCriada() : $resultado->registrarAtualizada();
+                $criada ? $resultado->registrarCriada() : $resultado->registrarAtualizada();
             }
         });
 
         return $resultado;
+    }
+
+    /**
+     * updateOrCreate "manual" que também restaura uma resposta excluída
+     * (soft-delete) em vez de colidir com o índice único. Retorna true
+     * quando um registro novo foi criado (para contabilizar no resumo).
+     */
+    private function salvarResposta(
+        Prova $prova,
+        ?string $ra,
+        ?string $cpf,
+        string $periodo,
+        int $numero,
+        ?string $resposta,
+        ?int $alunoId,
+    ): bool {
+        $resp = Resposta::withTrashed()
+            ->where('prova_codigo', $prova->codigo)
+            ->where('questao_numero', $numero)
+            ->where('periodo', $periodo)
+            ->where('ra', $ra)
+            ->where('cpf', $cpf)
+            ->first();
+
+        $novo = $resp === null;
+
+        if ($novo) {
+            $resp = new Resposta([
+                'prova_codigo' => $prova->codigo,
+                'questao_numero' => $numero,
+                'periodo' => $periodo,
+                'ra' => $ra,
+                'cpf' => $cpf,
+            ]);
+        } elseif ($resp->trashed()) {
+            $resp->restore();
+        }
+
+        $resp->resposta = $resposta;
+        $resp->aluno_id = $alunoId;
+        $resp->save();
+
+        return $novo;
     }
 
     /** @param array<int, string> $header */

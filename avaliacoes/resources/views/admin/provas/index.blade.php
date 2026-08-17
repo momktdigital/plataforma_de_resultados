@@ -24,6 +24,11 @@
             <input id="tipo" name="tipo" type="text" value="{{ old('tipo') }}" placeholder="Ex.: Institucional, Simulado..."
                    class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
         </div>
+        <div class="flex-1 min-w-[200px]">
+            <label class="block text-sm font-medium mb-1" for="link_comentado">Link do gabarito comentado (opcional)</label>
+            <input id="link_comentado" name="link_comentado" type="url" value="{{ old('link_comentado') }}"
+                   class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+        </div>
         <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-5 py-2 text-sm">
             Criar prova
         </button>

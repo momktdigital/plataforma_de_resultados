@@ -34,7 +34,7 @@ class ProvaController extends Controller
 
     public function show(Prova $prova): View
     {
-        $prova->loadCount(['questoes', 'resultados']);
+        $prova->loadCount(['questoes', 'resultados', 'metricas']);
 
         return view('admin.provas.show', ['prova' => $prova]);
     }
