@@ -34,6 +34,8 @@ class LegadoController extends Controller
             ]);
         }
 
+        $this->protegerContraTransacaoOrfa();
+
         DB::transaction(function () use ($importador) {
             DB::table('gabaritos')->orderBy('id')->cursor()->each(
                 fn ($linha) => $importador->importarGabarito($linha)
@@ -58,6 +60,7 @@ class LegadoController extends Controller
         $dryRun = $request->boolean('dry_run');
         $caminho = $request->file('arquivo')->getRealPath();
 
+        $this->protegerContraTransacaoOrfa();
         DB::beginTransaction();
 
         try {
@@ -100,5 +103,38 @@ class LegadoController extends Controller
         if (LimitesUpload::paraBytes(ini_get('memory_limit') ?: '128M') < LimitesUpload::paraBytes('512M')) {
             ini_set('memory_limit', '512M');
         }
+    }
+
+    /**
+     * Um erro fatal de "tempo máximo de execução excedido" pula direto para o
+     * encerramento do script — nosso try/catch nunca roda, e uma transação
+     * aberta ficaria presa segurando locks (foi exatamente isso que já
+     * travou até a tela inicial numa importação anterior). Isso aqui é a
+     * rede de segurança: mesmo nesse cenário, o shutdown do PHP ainda
+     * executa, então garantimos o rollback por aqui.
+     */
+    private function protegerContraTransacaoOrfa(): void
+    {
+        // Pega a conexão agora (objeto PHP concreto) em vez de resolver via
+        // facade dentro do closure: no shutdown, o container da aplicação já
+        // pode ter sido derrubado (ex.: fim dos testes), e resolver `DB::`
+        // nesse momento lançaria um erro fatal próprio em vez de proteger nada.
+        $conexao = DB::connection();
+
+        register_shutdown_function(function () use ($conexao) {
+            try {
+                if ($conexao->transactionLevel() > 0) {
+                    while ($conexao->transactionLevel() > 0) {
+                        $conexao->rollBack();
+                    }
+
+                    // error_log() nativo, não o facade Log:: — o container da
+                    // aplicação pode já ter sido derrubado neste ponto.
+                    error_log('[legado] Transação aberta no encerramento da requisição — revertida (provável timeout).');
+                }
+            } catch (Throwable) {
+                // Conexão pode já estar inutilizável neste ponto; nada mais a fazer.
+            }
+        });
     }
 }
