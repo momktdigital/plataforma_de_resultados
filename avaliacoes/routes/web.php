@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Admin\AlunoController;
+use App\Http\Controllers\Admin\MatriculaImportController;
 use App\Http\Controllers\Admin\ProvaController;
 use App\Http\Controllers\Admin\QuestaoImportController;
 use App\Http\Controllers\Admin\ResultadoImportController;
@@ -35,6 +37,15 @@ Route::middleware('instalado')->group(function () {
 
     Route::middleware('auth:admin')->group(function () {
         Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
+
+        Route::get('/alunos', [AlunoController::class, 'index'])->name('alunos.index');
+        Route::get('/alunos/importar', [MatriculaImportController::class, 'create'])->name('alunos.importar');
+        Route::post('/alunos/importar', [MatriculaImportController::class, 'store'])->name('alunos.importar.store');
+        Route::get('/alunos/novo', [AlunoController::class, 'create'])->name('alunos.create');
+        Route::post('/alunos', [AlunoController::class, 'store'])->name('alunos.store');
+        Route::get('/alunos/{aluno}/editar', [AlunoController::class, 'edit'])->name('alunos.edit');
+        Route::put('/alunos/{aluno}', [AlunoController::class, 'update'])->name('alunos.update');
+        Route::delete('/alunos/{aluno}', [AlunoController::class, 'destroy'])->name('alunos.destroy');
 
         Route::get('/provas', [ProvaController::class, 'index'])->name('provas.index');
         Route::post('/provas', [ProvaController::class, 'store'])->name('provas.store');

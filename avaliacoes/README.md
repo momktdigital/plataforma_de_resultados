@@ -42,6 +42,43 @@ de dados abaixo poder ler algo).
 > pega esse tipo de erro, por isso testamos manualmente contra MariaDB
 > antes de publicar qualquer migration que toque nessas duas tabelas.
 
+## Alunos (`/alunos`)
+
+CRUD completo de alunos — porta `admin/alunos.php`/`aluno_form.php` da
+aplicação legada para cá. Listagem com busca por RA/CPF/Nome e paginação,
+criação e edição exigem RA, CPF (11 dígitos, usado como login no portal
+público) e Data de Nascimento; Curso, Câmpus e E-mail são opcionais.
+Excluir um aluno remove só o cadastro de acesso, não seus resultados.
+
+### Importação de matrícula (`/alunos/importar`)
+
+Reconstrói, do lado do servidor, o antigo fluxo client-side de
+`admin/upload_alunos.php`/`alunos_di_process.php` (parsing em
+`admin/js/di_parser.js`). Upload de uma planilha `.csv`/`.xlsx`/`.xls`:
+
+- **Obrigatórias por linha:** RA (aceita `Matricula`/`MatriculaAluno`), Per.
+  Letivo (ex.: `2026/1`, aceita `2026.1`), Curso, Período (ex.: `5º`, aceita
+  `P5`/`5`) — linha sem alguma das quatro é ignorada, sem derrubar o import.
+- **Opcionais:** Cód. Perfil, Nome, Status/Situação, Turma, Dt. Nascimento,
+  CPF, Email.
+- RA é o identificador único (mesma coluna `UNIQUE` da tabela `alunos`):
+  reimportar atualiza em vez de duplicar. Campos de identidade
+  (nome/CPF/nascimento/email/cód. perfil) só são sobrescritos quando a
+  planilha traz um valor novo — não apagam um cadastro já completado
+  manualmente; Status/Per. Letivo/Período/Turma sempre refletem a última
+  planilha importada.
+- Cada curso visto na planilha é registrado em `cursos` (só para telas de
+  referência/filtro — não há hoje nenhuma tela de gestão de cursos).
+
+> **Correção em relação ao protótipo legado:** `alunos_di_process.php` já
+> gravava `cod_perfil`/`status`/`periodo_letivo`/`periodo`/`turma` e uma
+> tabela `cursos`, mas nenhuma migration em nenhum dos dois apps chegou a
+> criar essas colunas/tabela — a importação de matrícula sempre falhava em
+> produção. As migrations daqui resolvem isso e também tornam `cpf`/
+> `data_nascimento` nullable em `alunos` (a planilha de matrícula nunca
+> garantiu os dois; só o cadastro manual em `/alunos` exige ambos, por
+> serem a credencial de login do aluno no portal público).
+
 ## Autenticação
 
 Não há cadastro de usuário nem redefinição de senha por e-mail neste módulo.

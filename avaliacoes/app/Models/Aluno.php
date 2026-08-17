@@ -5,9 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Cadastro de alunos, mantido pela aplicação legada. Usado aqui somente para
- * resolver CPF/RA no import de resultados — este módulo não cria nem edita
- * matrículas.
+ * Cadastro de alunos, mantido pela aplicação legada.
  */
 class Aluno extends Model
 {
@@ -21,6 +19,11 @@ class Aluno extends Model
         'curso',
         'campus',
         'email',
+        'cod_perfil',
+        'status',
+        'periodo_letivo',
+        'periodo',
+        'turma',
     ];
 
     protected function casts(): array
