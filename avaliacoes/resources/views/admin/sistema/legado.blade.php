@@ -3,7 +3,11 @@
 @section('title', 'Importar dados legados — Avaliações')
 
 @section('content')
-<h1 class="text-2xl font-bold mb-6">Importar dados do sistema legado</h1>
+<h1 class="text-2xl font-bold mb-6">Configurações do sistema</h1>
+
+@include('admin.sistema._subnav')
+
+<h2 class="text-lg font-semibold mb-4">Importar dados do sistema legado</h2>
 
 <div class="grid sm:grid-cols-2 gap-6">
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
@@ -37,6 +41,11 @@
         <form method="POST" action="{{ route('sistema.legado.arquivo') }}" enctype="multipart/form-data" class="space-y-3">
             @csrf
             <input name="arquivo" type="file" accept=".sql,.txt" required class="w-full text-sm">
+            <p class="text-xs text-slate-500">
+                Este servidor aceita até <strong>{{ $limiteUploadMb }} MB</strong> por upload
+                (<code>post_max_size</code>/<code>upload_max_filesize</code> do PHP). Arquivo maior que isso? Aumente
+                esses limites no <code>php.ini</code> do servidor antes de enviar.
+            </p>
             <label class="flex items-center gap-2 text-sm text-slate-600">
                 <input type="checkbox" name="dry_run" value="1">
                 Simular (mostra os números sem gravar nada)

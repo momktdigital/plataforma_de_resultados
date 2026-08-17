@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\ImportarBackupLegadoRequest;
 use App\Services\Legado\BackupSqlParser;
 use App\Services\Legado\LegadoImportador;
+use App\Support\LimitesUpload;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -18,6 +19,7 @@ class LegadoController extends Controller
     {
         return view('admin.sistema.legado', [
             'bancoCompartilhadoDisponivel' => Schema::hasTable('gabaritos') && Schema::hasTable('resultados'),
+            'limiteUploadMb' => intdiv(LimitesUpload::limiteEfetivoEmKb(), 1024),
         ]);
     }
 

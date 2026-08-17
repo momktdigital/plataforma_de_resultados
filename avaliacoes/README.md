@@ -103,6 +103,15 @@ Uma linha por resposta (formato longo, não uma coluna por questão):
 - Se o CPF/RA bater com um aluno já cadastrado em `alunos`, o resultado é vinculado a ele (`aluno_id`); caso contrário, fica registrado só com o identificador enviado, sem exigir que o aluno já esteja importado.
 - Reimportar a mesma combinação prova + identificador + período + questão **atualiza** em vez de duplicar.
 
+## Painel de Configurações (`/sistema/configuracoes`)
+
+Migração de dados legados, backups, atualização e os ajustes do sistema
+vivem todos sob um único item de menu — **Configurações** — com abas
+(Geral / Backups / Dados legados / Atualizações). São quatro controllers
+e conjuntos de rotas independentes por baixo (nada de lógica compartilhada
+forçada só pela UI), a aba (`resources/views/admin/sistema/_subnav.blade.php`)
+é só a navegação comum entre eles.
+
 ## Migração dos dados legados (`/sistema/legado`)
 
 Duas formas de importar, a mesma regra de transformação nas duas (uma única
@@ -128,9 +137,14 @@ backup", com opção de simular antes (mostra os números sem gravar nada).
 > parser dedicado (`App\Services\Legado\BackupSqlParser`), e todo o resto do
 > arquivo (schema, outras tabelas) é ignorado. **O SQL do arquivo nunca é
 > executado** contra o banco — evita que um backup malicioso ou corrompido
-> (com `DROP TABLE`, etc.) rode qualquer comando. Tamanho máximo: 100 MB
-> (ajuste `upload_max_filesize`/`post_max_size` no `php.ini` do servidor se o
-> seu backup for maior).
+> (com `DROP TABLE`, etc.) rode qualquer comando.
+>
+> **Tamanho:** teto da aplicação é 100 MB, mas o limite real também depende
+> do `php.ini` do servidor (`post_max_size`/`upload_max_filesize`) — a tela
+> mostra o limite efetivo antes do envio. Se o backup for maior que isso, o
+> PHP recusa a requisição antes de chegar à aplicação (erro 413); aumente
+> essas duas diretivas (e `client_max_body_size` no Nginx, se houver) e
+> reinicie o PHP-FPM/Apache.
 
 Nos dois casos, o que é lido e para onde vai:
 

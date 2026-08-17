@@ -3,8 +3,12 @@
 @section('title', 'Backups — Avaliações')
 
 @section('content')
+<h1 class="text-2xl font-bold mb-6">Configurações do sistema</h1>
+
+@include('admin.sistema._subnav')
+
 <div class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-bold">Backups</h1>
+    <h2 class="text-lg font-semibold">Backups</h2>
     <form method="POST" action="{{ route('sistema.backups.store') }}">
         @csrf
         <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-5 py-2 text-sm">

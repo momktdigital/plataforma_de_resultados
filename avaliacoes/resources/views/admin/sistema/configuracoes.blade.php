@@ -5,6 +5,8 @@
 @section('content')
 <h1 class="text-2xl font-bold mb-6">Configurações do sistema</h1>
 
+@include('admin.sistema._subnav')
+
 <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 max-w-xl">
     <form method="POST" action="{{ route('sistema.configuracoes.update') }}" class="space-y-5">
         @csrf
