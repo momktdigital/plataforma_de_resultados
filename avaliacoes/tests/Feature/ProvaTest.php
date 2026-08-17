@@ -43,6 +43,8 @@ class ProvaTest extends TestCase
 
     public function test_guest_nao_acessa_provas(): void
     {
+        $this->admin(); // sistema já instalado, mas o cliente não está autenticado
+
         $this->get('/provas')->assertRedirect(route('login'));
         $this->post('/provas')->assertRedirect(route('login'));
     }

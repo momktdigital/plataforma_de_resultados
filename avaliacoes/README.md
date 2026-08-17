@@ -41,6 +41,8 @@ rate limiting (5 tentativas / 60s por usuário+IP).
 
 ## Instalação
 
+Passos únicos, feitos por SSH (preparam o código; não tocam em banco nem em admin):
+
 ```bash
 cd avaliacoes
 composer install
@@ -48,12 +50,27 @@ cp .env.example .env
 php artisan key:generate
 ```
 
-Edite `.env` com as credenciais do **mesmo banco `resultados_di`** usado
-pela aplicação legada (`DB_HOST`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`).
+Aponte o document root do servidor web para `avaliacoes/public/` (ver
+"Deploy" abaixo) e acesse a aplicação pelo navegador — como ainda não há
+nenhum administrador cadastrado, você cai automaticamente no **wizard de
+instalação** (`/instalar`), que cobre o resto:
+
+1. Verifica requisitos (versão do PHP, extensões, permissões de escrita).
+2. Testa a conexão com o banco e grava no `.env` (não precisa editar o
+   arquivo manualmente).
+3. Roda as migrations.
+4. Cria o primeiro usuário administrador.
+
+O wizard **bloqueia sozinho** assim que existir um administrador — não dá
+pra reabri-lo depois num site em produção. Se o deploy apontar para o mesmo
+banco que a aplicação legada (que já tem admins cadastrados), o wizard nem
+aparece: o sistema já se considera instalado.
+
+Prefere fazer manualmente por SSH em vez do wizard? Também funciona:
 
 ```bash
 php artisan migrate
-php artisan serve
+php artisan tinker --execute="App\Models\Admin::create(['username' => 'admin', 'password_hash' => Hash::make('sua-senha')])"
 ```
 
 ## Testes
@@ -108,6 +125,56 @@ Nenhuma informação das duas tabelas legadas fica sem um lugar no schema novo:
 `ra`/`periodo`/`nome_avaliacao`/`respostas`/`notas_finais`/`link_comentado`
 (de ambas as tabelas) e o estado de exclusão são todos preservados.
 
+## Versionamento
+
+A versão instalada fica no arquivo `VERSION` (raiz desta pasta, ex.: `1.0.0`)
+— acompanha o código a cada commit/tag. Releases publicadas no GitHub usam
+tag `vX.Y.Z` correspondente. `php artisan migrate --force` (chamado
+automaticamente pelo wizard e pelo atualizador) só aplica as migrations que
+ainda não rodaram nesse banco — o Laravel já rastreia isso sozinho pela
+tabela `migrations`, então versões novas nunca reaplicam o que já existe.
+
+## Atualização (`/sistema/atualizacao`)
+
+```bash
+php artisan sistema:atualizar --check   # só verifica se há versão nova
+php artisan sistema:atualizar           # verifica e aplica
+```
+
+Também disponível para o administrador pela interface, em **Atualizações**.
+O processo busca a última *Release* pública do repositório configurado em
+`ATUALIZACAO_REPOSITORIO` (`.env`, formato `owner/repo`) e, se houver uma
+versão mais nova que a instalada:
+
+1. Gera um backup completo (ver seção abaixo) — sempre, sem exceção.
+2. Coloca a aplicação em modo de manutenção.
+3. Baixa e extrai a Release, copiando por cima só a subpasta `avaliacoes/`
+   do repositório (o repositório também contém a aplicação legada) —
+   preservando `.env` e `storage/` intocados.
+4. Roda `composer install --no-dev` e as migrations pendentes.
+5. Grava a nova versão em `VERSION` e sai do modo de manutenção.
+
+Se qualquer passo falhar **depois** que os arquivos já começaram a ser
+substituídos, o atualizador tenta reverter automaticamente a aplicação a
+partir do backup gerado no passo 1 antes de reportar o erro. Uma falha
+*antes* disso (download, extração) não mexe em nada — só sai do modo de
+manutenção e mostra o erro.
+
+## Backups (`/sistema/backups`)
+
+```bash
+php artisan sistema:backup
+```
+
+Gera um `.zip` com o dump completo do banco (`database.sql`, via
+`mysqldump` quando disponível no servidor) mais todos os arquivos da
+aplicação — exceto `vendor/`, `node_modules/` e caches, que são
+reproduzíveis via `composer install`/`npm install` a partir do
+`composer.lock`/`package-lock.json` incluídos. **Inclui o `.env` real**, com
+credenciais — por isso o download só é permitido para administradores
+autenticados, nunca por link direto. Mantém automaticamente só os 5 backups
+mais recentes.
+
 ## Deploy
 
 Esta é uma aplicação Laravel completa: o document root do servidor web deve
@@ -117,3 +184,8 @@ root é a raiz do repositório), configure-as como **vhosts/aliases
 separados** — por exemplo um subdomínio (`avaliacoes.dominio.com` →
 `avaliacoes/public`) ou um alias de path no Apache/Nginx apontando para essa
 pasta, mantendo o `mod_rewrite`/`try_files` do Laravel.
+
+O servidor precisa de acesso a shell/Composer (usado pelo atualizador para
+rodar `composer install` após cada atualização) e, idealmente, ao binário
+`mysqldump` (usado nos backups — sem ele, cai para um dump em PHP puro,
+mais lento mas funcional).

@@ -13,7 +13,15 @@ class AuthenticationTest extends TestCase
 
     public function test_guest_is_redirected_to_login(): void
     {
+        Admin::create(['username' => 'coordenador', 'password_hash' => Hash::make('x')]);
+
         $this->get('/provas')->assertRedirect(route('login'));
+    }
+
+    public function test_fresh_install_without_admin_redirects_to_installer(): void
+    {
+        $this->get('/provas')->assertRedirect(route('instalar.inicio'));
+        $this->get('/login')->assertRedirect(route('instalar.inicio'));
     }
 
     public function test_admin_can_login_with_legacy_credentials(): void

@@ -46,6 +46,8 @@ Está em andamento uma evolução do cadastro de alunos para suportar planilhas 
 
 Aplicação **Laravel** separada, no diretório [`avaliacoes/`](avaliacoes/README.md), responsável pelo cadastro de Provas e pelo import de Questões/Gabarito e de Resultados. É onde o antigo protótipo "DI" de gabarito com metadados e resultados por questão foi reconstruído do zero — com schema normalizado (campos obrigatórios mínimos, todo o resto opcional) e boas práticas de import (upsert sem duplicar, relatório de linhas ignoradas). Compartilha o mesmo banco de dados desta aplicação (usa `admins` para login e `alunos` para resolver CPF/RA), mas roda como um app PHP/Laravel independente, com seu próprio document root (`avaliacoes/public/`) — ver [`avaliacoes/README.md`](avaliacoes/README.md) para instalação, modelagem de dados e formatos de import.
 
+Também tem ciclo de vida próprio para facilitar colocar em outro servidor: um **wizard de instalação** (`/instalar`, guarda conexão de banco + primeiro admin), um **atualizador** que busca a última Release pública do GitHub e aplica sozinho (gera backup, roda migrations pendentes, atualiza o código), e **backup completo sob demanda** (banco + arquivos, para download pelo admin).
+
 ---
 
 ## 🛠 Arquitetura e Stack Tecnológico
