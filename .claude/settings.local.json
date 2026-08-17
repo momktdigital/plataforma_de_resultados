@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir /s /b)",
+      "PowerShell(head -150)",
+      "Bash(Get-ChildItem -Path \"F:\\\\xampp\\\\htdocs\\\\resultados_di\" -Recurse -Directory -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object -First 20)",
+      "Bash(findstr /s \"CREATE TABLE\" \"F:\\\\xampp\\\\htdocs\\\\resultados_di\" --include=\"*.sql\" --include=\"*.php\")",
+      "Bash(Get-ChildItem -Path \"F:\\\\xampp\\\\htdocs\\\\resultados_di\\\\admin\" -Filter \"*.php\")",
+      "Bash(Select-Object Name)",
+      "Bash(gh pr *)",
+      "PowerShell(Get-Command gh -ErrorAction SilentlyContinue; \\(Get-Command gh -ErrorAction SilentlyContinue\\).Source)",
+      "PowerShell($env:GITHUB_TOKEN; $env:GH_TOKEN)",
+      "PowerShell($env:GITHUB_TOKEN)",
+      "PowerShell($env:GH_TOKEN)",
+      "PowerShell($env:PATH -split ';' | Where-Object { Test-Path \"$_\\\\gh.exe\" })"
+    ]
+  }
+}
