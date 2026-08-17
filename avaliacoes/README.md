@@ -87,6 +87,28 @@ senha, exige confirmar a senha atual) para cá. Mesma tabela `admins` da
 aplicação legada, então uma conta criada aqui já funciona para logar em
 qualquer um dos dois apps.
 
+## Configurações do portal público (`/sistema/portal`)
+
+Porta `admin/configuracoes.php` (+ `api_test_smtp.php`/`api_verify_test_smtp.php`)
+para uma aba própria em Configurações. Lê e grava na tabela `configuracoes`
+— a mesma usada pelo portal público **legado** — então salvar aqui já tem
+efeito lá, mesmo antes de o portal em si ser portado para este app:
+
+- **Aparência:** título do site e logo (fundo claro/escuro). O arquivo é
+  salvo em `assets/img/` **na raiz do repositório** (não em `storage/` do
+  Laravel), o mesmo diretório físico que o portal legado lê — os dois apps
+  continuam enxergando a mesma logo. Como o document root deste app é
+  `avaliacoes/public/`, uma rota própria (`/assets/img/{arquivo}`,
+  `App\Http\Controllers\AssetLegadoController`) serve esses arquivos
+  publicamente para exibição na própria tela.
+- **CAPTCHA:** Google reCAPTCHA v2 ou hCaptcha (mutuamente exclusivos).
+- **SMTP + template do e-mail de 2FA:** host/porta/usuário/senha (senha em
+  branco não altera a já salva), remetente e template com `[NOME_DO_ALUNO]`/
+  `[CODIGO]`, com o mesmo botão de "testar envio" do legado (envia um
+  código de 6 dígitos via SMTP puro do Symfony Mailer — não usa o
+  `config/mail.php` do Laravel, pois as credenciais vêm do banco, editáveis
+  pelo admin).
+
 ## Autenticação
 
 Não há cadastro de usuário nem redefinição de senha por e-mail neste módulo.

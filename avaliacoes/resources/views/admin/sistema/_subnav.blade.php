@@ -1,6 +1,7 @@
 @php
     $abas = [
         ['label' => 'Geral', 'route' => 'sistema.configuracoes.index', 'padrao' => 'sistema.configuracoes.*'],
+        ['label' => 'Portal público', 'route' => 'sistema.portal.index', 'padrao' => 'sistema.portal.*'],
         ['label' => 'Backups', 'route' => 'sistema.backups.index', 'padrao' => 'sistema.backups.*'],
         ['label' => 'Dados legados', 'route' => 'sistema.legado.index', 'padrao' => 'sistema.legado.*'],
         ['label' => 'Atualizações', 'route' => 'sistema.atualizacao.index', 'padrao' => 'sistema.atualizacao.*'],

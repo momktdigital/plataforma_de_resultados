@@ -7,12 +7,14 @@ use App\Http\Controllers\Admin\PerfilController;
 use App\Http\Controllers\Admin\ProvaController;
 use App\Http\Controllers\Admin\QuestaoImportController;
 use App\Http\Controllers\Admin\ResultadoImportController;
+use App\Http\Controllers\AssetLegadoController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\InstallController;
 use App\Http\Controllers\Sistema\AtualizacaoController;
 use App\Http\Controllers\Sistema\BackupController;
 use App\Http\Controllers\Sistema\ConfiguracaoController;
 use App\Http\Controllers\Sistema\LegadoController;
+use App\Http\Controllers\Sistema\PortalConfiguracaoController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -29,6 +31,10 @@ Route::middleware('instalado')->group(function () {
     Route::get('/', function () {
         return redirect()->route(Auth::guard('admin')->check() ? 'provas.index' : 'login');
     });
+
+    Route::get('/assets/img/{arquivo}', [AssetLegadoController::class, 'logo'])
+        ->where('arquivo', '[^/]+')
+        ->name('assets.logo');
 
     Route::middleware('guest:admin')->group(function () {
         Route::get('/login', [LoginController::class, 'create'])->name('login');
@@ -84,6 +90,13 @@ Route::middleware('instalado')->group(function () {
 
             Route::get('/configuracoes', [ConfiguracaoController::class, 'index'])->name('configuracoes.index');
             Route::post('/configuracoes', [ConfiguracaoController::class, 'update'])->name('configuracoes.update');
+
+            Route::get('/portal', [PortalConfiguracaoController::class, 'index'])->name('portal.index');
+            Route::put('/portal/aparencia', [PortalConfiguracaoController::class, 'atualizarAparencia'])->name('portal.aparencia');
+            Route::put('/portal/captcha', [PortalConfiguracaoController::class, 'atualizarCaptcha'])->name('portal.captcha');
+            Route::put('/portal/smtp', [PortalConfiguracaoController::class, 'atualizarSmtp'])->name('portal.smtp');
+            Route::post('/portal/smtp/teste', [PortalConfiguracaoController::class, 'testarSmtp'])->name('portal.smtp.teste');
+            Route::post('/portal/smtp/teste/verificar', [PortalConfiguracaoController::class, 'verificarTesteSmtp'])->name('portal.smtp.teste.verificar');
         });
     });
 });
