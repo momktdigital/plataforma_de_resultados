@@ -7,6 +7,8 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\InstallController;
 use App\Http\Controllers\Sistema\AtualizacaoController;
 use App\Http\Controllers\Sistema\BackupController;
+use App\Http\Controllers\Sistema\ConfiguracaoController;
+use App\Http\Controllers\Sistema\LegadoController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -55,6 +57,13 @@ Route::middleware('instalado')->group(function () {
 
             Route::get('/atualizacao', [AtualizacaoController::class, 'index'])->name('atualizacao.index');
             Route::post('/atualizacao', [AtualizacaoController::class, 'store'])->name('atualizacao.store');
+
+            Route::get('/legado', [LegadoController::class, 'index'])->name('legado.index');
+            Route::post('/legado/banco', [LegadoController::class, 'importarDoBanco'])->name('legado.banco');
+            Route::post('/legado/arquivo', [LegadoController::class, 'importarDeArquivo'])->name('legado.arquivo');
+
+            Route::get('/configuracoes', [ConfiguracaoController::class, 'index'])->name('configuracoes.index');
+            Route::post('/configuracoes', [ConfiguracaoController::class, 'update'])->name('configuracoes.update');
         });
     });
 });

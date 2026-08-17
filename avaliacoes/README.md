@@ -103,16 +103,36 @@ Uma linha por resposta (formato longo, não uma coluna por questão):
 - Se o CPF/RA bater com um aluno já cadastrado em `alunos`, o resultado é vinculado a ele (`aluno_id`); caso contrário, fica registrado só com o identificador enviado, sem exigir que o aluno já esteja importado.
 - Reimportar a mesma combinação prova + identificador + período + questão **atualiza** em vez de duplicar.
 
-## Migração dos dados legados
+## Migração dos dados legados (`/sistema/legado`)
+
+Duas formas de importar, a mesma regra de transformação nas duas (uma única
+implementação em `App\Services\Legado\LegadoImportador`, para não divergir):
+
+**1. Direto do banco compartilhado** — quando esta aplicação está configurada
+no mesmo banco que a aplicação legada:
 
 ```bash
 php artisan legado:importar --dry-run   # mostra o que seria migrado, sem gravar nada
 php artisan legado:importar             # migra de verdade
 ```
 
-Lê as tabelas `gabaritos` e `resultados` da aplicação legada (só leitura —
-nunca grava, apaga ou altera nada nelas) e povoa `provas`, `questoes`,
-`respostas` e `resultado_metricas`:
+Ou pelo painel, em "Dados legados" → "Importar do banco".
+
+**2. De um arquivo de backup `.sql`** — quando o sistema legado está em outro
+servidor e você só tem o arquivo gerado por "Backup Manual" no painel antigo
+(`admin/backup.php`). Envie o arquivo em "Dados legados" → "De um arquivo de
+backup", com opção de simular antes (mostra os números sem gravar nada).
+
+> **Segurança:** o arquivo enviado é só **interpretado como dados** — as
+> linhas `INSERT INTO` de `gabaritos`/`resultados` são extraídas por um
+> parser dedicado (`App\Services\Legado\BackupSqlParser`), e todo o resto do
+> arquivo (schema, outras tabelas) é ignorado. **O SQL do arquivo nunca é
+> executado** contra o banco — evita que um backup malicioso ou corrompido
+> (com `DROP TABLE`, etc.) rode qualquer comando. Tamanho máximo: 100 MB
+> (ajuste `upload_max_filesize`/`post_max_size` no `php.ini` do servidor se o
+> seu backup for maior).
+
+Nos dois casos, o que é lido e para onde vai:
 
 - Uma `Prova` é criada (ou reaproveitada) por `nome_avaliacao` distinto.
 - `gabaritos.respostas` (JSON) vira linhas em `questoes`; `gabaritos.link_comentado` vira `provas.link_comentado`.
@@ -143,8 +163,9 @@ php artisan sistema:atualizar           # verifica e aplica
 
 Também disponível para o administrador pela interface, em **Atualizações**.
 O processo busca a última *Release* pública do repositório configurado em
-`ATUALIZACAO_REPOSITORIO` (`.env`, formato `owner/repo`) e, se houver uma
-versão mais nova que a instalada:
+**Configurações** (ou `ATUALIZACAO_REPOSITORIO` no `.env`, se nunca tiver
+sido definido pela interface — formato `owner/repo`) e, se houver uma versão
+mais nova que a instalada:
 
 1. Gera um backup completo (ver seção abaixo) — sempre, sem exceção.
 2. Coloca a aplicação em modo de manutenção.
@@ -172,8 +193,21 @@ aplicação — exceto `vendor/`, `node_modules/` e caches, que são
 reproduzíveis via `composer install`/`npm install` a partir do
 `composer.lock`/`package-lock.json` incluídos. **Inclui o `.env` real**, com
 credenciais — por isso o download só é permitido para administradores
-autenticados, nunca por link direto. Mantém automaticamente só os 5 backups
-mais recentes.
+autenticados, nunca por link direto. Mantém automaticamente só os N backups
+mais recentes (configurável em **Configurações**, padrão 5).
+
+## Configurações (`/sistema/configuracoes`)
+
+Tela para ajustar, sem precisar de acesso ao servidor:
+
+- **Repositório do GitHub para atualizações** (`owner/repositorio`).
+- **Quantos backups manter** (os mais antigos além desse número são apagados
+  a cada novo backup).
+
+Guardado na tabela `configuracoes_sistema` (chave/valor — nome escolhido
+para não colidir com a tabela `configuracoes` da aplicação legada, que tem
+outra finalidade). Um valor não definido aqui cai no padrão do `.env`/
+`config/sistema.php`.
 
 ## Deploy
 

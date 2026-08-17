@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\ConfiguracaoSistema;
 use App\Services\Update\GithubReleaseClient;
 use Illuminate\Support\ServiceProvider;
 
@@ -12,8 +13,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton(GithubReleaseClient::class, fn () => new GithubReleaseClient(
-            config('sistema.repositorio'),
+        $this->app->bind(GithubReleaseClient::class, fn () => new GithubReleaseClient(
+            ConfiguracaoSistema::valor('atualizacao_repositorio', config('sistema.repositorio')),
         ));
     }
 
