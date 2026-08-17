@@ -31,6 +31,17 @@ Isso permite rodar `php artisan migrate` com segurança tanto em produção
 `gabaritos`/`resultados` legados ficam disponíveis para o comando de migração
 de dados abaixo poder ler algo).
 
+> **Se for referenciar `admins`/`alunos` com foreign key numa migration
+> nova:** use `$table->integer('coluna')->nullable()` + `$table->foreign(...)`
+> — **não** `$table->foreignId()` (que gera `BIGINT UNSIGNED`). O
+> `database.sql` legado define `admins.id`/`alunos.id` como `INT` simples;
+> o MySQL exige que os dois lados de uma FK tenham o mesmo tipo, e essa
+> troca já causou `errno 150` em produção (ver `provas.criado_por`,
+> `respostas.aluno_id`, `resultado_metricas.aluno_id` como exemplo).
+> Testes rodam em SQLite, que não enforce isso — só um banco MySQL real
+> pega esse tipo de erro, por isso testamos manualmente contra MariaDB
+> antes de publicar qualquer migration que toque nessas duas tabelas.
+
 ## Autenticação
 
 Não há cadastro de usuário nem redefinição de senha por e-mail neste módulo.

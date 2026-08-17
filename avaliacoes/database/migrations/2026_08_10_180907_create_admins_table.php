@@ -17,7 +17,11 @@ return new class extends Migration
         }
 
         Schema::create('admins', function (Blueprint $table) {
-            $table->id();
+            // INT (não BIGINT UNSIGNED) de propósito: precisa bater exatamente
+            // com `admins.id` do database.sql legado (`INT AUTO_INCREMENT
+            // PRIMARY KEY`), porque outras tabelas daqui referenciam essa
+            // coluna com foreign key — MySQL exige o mesmo tipo dos dois lados.
+            $table->integer('id', autoIncrement: true, unsigned: false);
             $table->string('username', 50)->unique();
             $table->string('password_hash', 255);
             $table->timestamp('created_at')->useCurrent();

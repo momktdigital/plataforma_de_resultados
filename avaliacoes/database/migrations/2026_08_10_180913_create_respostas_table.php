@@ -18,7 +18,10 @@ return new class extends Migration
             $table->foreignId('prova_codigo')->constrained('provas', 'codigo')->cascadeOnDelete();
 
             // Vínculo best-effort com o cadastro de alunos (pode não existir ainda).
-            $table->foreignId('aluno_id')->nullable()->constrained('alunos')->nullOnDelete();
+            // `integer` (não `foreignId`/BIGINT UNSIGNED) de propósito: precisa
+            // bater com o tipo de `alunos.id` (INT) para o MySQL aceitar a FK.
+            $table->integer('aluno_id')->nullable();
+            $table->foreign('aluno_id')->references('id')->on('alunos')->nullOnDelete();
 
             // Identificação do respondente: só é obrigatório informar UM dos dois.
             $table->string('ra', 50)->nullable();
