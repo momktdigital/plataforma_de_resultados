@@ -3,7 +3,11 @@
 @section('title', 'Atualizações — Avaliações')
 
 @section('content')
-<h1 class="text-2xl font-bold mb-6">Atualizações</h1>
+<h1 class="text-2xl font-bold mb-6">Configurações do sistema</h1>
+
+@include('admin.sistema._subnav')
+
+<h2 class="text-lg font-semibold mb-4">Atualizações</h2>
 
 <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 max-w-2xl">
     <p class="text-sm text-slate-500 mb-1">Versão instalada</p>

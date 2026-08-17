@@ -17,7 +17,11 @@ return new class extends Migration
         }
 
         Schema::create('alunos', function (Blueprint $table) {
-            $table->id();
+            // INT (não BIGINT UNSIGNED) de propósito: precisa bater exatamente
+            // com `alunos.id` do database.sql legado (`INT AUTO_INCREMENT
+            // PRIMARY KEY`), porque outras tabelas daqui referenciam essa
+            // coluna com foreign key — MySQL exige o mesmo tipo dos dois lados.
+            $table->integer('id', autoIncrement: true, unsigned: false);
             $table->string('ra', 50)->unique();
             $table->string('cpf', 20)->unique();
             $table->date('data_nascimento');

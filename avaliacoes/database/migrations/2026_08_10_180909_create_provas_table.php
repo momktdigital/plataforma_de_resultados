@@ -13,7 +13,12 @@ return new class extends Migration
             $table->string('nome')->nullable();
             $table->string('tipo')->nullable();
             $table->string('link_comentado')->nullable();
-            $table->foreignId('criado_por')->nullable()->constrained('admins')->nullOnDelete();
+
+            // `integer` (não `foreignId`/BIGINT UNSIGNED) de propósito: precisa
+            // bater com o tipo de `admins.id` (INT) para o MySQL aceitar a FK.
+            $table->integer('criado_por')->nullable();
+            $table->foreign('criado_por')->references('id')->on('admins')->nullOnDelete();
+
             $table->timestamps();
             $table->softDeletes();
         });

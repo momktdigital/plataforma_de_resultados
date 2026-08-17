@@ -15,7 +15,11 @@ return new class extends Migration
         Schema::create('resultado_metricas', function (Blueprint $table) {
             $table->id();
             $table->foreignId('prova_codigo')->constrained('provas', 'codigo')->cascadeOnDelete();
-            $table->foreignId('aluno_id')->nullable()->constrained('alunos')->nullOnDelete();
+
+            // `integer` (não `foreignId`/BIGINT UNSIGNED) de propósito: precisa
+            // bater com o tipo de `alunos.id` (INT) para o MySQL aceitar a FK.
+            $table->integer('aluno_id')->nullable();
+            $table->foreign('aluno_id')->references('id')->on('alunos')->nullOnDelete();
 
             $table->string('ra', 50)->nullable();
             $table->string('cpf', 20)->nullable();

@@ -2,6 +2,7 @@
 
 namespace App\Services\Backup;
 
+use App\Models\ConfiguracaoSistema;
 use FilesystemIterator;
 use Illuminate\Support\Facades\File;
 use RecursiveDirectoryIterator;
@@ -17,7 +18,7 @@ use ZipArchive;
  */
 class BackupService
 {
-    private const MANTER_ULTIMOS = 5;
+    private const MANTER_ULTIMOS_PADRAO = 5;
 
     /** Diretórios/arquivos (relativos à raiz da aplicação) fora do backup. */
     private const EXCLUIR = [
@@ -94,10 +95,12 @@ class BackupService
 
     private function removerBackupsAntigos(string $pasta): void
     {
+        $manter = (int) ConfiguracaoSistema::valor('backup_manter_ultimos', (string) self::MANTER_ULTIMOS_PADRAO);
+
         $arquivos = collect(File::files($pasta))
             ->sortByDesc(fn ($arquivo) => $arquivo->getMTime())
             ->values();
 
-        $arquivos->slice(self::MANTER_ULTIMOS)->each(fn ($arquivo) => File::delete($arquivo->getPathname()));
+        $arquivos->slice(max($manter, 0))->each(fn ($arquivo) => File::delete($arquivo->getPathname()));
     }
 }

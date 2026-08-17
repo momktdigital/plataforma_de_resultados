@@ -12,8 +12,7 @@
         <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
             <a href="{{ route('provas.index') }}" class="font-bold text-lg">Avaliações</a>
             <div class="flex items-center gap-4 text-sm">
-                <a href="{{ route('sistema.backups.index') }}" class="text-slate-500 hover:text-slate-800">Backups</a>
-                <a href="{{ route('sistema.atualizacao.index') }}" class="text-slate-500 hover:text-slate-800">Atualizações</a>
+                <a href="{{ route('sistema.configuracoes.index') }}" class="text-slate-500 hover:text-slate-800">Configurações</a>
                 <span class="text-slate-500">{{ auth('admin')->user()->username }}</span>
                 <form method="POST" action="{{ route('logout') }}">
                     @csrf
