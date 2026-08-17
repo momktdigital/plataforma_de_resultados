@@ -34,24 +34,34 @@ class LegadoImportador
     public function importarGabarito(object $linha): void
     {
         $prova = $this->localizarOuCriarProva($linha->nome_avaliacao, $linha->link_comentado ?? null);
+        $agora = now();
+        $deletedAt = $linha->deleted_at ?? null;
 
+        $questoes = [];
         foreach ($this->decodificarJson($linha->respostas ?? null) as $chave => $gabarito) {
             if (! preg_match('/\d+/', (string) $chave, $matches)) {
                 continue;
             }
 
-            $numero = (int) $matches[0];
-
-            $questao = Questao::withTrashed()->firstOrNew([
+            $questoes[] = [
                 'prova_codigo' => $prova->codigo,
-                'numero' => $numero,
-            ]);
-            $questao->gabarito = mb_strtoupper((string) $gabarito, 'UTF-8');
-            $questao->deleted_at = $linha->deleted_at ?? null;
-            $questao->save();
-
-            $this->contadores['questoes']++;
+                'numero' => (int) $matches[0],
+                'gabarito' => mb_strtoupper((string) $gabarito, 'UTF-8'),
+                'deleted_at' => $deletedAt,
+                'created_at' => $agora,
+                'updated_at' => $agora,
+            ];
         }
+
+        if (empty($questoes)) {
+            return;
+        }
+
+        // upsert (1 query para todas as questões desta prova) em vez de um
+        // find+save por questão — com milhares de linhas legadas, isso é a
+        // diferença entre segundos e minutos de importação.
+        Questao::upsert($questoes, ['prova_codigo', 'numero'], ['gabarito', 'deleted_at', 'updated_at']);
+        $this->contadores['questoes'] += count($questoes);
     }
 
     /**
@@ -63,43 +73,64 @@ class LegadoImportador
         $ra = trim((string) $linha->ra) ?: null;
         $periodo = (string) ($linha->periodo ?? '');
         $alunoId = $ra !== null ? Aluno::where('ra', $ra)->value('id') : null;
+        $agora = now();
+        $deletedAt = $linha->deleted_at ?? null;
 
+        $respostas = [];
         foreach ($this->decodificarJson($linha->respostas ?? null) as $chave => $valor) {
             if (! preg_match('/\d+/', (string) $chave, $matches)) {
                 continue;
             }
 
-            $numero = (int) $matches[0];
-
-            $resposta = Resposta::withTrashed()->firstOrNew([
+            $respostas[] = [
                 'prova_codigo' => $prova->codigo,
                 'ra' => $ra,
                 'cpf' => null,
                 'periodo' => $periodo,
-                'questao_numero' => $numero,
-            ]);
-            $resposta->resposta = $valor !== '' ? mb_strtoupper((string) $valor, 'UTF-8') : null;
-            $resposta->aluno_id = $alunoId;
-            $resposta->deleted_at = $linha->deleted_at ?? null;
-            $resposta->save();
-
-            $this->contadores['respostas']++;
+                'questao_numero' => (int) $matches[0],
+                'resposta' => $valor !== '' ? mb_strtoupper((string) $valor, 'UTF-8') : null,
+                'aluno_id' => $alunoId,
+                'deleted_at' => $deletedAt,
+                'created_at' => $agora,
+                'updated_at' => $agora,
+            ];
         }
 
+        if ($respostas !== []) {
+            // `aluno_chave` é gerada pelo banco (COALESCE(cpf, ra)) — não entra
+            // nos valores, mas o índice único sobre ela é o que o upsert usa
+            // pra decidir se cria ou atualiza cada linha.
+            Resposta::upsert(
+                $respostas,
+                ['prova_codigo', 'aluno_chave', 'periodo', 'questao_numero'],
+                ['resposta', 'aluno_id', 'deleted_at', 'updated_at'],
+            );
+            $this->contadores['respostas'] += count($respostas);
+        }
+
+        $metricas = [];
         foreach ($this->decodificarJson($linha->notas_finais ?? null) as $nomeMetrica => $valor) {
-            $metrica = ResultadoMetrica::withTrashed()->firstOrNew([
+            $metricas[] = [
                 'prova_codigo' => $prova->codigo,
                 'ra' => $ra,
                 'cpf' => null,
                 'periodo' => $periodo,
                 'nome_metrica' => $nomeMetrica,
-            ]);
-            $metrica->valor = $valor === null ? null : (string) $valor;
-            $metrica->aluno_id = $alunoId;
-            $metrica->deleted_at = $linha->deleted_at ?? null;
-            $metrica->save();
+                'valor' => $valor === null ? null : (string) $valor,
+                'aluno_id' => $alunoId,
+                'deleted_at' => $deletedAt,
+                'created_at' => $agora,
+                'updated_at' => $agora,
+            ];
+        }
 
-            $this->contadores['metricas']++;
+        if ($metricas !== []) {
+            ResultadoMetrica::upsert(
+                $metricas,
+                ['prova_codigo', 'aluno_chave', 'periodo', 'nome_metrica'],
+                ['valor', 'aluno_id', 'deleted_at', 'updated_at'],
+            );
+            $this->contadores['metricas'] += count($metricas);
         }
     }
 
