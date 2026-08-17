@@ -13,8 +13,9 @@
             <a href="{{ route('provas.index') }}" class="font-bold text-lg">Avaliações</a>
             <div class="flex items-center gap-4 text-sm">
                 <a href="{{ route('alunos.index') }}" class="text-slate-500 hover:text-slate-800">Alunos</a>
+                <a href="{{ route('administradores.index') }}" class="text-slate-500 hover:text-slate-800">Administradores</a>
                 <a href="{{ route('sistema.configuracoes.index') }}" class="text-slate-500 hover:text-slate-800">Configurações</a>
-                <span class="text-slate-500">{{ auth('admin')->user()->username }}</span>
+                <a href="{{ route('perfil.edit') }}" class="text-slate-500 hover:text-slate-800">{{ auth('admin')->user()->username }}</a>
                 <form method="POST" action="{{ route('logout') }}">
                     @csrf
                     <button type="submit" class="text-red-600 hover:underline">Sair</button>

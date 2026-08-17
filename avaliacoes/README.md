@@ -79,6 +79,14 @@ Reconstrói, do lado do servidor, o antigo fluxo client-side de
 > garantiu os dois; só o cadastro manual em `/alunos` exige ambos, por
 > serem a credencial de login do aluno no portal público).
 
+## Administradores (`/administradores`) e Perfil (`/perfil`)
+
+Porta `admin/usuarios.php` (CRUD de administradores: listar, criar, excluir —
+não é possível excluir a própria conta logada) e `admin/perfil.php` (troca de
+senha, exige confirmar a senha atual) para cá. Mesma tabela `admins` da
+aplicação legada, então uma conta criada aqui já funciona para logar em
+qualquer um dos dois apps.
+
 ## Autenticação
 
 Não há cadastro de usuário nem redefinição de senha por e-mail neste módulo.

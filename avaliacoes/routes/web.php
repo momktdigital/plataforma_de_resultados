@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\Admin\AdministradorController;
 use App\Http\Controllers\Admin\AlunoController;
 use App\Http\Controllers\Admin\MatriculaImportController;
+use App\Http\Controllers\Admin\PerfilController;
 use App\Http\Controllers\Admin\ProvaController;
 use App\Http\Controllers\Admin\QuestaoImportController;
 use App\Http\Controllers\Admin\ResultadoImportController;
@@ -46,6 +48,13 @@ Route::middleware('instalado')->group(function () {
         Route::get('/alunos/{aluno}/editar', [AlunoController::class, 'edit'])->name('alunos.edit');
         Route::put('/alunos/{aluno}', [AlunoController::class, 'update'])->name('alunos.update');
         Route::delete('/alunos/{aluno}', [AlunoController::class, 'destroy'])->name('alunos.destroy');
+
+        Route::get('/administradores', [AdministradorController::class, 'index'])->name('administradores.index');
+        Route::post('/administradores', [AdministradorController::class, 'store'])->name('administradores.store');
+        Route::delete('/administradores/{admin}', [AdministradorController::class, 'destroy'])->name('administradores.destroy');
+
+        Route::get('/perfil', [PerfilController::class, 'edit'])->name('perfil.edit');
+        Route::put('/perfil/senha', [PerfilController::class, 'updateSenha'])->name('perfil.senha');
 
         Route::get('/provas', [ProvaController::class, 'index'])->name('provas.index');
         Route::post('/provas', [ProvaController::class, 'store'])->name('provas.store');
