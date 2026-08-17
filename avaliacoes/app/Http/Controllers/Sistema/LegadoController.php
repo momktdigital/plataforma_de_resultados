@@ -26,6 +26,8 @@ class LegadoController extends Controller
     /** Lê `gabaritos`/`resultados` direto da conexão configurada (mesmo banco compartilhado). */
     public function importarDoBanco(LegadoImportador $importador): RedirectResponse
     {
+        $this->permitirExecucaoLonga();
+
         if (! Schema::hasTable('gabaritos') || ! Schema::hasTable('resultados')) {
             return back()->withErrors([
                 'banco' => 'As tabelas legadas `gabaritos`/`resultados` não existem neste banco. Se o sistema antigo está em outro servidor, use a opção de enviar o arquivo de backup.',
@@ -51,6 +53,8 @@ class LegadoController extends Controller
         LegadoImportador $importador,
         BackupSqlParser $parser,
     ): RedirectResponse {
+        $this->permitirExecucaoLonga();
+
         $dryRun = $request->boolean('dry_run');
         $caminho = $request->file('arquivo')->getRealPath();
 
@@ -81,5 +85,20 @@ class LegadoController extends Controller
     private function resumoTexto(array $resumo): string
     {
         return "Provas: {$resumo['provas']} · Questões: {$resumo['questoes']} · Respostas: {$resumo['respostas']} · Métricas: {$resumo['metricas']}";
+    }
+
+    /**
+     * Importar um backup inteiro pode significar milhares de linhas
+     * processadas uma a uma — sem isso, o limite padrão de `max_execution_time`
+     * do PHP (30s em muitas instalações, ex.: XAMPP) derruba a requisição no
+     * meio da importação com um 500 sem nenhuma mensagem útil.
+     */
+    private function permitirExecucaoLonga(): void
+    {
+        set_time_limit(0);
+
+        if (LimitesUpload::paraBytes(ini_get('memory_limit') ?: '128M') < LimitesUpload::paraBytes('512M')) {
+            ini_set('memory_limit', '512M');
+        }
     }
 }
