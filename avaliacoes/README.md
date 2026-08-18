@@ -6,11 +6,14 @@ Aplicação Laravel responsável pelo cadastro de **Provas**, import de
 abandonado porque o sistema passou a suportar avaliações de vários tipos, não
 só o Diagnóstico Institucional.
 
-Este módulo é uma aplicação separada da raiz do repositório (que continua
-com o portal público do aluno, 2FA, login administrativo, CRUD de alunos e
-configurações). As duas aplicações **compartilham o mesmo banco de dados**:
-esta aqui lê/usa as tabelas legadas `admins` e `alunos` sem alterá-las, e
-adiciona as tabelas novas descritas abaixo.
+Este módulo nasceu como uma aplicação separada da raiz do repositório —
+onde antes vivia um app legado em PHP puro com o portal público do aluno,
+2FA, login administrativo, CRUD de alunos e configurações — mas hoje é a
+única aplicação do projeto; o app legado foi removido depois que todas as
+suas funções foram portadas pra cá (ver histórico do repositório para o
+código antigo, se precisar consultar). O schema herdou as tabelas `admins`
+e `alunos` desse app legado sem alterá-las, e adiciona as tabelas novas
+descritas abaixo.
 
 ## Modelagem de dados
 
@@ -84,24 +87,24 @@ Reconstrói, do lado do servidor, o antigo fluxo client-side de
 
 Porta `admin/usuarios.php` (CRUD de administradores: listar, criar, excluir —
 não é possível excluir a própria conta logada) e `admin/perfil.php` (troca de
-senha, exige confirmar a senha atual) para cá. Mesma tabela `admins` da
-aplicação legada, então uma conta criada aqui já funciona para logar em
-qualquer um dos dois apps.
+senha, exige confirmar a senha atual) para cá. Mesma tabela `admins`
+herdada do schema da aplicação legada, então uma conta já cadastrada
+antes de o app legado ser removido continua funcionando aqui normalmente.
 
 ## Configurações do portal público (`/sistema/portal`)
 
 Porta `admin/configuracoes.php` (+ `api_test_smtp.php`/`api_verify_test_smtp.php`)
-para uma aba própria em Configurações. Lê e grava na tabela `configuracoes`
-— a mesma usada pelo portal público **legado** — então salvar aqui já tem
-efeito lá, mesmo antes de o portal em si ser portado para este app:
+para uma aba própria em Configurações, gravando na tabela `configuracoes`
+(schema herdado da aplicação legada):
 
 - **Aparência:** título do site e logo (fundo claro/escuro). O arquivo é
-  salvo em `assets/img/` **na raiz do repositório** (não em `storage/` do
-  Laravel), o mesmo diretório físico que o portal legado lê — os dois apps
-  continuam enxergando a mesma logo. Como o document root deste app é
-  `avaliacoes/public/`, uma rota própria (`/assets/img/{arquivo}`,
-  `App\Http\Controllers\AssetLegadoController`) serve esses arquivos
-  publicamente para exibição na própria tela.
+  salvo em `public/uploads/logos/` (`App\Support\LogoUploader`) e servido
+  como um arquivo estático comum, sem controller/rota dedicados — só o
+  `basename()` do caminho salvo em `configuracoes.site_logo` é usado pra
+  montar a URL (`asset('uploads/logos/'.basename(...))`), então uma
+  instalação migrada de uma base com o valor antigo (`assets/img/xxx.png`,
+  do layout da aplicação legada) continua exibindo a logo certa sem
+  precisar atualizar a tabela.
 - **CAPTCHA:** Google reCAPTCHA v2 ou hCaptcha (mutuamente exclusivos).
 - **SMTP + template do e-mail de 2FA:** host/porta/usuário/senha (senha em
   branco não altera a já salva), remetente e template com `[NOME_DO_ALUNO]`/
@@ -447,8 +450,7 @@ mais nova que a instalada:
 1. Gera um backup completo (ver seção abaixo) — sempre, sem exceção.
 2. Coloca a aplicação em modo de manutenção.
 3. Baixa e extrai a Release, copiando por cima só a subpasta `avaliacoes/`
-   do repositório (o repositório também contém a aplicação legada) —
-   preservando `.env` e `storage/` intocados.
+   do repositório — preservando `.env` e `storage/` intocados.
 4. Roda `composer install --no-dev` e as migrations pendentes.
 5. Grava a nova versão em `VERSION` e sai do modo de manutenção.
 
@@ -489,12 +491,10 @@ outra finalidade). Um valor não definido aqui cai no padrão do `.env`/
 ## Deploy
 
 Esta é uma aplicação Laravel completa: o document root do servidor web deve
-apontar para `avaliacoes/public/` (nunca para a raiz do projeto Laravel).
-Como ela convive no mesmo repositório que a aplicação legada (cujo document
-root é a raiz do repositório), configure-as como **vhosts/aliases
-separados** — por exemplo um subdomínio (`avaliacoes.dominio.com` →
-`avaliacoes/public`) ou um alias de path no Apache/Nginx apontando para essa
-pasta, mantendo o `mod_rewrite`/`try_files` do Laravel.
+apontar para `avaliacoes/public/` (nunca para a raiz do repositório, que
+guarda o código-fonte da aplicação mas não é servido diretamente) — por
+exemplo um vhost apontando pra essa pasta, mantendo o `mod_rewrite`/
+`try_files` do Laravel.
 
 O servidor precisa de acesso a shell/Composer (usado pelo atualizador para
 rodar `composer install` após cada atualização) e, idealmente, ao binário

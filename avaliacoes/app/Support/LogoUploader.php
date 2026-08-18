@@ -6,14 +6,14 @@ use Illuminate\Http\UploadedFile;
 use RuntimeException;
 
 /**
- * Salva o logo enviado em Configurações → Portal público no MESMO diretório
- * físico usado pela aplicação legada (`assets/img/`, na raiz do
- * repositório) — não em `storage/` do Laravel — porque o valor gravado em
- * `configuracoes.site_logo` é um caminho relativo (`assets/img/xxx.png`)
- * consumido pelo portal público legado a partir do document root dele.
- * Reaproveita a mesma validação de `admin/configuracoes.php`: extensão na
- * whitelist, MIME real via finfo e integridade via getimagesize (exceto
- * SVG, que não é raster).
+ * Salva o logo enviado em Configurações → Portal público em
+ * `public/uploads/logos/`, servido diretamente pelo Laravel (sem storage
+ * link nem controller dedicado). `configuracoes.site_logo` guarda o caminho
+ * relativo devolvido aqui, mas só o basename dele é usado pra montar a URL
+ * (`asset('uploads/logos/'.basename($caminho))`) — assim uma instalação
+ * migrada de uma base com valores antigos (ex.: `assets/img/xxx.png`, do
+ * layout usado pela aplicação legada) continua funcionando sem precisar
+ * atualizar a tabela `configuracoes`.
  */
 class LogoUploader
 {
@@ -43,17 +43,17 @@ class LogoUploader
             throw new RuntimeException('O arquivo não é uma imagem válida ou está corrompido.');
         }
 
-        $uploadDir = base_path('../assets/img');
+        $uploadDir = public_path('uploads/logos');
         if (! is_dir($uploadDir) && ! mkdir($uploadDir, 0755, true) && ! is_dir($uploadDir)) {
-            throw new RuntimeException('Não foi possível criar o diretório de destino (assets/img/).');
+            throw new RuntimeException('Não foi possível criar o diretório de destino (public/uploads/logos/).');
         }
 
         $nomeSeguro = time().'_'.$sufixo.'_'.bin2hex(random_bytes(6)).'.'.$ext;
 
         if (! $file->move($uploadDir, $nomeSeguro)) {
-            throw new RuntimeException('Erro ao salvar o arquivo — verifique as permissões de assets/img/.');
+            throw new RuntimeException('Erro ao salvar o arquivo — verifique as permissões de public/uploads/logos/.');
         }
 
-        return 'assets/img/'.$nomeSeguro;
+        return 'uploads/logos/'.$nomeSeguro;
     }
 }

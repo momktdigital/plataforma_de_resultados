@@ -5,9 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Configurações chave/valor genéricas da aplicação legada (CAPTCHA, SMTP,
+ * Configurações chave/valor genéricas do portal público (CAPTCHA, SMTP,
  * template do e-mail de 2FA, título/logo do site) — tabela `configuracoes`,
- * compartilhada com o portal público legado. Não confundir com
+ * cujo schema foi herdado da aplicação legada. Não confundir com
  * `ConfiguracaoSistema` (`configuracoes_sistema`), que é exclusiva deste app.
  */
 class Configuracao extends Model

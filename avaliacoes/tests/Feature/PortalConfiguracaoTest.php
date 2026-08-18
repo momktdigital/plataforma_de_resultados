@@ -57,10 +57,8 @@ class PortalConfiguracaoTest extends TestCase
         $this->assertSame('smtp.exemplo.com', Configuracao::valor('smtp_host'));
     }
 
-    public function test_upload_de_logo_salva_no_diretorio_compartilhado_com_o_legado(): void
+    public function test_upload_de_logo_salva_em_public_uploads(): void
     {
-        $destino = base_path('../assets/img');
-
         $arquivo = UploadedFile::fake()->image('logo.png', 40, 40);
 
         $response = $this->actingAs($this->admin(), 'admin')
@@ -70,11 +68,11 @@ class PortalConfiguracaoTest extends TestCase
 
         $caminhoSalvo = Configuracao::valor('site_logo');
         $this->assertNotEmpty($caminhoSalvo);
-        $this->assertStringStartsWith('assets/img/', $caminhoSalvo);
-        $this->assertFileExists(base_path('../'.$caminhoSalvo));
+        $this->assertStringStartsWith('uploads/logos/', $caminhoSalvo);
+        $this->assertFileExists(public_path($caminhoSalvo));
 
-        // Limpeza — não deixa arquivo de teste no diretório compartilhado.
-        @unlink(base_path('../'.$caminhoSalvo));
+        // Limpeza — não deixa arquivo de teste em public/.
+        @unlink(public_path($caminhoSalvo));
     }
 
     public function test_arquivo_de_logo_invalido_e_rejeitado(): void

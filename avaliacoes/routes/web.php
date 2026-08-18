@@ -12,7 +12,6 @@ use App\Http\Controllers\Admin\QuestaoController;
 use App\Http\Controllers\Admin\QuestaoImportController;
 use App\Http\Controllers\Admin\RespondenteController;
 use App\Http\Controllers\Admin\ResultadoImportController;
-use App\Http\Controllers\AssetLegadoController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\InstallController;
 use App\Http\Controllers\PortalController;
@@ -37,10 +36,6 @@ Route::middleware('instalado')->group(function () {
     Route::get('/', function () {
         return redirect()->route(Auth::guard('admin')->check() ? 'provas.index' : 'portal.consulta');
     });
-
-    Route::get('/assets/img/{arquivo}', [AssetLegadoController::class, 'logo'])
-        ->where('arquivo', '[^/]+')
-        ->name('assets.logo');
 
     Route::prefix('portal')->name('portal.')->middleware('throttle:30,1')->group(function () {
         Route::get('/', [PortalController::class, 'mostrarConsulta'])->name('consulta');

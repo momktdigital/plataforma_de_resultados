@@ -17,10 +17,9 @@ use RuntimeException;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 /**
- * Configurações compartilhadas com o portal público legado (título/logo do
- * site, CAPTCHA, SMTP + template do e-mail de 2FA) — tabela `configuracoes`.
- * Porta admin/configuracoes.php (+ api_test_smtp.php/api_verify_test_smtp.php)
- * para cá; salvar aqui já reflete no portal legado, que lê a mesma tabela.
+ * Configurações do portal público (título/logo do site, CAPTCHA, SMTP +
+ * template do e-mail de 2FA) — tabela `configuracoes`, herdada do schema da
+ * aplicação legada (ver App\Models\Configuracao).
  */
 class PortalConfiguracaoController extends Controller
 {

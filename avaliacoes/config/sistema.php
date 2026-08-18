@@ -8,8 +8,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Repositório GitHub público (owner/repo) de onde o atualizador busca a
-    | última Release. O sistema vive na subpasta `subpasta` desse repositório
-    | (o repositório também contém a aplicação legada em PHP puro na raiz).
+    | última Release. O sistema vive na subpasta `subpasta` desse repositório.
     |
     */
 

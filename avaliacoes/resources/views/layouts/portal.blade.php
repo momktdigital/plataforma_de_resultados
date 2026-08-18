@@ -34,10 +34,10 @@
         <a href="{{ route('portal.consulta') }}" class="flex items-center gap-2">
             @if ($siteLogo || $siteLogoDark)
                 @if ($siteLogo)
-                    <img src="{{ route('assets.logo', basename($siteLogo)) }}" alt="{{ $siteTitle }}" class="h-8 object-contain logo-light">
+                    <img src="{{ asset('uploads/logos/'.basename($siteLogo)) }}" alt="{{ $siteTitle }}" class="h-8 object-contain logo-light">
                 @endif
                 @if ($siteLogoDark)
-                    <img src="{{ route('assets.logo', basename($siteLogoDark)) }}" alt="{{ $siteTitle }}"
+                    <img src="{{ asset('uploads/logos/'.basename($siteLogoDark)) }}" alt="{{ $siteTitle }}"
                          class="h-8 object-contain logo-dark" @if($siteLogo) style="display:none" @endif>
                 @endif
             @else

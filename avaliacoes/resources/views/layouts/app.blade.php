@@ -39,7 +39,7 @@
         <aside id="sidebar" class="sidebar w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0">
             <div class="h-16 flex items-center px-6 border-b border-slate-800 bg-slate-950">
                 @if ($siteLogoDark || $siteLogo)
-                    <img src="{{ route('assets.logo', basename($siteLogoDark ?: $siteLogo)) }}" alt="{{ $siteTitle }}" class="h-8 object-contain">
+                    <img src="{{ asset('uploads/logos/'.basename($siteLogoDark ?: $siteLogo)) }}" alt="{{ $siteTitle }}" class="h-8 object-contain">
                 @else
                     <i class="ph-fill ph-exam text-primary text-2xl mr-2"></i>
                     <span class="text-lg font-bold text-white tracking-wide">{{ $siteTitle }}</span>

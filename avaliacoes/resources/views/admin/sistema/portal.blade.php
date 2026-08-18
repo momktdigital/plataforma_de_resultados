@@ -8,9 +8,9 @@
 @include('admin.sistema._subnav')
 
 <p class="text-sm text-slate-500 mb-6 max-w-2xl">
-    Estas configurações são lidas pelo portal público legado (consulta de
-    resultados por CPF + Data de Nascimento) — salvar aqui já reflete lá,
-    porque os dois apps compartilham a mesma tabela <code>configuracoes</code>.
+    Estas configurações alimentam o portal público (consulta de resultados por
+    CPF + Data de Nascimento): aparência, CAPTCHA e o SMTP/template usados no
+    2FA por e-mail.
 </p>
 
 <div class="space-y-8 max-w-2xl">
@@ -28,14 +28,14 @@
             <div>
                 <label class="block text-sm font-medium mb-1" for="site_logo">Logo (fundo claro)</label>
                 @if ($siteLogo)
-                    <img src="{{ route('assets.logo', basename($siteLogo)) }}" alt="Logo atual" class="h-10 object-contain border border-slate-200 rounded p-1 bg-white mb-2">
+                    <img src="{{ asset('uploads/logos/'.basename($siteLogo)) }}" alt="Logo atual" class="h-10 object-contain border border-slate-200 rounded p-1 bg-white mb-2">
                 @endif
                 <input id="site_logo" name="site_logo" type="file" accept="image/*,.svg" class="w-full text-sm">
             </div>
             <div>
                 <label class="block text-sm font-medium mb-1" for="site_logo_dark">Logo (fundo escuro)</label>
                 @if ($siteLogoDark)
-                    <img src="{{ route('assets.logo', basename($siteLogoDark)) }}" alt="Logo atual (escura)" class="h-10 object-contain border border-slate-600 rounded p-1 bg-slate-800 mb-2">
+                    <img src="{{ asset('uploads/logos/'.basename($siteLogoDark)) }}" alt="Logo atual (escura)" class="h-10 object-contain border border-slate-600 rounded p-1 bg-slate-800 mb-2">
                 @endif
                 <input id="site_logo_dark" name="site_logo_dark" type="file" accept="image/*,.svg" class="w-full text-sm">
             </div>
