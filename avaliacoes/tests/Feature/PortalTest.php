@@ -48,7 +48,7 @@ class PortalTest extends TestCase
         Questao::create(['prova_codigo' => $prova->codigo, 'numero' => 1, 'gabarito' => 'A']);
         Resposta::create(['prova_codigo' => $prova->codigo, 'ra' => $aluno->ra, 'questao_numero' => 1, 'resposta' => 'A']);
 
-        $response = $this->post('/portal/consultar', [
+        $response = $this->followingRedirects()->post('/portal/consultar', [
             'cpf' => '123.456.789-09',
             'data_nascimento' => '15/03/2000',
         ]);
@@ -128,7 +128,7 @@ class PortalTest extends TestCase
             $mock->shouldReceive('verificarRecaptcha')->once()->with('secreto', 'token-valido')->andReturn(true);
         });
 
-        $response = $this->post('/portal/consultar', [
+        $response = $this->followingRedirects()->post('/portal/consultar', [
             'cpf' => '123.456.789-09',
             'data_nascimento' => '15/03/2000',
             'g-recaptcha-response' => 'token-valido',
@@ -150,7 +150,7 @@ class PortalTest extends TestCase
             'expira_em' => Carbon::now()->addMinutes(10),
         ]);
 
-        $response = $this->post('/portal/verificar', ['cpf' => $aluno->cpf, 'codigo' => '123456']);
+        $response = $this->followingRedirects()->post('/portal/verificar', ['cpf' => $aluno->cpf, 'codigo' => '123456']);
 
         $response->assertOk();
         $response->assertSee('ENADE 2026');

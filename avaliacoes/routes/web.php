@@ -47,6 +47,9 @@ Route::middleware('instalado')->group(function () {
         Route::post('/consultar', [PortalController::class, 'consultar'])->name('consultar');
         Route::post('/verificar', [PortalController::class, 'verificar'])->name('verificar');
         Route::post('/reenviar', [PortalController::class, 'reenviar'])->name('reenviar');
+        Route::get('/resultados', [PortalController::class, 'resultados'])->name('resultados');
+        Route::get('/resultados/provas/{prova}', [PortalController::class, 'resultadoProva'])->name('resultados.prova');
+        Route::get('/sair', [PortalController::class, 'sair'])->name('sair');
     });
 
     Route::middleware('guest:admin')->group(function () {

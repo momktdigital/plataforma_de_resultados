@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\ConsultaResultadoRequest;
 use App\Models\Aluno;
 use App\Models\Configuracao;
+use App\Models\Prova;
 use App\Models\VerificacaoEmail;
 use App\Services\Portal\CaptchaVerifier;
 use App\Services\Portal\RateLimit2faService;
@@ -45,7 +46,6 @@ class PortalController extends Controller
         ConsultaResultadoRequest $request,
         CaptchaVerifier $captcha,
         SmtpEmailSender $mailer,
-        ResultadoConsultaService $consultaService,
     ): View|RedirectResponse {
         $dados = $request->validated();
         $cpf = $dados['cpf'];
@@ -86,10 +86,10 @@ class PortalController extends Controller
             return view('portal.verificar', ['cpf' => $cpf, 'emailOculto' => $this->ocultarEmail($aluno->email)]);
         }
 
-        return $this->renderizarResultados($aluno, $consultaService);
+        return $this->autenticarEIrParaResultados($aluno);
     }
 
-    public function verificar(Request $request, RateLimit2faService $rateLimiter, ResultadoConsultaService $consultaService): View|RedirectResponse
+    public function verificar(Request $request, RateLimit2faService $rateLimiter): View|RedirectResponse
     {
         $dados = $request->validate([
             'cpf' => ['required', 'string'],
@@ -149,7 +149,7 @@ class PortalController extends Controller
             return redirect()->route('portal.consulta')->withErrors(['cpf' => 'Aluno não encontrado.']);
         }
 
-        return $this->renderizarResultados($aluno, $consultaService);
+        return $this->autenticarEIrParaResultados($aluno);
     }
 
     public function reenviar(Request $request, SmtpEmailSender $mailer): View|RedirectResponse
@@ -205,6 +205,64 @@ class PortalController extends Controller
             'emailOculto' => $this->ocultarEmail($aluno->email),
             'status' => 'Código reenviado com sucesso.',
         ]);
+    }
+
+    /**
+     * Consultas GET aos resultados exigem ter passado antes pelo CPF + Data de
+     * Nascimento (e 2FA, se ativo) em consultar()/verificar(). Guardamos só o
+     * id do aluno na sessão — nada de repassar isso por querystring, senão
+     * qualquer um poderia adivinhar/alterar a URL e ver boletim alheio.
+     */
+    public function resultados(ResultadoConsultaService $consultaService): View|RedirectResponse
+    {
+        $aluno = $this->alunoAutenticado();
+
+        if ($aluno === null) {
+            return redirect()->route('portal.consulta');
+        }
+
+        return $this->renderizarResultados($aluno, $consultaService);
+    }
+
+    /** Detalhe de uma única prova, pensado para abrir em nova aba a partir do boletim. */
+    public function resultadoProva(Prova $prova, Request $request, ResultadoConsultaService $consultaService): View|RedirectResponse
+    {
+        $aluno = $this->alunoAutenticado();
+
+        if ($aluno === null) {
+            return redirect()->route('portal.consulta');
+        }
+
+        $periodo = (string) $request->query('periodo', '');
+        $resultado = $consultaService->buscarUmaProva($aluno, $prova->codigo, $periodo);
+
+        if ($resultado === null) {
+            abort(404);
+        }
+
+        return view('portal.resultado-prova', ['aluno' => $aluno, 'r' => $resultado]);
+    }
+
+    /** Encerra a sessão do boletim — útil em computador compartilhado (labs, secretaria). */
+    public function sair(): RedirectResponse
+    {
+        session()->forget('portal_aluno_id');
+
+        return redirect()->route('portal.consulta');
+    }
+
+    private function autenticarEIrParaResultados(Aluno $aluno): RedirectResponse
+    {
+        session(['portal_aluno_id' => $aluno->id]);
+
+        return redirect()->route('portal.resultados');
+    }
+
+    private function alunoAutenticado(): ?Aluno
+    {
+        $id = session('portal_aluno_id');
+
+        return $id ? Aluno::find($id) : null;
     }
 
     private function renderizarResultados(Aluno $aluno, ResultadoConsultaService $consultaService): View

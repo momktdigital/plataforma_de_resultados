@@ -46,7 +46,7 @@ class PortalCategoriaTest extends TestCase
         $aluno = $this->aluno();
         $this->resultadoNaProva($aluno, null, null, 'Prova Solta');
 
-        $response = $this->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
+        $response = $this->followingRedirects()->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
 
         $response->assertOk();
         $response->assertSee('Prova Solta');
@@ -58,7 +58,7 @@ class PortalCategoriaTest extends TestCase
         $categoria = Categoria::create(['nome' => 'Simulados']);
         $this->resultadoNaProva($aluno, $categoria->id, '2026-03-01', 'Simulado 1');
 
-        $response = $this->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
+        $response = $this->followingRedirects()->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
 
         $response->assertOk();
         $response->assertSee('Simulados');
@@ -72,7 +72,7 @@ class PortalCategoriaTest extends TestCase
         $categoriaComResultado = Categoria::create(['nome' => 'Com resultado']);
         $this->resultadoNaProva($aluno, $categoriaComResultado->id, null, 'Prova X');
 
-        $response = $this->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
+        $response = $this->followingRedirects()->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
 
         $response->assertOk();
         $response->assertSee('Com resultado');
@@ -86,7 +86,7 @@ class PortalCategoriaTest extends TestCase
         $filha = Categoria::create(['nome' => '1º ao 4º período', 'categoria_pai_id' => $mae->id]);
         $this->resultadoNaProva($aluno, $filha->id, null, 'Simulado do 1º período');
 
-        $response = $this->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
+        $response = $this->followingRedirects()->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
 
         $response->assertOk();
         $response->assertSee('Simulados');
@@ -99,32 +99,78 @@ class PortalCategoriaTest extends TestCase
         $aluno = $this->aluno();
         $prova = $this->resultadoNaProva($aluno, null, '2026-05-20', 'Prova com data');
 
-        $response = $this->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
+        $response = $this->followingRedirects()->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
 
         $response->assertOk();
         $response->assertSee('20/05/2026');
         $response->assertSee('data-data="2026-05-20"', false);
     }
 
-    public function test_boletim_mostra_card_resumido_com_modal_de_detalhe_e_pdf_por_prova(): void
+    public function test_boletim_mostra_card_resumido_com_link_para_nova_aba_e_pdf_por_prova(): void
     {
         $aluno = $this->aluno();
         $prova = $this->resultadoNaProva($aluno, null, '2026-05-20', 'ENADE 2026');
 
-        $response = $this->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
-        $html = $response->getContent();
+        $boletim = $this->followingRedirects()->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
+        $htmlBoletim = $boletim->getContent();
 
-        $id = $prova->codigo.'-sem-periodo';
+        $urlDetalhe = route('portal.resultados.prova', ['prova' => $prova->codigo, 'periodo' => '']);
 
-        // Card resumido clicável.
-        $response->assertSee("portalAbrirDetalhe('{$id}')", false);
-        // Modal de detalhe com o conteúdo exportável em PDF.
-        $response->assertSee("id=\"modal-{$id}\"", false);
-        $response->assertSee("id=\"pdf-conteudo-{$id}\"", false);
-        $response->assertSee("portalExportarPdfProva('{$id}')", false);
+        // Card resumido é um link que abre o detalhe em nova aba (target="_blank").
+        $boletim->assertSee('href="'.$urlDetalhe.'"', false);
+        $boletim->assertSee('target="_blank"', false);
 
-        // Não existe mais um botão de baixar TODAS as provas de uma vez.
-        $this->assertStringNotContainsString('portalExportarPdf()', $html);
-        $this->assertStringNotContainsString('id="btn-pdf"', $html);
+        // Não existe mais popup/modal nem um botão de baixar TODAS as provas de uma vez.
+        $this->assertStringNotContainsString('portalAbrirDetalhe', $htmlBoletim);
+        $this->assertStringNotContainsString('prova-modal', $htmlBoletim);
+        $this->assertStringNotContainsString('portalExportarPdf()', $htmlBoletim);
+        $this->assertStringNotContainsString('id="btn-pdf"', $htmlBoletim);
+
+        // A página dedicada da prova (aberta em nova aba) tem o detalhamento e o botão de PDF dela.
+        $detalhe = $this->get($urlDetalhe);
+        $detalhe->assertOk();
+        $detalhe->assertSee('ENADE 2026');
+        $detalhe->assertSee('portalExportarPdfProva()', false);
+    }
+
+    public function test_detalhe_da_prova_exige_ter_passado_pela_consulta(): void
+    {
+        $aluno = $this->aluno();
+        $prova = $this->resultadoNaProva($aluno, null, null, 'Prova Restrita');
+
+        $response = $this->get(route('portal.resultados.prova', ['prova' => $prova->codigo, 'periodo' => '']));
+
+        $response->assertRedirect(route('portal.consulta'));
+    }
+
+    public function test_detalhe_da_prova_nao_mostra_resultado_de_outro_aluno(): void
+    {
+        $aluno = $this->aluno();
+        $outroAluno = Aluno::create([
+            'ra' => '2026002',
+            'cpf' => '98765432100',
+            'data_nascimento' => '2001-01-01',
+            'nome' => 'Ciclano',
+        ]);
+        $prova = $this->resultadoNaProva($outroAluno, null, null, 'Prova do outro aluno');
+
+        $this->followingRedirects()->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
+
+        $response = $this->get(route('portal.resultados.prova', ['prova' => $prova->codigo, 'periodo' => '']));
+
+        $response->assertNotFound();
+    }
+
+    public function test_sair_encerra_a_sessao_do_boletim(): void
+    {
+        $aluno = $this->aluno();
+        $this->resultadoNaProva($aluno, null, null, 'Prova X');
+
+        $this->followingRedirects()->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
+        $this->get(route('portal.resultados'))->assertOk();
+
+        $this->get(route('portal.sair'))->assertRedirect(route('portal.consulta'));
+
+        $this->get(route('portal.resultados'))->assertRedirect(route('portal.consulta'));
     }
 }

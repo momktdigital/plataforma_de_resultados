@@ -47,20 +47,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- Actions ---
-    const increaseFontSize = () => {
-        if (currentFontSize < 150) {
-            currentFontSize += 10;
-            applyFontSize();
-        }
-    };
-
-    const decreaseFontSize = () => {
-        if (currentFontSize > 70) {
-            currentFontSize -= 10;
-            applyFontSize();
-        }
-    };
-
     const setTheme = (theme) => {
         currentTheme = theme;
         applyTheme();
@@ -72,6 +58,18 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.click();
         } else {
             console.warn('VLibras button not found yet.');
+        }
+    };
+
+    const triggerSienna = () => {
+        // Sienna (accessibility-widget) cria seu próprio botão flutuante com
+        // a classe .asw-menu-btn, escondido via CSS — disparamos o clique
+        // nele pra abrir o painel dela, igual fazemos com o VLibras acima.
+        const btn = document.querySelector('.asw-menu-btn');
+        if (btn) {
+            btn.click();
+        } else {
+            console.warn('Sienna button not found yet.');
         }
     };
 
@@ -87,13 +85,6 @@ document.addEventListener('DOMContentLoaded', () => {
     containers.forEach(container => {
         container.innerHTML = `
             <div class="flex items-center gap-1 sm:gap-2">
-                <button title="Diminuir Texto" class="btn-acc-decrease text-slate-500 hover:text-primary transition-colors p-1 flex items-center justify-center rounded hover:bg-slate-100">
-                    <span class="font-bold text-sm">A-</span>
-                </button>
-                <button title="Aumentar Texto" class="btn-acc-increase text-slate-500 hover:text-primary transition-colors p-1 flex items-center justify-center rounded hover:bg-slate-100 mr-1 sm:mr-2">
-                    <span class="font-bold text-sm">A+</span>
-                </button>
-
                 <!-- Theme Selector -->
                 <div class="relative group">
                     <button class="text-slate-500 hover:text-primary transition-colors p-1 flex items-center justify-center rounded hover:bg-slate-100" title="Temas (Claro, Escuro, Contraste)">
@@ -117,13 +108,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 <button title="Tradutor de Libras" class="btn-acc-vlibras text-slate-500 hover:text-primary transition-colors p-1 flex items-center justify-center rounded hover:bg-slate-100">
                     <i class="ph ph-hands-clapping text-xl"></i>
                 </button>
+
+                <!-- Sienna Trigger -->
+                <button title="Recursos de acessibilidade (Sienna)" class="btn-acc-sienna text-slate-500 hover:text-primary transition-colors p-1 flex items-center justify-center rounded hover:bg-slate-100">
+                    <i class="ph ph-wheelchair text-xl"></i>
+                </button>
             </div>
         `;
 
         // Attach events
-        container.querySelector('.btn-acc-decrease').addEventListener('click', decreaseFontSize);
-        container.querySelector('.btn-acc-increase').addEventListener('click', increaseFontSize);
         container.querySelector('.btn-acc-vlibras').addEventListener('click', triggerVLibras);
+        container.querySelector('.btn-acc-sienna').addEventListener('click', triggerSienna);
 
         container.querySelectorAll('.btn-acc-theme').forEach(btn => {
             btn.addEventListener('click', (e) => {

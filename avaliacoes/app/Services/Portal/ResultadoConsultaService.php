@@ -40,33 +40,67 @@ class ResultadoConsultaService
                 continue;
             }
 
-            $gabaritos = $prova->questoes()->whereNotNull('gabarito')->where('gabarito', '!=', '')->pluck('gabarito', 'numero');
-
-            $acertos = $grupo->filter(
-                fn ($r) => $gabaritos->has($r->questao_numero) && $r->resposta === $gabaritos[$r->questao_numero]
-            )->count();
-            $total = $gabaritos->count();
-
-            $metricas = ResultadoMetrica::where('prova_codigo', $provaCodigo)
-                ->where('periodo', $periodo)
-                ->where(fn ($q) => $this->porAluno($q, $aluno))
-                ->get();
-
-            $resultados[] = [
-                'prova' => $prova,
-                'periodo' => $periodo,
-                'respostas' => $grupo->sortBy('questao_numero')->values(),
-                'gabaritos' => $gabaritos,
-                'acertos' => $acertos,
-                'total' => $total,
-                'percentual' => $total > 0 ? round($acertos / $total * 100, 1) : null,
-                'metricas' => $metricas,
-            ];
+            $resultados[] = $this->montarResultado($aluno, $prova, $periodo, $grupo->sortBy('questao_numero')->values());
         }
 
         usort($resultados, fn ($a, $b) => $this->chaveOrdenacao($b) <=> $this->chaveOrdenacao($a));
 
         return $resultados;
+    }
+
+    /**
+     * Busca o resultado de uma única prova/período, verificando que ela
+     * realmente pertence ao aluno informado — usado pela tela de detalhe que
+     * abre em nova aba, então a "posse" do resultado precisa ser conferida
+     * aqui (nunca confiar que o código da prova na URL já é do aluno certo).
+     *
+     * @return array{prova: Prova, periodo: string, respostas: Collection, gabaritos: Collection, acertos: int, total: int, percentual: ?float, metricas: Collection}|null
+     */
+    public function buscarUmaProva(Aluno $aluno, int $provaCodigo, string $periodo): ?array
+    {
+        $prova = Prova::with('categoria')->find($provaCodigo);
+        if ($prova === null) {
+            return null;
+        }
+
+        $respostas = Resposta::where('prova_codigo', $provaCodigo)
+            ->where('periodo', $periodo)
+            ->where(fn ($q) => $this->porAluno($q, $aluno))
+            ->orderBy('questao_numero')
+            ->get();
+
+        if ($respostas->isEmpty()) {
+            return null;
+        }
+
+        return $this->montarResultado($aluno, $prova, $periodo, $respostas);
+    }
+
+    /** @return array{prova: Prova, periodo: string, respostas: Collection, gabaritos: Collection, acertos: int, total: int, percentual: ?float, metricas: Collection} */
+    private function montarResultado(Aluno $aluno, Prova $prova, string $periodo, Collection $respostas): array
+    {
+        $gabaritos = $prova->questoes()->whereNotNull('gabarito')->where('gabarito', '!=', '')->pluck('gabarito', 'numero');
+
+        $acertos = $respostas->filter(
+            fn ($r) => $gabaritos->has($r->questao_numero) && $r->resposta === $gabaritos[$r->questao_numero]
+        )->count();
+        $total = $gabaritos->count();
+
+        $metricas = ResultadoMetrica::where('prova_codigo', $prova->codigo)
+            ->where('periodo', $periodo)
+            ->where(fn ($q) => $this->porAluno($q, $aluno))
+            ->get();
+
+        return [
+            'prova' => $prova,
+            'periodo' => $periodo,
+            'respostas' => $respostas,
+            'gabaritos' => $gabaritos,
+            'acertos' => $acertos,
+            'total' => $total,
+            'percentual' => $total > 0 ? round($acertos / $total * 100, 1) : null,
+            'metricas' => $metricas,
+        ];
     }
 
     /**

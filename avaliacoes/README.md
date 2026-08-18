@@ -186,8 +186,10 @@ direto na tela de consulta; um administrador já logado é redirecionado
 para `/provas`. O acesso à área administrativa (`/login`) fica só num link
 discreto no rodapé das telas do portal — não é destacado na página.
 
-Fluxo, igual ao legado (o CPF circula pelos passos via campo oculto — não
-há sessão de autenticação):
+Fluxo, igual ao legado até a verificação (o CPF circula pelos passos via
+campo oculto, sem sessão de autenticação); só depois de CPF+Data de
+Nascimento (e 2FA, se ativo) confirmados é que entra uma sessão — só pra
+permitir uma URL própria do boletim (item 5 abaixo), nunca antes disso:
 
 1. **`GET /portal`** — formulário de CPF + Data de Nascimento (ambos com
    máscara via IMask, igual ao cadastro manual de aluno) + CAPTCHA se ativo
@@ -211,29 +213,43 @@ há sessão de autenticação):
    incriminar outro IP no) rate limit.
 4. **`POST /portal/reenviar`** — reenvia o mesmo código (só estende a
    validade), respeitando o cooldown progressivo (1, 2, 5, 10 min).
-5. **Boletim** (`portal.resultados`) — as provas são agrupadas na árvore de
+5. **Boletim** (`GET /portal/resultados`) — depois que `consultar()`/
+   `verificar()` confirmam CPF+Data de Nascimento (e o código de 2FA, se
+   ativo), o controller grava `session(['portal_aluno_id' => $aluno->id])`
+   e redireciona (POST/Redirect/GET) para esta rota — é a única exceção ao
+   fluxo "sem sessão" do portal, e existe só pra permitir uma URL própria
+   (ver abaixo). As provas são agrupadas na árvore de
    [categorias](#categorias-de-prova-categorias)
    (`App\Services\Portal\ResultadoConsultaService::montarArvore` — só
    entram categorias em que o aluno tem algum resultado, direto ou numa
    subcategoria; uma prova sem categoria aparece à parte). Cada categoria é
    um acordeão colapsável (clique pra expandir); dentro dela, cada prova
-   aparece como um **card resumido** (nome, data, % de acerto) — clicar
-   abre um modal com o detalhe completo (% de acerto, comparando
-   `respostas` com o gabarito de `questoes`; notas finais de
-   `resultado_metricas`; link do gabarito comentado; grade de respostas
-   colorida verde/vermelho). Um filtro por período (De/Até) esconde os
-   cards fora do intervalo e as categorias que ficam vazias — tudo
-   client-side, sem nova consulta ao servidor (evita reabrir a autenticação
-   por CPF/2FA só pra filtrar).
+   aparece como um **card resumido** (nome, data, % de acerto). Um filtro
+   por período (De/Até) esconde os cards fora do intervalo e as categorias
+   que ficam vazias — tudo client-side, sem nova consulta ao servidor.
 
-   **Exportação em PDF é por prova, não do boletim inteiro** — o botão fica
-   dentro do modal de cada prova (não existe mais um "baixar tudo"): o
-   PDF de uma prova de 100+ questões já é longo sozinho, e antes de ter os
-   cards resumidos era o único jeito de ver o detalhe de qualquer prova, o
-   que forçava esse "baixar tudo" a existir. O PDF ganha um cabeçalho
-   próprio (nome do site, nome do aluno, RA, data/hora de geração) inserido
-   antes de capturar e removido depois — mesma técnica do legado, mas por
-   prova em vez de uma vez só pra tudo.
+   **O detalhe de cada prova abre em nova aba** (`GET
+   /portal/resultados/provas/{prova}?periodo=`,
+   `App\Services\Portal\ResultadoConsultaService::buscarUmaProva`), não
+   mais num modal — pensado pra deixar espaço a outras análises que serão
+   adicionadas ali no futuro, sem espremer tudo num popup. Essa rota
+   também exige a sessão do boletim e, além disso, confere que a
+   prova/período pedidos realmente pertencem ao aluno autenticado (senão,
+   404) — a URL carrega só o código da prova, nunca dado nenhum do aluno,
+   então adivinhar/alterar um código de prova na barra de endereço não
+   revela boletim alheio. A tela de detalhe mostra o comparativo completo
+   (`respostas` x gabarito de `questoes`; notas finais de
+   `resultado_metricas`; link do gabarito comentado; grade de respostas
+   colorida verde/vermelho) e o botão de **baixar o PDF daquela prova**
+   (não existe mais um "baixar tudo" do boletim inteiro). O PDF ganha um
+   cabeçalho próprio (nome do site, nome do aluno, RA, data/hora de
+   geração) inserido antes de capturar e removido depois — mesma técnica
+   do legado, mas por prova em vez de uma vez só pra tudo.
+
+   **`GET /portal/sair`** encerra essa sessão (usado pelo link "Nova
+   consulta" no boletim) — importante em computador compartilhado
+   (laboratório, secretaria), pra não deixar o boletim acessível pro
+   próximo que abrir o navegador.
 
 ## Aparência e acessibilidade
 
@@ -251,23 +267,31 @@ foco desta rodada.
 tela (`resources/views/partials/accessibility-*.blade.php`):
 
 - **Barra própria** (`public/assets/js/accessibility.js` +
-  `public/assets/css/accessibility.css`, portados do
-  `assets/js/accessibility.js` legado sem mudança de comportamento):
-  A+/A- (tamanho de fonte, `localStorage`), tema Claro/Escuro/Alto
-  Contraste (via `filter: invert()/contrast()` no `<html>`, também
-  persistido) e um botão que abre o **VLibras** (tradutor de Libras do
-  governo federal, injetado sob demanda). Aparece no rodapé do portal
-  público e na topbar do painel administrativo.
+  `public/assets/css/accessibility.css`, baseados no
+  `assets/js/accessibility.js` legado): tema Claro/Escuro/Alto Contraste
+  (via `filter: invert()/contrast()` no `<html>`, persistido em
+  `localStorage`), um botão que abre o **VLibras** (tradutor de Libras do
+  governo federal, injetado sob demanda) e um botão que abre o **Sienna**
+  (ver abaixo). Os ícones de aumentar/diminuir fonte (A+/A-) do legado
+  foram removidos — com o widget Sienna cobrindo ajuste de tamanho de
+  texto (entre outros perfis), a barra ficava com controles redundantes.
+  Aparece no rodapé do portal público e na topbar do painel
+  administrativo.
 - **[Sienna](https://accessibility-widget.pages.dev/accessibility/)**
   (`sienna-accessibility.umd.js` via jsDelivr, carregado em toda página):
   widget de terceiro, gratuito e open-source, com perfis prontos (TDAH,
-  dislexia, baixa visão, etc.), cursor ampliado e redução de animação.
-  **Não substitui a barra própria** — não inclui VLibras nem tema de alto
-  contraste equivalente. Vale registrar a ressalva de acessibilidade real:
-  "widgets overlay" como este são vistos com desconfiança por usuários de
-  leitor de tela (ajustam a página por fora, sem corrigir HTML
-  semântico/ARIA/foco de teclado); foi incluído a pedido, como complemento
-  à barra própria, não como solução única de acessibilidade.
+  dislexia, baixa visão, etc.), ajuste de fonte, cursor ampliado e redução
+  de animação. **Não substitui a barra própria** — não inclui VLibras nem
+  tema de alto contraste equivalente. O botão flutuante que o Sienna cria
+  sozinho (`.asw-widget`) fica oculto via CSS — igual já era feito com o
+  `[vw-access-button]` do VLibras — e é a barra própria quem dispara o
+  clique nele (`.asw-menu-btn`) a partir do próprio botão da barra, pra
+  não conviver com dois balões flutuantes de cantos diferentes na tela.
+  Vale registrar a ressalva de acessibilidade real: "widgets overlay"
+  como este são vistos com desconfiança por usuários de leitor de tela
+  (ajustam a página por fora, sem corrigir HTML semântico/ARIA/foco de
+  teclado); foi incluído a pedido, como complemento à barra própria, não
+  como solução única de acessibilidade.
 
 ## Autenticação
 

@@ -10,6 +10,11 @@ html {
     display: none !important;
 }
 
+/* Hide Sienna's own floating widget button since we trigger it from the toolbar */
+.asw-widget {
+    display: none !important;
+}
+
 /* Dark Mode (Escuro) */
 html.theme-dark {
     filter: invert(0.92) hue-rotate(180deg);

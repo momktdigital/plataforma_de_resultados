@@ -45,4 +45,17 @@ class AparenciaTest extends TestCase
         $response->assertSee('id="sidebar"', false);
         $response->assertSee(route('categorias.index'), false);
     }
+
+    public function test_barra_de_acessibilidade_oculta_fonte_e_expoe_gatilho_do_sienna(): void
+    {
+        $js = file_get_contents(public_path('assets/js/accessibility.js'));
+
+        $this->assertStringNotContainsString('btn-acc-increase', $js);
+        $this->assertStringNotContainsString('btn-acc-decrease', $js);
+        $this->assertStringContainsString('btn-acc-sienna', $js);
+        $this->assertStringContainsString(".querySelector('.asw-menu-btn')", $js);
+
+        $css = file_get_contents(public_path('assets/css/accessibility.css'));
+        $this->assertStringContainsString('.asw-widget', $css);
+    }
 }
