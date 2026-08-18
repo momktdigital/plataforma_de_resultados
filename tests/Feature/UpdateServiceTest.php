@@ -46,9 +46,8 @@ class UpdateServiceTest extends TestCase
 
         $zip = new ZipArchive;
         $zip->open($zipPath, ZipArchive::CREATE);
-        $zip->addFromString('momktdigital-resultados_di-abcdef1/avaliacoes/VERSION', $versao."\n");
-        $zip->addFromString('momktdigital-resultados_di-abcdef1/avaliacoes/marcador.txt', 'arquivo novo da versão '.$versao);
-        $zip->addFromString('momktdigital-resultados_di-abcdef1/README.md', 'não faz parte da subpasta avaliacoes');
+        $zip->addFromString('momktdigital-resultados_di-abcdef1/VERSION', $versao."\n");
+        $zip->addFromString('momktdigital-resultados_di-abcdef1/marcador.txt', 'arquivo novo da versão '.$versao);
         $zip->close();
 
         return $zipPath;

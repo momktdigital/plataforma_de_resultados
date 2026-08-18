@@ -202,13 +202,15 @@ class UpdateService
             throw new RuntimeException('Formato inesperado do pacote de atualização.');
         }
 
-        $subpasta = $pastaExtraida.'/'.$entradas[0].'/'.config('sistema.subpasta');
+        $raizExtraida = $pastaExtraida.'/'.$entradas[0];
+        $subpasta = config('sistema.subpasta');
+        $origem = $subpasta === '' ? $raizExtraida : $raizExtraida.'/'.$subpasta;
 
-        if (! is_dir($subpasta)) {
-            throw new RuntimeException('Pasta "'.config('sistema.subpasta').'" não encontrada no pacote baixado.');
+        if (! is_dir($origem)) {
+            throw new RuntimeException('Pasta "'.$subpasta.'" não encontrada no pacote baixado.');
         }
 
-        return $subpasta;
+        return $origem;
     }
 
     private function copiarArquivos(string $origem, string $destino): void
