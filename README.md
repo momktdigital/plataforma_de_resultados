@@ -397,6 +397,15 @@ não é preciso um MySQL rodando nem tocar no banco de produção para testar.
 
 ## Formatos de import
 
+As duas telas de import (abaixo) têm um botão **"Baixar planilha de exemplo
+(.xlsx)"** — arquivos em `public/exemplos/`, com o cabeçalho exato reconhecido
+pelo import, algumas linhas de exemplo e uma segunda aba ("Instruções")
+explicando o que preencher; comentários nas células do cabeçalho explicam
+cada coluna. Coberto por teste (`PlanilhaExemploImportTest`) que importa os
+dois arquivos de verdade, então se o formato reconhecido mudar (`HeaderResolver`,
+`QuestaoImportService`, `ResultadoImportService`) e a planilha de exemplo não
+for atualizada junto, o teste quebra.
+
 ### Questões / Gabarito (`/provas/{codigo}/questoes/import`)
 
 Uma linha por questão. Colunas reconhecidas (cabeçalho flexível, com ou sem
@@ -404,7 +413,7 @@ acento):
 
 - **Obrigatórias:** `Questão` (aceita `Questao`, `Número`, `Item`, `#`), `Gabarito` (aceita `Resposta`, `Alternativa`, `Letra`, `Correta`).
 - **Opcionais:** `Matriz da Prova (campo A/B/C)`, `Bloom (nível)`, `Bloom (verbo)`, `Miller (nível)`, `Dificuldade Pedagógica` (fácil/médio/difícil), `Dificuldade TRI`, `DCN (campo A/B)`, `Portaria INEP (campo A/B/C)`, `PPC (campo A/B/C/D)`, `Matriz (período)`, `Matriz (disciplina)`, `Matriz (código)`.
-- As três colunas de Matriz (período/disciplina/código) aceitam **múltiplos valores por célula**, separados por `,`, `;` ou `|` — cada posição vira uma linha em `questao_matrizes`.
+- As três colunas de Matriz (período/disciplina/código) aceitam **múltiplos valores por célula**, separados por `,`, `;` ou `|` — cada posição vira uma linha em `questao_matrizes`. `Matriz da Prova`, `DCN`, `Portaria INEP` e `PPC` são um valor por coluna de campo (A/B/C/D) — cada um vira uma linha em `questao_referencias` (ver "Performance e escala").
 - Reimportar o mesmo número de questão desta prova **atualiza** em vez de duplicar.
 
 ### Resultados (`/provas/{codigo}/resultados/import`)

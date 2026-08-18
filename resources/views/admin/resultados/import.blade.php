@@ -6,6 +6,11 @@
 <a href="{{ route('provas.show', $prova) }}" class="text-sm text-slate-500 hover:underline">&larr; Prova #{{ $prova->codigo }}</a>
 <h1 class="text-2xl font-bold mt-2 mb-6">Importar resultados</h1>
 
+<a href="{{ asset('exemplos/resultados-exemplo.xlsx') }}"
+   class="inline-flex items-center gap-2 mb-6 text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2 hover:bg-emerald-100">
+    <i class="ph ph-file-arrow-down text-lg"></i> Baixar planilha de exemplo (.xlsx)
+</a>
+
 <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 max-w-2xl">
     <form method="POST" action="{{ route('provas.resultados.import.store', $prova) }}" enctype="multipart/form-data" class="space-y-4">
         @csrf
