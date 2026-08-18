@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreProvaRequest;
+use App\Models\Categoria;
 use App\Models\Prova;
 use App\Services\EstatisticaErroService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
@@ -14,17 +16,21 @@ class ProvaController extends Controller
 {
     public function index(): View
     {
-        $provas = Prova::withCount(['questoes', 'resultados'])
+        $provas = Prova::with('categoria')
+            ->withCount(['questoes', 'resultados'])
             ->latest('codigo')
             ->paginate(20);
 
-        return view('admin.provas.index', ['provas' => $provas]);
+        return view('admin.provas.index', [
+            'provas' => $provas,
+            'opcoesCategoria' => Categoria::opcoesSelect(),
+        ]);
     }
 
     public function store(StoreProvaRequest $request): RedirectResponse
     {
         $prova = Prova::create([
-            ...$request->validated(),
+            ...$this->comDataConvertida($request),
             'criado_por' => Auth::guard('admin')->id(),
         ]);
 
@@ -43,16 +49,30 @@ class ProvaController extends Controller
             'prova' => $prova,
             'questoes' => $questoes,
             'estatisticasErro' => (new EstatisticaErroService)->calcular($prova),
+            'opcoesCategoria' => Categoria::opcoesSelect(),
         ]);
     }
 
     public function update(StoreProvaRequest $request, Prova $prova): RedirectResponse
     {
-        $prova->update($request->validated());
+        $prova->update($this->comDataConvertida($request));
 
         return redirect()
             ->route('provas.show', $prova)
             ->with('status', 'Configurações da prova atualizadas com sucesso.');
+    }
+
+    /** @return array<string, mixed> */
+    private function comDataConvertida(StoreProvaRequest $request): array
+    {
+        $dados = $request->validated();
+        $dados['data_prova'] = $dados['data_prova'] ?? null;
+
+        if ($dados['data_prova'] !== null) {
+            $dados['data_prova'] = Carbon::createFromFormat('d/m/Y', $dados['data_prova'])->format('Y-m-d');
+        }
+
+        return $dados;
     }
 
     public function destroy(Prova $prova): RedirectResponse

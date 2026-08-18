@@ -21,6 +21,8 @@ class StoreProvaRequest extends FormRequest
             'nome' => ['nullable', 'string', 'max:255'],
             'tipo' => ['nullable', 'string', 'max:100'],
             'link_comentado' => ['nullable', 'url', 'max:255'],
+            'categoria_id' => ['nullable', 'integer', 'exists:categorias,id'],
+            'data_prova' => ['nullable', 'date_format:d/m/Y'],
         ];
     }
 }

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AdministradorController;
 use App\Http\Controllers\Admin\AlunoController;
 use App\Http\Controllers\Admin\BiController;
+use App\Http\Controllers\Admin\CategoriaController;
 use App\Http\Controllers\Admin\LixeiraController;
 use App\Http\Controllers\Admin\MatriculaImportController;
 use App\Http\Controllers\Admin\PerfilController;
@@ -73,6 +74,10 @@ Route::middleware('instalado')->group(function () {
 
         Route::get('/perfil', [PerfilController::class, 'edit'])->name('perfil.edit');
         Route::put('/perfil/senha', [PerfilController::class, 'updateSenha'])->name('perfil.senha');
+
+        Route::get('/categorias', [CategoriaController::class, 'index'])->name('categorias.index');
+        Route::post('/categorias', [CategoriaController::class, 'store'])->name('categorias.store');
+        Route::delete('/categorias/{categoria}', [CategoriaController::class, 'destroy'])->name('categorias.destroy');
 
         Route::get('/provas', [ProvaController::class, 'index'])->name('provas.index');
         Route::post('/provas', [ProvaController::class, 'store'])->name('provas.store');

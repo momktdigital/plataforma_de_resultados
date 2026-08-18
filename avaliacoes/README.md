@@ -16,7 +16,8 @@ adiciona as tabelas novas descritas abaixo.
 
 | Tabela | Campos obrigatórios | Observação |
 |---|---|---|
-| `provas` | — (código gerado automaticamente) | `nome`/`tipo`/`link_comentado` são só identificação, totalmente opcionais. |
+| `categorias` | `nome` | Árvore (`categoria_pai_id` aponta pra outra `categorias`, nulo = raiz) — agrupa o boletim do aluno no portal por categoria/subcategoria. |
+| `provas` | — (código gerado automaticamente) | `nome`/`tipo`/`link_comentado` são só identificação, totalmente opcionais. `categoria_id` (opcional) e `data_prova` (opcional, distinta de `created_at`) alimentam o agrupamento e a ordenação/filtro por data no portal. |
 | `questoes` | `prova_codigo`, `numero`, `gabarito` | Todo o resto (Bloom, Miller, dificuldade, DCN, Portaria INEP, PPC, Matriz da Prova) é opcional e só é gravado quando a coluna existe no arquivo importado. Suporta soft-delete. |
 | `questao_matrizes` | `questao_id` | Uma questão pode estar em mais de um período/disciplina/código de matriz — por isso é uma tabela filha (1:N), não colunas fixas. |
 | `respostas` | `prova_codigo`, (`ra` OU `cpf`), `questao_numero` | Formato longo: uma linha por resposta de um respondente a uma questão, num período (`periodo`, opcional — default `''`). `aluno_chave` é uma coluna gerada pelo banco (`COALESCE(cpf, ra)`) usada no índice único que evita duplicar a mesma resposta num reimport. Chama-se `respostas`, não `resultados`, porque a aplicação legada já tem uma tabela `resultados` no mesmo banco. |
@@ -109,6 +110,15 @@ efeito lá, mesmo antes de o portal em si ser portado para este app:
   `config/mail.php` do Laravel, pois as credenciais vêm do banco, editáveis
   pelo admin).
 
+## Categorias de prova (`/categorias`)
+
+Árvore de categoria/subcategoria (sem limite de profundidade) para agrupar
+o boletim do aluno no portal público — ex.: "Simulados" → "1º ao 4º
+período" → cada prova dentro. Uma Prova sem categoria continua funcionando
+normalmente, só aparece à parte no boletim ("Sem categoria"). Excluir uma
+categoria é bloqueado enquanto ela tiver subcategorias ou provas vinculadas
+(mude-as de categoria primeiro) — evita apagar organização por engano.
+
 ## Gestão de uma Prova (`/provas/{codigo}`)
 
 Além dos imports, a tela de uma Prova agora cobre o que
@@ -116,7 +126,9 @@ Além dos imports, a tela de uma Prova agora cobre o que
 faziam sobre o schema legado (JSON por aluno), recalculado sobre o schema
 normalizado (`questoes`/`respostas`/`resultado_metricas`):
 
-- **Editar configurações:** nome, tipo, link do gabarito comentado.
+- **Editar configurações:** nome, tipo, link do gabarito comentado,
+  categoria (opcional — ver [Categorias de prova](#categorias-de-prova-categorias))
+  e data em que a prova foi aplicada (opcional, distinta de "criada em").
 - **Editor manual de gabarito:** cria ou corrige uma questão por vez (sem
   reimportar a planilha inteira); reenviar o mesmo número restaura uma
   questão excluída em vez de duplicar (mesma regra do import). Gabarito é
@@ -171,8 +183,9 @@ discreto no rodapé das telas do portal — não é destacado na página.
 Fluxo, igual ao legado (o CPF circula pelos passos via campo oculto — não
 há sessão de autenticação):
 
-1. **`GET /portal`** — formulário de CPF + Data de Nascimento (+ CAPTCHA se
-   ativo em Configurações → Portal público).
+1. **`GET /portal`** — formulário de CPF + Data de Nascimento (ambos com
+   máscara via IMask, igual ao cadastro manual de aluno) + CAPTCHA se ativo
+   em Configurações → Portal público.
 2. **`POST /portal/consultar`** — valida CAPTCHA (`App\Services\Portal\CaptchaVerifier`,
    chama o siteverify do Google/hCaptcha), localiza o aluno por CPF + data
    de nascimento. Se SMTP/2FA estiver ativo em Configurações, emite um
@@ -195,8 +208,17 @@ há sessão de autenticação):
 5. **Boletim** (`portal.resultados`) — para cada Prova/período em que o
    aluno tem resposta: % de acerto (comparando `respostas` com o gabarito
    de `questoes`), notas finais (`resultado_metricas`), link do gabarito
-   comentado e grade de respostas colorida (verde/vermelho). Exportação em
-   PDF no navegador (html2pdf, igual ao legado).
+   comentado e grade de respostas colorida (verde/vermelho). As provas são
+   agrupadas na árvore de [categorias](#categorias-de-prova-categorias)
+   (`App\Services\Portal\ResultadoConsultaService::montarArvore` — só
+   entram categorias em que o aluno tem algum resultado, direto ou numa
+   subcategoria; uma prova sem categoria aparece à parte). Cada categoria é
+   um acordeão colapsável (clique pra expandir); um filtro por período
+   (De/Até) esconde as provas fora do intervalo e as categorias que ficam
+   vazias — tudo client-side, sem nova consulta ao servidor (evita reabrir
+   a autenticação por CPF/2FA só pra filtrar). Exportação em PDF no
+   navegador (html2pdf, igual ao legado) expande tudo antes de gerar, pra
+   sair completo mesmo com categorias colapsadas.
 
 ## Autenticação
 

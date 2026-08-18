@@ -93,11 +93,50 @@
             <input id="link_comentado" name="link_comentado" type="url" value="{{ old('link_comentado', $prova->link_comentado) }}"
                    class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
         </div>
+        <div class="flex-1 min-w-[160px]">
+            <label class="block text-sm font-medium mb-1" for="categoria_id">Categoria</label>
+            <select id="categoria_id" name="categoria_id" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                <option value="">— Sem categoria —</option>
+                @foreach ($opcoesCategoria as $opcao)
+                    <option value="{{ $opcao['id'] }}" {{ (int) old('categoria_id', $prova->categoria_id) === $opcao['id'] ? 'selected' : '' }}>
+                        {{ $opcao['label'] }}
+                    </option>
+                @endforeach
+            </select>
+        </div>
+        <div class="min-w-[140px]">
+            <label class="block text-sm font-medium mb-1" for="data_prova">Data da prova</label>
+            <input id="data_prova" name="data_prova" type="text" placeholder="DD/MM/AAAA"
+                   value="{{ old('data_prova', $prova->data_prova?->format('d/m/Y')) }}"
+                   class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+        </div>
         <button type="submit" class="bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-lg px-5 py-2 text-sm">
             Salvar
         </button>
     </form>
 </div>
+
+<script src="https://unpkg.com/imask"></script>
+<script>
+    IMask(document.getElementById('data_prova'), {
+        mask: Date,
+        pattern: 'd/m/Y',
+        blocks: {
+            d: {mask: IMask.MaskedRange, from: 1, to: 31, maxLength: 2},
+            m: {mask: IMask.MaskedRange, from: 1, to: 12, maxLength: 2},
+            Y: {mask: IMask.MaskedRange, from: 1900, to: 2999},
+        },
+        format: function (date) {
+            var day = String(date.getDate()).padStart(2, '0');
+            var month = String(date.getMonth() + 1).padStart(2, '0');
+            return [day, month, date.getFullYear()].join('/');
+        },
+        parse: function (str) {
+            var partes = str.split('/');
+            return new Date(partes[2], partes[1] - 1, partes[0]);
+        },
+    });
+</script>
 
 {{-- Editor manual de gabarito --}}
 <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">

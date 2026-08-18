@@ -86,10 +86,7 @@ class PortalController extends Controller
             return view('portal.verificar', ['cpf' => $cpf, 'emailOculto' => $this->ocultarEmail($aluno->email)]);
         }
 
-        return view('portal.resultados', [
-            'aluno' => $aluno,
-            'resultados' => $consultaService->buscarPorAluno($aluno),
-        ]);
+        return $this->renderizarResultados($aluno, $consultaService);
     }
 
     public function verificar(Request $request, RateLimit2faService $rateLimiter, ResultadoConsultaService $consultaService): View|RedirectResponse
@@ -152,10 +149,7 @@ class PortalController extends Controller
             return redirect()->route('portal.consulta')->withErrors(['cpf' => 'Aluno não encontrado.']);
         }
 
-        return view('portal.resultados', [
-            'aluno' => $aluno,
-            'resultados' => $consultaService->buscarPorAluno($aluno),
-        ]);
+        return $this->renderizarResultados($aluno, $consultaService);
     }
 
     public function reenviar(Request $request, SmtpEmailSender $mailer): View|RedirectResponse
@@ -210,6 +204,16 @@ class PortalController extends Controller
             'cpf' => $cpf,
             'emailOculto' => $this->ocultarEmail($aluno->email),
             'status' => 'Código reenviado com sucesso.',
+        ]);
+    }
+
+    private function renderizarResultados(Aluno $aluno, ResultadoConsultaService $consultaService): View
+    {
+        $resultados = $consultaService->buscarPorAluno($aluno);
+
+        return view('portal.resultados', [
+            'aluno' => $aluno,
+            ...$consultaService->montarArvore($resultados),
         ]);
     }
 

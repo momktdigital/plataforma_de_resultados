@@ -35,4 +35,27 @@
         </button>
     </form>
 </div>
+
+<script src="https://unpkg.com/imask"></script>
+<script>
+    IMask(document.getElementById('cpf'), {mask: '000.000.000-00'});
+    IMask(document.getElementById('data_nascimento'), {
+        mask: Date,
+        pattern: 'd/m/Y',
+        blocks: {
+            d: {mask: IMask.MaskedRange, from: 1, to: 31, maxLength: 2},
+            m: {mask: IMask.MaskedRange, from: 1, to: 12, maxLength: 2},
+            Y: {mask: IMask.MaskedRange, from: 1900, to: 2999},
+        },
+        format: function (date) {
+            var day = String(date.getDate()).padStart(2, '0');
+            var month = String(date.getMonth() + 1).padStart(2, '0');
+            return [day, month, date.getFullYear()].join('/');
+        },
+        parse: function (str) {
+            var partes = str.split('/');
+            return new Date(partes[2], partes[1] - 1, partes[0]);
+        },
+    });
+</script>
 @endsection

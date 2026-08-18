@@ -24,7 +24,21 @@ class Prova extends Model
         'tipo',
         'link_comentado',
         'criado_por',
+        'categoria_id',
+        'data_prova',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'data_prova' => 'date',
+        ];
+    }
+
+    public function categoria(): BelongsTo
+    {
+        return $this->belongsTo(Categoria::class);
+    }
 
     public function questoes(): HasMany
     {

@@ -3,6 +3,7 @@
 namespace App\Services\Portal;
 
 use App\Models\Aluno;
+use App\Models\Categoria;
 use App\Models\Prova;
 use App\Models\Resposta;
 use App\Models\ResultadoMetrica;
@@ -34,7 +35,7 @@ class ResultadoConsultaService
             $provaCodigo = $grupo->first()->prova_codigo;
             $periodo = $grupo->first()->periodo;
 
-            $prova = Prova::find($provaCodigo);
+            $prova = Prova::with('categoria')->find($provaCodigo);
             if ($prova === null) {
                 continue;
             }
@@ -63,9 +64,69 @@ class ResultadoConsultaService
             ];
         }
 
-        usort($resultados, fn ($a, $b) => $b['prova']->codigo <=> $a['prova']->codigo);
+        usort($resultados, fn ($a, $b) => $this->chaveOrdenacao($b) <=> $this->chaveOrdenacao($a));
 
         return $resultados;
+    }
+
+    /**
+     * Agrupa os resultados de buscarPorAluno() na árvore de categorias
+     * (categoria → subcategorias → provas), para o boletim mostrar "clique
+     * na categoria para ver as provas dentro dela, por data" em vez de uma
+     * lista plana. Só entram na árvore as categorias que o aluno realmente
+     * tem resultado (direto ou em alguma subcategoria) — o resto da
+     * taxonomia cadastrada pelo admin fica de fora.
+     *
+     * @param  array<int, array<string, mixed>>  $resultados
+     * @return array{arvore: array, semCategoria: array}
+     */
+    public function montarArvore(array $resultados): array
+    {
+        $todasCategorias = Categoria::all()->keyBy('id');
+        $porCategoria = collect($resultados)->groupBy(fn ($r) => $r['prova']->categoria_id);
+
+        $semCategoria = ($porCategoria->get(null) ?? collect())
+            ->sortByDesc(fn ($r) => $this->chaveOrdenacao($r))
+            ->values()->all();
+
+        $idsRelevantes = [];
+        foreach ($porCategoria->keys()->filter() as $id) {
+            $atual = $todasCategorias->get($id);
+            while ($atual !== null) {
+                $idsRelevantes[$atual->id] = true;
+                $atual = $atual->categoria_pai_id ? $todasCategorias->get($atual->categoria_pai_id) : null;
+            }
+        }
+
+        $construirNo = function (int $categoriaId) use (&$construirNo, $todasCategorias, $idsRelevantes, $porCategoria): array {
+            $filhos = $todasCategorias
+                ->filter(fn ($c) => $c->categoria_pai_id === $categoriaId && isset($idsRelevantes[$c->id]))
+                ->sortBy('nome');
+
+            return [
+                'categoria' => $todasCategorias->get($categoriaId),
+                'resultados' => ($porCategoria->get($categoriaId) ?? collect())
+                    ->sortByDesc(fn ($r) => $this->chaveOrdenacao($r))->values()->all(),
+                'subcategorias' => $filhos->map(fn ($c) => $construirNo($c->id))->values()->all(),
+            ];
+        };
+
+        $raizes = $todasCategorias
+            ->filter(fn ($c) => $c->categoria_pai_id === null && isset($idsRelevantes[$c->id]))
+            ->sortBy('nome');
+
+        return [
+            'arvore' => $raizes->map(fn ($c) => $construirNo($c->id))->values()->all(),
+            'semCategoria' => $semCategoria,
+        ];
+    }
+
+    /** Chave de ordenação: data da prova (quando cadastrada) ou o código dela, mais recente primeiro. */
+    private function chaveOrdenacao(array $resultado): string
+    {
+        $data = $resultado['prova']->data_prova?->format('Y-m-d') ?? '0000-00-00';
+
+        return sprintf('%s-%010d', $data, $resultado['prova']->codigo);
     }
 
     private function porAluno($query, Aluno $aluno): void

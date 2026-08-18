@@ -13,6 +13,7 @@
             <a href="{{ route('provas.index') }}" class="font-bold text-lg">Avaliações</a>
             <div class="flex items-center gap-4 text-sm">
                 <a href="{{ route('alunos.index') }}" class="text-slate-500 hover:text-slate-800">Alunos</a>
+                <a href="{{ route('categorias.index') }}" class="text-slate-500 hover:text-slate-800">Categorias</a>
                 <a href="{{ route('administradores.index') }}" class="text-slate-500 hover:text-slate-800">Administradores</a>
                 <a href="{{ route('lixeira.index') }}" class="text-slate-500 hover:text-slate-800">Lixeira</a>
                 <a href="{{ route('sistema.configuracoes.index') }}" class="text-slate-500 hover:text-slate-800">Configurações</a>
