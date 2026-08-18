@@ -211,20 +211,29 @@ há sessão de autenticação):
    incriminar outro IP no) rate limit.
 4. **`POST /portal/reenviar`** — reenvia o mesmo código (só estende a
    validade), respeitando o cooldown progressivo (1, 2, 5, 10 min).
-5. **Boletim** (`portal.resultados`) — para cada Prova/período em que o
-   aluno tem resposta: % de acerto (comparando `respostas` com o gabarito
-   de `questoes`), notas finais (`resultado_metricas`), link do gabarito
-   comentado e grade de respostas colorida (verde/vermelho). As provas são
-   agrupadas na árvore de [categorias](#categorias-de-prova-categorias)
+5. **Boletim** (`portal.resultados`) — as provas são agrupadas na árvore de
+   [categorias](#categorias-de-prova-categorias)
    (`App\Services\Portal\ResultadoConsultaService::montarArvore` — só
    entram categorias em que o aluno tem algum resultado, direto ou numa
    subcategoria; uma prova sem categoria aparece à parte). Cada categoria é
-   um acordeão colapsável (clique pra expandir); um filtro por período
-   (De/Até) esconde as provas fora do intervalo e as categorias que ficam
-   vazias — tudo client-side, sem nova consulta ao servidor (evita reabrir
-   a autenticação por CPF/2FA só pra filtrar). Exportação em PDF no
-   navegador (html2pdf, igual ao legado) expande tudo antes de gerar, pra
-   sair completo mesmo com categorias colapsadas.
+   um acordeão colapsável (clique pra expandir); dentro dela, cada prova
+   aparece como um **card resumido** (nome, data, % de acerto) — clicar
+   abre um modal com o detalhe completo (% de acerto, comparando
+   `respostas` com o gabarito de `questoes`; notas finais de
+   `resultado_metricas`; link do gabarito comentado; grade de respostas
+   colorida verde/vermelho). Um filtro por período (De/Até) esconde os
+   cards fora do intervalo e as categorias que ficam vazias — tudo
+   client-side, sem nova consulta ao servidor (evita reabrir a autenticação
+   por CPF/2FA só pra filtrar).
+
+   **Exportação em PDF é por prova, não do boletim inteiro** — o botão fica
+   dentro do modal de cada prova (não existe mais um "baixar tudo"): o
+   PDF de uma prova de 100+ questões já é longo sozinho, e antes de ter os
+   cards resumidos era o único jeito de ver o detalhe de qualquer prova, o
+   que forçava esse "baixar tudo" a existir. O PDF ganha um cabeçalho
+   próprio (nome do site, nome do aluno, RA, data/hora de geração) inserido
+   antes de capturar e removido depois — mesma técnica do legado, mas por
+   prova em vez de uma vez só pra tudo.
 
 ## Aparência e acessibilidade
 

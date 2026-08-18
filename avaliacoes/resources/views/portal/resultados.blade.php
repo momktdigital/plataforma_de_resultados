@@ -3,17 +3,16 @@
 @section('title', "Boletim — {$aluno->ra}")
 @section('container-class', 'max-w-5xl')
 
+@php
+    $siteTitle = \App\Models\Configuracao::valor('site_title', 'Resultados DI');
+@endphp
+
 @section('content')
 <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4 fade-in">
     <div>
-        <div class="flex gap-2 mb-3">
-            <a href="{{ route('portal.consulta') }}" class="inline-flex items-center text-sm font-medium text-slate-500 hover:text-primary transition-colors bg-white px-4 py-2 rounded-full shadow-sm border border-slate-200">
-                <i class="ph-bold ph-arrow-left mr-2"></i> Nova consulta
-            </a>
-            <button onclick="portalExportarPdf()" id="btn-pdf" class="inline-flex items-center text-sm font-medium text-white bg-slate-800 hover:bg-slate-700 transition-colors px-4 py-2 rounded-full shadow-sm border border-slate-800">
-                <i class="ph-bold ph-file-pdf mr-2 text-red-400"></i> Baixar PDF
-            </button>
-        </div>
+        <a href="{{ route('portal.consulta') }}" class="inline-flex items-center text-sm font-medium text-slate-500 hover:text-primary transition-colors bg-white px-4 py-2 rounded-full shadow-sm border border-slate-200 mb-3">
+            <i class="ph-bold ph-arrow-left mr-2"></i> Nova consulta
+        </a>
         <h1 class="text-3xl font-bold text-slate-800 flex items-center gap-2">
             <i class="ph-fill ph-chart-bar text-primary"></i> Meu Boletim
         </h1>
@@ -40,6 +39,8 @@
     </div>
 @endif
 
+<p class="text-sm text-slate-500 mb-4">Clique numa prova para ver o detalhamento e baixar o PDF dela.</p>
+
 <div id="boletim">
     @if (empty($arvore) && empty($semCategoria))
         <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-12 text-center">
@@ -65,6 +66,9 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script>
+const PORTAL_SITE_TITLE = @json($siteTitle);
+const PORTAL_ALUNO = {nome: @json($aluno->nome), ra: @json($aluno->ra)};
+
 function portalToggleCategoria(botao) {
     const conteudo = botao.nextElementSibling;
     conteudo.hidden = !conteudo.hidden;
@@ -109,24 +113,71 @@ function portalLimparFiltro() {
     portalAplicarFiltro();
 }
 
-function portalExportarPdf() {
-    const btnPdf = document.getElementById('btn-pdf');
-    const originalHtml = btnPdf.innerHTML;
-    btnPdf.innerHTML = '<i class="ph-bold ph-spinner-gap animate-spin mr-2"></i> Gerando...';
-    btnPdf.disabled = true;
+function portalAbrirDetalhe(id) {
+    document.querySelectorAll('.prova-modal').forEach(function (m) {
+        m.classList.add('hidden');
+        m.classList.remove('flex');
+    });
+    const modal = document.getElementById('modal-' + id);
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    document.body.style.overflow = 'hidden';
+}
 
-    // Expande tudo temporariamente pra sair no PDF, mesmo o que estava colapsado.
-    const conteudos = document.querySelectorAll('.categoria-conteudo');
-    const estadoAnterior = Array.from(conteudos).map(function (el) { return el.hidden; });
-    conteudos.forEach(function (el) { el.hidden = false; });
+function portalFecharDetalhe(id) {
+    const modal = document.getElementById('modal-' + id);
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    document.body.style.overflow = '';
+}
 
-    html2pdf().from(document.getElementById('boletim')).set({
-        filename: 'boletim-{{ $aluno->ra }}.pdf',
+document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    document.querySelectorAll('.prova-modal:not(.hidden)').forEach(function (m) {
+        m.classList.add('hidden');
+        m.classList.remove('flex');
+    });
+    document.body.style.overflow = '';
+});
+
+function portalExportarPdfProva(id) {
+    const conteudo = document.getElementById('pdf-conteudo-' + id);
+    const btn = document.querySelector('#modal-' + id + ' .btn-pdf-prova');
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="ph-bold ph-spinner-gap animate-spin mr-2"></i> Gerando...';
+    btn.disabled = true;
+
+    const cabecalho = document.createElement('div');
+    cabecalho.className = 'flex justify-between items-center mb-6 pb-4 border-b-2 border-primary';
+    cabecalho.innerHTML = '<div>'
+        + '<p class="font-black text-lg text-slate-800">' + PORTAL_SITE_TITLE + '</p>'
+        + '<p class="text-xs text-slate-500 mt-0.5">Boletim de Resultado</p>'
+        + '</div>'
+        + '<div class="text-right">'
+        + '<p class="text-sm font-bold text-slate-700">' + (PORTAL_ALUNO.nome || '') + '</p>'
+        + '<p class="text-xs text-slate-500">RA: ' + PORTAL_ALUNO.ra + ' &middot; Gerado em '
+        + new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR') + '</p>'
+        + '</div>';
+    conteudo.insertBefore(cabecalho, conteudo.firstChild);
+
+    const nomeProvaArquivo = (conteudo.dataset.provaNome || 'prova').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+
+    html2pdf().from(conteudo).set({
         margin: 10,
+        filename: 'boletim-' + PORTAL_ALUNO.ra + '-' + nomeProvaArquivo + '.pdf',
+        image: {type: 'jpeg', quality: 0.98},
+        html2canvas: {scale: 2, useCORS: true, logging: false},
+        jsPDF: {unit: 'mm', format: 'a4', orientation: 'portrait'},
     }).save().then(function () {
-        conteudos.forEach(function (el, i) { el.hidden = estadoAnterior[i]; });
-        btnPdf.innerHTML = originalHtml;
-        btnPdf.disabled = false;
+        cabecalho.remove();
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+    }).catch(function (err) {
+        console.error('Erro ao gerar PDF: ', err);
+        alert('Ocorreu um erro ao gerar o PDF.');
+        cabecalho.remove();
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
     });
 }
 </script>

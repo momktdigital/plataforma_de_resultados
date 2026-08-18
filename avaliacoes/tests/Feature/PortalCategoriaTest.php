@@ -105,4 +105,26 @@ class PortalCategoriaTest extends TestCase
         $response->assertSee('20/05/2026');
         $response->assertSee('data-data="2026-05-20"', false);
     }
+
+    public function test_boletim_mostra_card_resumido_com_modal_de_detalhe_e_pdf_por_prova(): void
+    {
+        $aluno = $this->aluno();
+        $prova = $this->resultadoNaProva($aluno, null, '2026-05-20', 'ENADE 2026');
+
+        $response = $this->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
+        $html = $response->getContent();
+
+        $id = $prova->codigo.'-sem-periodo';
+
+        // Card resumido clicável.
+        $response->assertSee("portalAbrirDetalhe('{$id}')", false);
+        // Modal de detalhe com o conteúdo exportável em PDF.
+        $response->assertSee("id=\"modal-{$id}\"", false);
+        $response->assertSee("id=\"pdf-conteudo-{$id}\"", false);
+        $response->assertSee("portalExportarPdfProva('{$id}')", false);
+
+        // Não existe mais um botão de baixar TODAS as provas de uma vez.
+        $this->assertStringNotContainsString('portalExportarPdf()', $html);
+        $this->assertStringNotContainsString('id="btn-pdf"', $html);
+    }
 }
