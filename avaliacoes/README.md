@@ -226,6 +226,40 @@ há sessão de autenticação):
    navegador (html2pdf, igual ao legado) expande tudo antes de gerar, pra
    sair completo mesmo com categorias colapsadas.
 
+## Aparência e acessibilidade
+
+O visual segue a mesma identidade do app legado — sem isso, as duas
+aplicações convivendo no mesmo domínio ficariam com "cara" diferente:
+Tailwind via CDN com a paleta `primary #00b48d`/`secondary`/`dark`, fonte
+Inter (Google Fonts) e [Phosphor Icons](https://phosphoricons.com/). O
+layout do portal público, do login e do painel administrativo (agora uma
+sidebar escura, como o `admin/includes/header.php` legado, em vez do
+topbar fino que tinha antes) foram redesenhados nesse padrão; as telas de
+gestão internas (CRUDs) ainda usam um estilo mais simples — não foram o
+foco desta rodada.
+
+**Acessibilidade** — dois mecanismos complementares, presentes em toda
+tela (`resources/views/partials/accessibility-*.blade.php`):
+
+- **Barra própria** (`public/assets/js/accessibility.js` +
+  `public/assets/css/accessibility.css`, portados do
+  `assets/js/accessibility.js` legado sem mudança de comportamento):
+  A+/A- (tamanho de fonte, `localStorage`), tema Claro/Escuro/Alto
+  Contraste (via `filter: invert()/contrast()` no `<html>`, também
+  persistido) e um botão que abre o **VLibras** (tradutor de Libras do
+  governo federal, injetado sob demanda). Aparece no rodapé do portal
+  público e na topbar do painel administrativo.
+- **[Sienna](https://accessibility-widget.pages.dev/accessibility/)**
+  (`sienna-accessibility.umd.js` via jsDelivr, carregado em toda página):
+  widget de terceiro, gratuito e open-source, com perfis prontos (TDAH,
+  dislexia, baixa visão, etc.), cursor ampliado e redução de animação.
+  **Não substitui a barra própria** — não inclui VLibras nem tema de alto
+  contraste equivalente. Vale registrar a ressalva de acessibilidade real:
+  "widgets overlay" como este são vistos com desconfiança por usuários de
+  leitor de tela (ajustam a página por fora, sem corrigir HTML
+  semântico/ARIA/foco de teclado); foi incluído a pedido, como complemento
+  à barra própria, não como solução única de acessibilidade.
+
 ## Autenticação
 
 Não há cadastro de usuário nem redefinição de senha por e-mail neste módulo.

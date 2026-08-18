@@ -1,11 +1,13 @@
 {{-- $no: ['categoria' => Categoria, 'resultados' => [...], 'subcategorias' => [...]] --}}
-<li class="categoria-no border border-slate-200 rounded-xl bg-white overflow-hidden">
+<li class="categoria-no border border-slate-200 rounded-2xl bg-white shadow-sm overflow-hidden">
     <button type="button" onclick="portalToggleCategoria(this)"
-            class="w-full flex items-center justify-between px-4 py-3 text-left font-semibold hover:bg-slate-50">
-        <span>{{ $no['categoria']->nome }}</span>
-        <span class="text-slate-400 text-sm">&#9662;</span>
+            class="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 transition-colors">
+        <span class="font-bold text-slate-800 flex items-center gap-2">
+            <i class="ph-fill ph-folder text-primary"></i> {{ $no['categoria']->nome }}
+        </span>
+        <i class="ph-bold ph-caret-down categoria-seta text-slate-400 transition-transform"></i>
     </button>
-    <div class="categoria-conteudo px-4 pb-4 space-y-4" hidden>
+    <div class="categoria-conteudo px-5 pb-5 space-y-4 border-t border-slate-100 pt-4" hidden>
         @if (! empty($no['subcategorias']))
             <ul class="space-y-3">
                 @foreach ($no['subcategorias'] as $filho)
