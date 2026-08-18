@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreProvaRequest;
 use App\Models\Prova;
+use App\Services\EstatisticaErroService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
@@ -36,6 +37,33 @@ class ProvaController extends Controller
     {
         $prova->loadCount(['questoes', 'resultados', 'metricas']);
 
-        return view('admin.provas.show', ['prova' => $prova]);
+        $questoes = $prova->questoes()->withTrashed()->orderBy('numero')->get();
+
+        return view('admin.provas.show', [
+            'prova' => $prova,
+            'questoes' => $questoes,
+            'estatisticasErro' => (new EstatisticaErroService)->calcular($prova),
+        ]);
+    }
+
+    public function update(StoreProvaRequest $request, Prova $prova): RedirectResponse
+    {
+        $prova->update($request->validated());
+
+        return redirect()
+            ->route('provas.show', $prova)
+            ->with('status', 'Configurações da prova atualizadas com sucesso.');
+    }
+
+    public function destroy(Prova $prova): RedirectResponse
+    {
+        $prova->questoes()->delete();
+        $prova->resultados()->delete();
+        $prova->metricas()->delete();
+        $prova->delete();
+
+        return redirect()
+            ->route('provas.index')
+            ->with('status', "Prova #{$prova->codigo} e todos os dados associados foram excluídos.");
     }
 }

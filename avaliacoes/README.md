@@ -109,6 +109,50 @@ efeito lá, mesmo antes de o portal em si ser portado para este app:
   `config/mail.php` do Laravel, pois as credenciais vêm do banco, editáveis
   pelo admin).
 
+## Gestão de uma Prova (`/provas/{codigo}`)
+
+Além dos imports, a tela de uma Prova agora cobre o que
+`admin/avaliacao_editar.php`, `admin/resultados.php` e `admin/lixeira.php`
+faziam sobre o schema legado (JSON por aluno), recalculado sobre o schema
+normalizado (`questoes`/`respostas`/`resultado_metricas`):
+
+- **Editar configurações:** nome, tipo, link do gabarito comentado.
+- **Editor manual de gabarito:** cria ou corrige uma questão por vez (sem
+  reimportar a planilha inteira); reenviar o mesmo número restaura uma
+  questão excluída em vez de duplicar (mesma regra do import). Gabarito é
+  obrigatório — a coluna é `NOT NULL`, mesma regra já aplicada pelo import
+  em lote (uma linha sem gabarito é ignorada, não vira questão "anulada").
+- **Questões críticas:** taxa de erro por questão entre os respondentes
+  (`App\Services\EstatisticaErroService`), maiores erros primeiro.
+- **Excluir prova:** soft-delete em cascata (questões, respostas, métricas).
+
+### Resultados por aluno (`/provas/{codigo}/respondentes`)
+
+Uma linha por respondente + período (equivalente a uma linha de
+`admin/resultados.php`, sem o JSON): busca por RA/CPF, filtro por período,
+"ver" abre as respostas comparadas ao gabarito (verde/vermelho) e as
+métricas daquele respondente. Excluir/restaurar é sempre por período dentro
+da prova (`resultados.php` também excluía por período, mas globalmente —
+aqui é escopado à prova porque o schema novo já separa por prova).
+
+### Painel BI (`/provas/{codigo}/bi`)
+
+Substitui o dashboard de `admin/index.php` (Chart.js): histograma de
+distribuição de % de acerto, radar de desempenho médio por disciplina (usa
+`questao_matrizes.disciplina` — só aparece se o import de questões trouxe
+essa coluna) e Top 5. Filtro por período. `App\Services\BiDashboardService`
+concentra o cálculo.
+
+## Lixeira (`/lixeira`)
+
+Substitui `admin/lixeira.php`. Lista Provas excluídas (restaurar traz de
+volta questões/respostas/métricas junto) e Questões excluídas
+individualmente de provas que continuam ativas. Resultados/métricas
+excluídos em lote por período são restaurados/expurgados direto na tela de
+"Resultados por aluno" da prova (acima), não aparecem aqui um a um — seriam
+potencialmente milhares de linhas por prova, ao contrário do schema legado
+(uma linha por aluno).
+
 ## Autenticação
 
 Não há cadastro de usuário nem redefinição de senha por e-mail neste módulo.

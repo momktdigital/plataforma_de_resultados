@@ -2,10 +2,14 @@
 
 use App\Http\Controllers\Admin\AdministradorController;
 use App\Http\Controllers\Admin\AlunoController;
+use App\Http\Controllers\Admin\BiController;
+use App\Http\Controllers\Admin\LixeiraController;
 use App\Http\Controllers\Admin\MatriculaImportController;
 use App\Http\Controllers\Admin\PerfilController;
 use App\Http\Controllers\Admin\ProvaController;
+use App\Http\Controllers\Admin\QuestaoController;
 use App\Http\Controllers\Admin\QuestaoImportController;
+use App\Http\Controllers\Admin\RespondenteController;
 use App\Http\Controllers\Admin\ResultadoImportController;
 use App\Http\Controllers\AssetLegadoController;
 use App\Http\Controllers\Auth\LoginController;
@@ -65,16 +69,35 @@ Route::middleware('instalado')->group(function () {
         Route::get('/provas', [ProvaController::class, 'index'])->name('provas.index');
         Route::post('/provas', [ProvaController::class, 'store'])->name('provas.store');
         Route::get('/provas/{prova}', [ProvaController::class, 'show'])->name('provas.show');
+        Route::put('/provas/{prova}', [ProvaController::class, 'update'])->name('provas.update');
+        Route::delete('/provas/{prova}', [ProvaController::class, 'destroy'])->name('provas.destroy');
 
         Route::get('/provas/{prova}/questoes/import', [QuestaoImportController::class, 'create'])
             ->name('provas.questoes.import');
         Route::post('/provas/{prova}/questoes/import', [QuestaoImportController::class, 'store'])
             ->name('provas.questoes.import.store');
 
+        Route::post('/provas/{prova}/questoes', [QuestaoController::class, 'store'])->name('provas.questoes.store');
+        Route::delete('/provas/{prova}/questoes/{questao}', [QuestaoController::class, 'destroy'])->name('provas.questoes.destroy');
+        Route::post('/provas/{prova}/questoes/{questao}/restaurar', [QuestaoController::class, 'restore'])->name('provas.questoes.restore');
+
         Route::get('/provas/{prova}/resultados/import', [ResultadoImportController::class, 'create'])
             ->name('provas.resultados.import');
         Route::post('/provas/{prova}/resultados/import', [ResultadoImportController::class, 'store'])
             ->name('provas.resultados.import.store');
+
+        Route::get('/provas/{prova}/respondentes', [RespondenteController::class, 'index'])->name('provas.respondentes.index');
+        Route::get('/provas/{prova}/respondentes/show', [RespondenteController::class, 'show'])->name('provas.respondentes.show');
+        Route::delete('/provas/{prova}/periodos', [RespondenteController::class, 'destroyPeriodo'])->name('provas.periodos.destroy');
+        Route::post('/provas/{prova}/periodos/restaurar', [RespondenteController::class, 'restorePeriodo'])->name('provas.periodos.restore');
+
+        Route::get('/provas/{prova}/bi', [BiController::class, 'index'])->name('provas.bi');
+
+        Route::get('/lixeira', [LixeiraController::class, 'index'])->name('lixeira.index');
+        Route::post('/lixeira/provas/{prova}/restaurar', [LixeiraController::class, 'restoreProva'])->name('lixeira.provas.restore');
+        Route::delete('/lixeira/provas/{prova}', [LixeiraController::class, 'forceDeleteProva'])->name('lixeira.provas.forceDelete');
+        Route::post('/lixeira/questoes/{questao}/restaurar', [LixeiraController::class, 'restoreQuestao'])->name('lixeira.questoes.restore');
+        Route::delete('/lixeira/questoes/{questao}', [LixeiraController::class, 'forceDeleteQuestao'])->name('lixeira.questoes.forceDelete');
 
         Route::prefix('sistema')->name('sistema.')->group(function () {
             Route::get('/backups', [BackupController::class, 'index'])->name('backups.index');
