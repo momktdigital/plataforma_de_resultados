@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Admin;
 use App\Models\Aluno;
 use App\Models\Prova;
+use App\Models\Questao;
 use App\Models\Resposta;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -142,5 +143,26 @@ class ResultadoImportTest extends TestCase
         $response->assertSessionDoesntHaveErrors();
         $this->assertDatabaseCount('respostas', 1);
         $this->assertNotSoftDeleted('respostas', ['ra' => '123']);
+    }
+
+    public function test_import_recalcula_o_resumo_do_boletim(): void
+    {
+        $prova = Prova::create([]);
+        Questao::create(['prova_codigo' => $prova->codigo, 'numero' => 1, 'gabarito' => 'B']);
+        Questao::create(['prova_codigo' => $prova->codigo, 'numero' => 2, 'gabarito' => 'C']);
+
+        $csv = "RA,Questão,Resposta\n123,1,B\n123,2,D\n";
+        $arquivo = UploadedFile::fake()->createWithContent('resultados.csv', $csv);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post("/provas/{$prova->codigo}/resultados/import", ['arquivo' => $arquivo]);
+
+        $this->assertDatabaseHas('resultado_resumos', [
+            'prova_codigo' => $prova->codigo,
+            'ra' => '123',
+            'acertos' => 1,
+            'total' => 2,
+            'percentual' => 50.0,
+        ]);
     }
 }

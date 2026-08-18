@@ -17,23 +17,11 @@ class Questao extends Model
         'prova_codigo',
         'numero',
         'gabarito',
-        'matriz_prova_a',
-        'matriz_prova_b',
-        'matriz_prova_c',
         'bloom_nivel',
         'bloom_verbo',
         'miller_nivel',
         'dificuldade_pedagogica',
         'dificuldade_tri',
-        'dcn_a',
-        'dcn_b',
-        'portaria_inep_a',
-        'portaria_inep_b',
-        'portaria_inep_c',
-        'ppc_a',
-        'ppc_b',
-        'ppc_c',
-        'ppc_d',
     ];
 
     protected function casts(): array
@@ -52,5 +40,11 @@ class Questao extends Model
     public function matrizes(): HasMany
     {
         return $this->hasMany(QuestaoMatriz::class);
+    }
+
+    /** Referências a matriz de prova, DCN, portaria INEP e PPC — ver App\Models\QuestaoReferencia. */
+    public function referencias(): HasMany
+    {
+        return $this->hasMany(QuestaoReferencia::class);
     }
 }

@@ -46,6 +46,9 @@ class LegadoImportWebTest extends TestCase
         $this->assertDatabaseHas('provas', ['nome' => 'ENADE 2026']);
         $this->assertDatabaseHas('questoes', ['numero' => 1, 'gabarito' => 'B']);
         $this->assertDatabaseHas('respostas', ['ra' => '12345', 'questao_numero' => 1, 'resposta' => 'B']);
+        // O resumo do boletim já é gerado nesta mesma importação, sem esperar
+        // um novo import de resultados.
+        $this->assertDatabaseHas('resultado_resumos', ['ra' => '12345', 'periodo' => '2026/1', 'acertos' => 1, 'total' => 1]);
     }
 
     public function test_importar_do_banco_avisa_quando_tabelas_legadas_nao_existem(): void

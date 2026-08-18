@@ -8,6 +8,7 @@ use App\Models\Categoria;
 use App\Models\Prova;
 use App\Models\Questao;
 use App\Models\Resposta;
+use App\Services\ResumoResultadoService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -37,6 +38,12 @@ class PortalCategoriaTest extends TestCase
         $prova = Prova::create(['nome' => $nome, 'categoria_id' => $categoriaId, 'data_prova' => $dataProva]);
         Questao::create(['prova_codigo' => $prova->codigo, 'numero' => 1, 'gabarito' => 'A']);
         Resposta::create(['prova_codigo' => $prova->codigo, 'ra' => $aluno->ra, 'questao_numero' => 1, 'resposta' => 'A']);
+
+        // O boletim do portal lê de `resultado_resumos`, não direto de
+        // `respostas` — nos imports de verdade isso é recalculado pelos
+        // controllers; aqui a fixture cria a resposta direto no banco, então
+        // precisa disparar o mesmo recálculo manualmente.
+        app(ResumoResultadoService::class)->recalcular($prova->codigo);
 
         return $prova;
     }

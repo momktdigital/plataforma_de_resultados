@@ -7,6 +7,7 @@ use App\Models\Prova;
 use App\Models\Questao;
 use App\Models\Resposta;
 use App\Models\ResultadoMetrica;
+use App\Services\ResumoResultadoService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -69,6 +70,8 @@ class RespondenteTest extends TestCase
     public function test_exclui_e_restaura_resultados_de_um_periodo(): void
     {
         $prova = $this->provaComRespostas();
+        app(ResumoResultadoService::class)->recalcular($prova->codigo);
+        $this->assertDatabaseHas('resultado_resumos', ['ra' => '111', 'periodo' => '2026/1']);
         $admin = $this->admin();
 
         $response = $this->actingAs($admin, 'admin')
@@ -77,12 +80,15 @@ class RespondenteTest extends TestCase
         $response->assertRedirect(route('provas.respondentes.index', $prova));
         $this->assertSoftDeleted('respostas', ['ra' => '111', 'periodo' => '2026/1']);
         $this->assertSoftDeleted('resultado_metricas', ['ra' => '111', 'periodo' => '2026/1']);
+        // O resumo do boletim também é recalculado — período excluído some dele.
+        $this->assertDatabaseMissing('resultado_resumos', ['ra' => '111', 'periodo' => '2026/1']);
 
         $this->actingAs($admin, 'admin')
             ->post("/provas/{$prova->codigo}/periodos/restaurar", ['periodo' => '2026/1']);
 
         $this->assertNotSoftDeleted('respostas', ['ra' => '111', 'periodo' => '2026/1']);
         $this->assertNotSoftDeleted('resultado_metricas', ['ra' => '111', 'periodo' => '2026/1']);
+        $this->assertDatabaseHas('resultado_resumos', ['ra' => '111', 'periodo' => '2026/1']);
     }
 
     public function test_guest_nao_acessa_respondentes(): void

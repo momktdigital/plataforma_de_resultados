@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Prova;
+use App\Services\ResumoResultadoService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -81,24 +82,28 @@ class RespondenteController extends Controller
         ]);
     }
 
-    public function destroyPeriodo(Request $request, Prova $prova): RedirectResponse
+    public function destroyPeriodo(Request $request, Prova $prova, ResumoResultadoService $resumos): RedirectResponse
     {
         $periodo = (string) $request->input('periodo', '');
 
         $excluidas = $prova->resultados()->where('periodo', $periodo)->delete();
         $excluidas += $prova->metricas()->where('periodo', $periodo)->delete();
 
+        $resumos->recalcular($prova->codigo);
+
         return redirect()
             ->route('provas.respondentes.index', $prova)
             ->with('status', "Resultados do período '{$periodo}' excluídos ({$excluidas} registro(s)).");
     }
 
-    public function restorePeriodo(Request $request, Prova $prova): RedirectResponse
+    public function restorePeriodo(Request $request, Prova $prova, ResumoResultadoService $resumos): RedirectResponse
     {
         $periodo = (string) $request->input('periodo', '');
 
         $restauradas = $prova->resultados()->onlyTrashed()->where('periodo', $periodo)->restore();
         $restauradas += $prova->metricas()->onlyTrashed()->where('periodo', $periodo)->restore();
+
+        $resumos->recalcular($prova->codigo);
 
         return redirect()
             ->route('provas.respondentes.index', ['prova' => $prova, 'periodo' => $periodo])

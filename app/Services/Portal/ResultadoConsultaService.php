@@ -7,6 +7,7 @@ use App\Models\Categoria;
 use App\Models\Prova;
 use App\Models\Resposta;
 use App\Models\ResultadoMetrica;
+use App\Models\ResultadoResumo;
 use Illuminate\Support\Collection;
 
 /**
@@ -17,35 +18,28 @@ use Illuminate\Support\Collection;
  */
 class ResultadoConsultaService
 {
-    /** @return array<int, array{prova: Prova, periodo: string, respostas: Collection, gabaritos: Collection, acertos: int, total: int, percentual: ?float, metricas: Collection}> */
+    /**
+     * Boletim (lista de cards) — só precisa de acertos/total/percentual por
+     * prova, então lê de `resultado_resumos` (App\Services\ResumoResultadoService)
+     * em vez de escanear `respostas`, que cresce um por aluno×prova×questão.
+     *
+     * @return array<int, array{prova: Prova, periodo: string, acertos: int, total: int, percentual: ?float}>
+     */
     public function buscarPorAluno(Aluno $aluno): array
     {
-        $respostas = Resposta::where(fn ($q) => $this->porAluno($q, $aluno))
-            ->orderBy('questao_numero')
-            ->get();
-
-        if ($respostas->isEmpty()) {
-            return [];
-        }
-
-        $grupos = $respostas->groupBy(fn ($r) => $r->prova_codigo.'|'.$r->periodo);
-
-        $resultados = [];
-        foreach ($grupos as $grupo) {
-            $provaCodigo = $grupo->first()->prova_codigo;
-            $periodo = $grupo->first()->periodo;
-
-            $prova = Prova::with('categoria')->find($provaCodigo);
-            if ($prova === null) {
-                continue;
-            }
-
-            $resultados[] = $this->montarResultado($aluno, $prova, $periodo, $grupo->sortBy('questao_numero')->values());
-        }
-
-        usort($resultados, fn ($a, $b) => $this->chaveOrdenacao($b) <=> $this->chaveOrdenacao($a));
-
-        return $resultados;
+        return ResultadoResumo::with('prova.categoria')
+            ->where(fn ($q) => $this->porAluno($q, $aluno))
+            ->get()
+            ->filter(fn (ResultadoResumo $resumo) => $resumo->prova !== null)
+            ->map(fn (ResultadoResumo $resumo) => [
+                'prova' => $resumo->prova,
+                'periodo' => $resumo->periodo,
+                'acertos' => $resumo->acertos,
+                'total' => $resumo->total,
+                'percentual' => $resumo->percentual !== null ? (float) $resumo->percentual : null,
+            ])
+            ->values()
+            ->all();
     }
 
     /**
@@ -81,10 +75,26 @@ class ResultadoConsultaService
     {
         $gabaritos = $prova->questoes()->whereNotNull('gabarito')->where('gabarito', '!=', '')->pluck('gabarito', 'numero');
 
-        $acertos = $respostas->filter(
-            fn ($r) => $gabaritos->has($r->questao_numero) && $r->resposta === $gabaritos[$r->questao_numero]
-        )->count();
-        $total = $gabaritos->count();
+        // Acertos/total vêm do resumo pré-calculado (mesma fonte usada no
+        // boletim, pra nunca mostrar um número diferente na tela de detalhe).
+        // Fallback calculado na hora só existe pra não quebrar se por algum
+        // motivo o resumo ainda não tiver sido gerado para esta prova.
+        $resumo = ResultadoResumo::where('prova_codigo', $prova->codigo)
+            ->where('periodo', $periodo)
+            ->where(fn ($q) => $this->porAluno($q, $aluno))
+            ->first();
+
+        if ($resumo !== null) {
+            $acertos = $resumo->acertos;
+            $total = $resumo->total;
+            $percentual = $resumo->percentual !== null ? (float) $resumo->percentual : null;
+        } else {
+            $acertos = $respostas->filter(
+                fn ($r) => $gabaritos->has($r->questao_numero) && $r->resposta === $gabaritos[$r->questao_numero]
+            )->count();
+            $total = $gabaritos->count();
+            $percentual = $total > 0 ? round($acertos / $total * 100, 1) : null;
+        }
 
         $metricas = ResultadoMetrica::where('prova_codigo', $prova->codigo)
             ->where('periodo', $periodo)
@@ -98,7 +108,7 @@ class ResultadoConsultaService
             'gabaritos' => $gabaritos,
             'acertos' => $acertos,
             'total' => $total,
-            'percentual' => $total > 0 ? round($acertos / $total * 100, 1) : null,
+            'percentual' => $percentual,
             'metricas' => $metricas,
         ];
     }

@@ -21,10 +21,12 @@ sem alterá-las, e adiciona as tabelas novas descritas abaixo.
 |---|---|---|
 | `categorias` | `nome` | Árvore (`categoria_pai_id` aponta pra outra `categorias`, nulo = raiz) — agrupa o boletim do aluno no portal por categoria/subcategoria. |
 | `provas` | — (código gerado automaticamente) | `nome`/`tipo`/`link_comentado` são só identificação, totalmente opcionais. `categoria_id` (opcional) e `data_prova` (opcional, distinta de `created_at`) alimentam o agrupamento e a ordenação/filtro por data no portal. |
-| `questoes` | `prova_codigo`, `numero`, `gabarito` | Todo o resto (Bloom, Miller, dificuldade, DCN, Portaria INEP, PPC, Matriz da Prova) é opcional e só é gravado quando a coluna existe no arquivo importado. Suporta soft-delete. |
+| `questoes` | `prova_codigo`, `numero`, `gabarito` | O resto que é **um valor só** por questão (Bloom, Miller, dificuldade) é opcional e vira coluna. O que pode ter **vários valores** (matriz da prova, DCN, Portaria INEP, PPC) vira linhas em `questao_referencias` — ver abaixo. Suporta soft-delete. |
 | `questao_matrizes` | `questao_id` | Uma questão pode estar em mais de um período/disciplina/código de matriz — por isso é uma tabela filha (1:N), não colunas fixas. |
-| `respostas` | `prova_codigo`, (`ra` OU `cpf`), `questao_numero` | Formato longo: uma linha por resposta de um respondente a uma questão, num período (`periodo`, opcional — default `''`). `aluno_chave` é uma coluna gerada pelo banco (`COALESCE(cpf, ra)`) usada no índice único que evita duplicar a mesma resposta num reimport. Chama-se `respostas`, não `resultados`, porque a aplicação legada já tem uma tabela `resultados` no mesmo banco. |
-| `resultado_metricas` | `prova_codigo`, (`ra` OU `cpf`), `nome_metrica` | Métricas agregadas por aluno+prova+período que não são resposta de uma questão (ex.: "Nota de Redação", "Total") — equivalente ao antigo JSON `resultados.notas_finais`, como linhas em vez de colunas dinâmicas. |
+| `questao_referencias` | `questao_id`, `tipo`, `valor` | Referências da questão a matriz de prova/DCN/Portaria INEP/PPC — uma linha por valor, `tipo` diz a qual grupo pertence. Existiam como colunas numeradas (`dcn_a`, `dcn_b`...); viraram tabela porque é um grupo repetitivo (0..N valores), não um atributo de valor único, e o número de colunas era só um palpite (ver "Performance e escala" abaixo). |
+| `respostas` | `prova_codigo`, (`ra` OU `cpf`), `questao_numero` | Formato longo: uma linha por resposta de um respondente a uma questão, num período (`periodo`, opcional — default `''`). `aluno_chave` é uma coluna gerada pelo banco (`COALESCE(cpf, ra)`) usada no índice único que evita duplicar a mesma resposta num reimport; `ra`/`cpf` também têm índice próprio (ver "Performance e escala"). Chama-se `respostas`, não `resultados`, porque a aplicação legada já tem uma tabela `resultados` no mesmo banco. |
+| `resultado_metricas` | `prova_codigo`, (`ra` OU `cpf`), `nome_metrica` | Métricas agregadas por aluno+prova+período que não são resposta de uma questão (ex.: "Nota de Redação", "Total") — equivalente ao antigo JSON `resultados.notas_finais`, como linhas em vez de colunas dinâmicas. Mesma lógica de índice em `ra`/`cpf` que `respostas`. |
+| `resultado_resumos` | `prova_codigo`, `aluno_chave`, `periodo` | Cache de leitura: acertos/total/percentual já calculados por aluno+prova+período, mantida por `App\Services\ResumoResultadoService`. Nunca gravada diretamente pela aplicação — ver "Performance e escala". |
 
 `admins`, `alunos`, `gabaritos` e `resultados` (a tabela legada, não confundir
 com `respostas`) têm migrations próprias aqui, mas elas só criam a tabela
@@ -45,6 +47,53 @@ de dados abaixo poder ler algo).
 > Testes rodam em SQLite, que não enforce isso — só um banco MySQL real
 > pega esse tipo de erro, por isso testamos manualmente contra MariaDB
 > antes de publicar qualquer migration que toque nessas duas tabelas.
+
+## Performance e escala
+
+Pensado para o sistema processar milhões de resultados sem travar. O ponto
+de partida é notar que nem toda tabela cresce do mesmo jeito: `provas` e
+`questoes` crescem com o número de avaliações/questões cadastradas (limitado
+— dezenas de milhares, no máximo); `respostas` e `resultado_metricas` crescem
+com **aluno × prova × período × questão/métrica** — uma única prova de 100
+questões com 10.000 respondentes já é 1 milhão de linhas sozinha. É nessas
+duas que qualquer decisão de schema/índice precisa ser pensada para escala;
+nas outras, quase qualquer desenho funciona igual de bem.
+
+- **Coluna vs. tabela filha em `questoes`:** um atributo opcional de **valor
+  único** por questão (`bloom_nivel`, `dificuldade_tri`...) é uma coluna
+  nullable — normal, não custa nada em espaço/performance. Um atributo que
+  pode ter **vários valores** por questão, mas foi modelado como colunas
+  numeradas (`dcn_a`, `dcn_b`, `ppc_a..d`) é um grupo repetitivo disfarçado —
+  vira tabela filha (`questao_referencias`), senão qualquer novo valor além
+  do que "a/b/c/d" previu exige alterar a tabela de novo. Mesma lógica já
+  usada em `questao_matrizes` para período/disciplina/código.
+- **Índice em `ra`/`cpf` de `respostas`/`resultado_metricas`:** o boletim do
+  portal busca essas tabelas filtrando por `ra` OU `cpf`, sem saber de
+  antemão qual prova ou qual das duas colunas está preenchida. Sem um
+  índice em cada coluna, essa busca é um full table scan — inofensivo com
+  poucas linhas, mas é exatamente a consulta que trava com milhões delas
+  (a mais usada do sistema, ainda por cima). `Schema::index('ra')` +
+  `Schema::index('cpf')` bastam para o MySQL fazer um index-merge na busca.
+- **`resultado_resumos` como cache de leitura:** calcular "quantas questões
+  o aluno acertou nesta prova" exige comparar cada resposta com o gabarito —
+  um JOIN entre `respostas` e `questoes`. Fazer isso a cada vez que um aluno
+  abre o boletim significa refazer esse JOIN toda hora, mesmo que ninguém
+  tenha respondido nada novo desde a última consulta. `resultado_resumos`
+  guarda o resultado desse cálculo (uma linha por aluno+prova+período) e é
+  recalculada por `App\Services\ResumoResultadoService::recalcular($provaCodigo)`
+  — sempre **para uma prova só** (nunca a tabela toda), com uma única query
+  agregada (`JOIN` + `GROUP BY` + `SUM(CASE...)`), depois de qualquer coisa
+  que mude o resultado dela: import de respostas/gabarito (`ResultadoImportController`,
+  `QuestaoImportController`, `LegadoController`), edição/exclusão manual de
+  uma questão (`QuestaoController`, `LixeiraController`) ou exclusão/
+  restauração de um período inteiro (`RespondenteController`). O boletim
+  (`ResultadoConsultaService::buscarPorAluno`) só lê dessa tabela — nunca
+  escaneia `respostas` para montar a lista. A tela de detalhe de uma prova
+  (`buscarUmaProva`) ainda busca as respostas individuais pra montar a grade
+  de Q1..Qn (isso é sempre uma prova só, nunca escala com o total do
+  sistema), mas usa o mesmo resumo pra acertos/total/percentual — garante
+  que a lista e o detalhe sempre mostrem o mesmo número, e tem um fallback
+  que recalcula na hora caso o resumo não exista por algum motivo.
 
 ## Alunos (`/alunos`)
 

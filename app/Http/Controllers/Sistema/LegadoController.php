@@ -7,6 +7,7 @@ use App\Http\Requests\ImportarBackupLegadoRequest;
 use App\Models\Prova;
 use App\Services\Legado\BackupSqlParser;
 use App\Services\Legado\LegadoImportador;
+use App\Services\ResumoResultadoService;
 use App\Support\LimitesUpload;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -67,7 +68,7 @@ class LegadoController extends Controller
     }
 
     /** Lê `gabaritos`/`resultados` direto da conexão configurada (mesmo banco compartilhado). */
-    public function importarDoBanco(LegadoImportador $importador): RedirectResponse
+    public function importarDoBanco(LegadoImportador $importador, ResumoResultadoService $resumos): RedirectResponse
     {
         $this->permitirExecucaoLonga();
 
@@ -88,6 +89,10 @@ class LegadoController extends Controller
             );
         });
 
+        foreach ($importador->provasTocadas() as $provaCodigo) {
+            $resumos->recalcular($provaCodigo);
+        }
+
         return redirect()->route('sistema.legado.index')
             ->with('status', $this->resumoTexto($importador->resumo()));
     }
@@ -97,6 +102,7 @@ class LegadoController extends Controller
         ImportarBackupLegadoRequest $request,
         LegadoImportador $importador,
         BackupSqlParser $parser,
+        ResumoResultadoService $resumos,
     ): RedirectResponse {
         $this->permitirExecucaoLonga();
 
@@ -120,6 +126,12 @@ class LegadoController extends Controller
         }
 
         $dryRun ? DB::rollBack() : DB::commit();
+
+        if (! $dryRun) {
+            foreach ($importador->provasTocadas() as $provaCodigo) {
+                $resumos->recalcular($provaCodigo);
+            }
+        }
 
         $mensagem = $this->resumoTexto($importador->resumo());
 

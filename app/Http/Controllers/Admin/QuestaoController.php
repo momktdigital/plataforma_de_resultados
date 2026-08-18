@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreQuestaoRequest;
 use App\Models\Prova;
 use App\Models\Questao;
+use App\Services\ResumoResultadoService;
 use Illuminate\Http\RedirectResponse;
 
 /**
@@ -15,7 +16,7 @@ use Illuminate\Http\RedirectResponse;
  */
 class QuestaoController extends Controller
 {
-    public function store(StoreQuestaoRequest $request, Prova $prova): RedirectResponse
+    public function store(StoreQuestaoRequest $request, Prova $prova, ResumoResultadoService $resumos): RedirectResponse
     {
         $dados = $request->validated();
 
@@ -33,26 +34,32 @@ class QuestaoController extends Controller
         $questao->gabarito = mb_strtoupper($dados['gabarito'], 'UTF-8');
         $questao->save();
 
+        $resumos->recalcular($prova->codigo);
+
         return redirect()
             ->route('provas.show', $prova)
             ->with('status', "Questão {$dados['numero']} salva com sucesso.");
     }
 
-    public function destroy(Prova $prova, Questao $questao): RedirectResponse
+    public function destroy(Prova $prova, Questao $questao, ResumoResultadoService $resumos): RedirectResponse
     {
         $questao->delete();
+
+        $resumos->recalcular($prova->codigo);
 
         return redirect()
             ->route('provas.show', $prova)
             ->with('status', "Questão {$questao->numero} excluída.");
     }
 
-    public function restore(Prova $prova, int $questao): RedirectResponse
+    public function restore(Prova $prova, int $questao, ResumoResultadoService $resumos): RedirectResponse
     {
         $questaoModel = Questao::withTrashed()
             ->where('prova_codigo', $prova->codigo)
             ->findOrFail($questao);
         $questaoModel->restore();
+
+        $resumos->recalcular($prova->codigo);
 
         return redirect()
             ->route('provas.show', $prova)

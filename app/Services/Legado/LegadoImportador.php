@@ -28,6 +28,9 @@ class LegadoImportador
         'metricas' => 0,
     ];
 
+    /** @var array<int, true> Códigos de Prova tocados nesta importação, para recalcular o resumo delas depois. */
+    private array $provasTocadas = [];
+
     /**
      * @param  object  $linha  Precisa ter: nome_avaliacao, respostas, link_comentado, deleted_at.
      */
@@ -140,9 +143,16 @@ class LegadoImportador
         return $this->contadores;
     }
 
+    /** @return array<int, int> Códigos de Prova tocados nesta importação. */
+    public function provasTocadas(): array
+    {
+        return array_keys($this->provasTocadas);
+    }
+
     private function localizarOuCriarProva(string $nomeAvaliacao, ?string $linkComentado): Prova
     {
         $prova = Prova::firstOrCreate(['nome' => $nomeAvaliacao]);
+        $this->provasTocadas[$prova->codigo] = true;
 
         if ($prova->wasRecentlyCreated) {
             $this->contadores['provas']++;

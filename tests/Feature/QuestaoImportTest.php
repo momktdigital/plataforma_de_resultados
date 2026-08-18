@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Admin;
 use App\Models\Prova;
 use App\Models\Questao;
+use App\Models\Resposta;
+use App\Services\ResumoResultadoService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
@@ -102,5 +104,64 @@ class QuestaoImportTest extends TestCase
         $response->assertSessionDoesntHaveErrors();
         $this->assertDatabaseCount('questoes', 1);
         $this->assertNotSoftDeleted('questoes', ['numero' => 1]);
+    }
+
+    public function test_referencias_a_b_c_viram_linhas_em_questao_referencias(): void
+    {
+        $prova = Prova::create([]);
+
+        $csv = "Questão,Gabarito,Matriz Prova A,Matriz Prova B,DCN A,PPC A,PPC B,PPC C\n"
+            .'1,B,"Item 1","Item 2","DCN X","P1","P2","P3"'."\n";
+        $arquivo = UploadedFile::fake()->createWithContent('gabarito.csv', $csv);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post("/provas/{$prova->codigo}/questoes/import", ['arquivo' => $arquivo]);
+
+        $questao = Questao::where('numero', 1)->firstOrFail();
+
+        $matrizProva = $questao->referencias()->where('tipo', 'matriz_prova')->pluck('valor')->all();
+        $dcn = $questao->referencias()->where('tipo', 'dcn')->pluck('valor')->all();
+        $ppc = $questao->referencias()->where('tipo', 'ppc')->pluck('valor')->all();
+
+        $this->assertSame(['Item 1', 'Item 2'], $matrizProva);
+        $this->assertSame(['DCN X'], $dcn);
+        $this->assertSame(['P1', 'P2', 'P3'], $ppc);
+    }
+
+    public function test_reimportar_sem_coluna_de_referencia_nao_apaga_a_ja_salva(): void
+    {
+        $prova = Prova::create([]);
+        $admin = $this->admin();
+
+        $primeiro = UploadedFile::fake()->createWithContent(
+            'gabarito.csv',
+            "Questão,Gabarito,DCN A\n1,B,\"DCN X\"\n"
+        );
+        $this->actingAs($admin, 'admin')
+            ->post("/provas/{$prova->codigo}/questoes/import", ['arquivo' => $primeiro]);
+
+        // Reimporta só com Gabarito — sem a coluna de DCN.
+        $segundo = UploadedFile::fake()->createWithContent('gabarito.csv', "Questão,Gabarito\n1,C\n");
+        $this->actingAs($admin, 'admin')
+            ->post("/provas/{$prova->codigo}/questoes/import", ['arquivo' => $segundo]);
+
+        $questao = Questao::where('numero', 1)->firstOrFail();
+        $this->assertSame('C', $questao->gabarito);
+        $this->assertCount(1, $questao->referencias()->where('tipo', 'dcn')->get());
+    }
+
+    public function test_reimportar_gabarito_recalcula_o_resumo_do_boletim(): void
+    {
+        $prova = Prova::create([]);
+        Questao::create(['prova_codigo' => $prova->codigo, 'numero' => 1, 'gabarito' => 'A']);
+        Resposta::create(['prova_codigo' => $prova->codigo, 'ra' => '123', 'questao_numero' => 1, 'resposta' => 'B']);
+        app(ResumoResultadoService::class)->recalcular($prova->codigo);
+        $this->assertDatabaseHas('resultado_resumos', ['ra' => '123', 'acertos' => 0, 'total' => 1]);
+
+        $arquivo = UploadedFile::fake()->createWithContent('gabarito.csv', "Questão,Gabarito\n1,B\n");
+        $this->actingAs($this->admin(), 'admin')
+            ->post("/provas/{$prova->codigo}/questoes/import", ['arquivo' => $arquivo]);
+
+        $this->assertDatabaseHas('resultado_resumos', ['ra' => '123', 'acertos' => 1, 'total' => 1]);
     }
 }

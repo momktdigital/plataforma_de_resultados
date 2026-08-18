@@ -50,6 +50,8 @@ class LixeiraTest extends TestCase
         $this->assertNotSoftDeleted('provas', ['codigo' => $prova->codigo]);
         $this->assertNotSoftDeleted('questoes', ['id' => $questao->id]);
         $this->assertNotSoftDeleted('respostas', ['prova_codigo' => $prova->codigo]);
+        // Restaurar a prova recalcula o resumo do boletim com os dados de volta.
+        $this->assertDatabaseHas('resultado_resumos', ['prova_codigo' => $prova->codigo, 'ra' => '1', 'acertos' => 1, 'total' => 1]);
     }
 
     public function test_exclui_prova_definitivamente_remove_filhos_via_fk_cascade(): void

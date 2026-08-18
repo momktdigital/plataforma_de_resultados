@@ -22,6 +22,21 @@ class QuestaoImportService
 
     private const GABARITO_PATTERNS = ['/^(gabarito|resposta|alternativa|letra|correta)$/'];
 
+    /** Letras de coluna aceitas por tipo de referência (ver QuestaoReferencia). */
+    private const REFERENCIA_LETRAS = [
+        'matriz_prova' => ['a', 'b', 'c'],
+        'dcn' => ['a', 'b'],
+        'portaria_inep' => ['a', 'b', 'c'],
+        'ppc' => ['a', 'b', 'c', 'd'],
+    ];
+
+    private const REFERENCIA_LABEL_TOKENS = [
+        'matriz_prova' => ['matriz', 'prova'],
+        'dcn' => ['dcn'],
+        'portaria_inep' => ['portaria', 'inep'],
+        'ppc' => ['ppc'],
+    ];
+
     public function importar(Prova $prova, UploadedFile $file): ImportResult
     {
         $rows = SpreadsheetReader::readRows($file);
@@ -57,6 +72,7 @@ class QuestaoImportService
                 $questao->wasRecentlyCreated ? $resultado->registrarCriada() : $resultado->registrarAtualizada();
 
                 $this->sincronizarMatrizes($questao, $row);
+                $this->sincronizarReferencias($questao, $row);
             }
         });
 
@@ -92,22 +108,6 @@ class QuestaoImportService
     private function extrairMetadados(array $row): array
     {
         $campos = [];
-
-        foreach (['a' => 'matriz_prova_a', 'b' => 'matriz_prova_b', 'c' => 'matriz_prova_c'] as $letra => $campo) {
-            $campos[$campo] = HeaderResolver::findCampoValue($row, ['matriz', 'prova'], $letra);
-        }
-
-        foreach (['a' => 'dcn_a', 'b' => 'dcn_b'] as $letra => $campo) {
-            $campos[$campo] = HeaderResolver::findCampoValue($row, ['dcn'], $letra);
-        }
-
-        foreach (['a' => 'portaria_inep_a', 'b' => 'portaria_inep_b', 'c' => 'portaria_inep_c'] as $letra => $campo) {
-            $campos[$campo] = HeaderResolver::findCampoValue($row, ['portaria', 'inep'], $letra);
-        }
-
-        foreach (['a' => 'ppc_a', 'b' => 'ppc_b', 'c' => 'ppc_c', 'd' => 'ppc_d'] as $letra => $campo) {
-            $campos[$campo] = HeaderResolver::findCampoValue($row, ['ppc'], $letra);
-        }
 
         $campos['bloom_nivel'] = HeaderResolver::findValue($row, ['/(?=.*bloom)(?=.*nivel)/']);
         $campos['bloom_verbo'] = HeaderResolver::findValue($row, ['/(?=.*bloom)(?=.*verbo)/']);
@@ -160,6 +160,35 @@ class QuestaoImportService
                 'disciplina' => $disciplinas[$i] ?? null,
                 'codigo' => $codigos[$i] ?? null,
             ]);
+        }
+    }
+
+    /**
+     * Só mexe nos tipos de referência que aparecem nesta linha da planilha —
+     * um import que não traz coluna de "PPC", por exemplo, não apaga o que já
+     * estava salvo em `ppc` de um import anterior.
+     */
+    private function sincronizarReferencias(Questao $questao, array $row): void
+    {
+        $valoresPorTipo = [];
+
+        foreach (self::REFERENCIA_LETRAS as $tipo => $letras) {
+            $valores = [];
+            foreach ($letras as $letra) {
+                $valor = HeaderResolver::findCampoValue($row, self::REFERENCIA_LABEL_TOKENS[$tipo], $letra);
+                if ($valor !== null) {
+                    $valores[] = $valor;
+                }
+            }
+
+            if ($valores !== []) {
+                $valoresPorTipo[$tipo] = $valores;
+            }
+        }
+
+        foreach ($valoresPorTipo as $tipo => $valores) {
+            $questao->referencias()->where('tipo', $tipo)->delete();
+            $questao->referencias()->createMany(array_map(fn ($valor) => ['tipo' => $tipo, 'valor' => $valor], $valores));
         }
     }
 
