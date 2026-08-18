@@ -14,6 +14,7 @@ use App\Http\Controllers\Admin\ResultadoImportController;
 use App\Http\Controllers\AssetLegadoController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\InstallController;
+use App\Http\Controllers\PortalController;
 use App\Http\Controllers\Sistema\AtualizacaoController;
 use App\Http\Controllers\Sistema\BackupController;
 use App\Http\Controllers\Sistema\ConfiguracaoController;
@@ -39,6 +40,13 @@ Route::middleware('instalado')->group(function () {
     Route::get('/assets/img/{arquivo}', [AssetLegadoController::class, 'logo'])
         ->where('arquivo', '[^/]+')
         ->name('assets.logo');
+
+    Route::prefix('portal')->name('portal.')->middleware('throttle:30,1')->group(function () {
+        Route::get('/', [PortalController::class, 'mostrarConsulta'])->name('consulta');
+        Route::post('/consultar', [PortalController::class, 'consultar'])->name('consultar');
+        Route::post('/verificar', [PortalController::class, 'verificar'])->name('verificar');
+        Route::post('/reenviar', [PortalController::class, 'reenviar'])->name('reenviar');
+    });
 
     Route::middleware('guest:admin')->group(function () {
         Route::get('/login', [LoginController::class, 'create'])->name('login');

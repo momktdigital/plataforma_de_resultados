@@ -7,6 +7,7 @@ use App\Http\Requests\AtualizarPortalAparenciaRequest;
 use App\Http\Requests\AtualizarPortalCaptchaRequest;
 use App\Http\Requests\AtualizarPortalSmtpRequest;
 use App\Models\Configuracao;
+use App\Services\Portal\SmtpEmailSender;
 use App\Support\LogoUploader;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -14,9 +15,6 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 use RuntimeException;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
-use Symfony\Component\Mailer\Mailer;
-use Symfony\Component\Mailer\Transport\Smtp\EsmtpTransport;
-use Symfony\Component\Mime\Email;
 
 /**
  * Configurações compartilhadas com o portal público legado (título/logo do
@@ -110,7 +108,7 @@ class PortalConfiguracaoController extends Controller
         return redirect()->route('sistema.portal.index')->with('status', 'Configurações de e-mail (SMTP) salvas com sucesso.');
     }
 
-    public function testarSmtp(Request $request): JsonResponse
+    public function testarSmtp(Request $request, SmtpEmailSender $mailer): JsonResponse
     {
         $dados = $request->validate(['email' => ['required', 'email']]);
 
@@ -118,20 +116,11 @@ class PortalConfiguracaoController extends Controller
         $request->session()->put('smtp_test_code', $codigo);
 
         try {
-            $transport = new EsmtpTransport(
-                Configuracao::valor('smtp_host', ''),
-                (int) Configuracao::valor('smtp_port', '587'),
+            $mailer->enviar(
+                $dados['email'],
+                'Teste de Configuração SMTP',
+                "Olá,<br><br>Seu código de teste é: <b>{$codigo}</b><br><br>Insira este código na tela de configuração para validar.",
             );
-            $transport->setUsername(Configuracao::valor('smtp_user', ''));
-            $transport->setPassword(Configuracao::valor('smtp_pass', ''));
-
-            $email = (new Email)
-                ->from(Configuracao::valor('smtp_from_email', ''))
-                ->to($dados['email'])
-                ->subject('Teste de Configuração SMTP')
-                ->html("Olá,<br><br>Seu código de teste é: <b>{$codigo}</b><br><br>Insira este código na tela de configuração para validar.");
-
-            (new Mailer($transport))->send($email);
 
             return response()->json(['status' => 'success']);
         } catch (TransportExceptionInterface $e) {

@@ -153,6 +153,46 @@ excluídos em lote por período são restaurados/expurgados direto na tela de
 potencialmente milhares de linhas por prova, ao contrário do schema legado
 (uma linha por aluno).
 
+## Portal público do aluno (`/portal`)
+
+Porta `index.php` (SPA de consulta pública) + `api/consulta.php` +
+`api/verify_2fa.php` + `api/resend_2fa.php` para cá — sem exigir login de
+admin, server-rendered (formulários simples, sem SPA em JS). Reaproveita as
+tabelas legadas `verificacoes_email` e `rate_limit_2fa` (migrations
+próprias, mesmo padrão idempotente das demais tabelas compartilhadas), mas
+busca o boletim no **schema novo** (`respostas`/`resultado_metricas`/
+`questoes` por Prova), não no JSON de `resultados`/`gabaritos`.
+
+Fluxo, igual ao legado (o CPF circula pelos passos via campo oculto — não
+há sessão de autenticação):
+
+1. **`GET /portal`** — formulário de CPF + Data de Nascimento (+ CAPTCHA se
+   ativo em Configurações → Portal público).
+2. **`POST /portal/consultar`** — valida CAPTCHA (`App\Services\Portal\CaptchaVerifier`,
+   chama o siteverify do Google/hCaptcha), localiza o aluno por CPF + data
+   de nascimento. Se SMTP/2FA estiver ativo em Configurações, emite um
+   código de 6 dígitos (`verificacoes_email`) e envia por e-mail
+   (`App\Services\Portal\SmtpEmailSender`, mesmo SMTP puro via Symfony
+   Mailer usado no teste de envio de Configurações); senão, mostra o
+   boletim direto.
+3. **`POST /portal/verificar`** — valida o código; 3 erros seguidos ou
+   código expirado manda de volta para `/portal`. Bloqueio por IP após 10
+   tentativas falhas em 1h (`App\Services\Portal\RateLimit2faService`,
+   tabela `rate_limit_2fa`) — reescrito com Eloquent em vez do
+   `ON DUPLICATE KEY ... IF(...)` só-MySQL do legado, para funcionar também
+   em SQLite (testes). Diferente do legado, o IP do cliente vem de
+   `$request->ip()` (respeita `trusted proxies` do Laravel) em vez de
+   confiar cegamente em `CF-Connecting-IP`/`X-Forwarded-For` — o legado
+   permitia um cliente falsificar esses cabeçalhos para escapar do (ou
+   incriminar outro IP no) rate limit.
+4. **`POST /portal/reenviar`** — reenvia o mesmo código (só estende a
+   validade), respeitando o cooldown progressivo (1, 2, 5, 10 min).
+5. **Boletim** (`portal.resultados`) — para cada Prova/período em que o
+   aluno tem resposta: % de acerto (comparando `respostas` com o gabarito
+   de `questoes`), notas finais (`resultado_metricas`), link do gabarito
+   comentado e grade de respostas colorida (verde/vermelho). Exportação em
+   PDF no navegador (html2pdf, igual ao legado).
+
 ## Autenticação
 
 Não há cadastro de usuário nem redefinição de senha por e-mail neste módulo.
