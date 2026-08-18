@@ -163,6 +163,11 @@ próprias, mesmo padrão idempotente das demais tabelas compartilhadas), mas
 busca o boletim no **schema novo** (`respostas`/`resultado_metricas`/
 `questoes` por Prova), não no JSON de `resultados`/`gabaritos`.
 
+**A raiz do site (`/`) é o portal público**: quem acessa deslogado cai
+direto na tela de consulta; um administrador já logado é redirecionado
+para `/provas`. O acesso à área administrativa (`/login`) fica só num link
+discreto no rodapé das telas do portal — não é destacado na página.
+
 Fluxo, igual ao legado (o CPF circula pelos passos via campo oculto — não
 há sessão de autenticação):
 

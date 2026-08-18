@@ -34,7 +34,7 @@ Route::middleware('nao-instalado')->prefix('instalar')->name('instalar.')->group
 
 Route::middleware('instalado')->group(function () {
     Route::get('/', function () {
-        return redirect()->route(Auth::guard('admin')->check() ? 'provas.index' : 'login');
+        return redirect()->route(Auth::guard('admin')->check() ? 'provas.index' : 'portal.consulta');
     });
 
     Route::get('/assets/img/{arquivo}', [AssetLegadoController::class, 'logo'])
