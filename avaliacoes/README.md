@@ -135,7 +135,11 @@ normalizado (`questoes`/`respostas`/`resultado_metricas`):
   obrigatório — a coluna é `NOT NULL`, mesma regra já aplicada pelo import
   em lote (uma linha sem gabarito é ignorada, não vira questão "anulada").
 - **Questões críticas:** taxa de erro por questão entre os respondentes
-  (`App\Services\EstatisticaErroService`), maiores erros primeiro.
+  (`App\Services\EstatisticaErroService`), maiores erros primeiro. A conta é
+  feita em SQL (`JOIN` + `SUM(CASE...)` agrupado por questão) — uma versão
+  anterior trazia cada resposta pra PHP via `->chunk()`, que pagina por
+  `LIMIT`/`OFFSET` e degrada conforme o offset cresce; numa prova com 167
+  mil respostas isso estourava o `max_execution_time` (500 na tela).
 - **Excluir prova:** soft-delete em cascata (questões, respostas, métricas).
 
 ### Resultados por aluno (`/provas/{codigo}/respondentes`)
@@ -153,7 +157,9 @@ Substitui o dashboard de `admin/index.php` (Chart.js): histograma de
 distribuição de % de acerto, radar de desempenho médio por disciplina (usa
 `questao_matrizes.disciplina` — só aparece se o import de questões trouxe
 essa coluna) e Top 5. Filtro por período. `App\Services\BiDashboardService`
-concentra o cálculo.
+concentra o cálculo — mesma correção de performance da EstatisticaErroService
+acima: a nota de cada respondente e a média por disciplina são agregadas em
+SQL, não varrendo um Collection do PHP com todas as respostas da prova.
 
 ## Lixeira (`/lixeira`)
 

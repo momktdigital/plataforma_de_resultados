@@ -72,6 +72,33 @@ class BiDashboardTest extends TestCase
         $response->assertSee('1 respondente');
     }
 
+    public function test_desempenho_com_grande_volume_de_respostas(): void
+    {
+        $prova = Prova::create([]);
+        $q1 = Questao::create(['prova_codigo' => $prova->codigo, 'numero' => 1, 'gabarito' => 'A']);
+        QuestaoMatriz::create(['questao_id' => $q1->id, 'disciplina' => 'Anatomia']);
+
+        $lote = [];
+        for ($i = 0; $i < 5000; $i++) {
+            $lote[] = [
+                'prova_codigo' => $prova->codigo,
+                'ra' => (string) $i,
+                'periodo' => '',
+                'questao_numero' => 1,
+                'resposta' => $i % 2 === 0 ? 'A' : 'B',
+            ];
+        }
+        Resposta::insert($lote);
+
+        $inicio = microtime(true);
+        $response = $this->actingAs($this->admin(), 'admin')->get("/provas/{$prova->codigo}/bi");
+        $duracao = microtime(true) - $inicio;
+
+        $response->assertOk();
+        $response->assertSee('5000 respondente');
+        $this->assertLessThan(5.0, $duracao, 'Painel deve agregar em SQL, não varrer as respostas em PHP.');
+    }
+
     public function test_guest_nao_acessa_bi(): void
     {
         $this->admin();

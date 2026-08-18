@@ -3,11 +3,19 @@
 namespace App\Services;
 
 use App\Models\Prova;
+use App\Models\Resposta;
 
 /**
  * Taxa de erro por questão de uma Prova — equivalente ao painel "Questões
  * críticas" de admin/avaliacao_editar.php, recalculado aqui a partir de
  * `respostas` (formato longo) em vez do antigo JSON por aluno.
+ *
+ * A contagem é feita inteira em SQL (JOIN + SUM(CASE...) agrupado por
+ * questão) em vez de trazer cada resposta pra PHP: a versão anterior usava
+ * ->chunk() sobre a tabela toda, que pagina por LIMIT/OFFSET — cada chunk
+ * fica mais lento que o anterior porque o banco tem que pular um offset
+ * cada vez maior, um comportamento ~O(n²) que travava (timeout de 30s) numa
+ * prova com 167 mil respostas.
  */
 class EstatisticaErroService
 {
@@ -16,44 +24,38 @@ class EstatisticaErroService
     /** @return array<int, array{numero: int, acertos: int, erros: int, em_branco: int, taxa_erro: float}> */
     public function calcular(Prova $prova): array
     {
-        $gabaritos = $prova->questoes()
-            ->whereNotNull('gabarito')
-            ->where('gabarito', '!=', '')
-            ->pluck('gabarito', 'numero');
+        $linhas = Resposta::query()
+            ->join('questoes', function ($join) use ($prova) {
+                $join->on('questoes.numero', '=', 'respostas.questao_numero')
+                    ->where('questoes.prova_codigo', $prova->codigo)
+                    ->whereNull('questoes.deleted_at')
+                    ->whereNotNull('questoes.gabarito')
+                    ->where('questoes.gabarito', '!=', '');
+            })
+            ->where('respostas.prova_codigo', $prova->codigo)
+            ->selectRaw('respostas.questao_numero as numero')
+            ->selectRaw("SUM(CASE WHEN respostas.resposta IS NULL OR respostas.resposta = '' THEN 1 ELSE 0 END) as em_branco")
+            ->selectRaw('SUM(CASE WHEN respostas.resposta = questoes.gabarito THEN 1 ELSE 0 END) as acertos')
+            ->selectRaw("SUM(CASE WHEN respostas.resposta IS NOT NULL AND respostas.resposta != '' AND respostas.resposta != questoes.gabarito THEN 1 ELSE 0 END) as erros")
+            ->groupBy('respostas.questao_numero')
+            ->get();
 
-        if ($gabaritos->isEmpty()) {
-            return [];
+        $stats = [];
+        foreach ($linhas as $linha) {
+            $acertos = (int) $linha->acertos;
+            $erros = (int) $linha->erros;
+            $totalRespondido = $acertos + $erros;
+
+            $stats[] = [
+                'numero' => (int) $linha->numero,
+                'acertos' => $acertos,
+                'erros' => $erros,
+                'em_branco' => (int) $linha->em_branco,
+                'taxa_erro' => $totalRespondido > 0 ? round($erros / $totalRespondido * 100, 1) : 0.0,
+            ];
         }
 
-        $stats = $gabaritos->keys()->mapWithKeys(fn ($numero) => [
-            $numero => ['numero' => $numero, 'acertos' => 0, 'erros' => 0, 'em_branco' => 0],
-        ])->all();
-
-        $prova->resultados()
-            ->whereIn('questao_numero', $gabaritos->keys())
-            ->select(['questao_numero', 'resposta'])
-            ->chunk(1000, function ($respostas) use (&$stats, $gabaritos) {
-                foreach ($respostas as $resposta) {
-                    $correta = $gabaritos[$resposta->questao_numero];
-                    $marcada = $resposta->resposta ?? '';
-
-                    if ($marcada === '') {
-                        $stats[$resposta->questao_numero]['em_branco']++;
-                    } elseif ($marcada === $correta) {
-                        $stats[$resposta->questao_numero]['acertos']++;
-                    } else {
-                        $stats[$resposta->questao_numero]['erros']++;
-                    }
-                }
-            });
-
-        foreach ($stats as $numero => &$s) {
-            $totalRespondido = $s['acertos'] + $s['erros'];
-            $s['taxa_erro'] = $totalRespondido > 0 ? round(($s['erros'] / $totalRespondido) * 100, 1) : 0.0;
-        }
-        unset($s);
-
-        $stats = array_filter($stats, fn ($s) => $s['taxa_erro'] > 0);
+        $stats = array_values(array_filter($stats, fn ($s) => $s['taxa_erro'] > 0));
         usort($stats, fn ($a, $b) => $b['taxa_erro'] <=> $a['taxa_erro']);
 
         return array_slice($stats, 0, self::MAXIMO_EXIBIDO);
