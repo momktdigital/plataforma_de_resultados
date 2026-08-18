@@ -7,6 +7,15 @@
 
 Um sistema web completo, responsivo e seguro focado na publicação e análise de resultados de simulados, provas e avaliações acadêmicas (UNIFAA/FAA). O sistema garante a privacidade do aluno exigindo CPF + Data de Nascimento e, opcionalmente, um segundo fator de autenticação por e-mail (2FA), e oferece um Dashboard Administrativo com recursos de *Business Intelligence* (BI) para o corpo docente/coordenação.
 
+> 🚧 **Migração para o módulo [Avaliações](avaliacoes/README.md):** todas as
+> funções descritas abaixo (portal público + 2FA, CRUD de alunos/admins,
+> configurações, importação de matrícula, gestão de avaliações/resultados/
+> lixeira, dashboard BI) já foram portadas para a aplicação Laravel em
+> `avaliacoes/`, sobre o schema novo e normalizado — ver o README de lá para
+> o que mudou em cada uma. Esta aplicação na raiz continua funcional e é o
+> que roda em produção hoje, mas passa a ser considerada legada; novas
+> funcionalidades devem ir para `avaliacoes/`.
+
 ---
 
 ## 🚀 Funcionalidades Principais
