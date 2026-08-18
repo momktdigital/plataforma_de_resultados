@@ -23,6 +23,16 @@ class Admin extends Authenticatable
         'password_hash',
     ];
 
+    protected function casts(): array
+    {
+        return [
+            // $timestamps = false (sem updated_at) já impede o Eloquent de
+            // castear created_at automaticamente — sem isto, a tela de
+            // Administradores quebra ao chamar ->format() numa string crua.
+            'created_at' => 'datetime',
+        ];
+    }
+
     public function getAuthPasswordName(): string
     {
         return 'password_hash';

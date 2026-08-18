@@ -16,6 +16,16 @@ class AdministradorTest extends TestCase
         return Admin::create(['username' => 'coordenador', 'password_hash' => bcrypt('x')]);
     }
 
+    public function test_lista_administradores(): void
+    {
+        $admin = $this->admin();
+
+        $response = $this->actingAs($admin, 'admin')->get('/administradores');
+
+        $response->assertOk();
+        $response->assertSee('coordenador');
+    }
+
     public function test_cria_administrador(): void
     {
         $response = $this->actingAs($this->admin(), 'admin')->post('/administradores', [
