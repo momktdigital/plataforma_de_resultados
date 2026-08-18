@@ -62,4 +62,54 @@
     resultados viram Respostas + Métricas, e registros já excluídos na lixeira do sistema antigo são preservados
     como excluídos aqui. É seguro repetir a importação — dados existentes são atualizados, nunca duplicados.</p>
 </div>
+
+<h2 class="text-lg font-semibold mb-4 mt-10">Depois de migrar: excluir as tabelas antigas</h2>
+
+@if (empty($tabelasLegadasLinhas))
+    <div class="max-w-3xl bg-slate-50 border border-slate-200 rounded-xl p-5 text-sm text-slate-600">
+        Nenhuma tabela legada (<code>gabaritos</code>/<code>resultados</code>) encontrada neste banco — não há nada a excluir.
+    </div>
+@else
+    <div class="max-w-3xl bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+        <p class="text-sm text-slate-600 mb-4">
+            Depois de confirmar que a importação acima já trouxe tudo pro schema novo, você pode excluir as
+            tabelas antigas do banco. <strong class="text-red-600">Esta ação é irreversível</strong> — recomendamos
+            gerar um <a href="{{ route('sistema.backups.index') }}" class="underline">backup completo</a> antes.
+        </p>
+        <ul class="text-sm text-slate-700 mb-4 space-y-1">
+            @foreach ($tabelasLegadasLinhas as $tabela => $linhas)
+                <li>Tabela <code>{{ $tabela }}</code>: <strong>{{ $linhas }}</strong> linha(s).</li>
+            @endforeach
+            <li>Provas já no schema novo: <strong>{{ $provasJaMigradas }}</strong>.</li>
+        </ul>
+
+        @if ($provasJaMigradas === 0)
+            <p class="text-sm text-amber-700 font-semibold mb-4">
+                Nenhuma Prova encontrada no schema novo ainda — a exclusão fica bloqueada até que a importação
+                acima seja executada, para não perder os únicos dados existentes.
+            </p>
+        @endif
+
+        <form method="POST" action="{{ route('sistema.legado.tabelas.destroy') }}"
+              onsubmit="return confirm('Excluir permanentemente {{ implode(', ', array_keys($tabelasLegadasLinhas)) }}? Esta ação não pode ser desfeita.');"
+              class="space-y-3">
+            @csrf
+            @method('DELETE')
+            <div>
+                <label class="block text-sm font-medium mb-1" for="confirmacao">
+                    Digite <code>EXCLUIR</code> para confirmar
+                </label>
+                <input id="confirmacao" name="confirmacao" type="text" autocomplete="off"
+                       class="w-full max-w-xs rounded-lg border border-slate-300 px-3 py-2 text-sm" required>
+                @error('confirmacao')
+                    <p class="text-sm text-red-600 mt-1">{{ $message }}</p>
+                @enderror
+            </div>
+            <button type="submit" @disabled($provasJaMigradas === 0)
+                    class="bg-red-600 hover:bg-red-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold rounded-lg px-5 py-2 text-sm">
+                Excluir tabelas legadas
+            </button>
+        </form>
+    </div>
+@endif
 @endsection

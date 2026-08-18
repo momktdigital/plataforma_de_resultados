@@ -103,4 +103,68 @@ class LegadoImportWebTest extends TestCase
 
         $response->assertSessionHasErrors('arquivo');
     }
+
+    public function test_guest_nao_exclui_tabelas_legadas(): void
+    {
+        $this->admin();
+
+        $this->delete('/sistema/legado/tabelas')->assertRedirect(route('login'));
+    }
+
+    public function test_exclusao_exige_confirmacao_exata(): void
+    {
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->delete('/sistema/legado/tabelas', ['confirmacao' => 'excluir']);
+
+        $response->assertSessionHasErrors('confirmacao');
+        $this->assertTrue(Schema::hasTable('gabaritos'));
+        $this->assertTrue(Schema::hasTable('resultados'));
+    }
+
+    public function test_exclusao_bloqueada_sem_nenhuma_prova_migrada(): void
+    {
+        DB::table('gabaritos')->insert([
+            'nome_avaliacao' => 'ENADE 2026',
+            'respostas' => json_encode(['Q1' => 'B']),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->delete('/sistema/legado/tabelas', ['confirmacao' => 'EXCLUIR']);
+
+        $response->assertSessionHasErrors('confirmacao');
+        $this->assertTrue(Schema::hasTable('gabaritos'));
+    }
+
+    public function test_exclui_tabelas_legadas_apos_confirmar_e_ja_ter_provas_migradas(): void
+    {
+        DB::table('gabaritos')->insert([
+            'nome_avaliacao' => 'ENADE 2026',
+            'respostas' => json_encode(['Q1' => 'B']),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $admin = $this->admin();
+        $this->actingAs($admin, 'admin')->post('/sistema/legado/banco');
+
+        $response = $this->actingAs($admin, 'admin')
+            ->delete('/sistema/legado/tabelas', ['confirmacao' => 'EXCLUIR']);
+
+        $response->assertRedirect(route('sistema.legado.index'));
+        $response->assertSessionHas('status');
+        $this->assertFalse(Schema::hasTable('gabaritos'));
+        $this->assertFalse(Schema::hasTable('resultados'));
+        $this->assertDatabaseHas('provas', ['nome' => 'ENADE 2026']);
+    }
+
+    public function test_exclusao_avisa_quando_nao_ha_tabelas_legadas(): void
+    {
+        Schema::dropIfExists('gabaritos');
+        Schema::dropIfExists('resultados');
+
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->delete('/sistema/legado/tabelas', ['confirmacao' => 'EXCLUIR']);
+
+        $response->assertRedirect(route('sistema.legado.index'));
+        $response->assertSessionHas('status');
+    }
 }

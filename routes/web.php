@@ -121,6 +121,7 @@ Route::middleware('instalado')->group(function () {
             Route::get('/legado', [LegadoController::class, 'index'])->name('legado.index');
             Route::post('/legado/banco', [LegadoController::class, 'importarDoBanco'])->name('legado.banco');
             Route::post('/legado/arquivo', [LegadoController::class, 'importarDeArquivo'])->name('legado.arquivo');
+            Route::delete('/legado/tabelas', [LegadoController::class, 'excluirTabelas'])->name('legado.tabelas.destroy');
 
             Route::get('/configuracoes', [ConfiguracaoController::class, 'index'])->name('configuracoes.index');
             Route::post('/configuracoes', [ConfiguracaoController::class, 'update'])->name('configuracoes.update');

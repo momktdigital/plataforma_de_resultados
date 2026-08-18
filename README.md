@@ -424,6 +424,30 @@ Nenhuma informação das duas tabelas legadas fica sem um lugar no schema novo:
 `ra`/`periodo`/`nome_avaliacao`/`respostas`/`notas_finais`/`link_comentado`
 (de ambas as tabelas) e o estado de exclusão são todos preservados.
 
+### Excluir as tabelas legadas depois de migrar
+
+A mesma tela ("Dados legados") tem uma segunda seção pra excluir
+`gabaritos`/`resultados` do banco depois que a migração acima já rodou —
+essas duas tabelas ficam existindo só como fonte pro import; uma vez que os
+dados já estão em `provas`/`questoes`/`respostas`/`resultado_metricas`, elas
+não são mais lidas por nada. **Não confundir com `admins`, `alunos`,
+`configuracoes`, `verificacoes_email` e `rate_limit_2fa`** — essas
+continuam sendo usadas diretamente pela aplicação (não foram substituídas
+por um schema novo) e não são tocadas por esta ação.
+
+Por ser irreversível (`DROP TABLE`), a exclusão tem três travas:
+
+1. **Confirmação por texto** — precisa digitar `EXCLUIR` no campo antes de
+   enviar (mais um `confirm()` no navegador).
+2. **Bloqueio automático se nada foi migrado ainda** — se não existir
+   nenhuma `Prova` no schema novo, o botão fica desabilitado e o servidor
+   também recusa a exclusão, pra não apagar o único lugar onde os dados
+   existiam.
+3. A tela mostra a contagem de linhas em cada tabela legada e de Provas já
+   migradas, para conferir antes de excluir — e o texto recomenda gerar um
+   [backup completo](#backups-sistemabackups) antes, já que a ação não pode
+   ser desfeita.
+
 ## Versionamento
 
 A versão instalada fica no arquivo `VERSION` (raiz desta pasta, ex.: `1.0.0`)

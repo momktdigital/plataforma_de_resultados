@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Sistema;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ImportarBackupLegadoRequest;
+use App\Models\Prova;
 use App\Services\Legado\BackupSqlParser;
 use App\Services\Legado\LegadoImportador;
 use App\Support\LimitesUpload;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
@@ -15,12 +17,53 @@ use Throwable;
 
 class LegadoController extends Controller
 {
+    /** Tabelas do schema antigo, substituídas por `provas`/`questoes`/`respostas`/`resultado_metricas`. */
+    private const TABELAS_LEGADAS = ['gabaritos', 'resultados'];
+
     public function index(): View
     {
+        $tabelasExistentes = array_values(array_filter(self::TABELAS_LEGADAS, fn ($t) => Schema::hasTable($t)));
+
         return view('admin.sistema.legado', [
             'bancoCompartilhadoDisponivel' => Schema::hasTable('gabaritos') && Schema::hasTable('resultados'),
             'limiteUploadMb' => intdiv(LimitesUpload::limiteEfetivoEmKb(), 1024),
+            'tabelasLegadasLinhas' => collect($tabelasExistentes)->mapWithKeys(fn ($t) => [$t => DB::table($t)->count()])->all(),
+            'provasJaMigradas' => Prova::count(),
         ]);
+    }
+
+    /**
+     * Exclui as tabelas legadas (`gabaritos`/`resultados`) depois que os dados
+     * já foram migrados para o schema novo — ação irreversível, por isso exige
+     * confirmação explícita por texto e só é permitida se já existir ao menos
+     * uma Prova migrada (evita apagar o único lugar onde os dados existiam,
+     * caso a importação nunca tenha rodado).
+     */
+    public function excluirTabelas(Request $request): RedirectResponse
+    {
+        $request->validate(['confirmacao' => ['required', 'in:EXCLUIR']], [
+            'confirmacao.in' => 'Digite EXCLUIR (em maiúsculas) para confirmar.',
+        ]);
+
+        $tabelasExistentes = array_values(array_filter(self::TABELAS_LEGADAS, fn ($t) => Schema::hasTable($t)));
+
+        if ($tabelasExistentes === []) {
+            return redirect()->route('sistema.legado.index')
+                ->with('status', 'Nenhuma tabela legada encontrada neste banco — nada a excluir.');
+        }
+
+        if (Prova::count() === 0) {
+            return back()->withErrors([
+                'confirmacao' => 'Nenhuma Prova encontrada no schema novo ainda. Rode a importação (acima) antes de excluir as tabelas legadas — senão os dados seriam perdidos.',
+            ]);
+        }
+
+        foreach ($tabelasExistentes as $tabela) {
+            Schema::dropIfExists($tabela);
+        }
+
+        return redirect()->route('sistema.legado.index')
+            ->with('status', 'Tabelas legadas excluídas: '.implode(', ', $tabelasExistentes).'.');
     }
 
     /** Lê `gabaritos`/`resultados` direto da conexão configurada (mesmo banco compartilhado). */
