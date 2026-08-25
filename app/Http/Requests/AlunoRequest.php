@@ -31,10 +31,10 @@ class AlunoRequest extends FormRequest
             'cpf' => ['nullable', 'digits:11', Rule::unique('alunos', 'cpf')->ignore($alunoId)],
             'data_nascimento' => ['nullable', 'date_format:d/m/Y'],
             'sexo' => ['nullable', 'string', 'max:20'],
-            'estado_civil' => ['nullable', 'string', 'max:30'],
-            'cor_raca' => ['nullable', 'string', 'max:50'],
-            'religiao' => ['nullable', 'string', 'max:50'],
-            'celular' => ['nullable', 'string', 'max:20'],
+            'estado_civil' => ['nullable', 'string', 'max:60'],
+            'cor_raca' => ['nullable', 'string', 'max:100'],
+            'religiao' => ['nullable', 'string', 'max:100'],
+            'celular' => ['nullable', 'string', 'max:30'],
             'email' => ['nullable', 'email', 'max:255'],
             'cidade' => ['nullable', 'string', 'max:100'],
             'uf' => ['nullable', 'string', 'size:2'],
@@ -43,7 +43,7 @@ class AlunoRequest extends FormRequest
             'matriz' => ['nullable', 'string', 'max:255'],
             'campus' => ['nullable', 'string', 'max:255'],
             'turma' => ['nullable', 'string', 'max:255'],
-            'periodo' => ['nullable', 'string', 'max:10'],
+            'periodo' => ['nullable', 'string', 'max:30'],
             'periodo_letivo' => ['nullable', 'string', 'max:20'],
         ];
     }
