@@ -5,12 +5,15 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ImportArquivoRequest;
 use App\Services\MatriculaImportService;
+use App\Support\Concerns\PermiteImportacaoLonga;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 use RuntimeException;
 
 class MatriculaImportController extends Controller
 {
+    use PermiteImportacaoLonga;
+
     public function create(): View
     {
         return view('admin.alunos.importar');
@@ -18,6 +21,9 @@ class MatriculaImportController extends Controller
 
     public function store(ImportArquivoRequest $request, MatriculaImportService $service): RedirectResponse
     {
+        $this->permitirExecucaoLonga();
+        $this->protegerContraTransacaoOrfa();
+
         try {
             $resultado = $service->importar($request->file('arquivo'));
         } catch (RuntimeException $e) {

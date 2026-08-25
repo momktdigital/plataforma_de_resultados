@@ -37,6 +37,45 @@ class MatriculaImportTest extends TestCase
         $this->assertDatabaseHas('cursos', ['nome' => 'MEDICINA']);
     }
 
+    public function test_importa_dados_pessoais_da_planilha(): void
+    {
+        $csv = "RA,Nome,Per. Letivo,Curso,Matriz,Período,Sexo,Cor/Raça,Religião,Estado Civil,Cidade,UF,Celular,CPF,Email,Cód. Perfil\n"
+            ."2026001,Ana Silva,2026/1,Medicina,MEDICINA 3390,5,FEMININO,PARDA,CATOLICA,SOLTEIRO,VALENCA,RJ,24999998888,12345678909,ana@example.com,222710\n";
+        $arquivo = UploadedFile::fake()->createWithContent('matricula.csv', $csv);
+
+        $this->actingAs($this->admin(), 'admin')->post('/alunos/importar', ['arquivo' => $arquivo]);
+
+        $aluno = Aluno::where('ra', '2026001')->firstOrFail();
+        $this->assertSame('MEDICINA 3390', $aluno->matriz);
+        $this->assertSame('FEMININO', $aluno->sexo);
+        $this->assertSame('PARDA', $aluno->cor_raca);
+        $this->assertSame('CATOLICA', $aluno->religiao);
+        $this->assertSame('SOLTEIRO', $aluno->estado_civil);
+        $this->assertSame('VALENCA', $aluno->cidade);
+        $this->assertSame('RJ', $aluno->uf);
+        $this->assertSame('24999998888', $aluno->celular);
+        $this->assertSame('222710', $aluno->cod_perfil);
+        $this->assertSame('2026001@somos.unifaa.edu.br', $aluno->email_institucional);
+    }
+
+    public function test_linha_com_cpf_duplicado_e_ignorada_sem_derrubar_as_demais(): void
+    {
+        Aluno::create(['ra' => '999999', 'cpf' => '12345678909', 'data_nascimento' => '2000-01-01']);
+
+        $csv = "RA,Per. Letivo,Curso,Período,CPF\n"
+            ."2026001,2026/1,Medicina,1,12345678909\n" // CPF já usado por outro RA
+            ."2026002,2026/1,Medicina,2,98765432100\n";
+        $arquivo = UploadedFile::fake()->createWithContent('matricula.csv', $csv);
+
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->post('/alunos/importar', ['arquivo' => $arquivo]);
+
+        $response->assertRedirect(route('alunos.index'));
+        $response->assertSessionHas('importIgnoradas');
+        $this->assertDatabaseMissing('alunos', ['ra' => '2026001']);
+        $this->assertDatabaseHas('alunos', ['ra' => '2026002', 'cpf' => '98765432100']);
+    }
+
     public function test_linha_sem_curso_e_ignorada_sem_derrubar_o_import(): void
     {
         $csv = "RA,Per. Letivo,Curso,Período\n2026001,2026/1,Medicina,5\n2026002,2026/1,,5\n";

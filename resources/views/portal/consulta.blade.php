@@ -9,7 +9,7 @@
             <i class="ph ph-magnifying-glass text-3xl text-primary"></i>
         </div>
         <h1 class="text-2xl font-bold mb-2">Consulte seu Resultado</h1>
-        <p class="text-slate-500 text-sm">Informe seu CPF e Data de Nascimento para acessar seu boletim.</p>
+        <p class="text-slate-500 text-sm">Informe seu CPF e Data de Nascimento para acessar seus resultados.</p>
     </div>
 
     <form method="POST" action="{{ route('portal.consultar') }}" class="space-y-6">

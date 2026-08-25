@@ -27,7 +27,8 @@
         Curso, Período (ex.: 5º) — linhas sem alguma dessas quatro são ignoradas.
     </p>
     <p class="mb-2">
-        <strong>Opcionais:</strong> Cód. Perfil, Nome, Status/Situação, Turma, Dt. Nascimento, CPF, Email.
+        <strong>Opcionais:</strong> Cód. Perfil, Nome, Status/Situação, Matriz, Turma, Dt. Nascimento, Sexo,
+        CPF, Estado Civil, Cor/Raça, Religião, Cidade, UF, Celular, Email.
     </p>
     <p>
         A importação usa RA como identificador único: se o aluno já existir, os dados são atualizados

@@ -9,6 +9,7 @@ use App\Support\ImportResult;
 use App\Support\SpreadsheetReader;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * Import de matrícula de alunos por planilha — reconstrói, no lado do
@@ -42,12 +43,33 @@ class MatriculaImportService
 
     private const COD_PERFIL_PATTERNS = ['/^(cod\s*perfil|codigoperfil)$/'];
 
+    private const MATRIZ_PATTERNS = ['/^matriz$/'];
+
+    private const COR_RACA_PATTERNS = ['/^cor\s*raca$/'];
+
+    private const RELIGIAO_PATTERNS = ['/^religiao$/'];
+
+    private const SEXO_PATTERNS = ['/^sexo$/'];
+
+    private const ESTADO_CIVIL_PATTERNS = ['/^estado\s*civil$/'];
+
+    private const CIDADE_PATTERNS = ['/^cidade$/'];
+
+    private const UF_PATTERNS = ['/^uf$/'];
+
+    private const CELULAR_PATTERNS = ['/^celular$/'];
+
     public function importar(UploadedFile $file): ImportResult
     {
         $rows = SpreadsheetReader::readRows($file);
         $resultado = new ImportResult;
 
-        DB::transaction(function () use ($rows, $resultado) {
+        // Cursos já conhecidos, carregados uma vez em vez de um SELECT (+
+        // possível INSERT) por linha — numa planilha de milhares de alunos,
+        // o mesmo punhado de cursos se repete em quase toda linha.
+        $cursosConhecidos = Curso::pluck('nome')->flip()->all();
+
+        DB::transaction(function () use ($rows, $resultado, &$cursosConhecidos) {
             foreach ($rows as $index => $row) {
                 $resultado->registrarLinha();
                 $linha = $index + 2; // +1 pelo cabeçalho, +1 por índice base 0
@@ -74,9 +96,20 @@ class MatriculaImportService
                     continue;
                 }
 
-                $this->salvarAluno($resultado, $ra, $curso, $periodoLetivo, $periodo, $row);
+                // Uma linha ruim (CPF duplicado de outro RA, valor que não
+                // cabe numa coluna, etc.) não pode derrubar a importação
+                // inteira — registra como ignorada, com o motivo, e segue
+                // pras próximas milhares de linhas.
+                try {
+                    $this->salvarAluno($resultado, $ra, $curso, $periodoLetivo, $periodo, $row);
 
-                Curso::firstOrCreate(['nome' => $curso]);
+                    if (! isset($cursosConhecidos[$curso])) {
+                        Curso::firstOrCreate(['nome' => $curso]);
+                        $cursosConhecidos[$curso] = true;
+                    }
+                } catch (Throwable $e) {
+                    $resultado->ignorarLinha($linha, 'Falha ao salvar: '.$e->getMessage());
+                }
             }
         });
 
@@ -99,6 +132,14 @@ class MatriculaImportService
         $codPerfil = HeaderResolver::findValue($row, self::COD_PERFIL_PATTERNS);
         $status = HeaderResolver::findValue($row, self::STATUS_PATTERNS);
         $turma = HeaderResolver::findValue($row, self::TURMA_PATTERNS);
+        $matriz = HeaderResolver::findValue($row, self::MATRIZ_PATTERNS);
+        $corRaca = HeaderResolver::findValue($row, self::COR_RACA_PATTERNS);
+        $religiao = HeaderResolver::findValue($row, self::RELIGIAO_PATTERNS);
+        $sexo = HeaderResolver::findValue($row, self::SEXO_PATTERNS);
+        $estadoCivil = HeaderResolver::findValue($row, self::ESTADO_CIVIL_PATTERNS);
+        $cidade = HeaderResolver::findValue($row, self::CIDADE_PATTERNS);
+        $uf = HeaderResolver::findValue($row, self::UF_PATTERNS);
+        $celular = HeaderResolver::findValue($row, self::CELULAR_PATTERNS);
 
         $aluno = Aluno::where('ra', $ra)->first();
 
@@ -110,11 +151,19 @@ class MatriculaImportService
                 'data_nascimento' => $dataNascimento,
                 'email' => $email,
                 'curso' => $curso,
+                'matriz' => $matriz,
                 'cod_perfil' => $codPerfil,
                 'status' => $status,
                 'periodo_letivo' => $periodoLetivo,
                 'periodo' => $periodo,
                 'turma' => $turma,
+                'cor_raca' => $corRaca,
+                'religiao' => $religiao,
+                'sexo' => $sexo,
+                'estado_civil' => $estadoCivil,
+                'cidade' => $cidade,
+                'uf' => $uf,
+                'celular' => $celular,
             ]);
             $resultado->registrarCriada();
 
@@ -122,17 +171,27 @@ class MatriculaImportService
         }
 
         // Espelha o UPSERT de admin/alunos_di_process.php: campos de
-        // identidade (nome/cpf/nascimento/email/cod_perfil) só são
+        // identidade/dados pessoais (nome/cpf/nascimento/email/cod_perfil/
+        // cor-raça/religião/sexo/estado civil/cidade/UF/celular) só são
         // sobrescritos quando a planilha traz um valor novo — não apagam um
-        // dado já cadastrado manualmente. Status/período letivo/período/turma
-        // sempre refletem a planilha mais recente (inclusive para limpar,
-        // se a coluna ficar vazia num reimport).
+        // dado já cadastrado manualmente. Curso/matriz/status/período
+        // letivo/período/turma são específicos da matrícula corrente e
+        // sempre refletem a planilha mais recente (inclusive para limpar, se
+        // a coluna ficar vazia num reimport).
         $aluno->nome = $nome ?? $aluno->nome;
         $aluno->cpf = $cpf ?? $aluno->cpf;
         $aluno->data_nascimento = $dataNascimento ?? $aluno->data_nascimento;
         $aluno->email = $email ?? $aluno->email;
         $aluno->cod_perfil = $codPerfil ?? $aluno->cod_perfil;
+        $aluno->cor_raca = $corRaca ?? $aluno->cor_raca;
+        $aluno->religiao = $religiao ?? $aluno->religiao;
+        $aluno->sexo = $sexo ?? $aluno->sexo;
+        $aluno->estado_civil = $estadoCivil ?? $aluno->estado_civil;
+        $aluno->cidade = $cidade ?? $aluno->cidade;
+        $aluno->uf = $uf ?? $aluno->uf;
+        $aluno->celular = $celular ?? $aluno->celular;
         $aluno->curso = $curso;
+        $aluno->matriz = $matriz;
         $aluno->status = $status;
         $aluno->periodo_letivo = $periodoLetivo;
         $aluno->periodo = $periodo;

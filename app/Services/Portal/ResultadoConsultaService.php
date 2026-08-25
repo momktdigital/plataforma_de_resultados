@@ -8,6 +8,7 @@ use App\Models\Categoria;
 use App\Models\Resposta;
 use App\Models\ResultadoMetrica;
 use App\Models\ResultadoResumo;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 /**
@@ -23,7 +24,7 @@ class ResultadoConsultaService
      * avaliação, então lê de `resultado_resumos` (App\Services\ResumoResultadoService)
      * em vez de escanear `respostas`, que cresce um por aluno×avaliação×questão.
      *
-     * @return array<int, array{avaliação: Avaliação, periodo: string, acertos: int, total: int, percentual: ?float}>
+     * @return array<int, array{avaliação: Avaliação, periodo: string, periodo_letivo: string, acertos: int, total: int, percentual: ?float}>
      */
     public function buscarPorAluno(Aluno $aluno): array
     {
@@ -34,12 +35,35 @@ class ResultadoConsultaService
             ->map(fn (ResultadoResumo $resumo) => [
                 'avaliacao' => $resumo->avaliacao,
                 'periodo' => $resumo->periodo,
+                'periodo_letivo' => $this->periodoLetivo($resumo->avaliacao->data_avaliacao),
                 'acertos' => $resumo->acertos,
                 'total' => $resumo->total,
                 'percentual' => $resumo->percentual !== null ? (float) $resumo->percentual : null,
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * "Período letivo" (ex.: "2026/2") é diferente de "período" (`periodo`
+     * em respostas/resultado_metricas/resultado_resumos, ex.: "5º") — este
+     * último é o período do CURSO do aluno, não o semestre letivo. Nenhuma
+     * tabela guarda o período letivo de uma avaliação diretamente (só
+     * `alunos.periodo_letivo`, que é um valor único por aluno, sempre o mais
+     * recente da matrícula — não dá pra usar pra classificar avaliações
+     * antigas), então derivamos do semestre da data da avaliação:
+     * jan–jun = "/1", jul–dez = "/2". Sem data cadastrada, não dá pra
+     * classificar — some do filtro (mas continua aparecendo em "Todos").
+     */
+    private function periodoLetivo(?Carbon $dataAvaliacao): string
+    {
+        if ($dataAvaliacao === null) {
+            return '';
+        }
+
+        $semestre = $dataAvaliacao->month <= 6 ? 1 : 2;
+
+        return "{$dataAvaliacao->year}/{$semestre}";
     }
 
     /**

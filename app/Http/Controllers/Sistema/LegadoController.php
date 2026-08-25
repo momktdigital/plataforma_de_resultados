@@ -8,6 +8,7 @@ use App\Models\Avaliacao;
 use App\Services\Legado\BackupSqlParser;
 use App\Services\Legado\LegadoImportador;
 use App\Services\ResumoResultadoService;
+use App\Support\Concerns\PermiteImportacaoLonga;
 use App\Support\LimitesUpload;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,6 +19,8 @@ use Throwable;
 
 class LegadoController extends Controller
 {
+    use PermiteImportacaoLonga;
+
     /** Tabelas do schema antigo, substituídas por `avaliacoes`/`questoes`/`respostas`/`resultado_metricas`. */
     private const TABELAS_LEGADAS = ['gabaritos', 'resultados'];
 
@@ -143,53 +146,5 @@ class LegadoController extends Controller
     private function resumoTexto(array $resumo): string
     {
         return "Avaliacoes: {$resumo['avaliacoes']} · Questões: {$resumo['questoes']} · Respostas: {$resumo['respostas']} · Métricas: {$resumo['metricas']}";
-    }
-
-    /**
-     * Importar um backup inteiro pode significar milhares de linhas
-     * processadas uma a uma — sem isso, o limite padrão de `max_execution_time`
-     * do PHP (30s em muitas instalações, ex.: XAMPP) derruba a requisição no
-     * meio da importação com um 500 sem nenhuma mensagem útil.
-     */
-    private function permitirExecucaoLonga(): void
-    {
-        set_time_limit(0);
-
-        if (LimitesUpload::paraBytes(ini_get('memory_limit') ?: '128M') < LimitesUpload::paraBytes('512M')) {
-            ini_set('memory_limit', '512M');
-        }
-    }
-
-    /**
-     * Um erro fatal de "tempo máximo de execução excedido" pula direto para o
-     * encerramento do script — nosso try/catch nunca roda, e uma transação
-     * aberta ficaria presa segurando locks (foi exatamente isso que já
-     * travou até a tela inicial numa importação anterior). Isso aqui é a
-     * rede de segurança: mesmo nesse cenário, o shutdown do PHP ainda
-     * executa, então garantimos o rollback por aqui.
-     */
-    private function protegerContraTransacaoOrfa(): void
-    {
-        // Pega a conexão agora (objeto PHP concreto) em vez de resolver via
-        // facade dentro do closure: no shutdown, o container da aplicação já
-        // pode ter sido derrubado (ex.: fim dos testes), e resolver `DB::`
-        // nesse momento lançaria um erro fatal próprio em vez de proteger nada.
-        $conexao = DB::connection();
-
-        register_shutdown_function(function () use ($conexao) {
-            try {
-                if ($conexao->transactionLevel() > 0) {
-                    while ($conexao->transactionLevel() > 0) {
-                        $conexao->rollBack();
-                    }
-
-                    // error_log() nativo, não o facade Log:: — o container da
-                    // aplicação pode já ter sido derrubado neste ponto.
-                    error_log('[legado] Transação aberta no encerramento da requisição — revertida (provável timeout).');
-                }
-            } catch (Throwable) {
-                // Conexão pode já estar inutilizável neste ponto; nada mais a fazer.
-            }
-        });
     }
 }

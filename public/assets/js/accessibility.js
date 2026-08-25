@@ -25,24 +25,19 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const injectVLibras = () => {
-        if (document.querySelector('[vw]')) return;
+        if (document.querySelector('script[data-vlibras]')) return;
 
-        const vwDiv = document.createElement('div');
-        vwDiv.setAttribute('vw', '');
-        vwDiv.className = 'enabled';
-        vwDiv.innerHTML = `
-            <div vw-access-button class="active"></div>
-            <div vw-plugin-wrapper>
-                <div class="vw-plugin-top-wrapper"></div>
-            </div>
-        `;
-        document.body.appendChild(vwDiv);
-
+        // A versão atual do plugin (v7.6.0) não usa mais o container
+        // `[vw]`/`[vw-access-button]` que a gente montava na mão — ela se
+        // auto-inicializa (via Shadow DOM, direto no <body>) assim que o
+        // script carrega, e expõe `window.VLibrasWidget.open()` pra abrir o
+        // tradutor programaticamente. Só carregamos o script e deixamos ele
+        // se renderizar; o botão flutuante dele é escondido via CSS
+        // (#vlibras-access-wrapper) e acionado pelo botão da nossa barra.
         const script = document.createElement('script');
         script.src = 'https://vlibras.gov.br/app/vlibras-plugin.js';
-        script.onload = () => {
-            new window.VLibras.Widget('https://vlibras.gov.br/app');
-        };
+        script.dataset.vlibras = 'true';
+        script.async = true;
         document.body.appendChild(script);
     };
 
@@ -53,12 +48,26 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const triggerVLibras = () => {
-        const btn = document.querySelector('[vw-access-button]');
-        if (btn) {
-            btn.click();
-        } else {
-            console.warn('VLibras button not found yet.');
+        if (window.VLibrasWidget && typeof window.VLibrasWidget.open === 'function') {
+            window.VLibrasWidget.open();
+
+            return;
         }
+
+        // O script carrega de forma assíncrona — se o clique acontecer antes
+        // dele terminar, espera até 5s por `window.VLibrasWidget.open`.
+        let tentativas = 0;
+        const esperar = setInterval(() => {
+            tentativas++;
+
+            if (window.VLibrasWidget && typeof window.VLibrasWidget.open === 'function') {
+                clearInterval(esperar);
+                window.VLibrasWidget.open();
+            } else if (tentativas >= 25) {
+                clearInterval(esperar);
+                console.warn('VLibras ainda não carregou.');
+            }
+        }, 200);
     };
 
     const triggerSienna = () => {

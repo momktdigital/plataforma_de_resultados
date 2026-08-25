@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Admin;
+use App\Models\Aluno;
 use App\Models\Avaliacao;
 use App\Models\Questao;
 use App\Models\Resposta;
@@ -54,6 +55,33 @@ class RespondenteTest extends TestCase
 
         $response->assertSee('111');
         $response->assertDontSee('222');
+    }
+
+    public function test_lista_mostra_nome_do_aluno_e_acertos(): void
+    {
+        Aluno::create(['ra' => '111', 'cpf' => '11122233344', 'data_nascimento' => '2000-01-01', 'nome' => 'Ana Respondente']);
+        $avaliacao = $this->provaComRespostas();
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+
+        $response = $this->actingAs($this->admin(), 'admin')->get("/avaliacoes/{$avaliacao->codigo}/respondentes");
+
+        $response->assertOk();
+        $response->assertSee('Ana Respondente');
+        $response->assertSee('1/2');
+    }
+
+    public function test_detalhe_mostra_nome_e_acertos_do_aluno(): void
+    {
+        Aluno::create(['ra' => '111', 'cpf' => '11122233344', 'data_nascimento' => '2000-01-01', 'nome' => 'Ana Respondente']);
+        $avaliacao = $this->provaComRespostas();
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->get("/avaliacoes/{$avaliacao->codigo}/respondentes/show?chave=111&periodo=".urlencode('2026/1'));
+
+        $response->assertOk();
+        $response->assertSee('Ana Respondente');
+        $response->assertSee('1/2');
     }
 
     public function test_mostra_respostas_do_respondente_com_comparacao_ao_gabarito(): void

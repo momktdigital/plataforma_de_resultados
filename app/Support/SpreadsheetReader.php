@@ -51,12 +51,12 @@ class SpreadsheetReader
             return [];
         }
 
-        $header = str_getcsv(array_shift($lines), $delimiter);
+        $header = str_getcsv(array_shift($lines), $delimiter, '"', '\\');
         $header = array_map(fn ($h) => trim((string) $h), $header);
 
         $rows = [];
         foreach ($lines as $line) {
-            $values = str_getcsv($line, $delimiter);
+            $values = str_getcsv($line, $delimiter, '"', '\\');
             $row = [];
             foreach ($header as $index => $columnName) {
                 if ($columnName === '') {

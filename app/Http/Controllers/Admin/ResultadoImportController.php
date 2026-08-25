@@ -7,12 +7,15 @@ use App\Http\Requests\ImportArquivoRequest;
 use App\Models\Avaliacao;
 use App\Services\ResultadoImportService;
 use App\Services\ResumoResultadoService;
+use App\Support\Concerns\PermiteImportacaoLonga;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 use RuntimeException;
 
 class ResultadoImportController extends Controller
 {
+    use PermiteImportacaoLonga;
+
     public function create(Avaliacao $avaliacao): View
     {
         return view('admin.resultados.import', ['avaliacao' => $avaliacao]);
@@ -24,6 +27,9 @@ class ResultadoImportController extends Controller
         ResultadoImportService $service,
         ResumoResultadoService $resumos,
     ): RedirectResponse {
+        $this->permitirExecucaoLonga();
+        $this->protegerContraTransacaoOrfa();
+
         try {
             $resultado = $service->importar($avaliacao, $request->file('arquivo'));
         } catch (RuntimeException $e) {
