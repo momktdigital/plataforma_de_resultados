@@ -3,18 +3,67 @@
 @section('title', "Boletim — {$aluno->ra}")
 @section('container-class', 'max-w-5xl')
 
+@php
+    $primeiroNome = $aluno->nome ? mb_convert_case(explode(' ', trim($aluno->nome))[0], MB_CASE_TITLE, 'UTF-8') : $aluno->ra;
+@endphp
+
 @section('content')
-<div class="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4 fade-in">
-    <div>
-        <a href="{{ route('portal.sair') }}" class="inline-flex items-center text-sm font-medium text-slate-500 hover:text-primary transition-colors bg-white px-4 py-2 rounded-full shadow-sm border border-slate-200 mb-3">
-            <i class="ph-bold ph-arrow-left mr-2"></i> Nova consulta
-        </a>
-        <h1 class="text-3xl font-bold text-slate-800 flex items-center gap-2">
-            <i class="ph-fill ph-chart-bar text-primary"></i> Meu Boletim
-        </h1>
-        <p class="text-slate-500 mt-1">RA: <span class="font-bold text-slate-700">{{ $aluno->ra }}</span> — {{ $aluno->nome }}</p>
+<div class="mb-6 fade-in">
+    <a href="{{ route('portal.sair') }}" class="inline-flex items-center text-sm font-medium text-slate-500 hover:text-primary transition-colors bg-white px-4 py-2 rounded-full shadow-sm border border-slate-200 mb-4">
+        <i class="ph-bold ph-arrow-left mr-2"></i> Nova consulta
+    </a>
+
+    <div class="relative overflow-hidden rounded-3xl shadow-lg" style="background: linear-gradient(135deg, #00b48d 0%, #009e7d 55%, #007a61 100%);">
+        <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(circle at 85% 15%, white 0, transparent 45%), radial-gradient(circle at 10% 90%, white 0, transparent 40%);"></div>
+
+        <div class="relative p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center gap-6">
+            <div class="shrink-0">
+                @if ($aluno->fotoUrl())
+                    <img src="{{ $aluno->fotoUrl(150) }}" alt="Foto de {{ $aluno->nome ?: $aluno->ra }}"
+                         class="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-4 border-white/40 shadow-md"
+                         onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='flex';">
+                    <div style="display:none" class="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-4 border-white/40 shadow-md bg-white/20 items-center justify-center text-white text-3xl font-bold">
+                        {{ mb_strtoupper(mb_substr($aluno->nome ?: $aluno->ra, 0, 1)) }}
+                    </div>
+                @else
+                    <div class="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-4 border-white/40 shadow-md bg-white/20 flex items-center justify-center text-white text-3xl font-bold">
+                        {{ mb_strtoupper(mb_substr($aluno->nome ?: $aluno->ra, 0, 1)) }}
+                    </div>
+                @endif
+            </div>
+
+            <div class="min-w-0 flex-1">
+                <p id="saudacao-portal" class="text-white/80 text-sm font-medium uppercase tracking-wide">Olá</p>
+                <h1 class="text-2xl sm:text-3xl font-black text-white truncate">{{ $primeiroNome }}</h1>
+                <p class="text-white/85 text-sm mt-1">
+                    RA {{ $aluno->ra }}
+                    @if ($aluno->curso) &middot; {{ $aluno->curso }} @endif
+                    @if ($aluno->periodo) &middot; {{ $aluno->periodo }} período @endif
+                </p>
+            </div>
+
+            <div class="flex gap-3 sm:gap-4 shrink-0">
+                <div class="bg-white/15 backdrop-blur-sm rounded-2xl px-4 py-3 text-center min-w-[84px]">
+                    <div class="text-2xl font-black text-white">{{ $totalAvaliacoes }}</div>
+                    <div class="text-[11px] text-white/80 font-medium uppercase tracking-wide">Avaliações</div>
+                </div>
+                <div class="bg-white/15 backdrop-blur-sm rounded-2xl px-4 py-3 text-center min-w-[84px]">
+                    <div class="text-2xl font-black text-white">{{ $mediaGeral !== null ? $mediaGeral.'%' : '—' }}</div>
+                    <div class="text-[11px] text-white/80 font-medium uppercase tracking-wide">Média geral</div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+
+<script>
+(function () {
+    var hora = new Date().getHours();
+    var saudacao = hora < 12 ? 'Bom dia' : (hora < 18 ? 'Boa tarde' : 'Boa noite');
+    var el = document.getElementById('saudacao-portal');
+    if (el) el.textContent = saudacao + ',';
+})();
+</script>
 
 @if (! empty($arvore) || ! empty($semCategoria))
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-6 flex flex-wrap items-end gap-3">

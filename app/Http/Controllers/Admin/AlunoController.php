@@ -68,7 +68,9 @@ class AlunoController extends Controller
     private function comDataConvertida(AlunoRequest $request): array
     {
         $dados = $request->validated();
-        $dados['data_nascimento'] = Carbon::createFromFormat('d/m/Y', $dados['data_nascimento'])->format('Y-m-d');
+        $dados['data_nascimento'] = empty($dados['data_nascimento'])
+            ? null
+            : Carbon::createFromFormat('d/m/Y', $dados['data_nascimento'])->format('Y-m-d');
 
         return $dados;
     }

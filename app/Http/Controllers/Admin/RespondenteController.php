@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Aluno;
 use App\Models\Avaliacao;
+use App\Models\ResultadoResumo;
 use App\Services\ResumoResultadoService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 /**
@@ -37,6 +40,8 @@ class RespondenteController extends Controller
             ->orderByDesc('updated_at')
             ->paginate(20)
             ->withQueryString();
+
+        $this->anexarAlunoEAcertos($avaliacao, $respondentes->getCollection());
 
         $periodosDisponiveis = $avaliacao->resultados()->select('periodo')->distinct()->pluck('periodo');
 
@@ -72,6 +77,12 @@ class RespondenteController extends Controller
         $gabaritos = $avaliacao->questoes()->whereNotNull('gabarito')->pluck('gabarito', 'numero');
         $metricas = $avaliacao->metricas()->where('aluno_chave', $chave)->where('periodo', $periodo)->get();
 
+        $aluno = Aluno::where('ra', $chave)->orWhere('cpf', $chave)->first();
+        $resumo = ResultadoResumo::where('avaliacao_codigo', $avaliacao->codigo)
+            ->where('aluno_chave', $chave)
+            ->where('periodo', $periodo)
+            ->first();
+
         return view('admin.avaliacoes.respondentes.show', [
             'avaliacao' => $avaliacao,
             'respostas' => $respostas,
@@ -79,7 +90,50 @@ class RespondenteController extends Controller
             'metricas' => $metricas,
             'chave' => $chave,
             'periodo' => $periodo,
+            'aluno' => $aluno,
+            'acertos' => $resumo?->acertos,
+            'total' => $resumo?->total,
         ]);
+    }
+
+    /**
+     * Enriquece cada linha (aluno_chave/periodo, vindas de `respostas`
+     * agrupadas) com o nome do aluno cadastrado e o total de acertos/questões
+     * daquela avaliação — batch, sem N+1: uma consulta a `alunos` e uma a
+     * `resultado_resumos` para a página inteira.
+     */
+    private function anexarAlunoEAcertos(Avaliacao $avaliacao, Collection $linhas): void
+    {
+        $chaves = $linhas->pluck('aluno_chave')->filter()->unique()->values();
+
+        if ($chaves->isEmpty()) {
+            return;
+        }
+
+        $alunosPorChave = Aluno::where(fn ($q) => $q->whereIn('ra', $chaves)->orWhereIn('cpf', $chaves))
+            ->get()
+            ->reduce(function (array $carry, Aluno $aluno) {
+                if ($aluno->ra) {
+                    $carry[$aluno->ra] = $aluno;
+                }
+                if ($aluno->cpf) {
+                    $carry[$aluno->cpf] = $aluno;
+                }
+
+                return $carry;
+            }, []);
+
+        $resumosPorChavePeriodo = ResultadoResumo::where('avaliacao_codigo', $avaliacao->codigo)
+            ->whereIn('aluno_chave', $chaves)
+            ->get()
+            ->keyBy(fn (ResultadoResumo $resumo) => "{$resumo->aluno_chave}|{$resumo->periodo}");
+
+        foreach ($linhas as $linha) {
+            $linha->aluno_nome = $alunosPorChave[$linha->aluno_chave]->nome ?? null;
+            $resumo = $resumosPorChavePeriodo->get("{$linha->aluno_chave}|{$linha->periodo}");
+            $linha->acertos = $resumo?->acertos;
+            $linha->total = $resumo?->total;
+        }
     }
 
     public function destroyPeriodo(Request $request, Avaliacao $avaliacao, ResumoResultadoService $resumos): RedirectResponse

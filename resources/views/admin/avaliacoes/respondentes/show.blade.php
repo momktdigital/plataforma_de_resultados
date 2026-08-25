@@ -4,10 +4,25 @@
 
 @section('content')
 <a href="{{ route('avaliacoes.respondentes.index', $avaliacao) }}" class="text-sm text-slate-500 hover:underline">&larr; Resultados por aluno</a>
-<h1 class="text-2xl font-bold mt-2 mb-1">
-    {{ $respostas->first()->ra ?: $respostas->first()->cpf ?: $chave }}
-</h1>
-<p class="text-slate-500 mb-6">Período: {{ $periodo !== '' ? $periodo : '(sem período)' }}</p>
+<div class="flex items-start justify-between gap-4 mt-2 mb-6">
+    <div>
+        <h1 class="text-2xl font-bold mb-1">
+            {{ $aluno?->nome ?: ($respostas->first()->ra ?: $respostas->first()->cpf ?: $chave) }}
+        </h1>
+        <p class="text-slate-500">
+            @if ($aluno?->nome)
+                RA {{ $respostas->first()->ra ?: $aluno->ra }} &middot;
+            @endif
+            Período: {{ $periodo !== '' ? $periodo : '(sem período)' }}
+        </p>
+    </div>
+    @if ($total !== null)
+        <div class="text-right shrink-0">
+            <div class="text-2xl font-black text-emerald-700">{{ $acertos }}/{{ $total }}</div>
+            <div class="text-xs text-slate-500 font-medium">acertos</div>
+        </div>
+    @endif
+</div>
 
 @if ($metricas->isNotEmpty())
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">

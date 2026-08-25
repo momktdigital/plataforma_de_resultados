@@ -269,8 +269,12 @@ class PortalController extends Controller
     {
         $resultados = $consultaService->buscarPorAluno($aluno);
 
+        $comPercentual = collect($resultados)->pluck('percentual')->filter(fn ($p) => $p !== null);
+
         return view('portal.resultados', [
             'aluno' => $aluno,
+            'totalAvaliacoes' => count($resultados),
+            'mediaGeral' => $comPercentual->isNotEmpty() ? round($comPercentual->avg(), 1) : null,
             ...$consultaService->montarArvore($resultados),
         ]);
     }

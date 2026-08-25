@@ -55,9 +55,11 @@
     <table class="w-full text-sm">
         <thead class="bg-slate-50 text-slate-500 text-left">
             <tr>
+                <th class="px-4 py-3">Nome</th>
                 <th class="px-4 py-3">RA</th>
                 <th class="px-4 py-3">CPF</th>
                 <th class="px-4 py-3">Período</th>
+                <th class="px-4 py-3">Acertos</th>
                 <th class="px-4 py-3">Respostas</th>
                 <th class="px-4 py-3">Atualizado em</th>
                 <th class="px-4 py-3"></th>
@@ -66,9 +68,11 @@
         <tbody class="divide-y divide-slate-100">
             @forelse ($respondentes as $r)
                 <tr>
-                    <td class="px-4 py-3 font-medium">{{ $r->ra ?: '—' }}</td>
+                    <td class="px-4 py-3 font-medium">{{ $r->aluno_nome ?: '—' }}</td>
+                    <td class="px-4 py-3">{{ $r->ra ?: '—' }}</td>
                     <td class="px-4 py-3">{{ $r->cpf ?: '—' }}</td>
                     <td class="px-4 py-3">{{ $r->periodo !== '' ? $r->periodo : '—' }}</td>
+                    <td class="px-4 py-3">{{ $r->total !== null ? "{$r->acertos}/{$r->total}" : '—' }}</td>
                     <td class="px-4 py-3">{{ $r->total_respostas }}</td>
                     <td class="px-4 py-3 text-slate-500">{{ \Illuminate\Support\Carbon::parse($r->updated_at)->format('d/m/Y H:i') }}</td>
                     <td class="px-4 py-3 text-right">
@@ -80,7 +84,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="6" class="px-4 py-12 text-center text-slate-400">Nenhum resultado encontrado.</td>
+                    <td colspan="8" class="px-4 py-12 text-center text-slate-400">Nenhum resultado encontrado.</td>
                 </tr>
             @endforelse
         </tbody>
