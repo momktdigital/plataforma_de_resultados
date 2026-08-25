@@ -58,6 +58,24 @@ class MatriculaImportTest extends TestCase
         $this->assertSame('2026001@somos.unifaa.edu.br', $aluno->email_institucional);
     }
 
+    public function test_linha_com_cpf_duplicado_e_ignorada_sem_derrubar_as_demais(): void
+    {
+        Aluno::create(['ra' => '999999', 'cpf' => '12345678909', 'data_nascimento' => '2000-01-01']);
+
+        $csv = "RA,Per. Letivo,Curso,Período,CPF\n"
+            ."2026001,2026/1,Medicina,1,12345678909\n" // CPF já usado por outro RA
+            ."2026002,2026/1,Medicina,2,98765432100\n";
+        $arquivo = UploadedFile::fake()->createWithContent('matricula.csv', $csv);
+
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->post('/alunos/importar', ['arquivo' => $arquivo]);
+
+        $response->assertRedirect(route('alunos.index'));
+        $response->assertSessionHas('importIgnoradas');
+        $this->assertDatabaseMissing('alunos', ['ra' => '2026001']);
+        $this->assertDatabaseHas('alunos', ['ra' => '2026002', 'cpf' => '98765432100']);
+    }
+
     public function test_linha_sem_curso_e_ignorada_sem_derrubar_o_import(): void
     {
         $csv = "RA,Per. Letivo,Curso,Período\n2026001,2026/1,Medicina,5\n2026002,2026/1,,5\n";

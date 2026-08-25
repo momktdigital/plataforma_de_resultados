@@ -9,6 +9,7 @@ use App\Support\ImportResult;
 use App\Support\SpreadsheetReader;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * Import de matrícula de alunos por planilha — reconstrói, no lado do
@@ -63,7 +64,12 @@ class MatriculaImportService
         $rows = SpreadsheetReader::readRows($file);
         $resultado = new ImportResult;
 
-        DB::transaction(function () use ($rows, $resultado) {
+        // Cursos já conhecidos, carregados uma vez em vez de um SELECT (+
+        // possível INSERT) por linha — numa planilha de milhares de alunos,
+        // o mesmo punhado de cursos se repete em quase toda linha.
+        $cursosConhecidos = Curso::pluck('nome')->flip()->all();
+
+        DB::transaction(function () use ($rows, $resultado, &$cursosConhecidos) {
             foreach ($rows as $index => $row) {
                 $resultado->registrarLinha();
                 $linha = $index + 2; // +1 pelo cabeçalho, +1 por índice base 0
@@ -90,9 +96,20 @@ class MatriculaImportService
                     continue;
                 }
 
-                $this->salvarAluno($resultado, $ra, $curso, $periodoLetivo, $periodo, $row);
+                // Uma linha ruim (CPF duplicado de outro RA, valor que não
+                // cabe numa coluna, etc.) não pode derrubar a importação
+                // inteira — registra como ignorada, com o motivo, e segue
+                // pras próximas milhares de linhas.
+                try {
+                    $this->salvarAluno($resultado, $ra, $curso, $periodoLetivo, $periodo, $row);
 
-                Curso::firstOrCreate(['nome' => $curso]);
+                    if (! isset($cursosConhecidos[$curso])) {
+                        Curso::firstOrCreate(['nome' => $curso]);
+                        $cursosConhecidos[$curso] = true;
+                    }
+                } catch (Throwable $e) {
+                    $resultado->ignorarLinha($linha, 'Falha ao salvar: '.$e->getMessage());
+                }
             }
         });
 
