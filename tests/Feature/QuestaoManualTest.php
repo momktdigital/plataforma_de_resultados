@@ -82,6 +82,97 @@ class QuestaoManualTest extends TestCase
         $this->assertDatabaseHas('questoes', ['id' => $questao->id, 'gabarito' => 'B']);
     }
 
+    public function test_cria_questao_manualmente_com_todos_os_metadados(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+
+        $this->actingAs($this->admin(), 'admin')->post("/avaliacoes/{$avaliacao->codigo}/questoes", [
+            'numero' => 1,
+            'gabarito' => 'B',
+            'area' => 'Clínica Médica',
+            'tema' => 'HIV/AIDS',
+            'habilidade' => 'E3 — Avaliação',
+            'bloom_nivel' => 'Aplicação',
+            'bloom_verbo' => 'Avaliar',
+            'miller_nivel' => 'Sabe como',
+            'dificuldade_pedagogica' => 'facil',
+            'dificuldade_tri' => '0.35',
+            'matriz_prova' => ['Item 1', 'Item 2'],
+            'dcn' => ['Art. 5º'],
+            'portaria_inep' => ['P1', 'P2'],
+            'ppc' => ['PPC-01'],
+            'matriz_periodo' => ['1', '2'],
+            'matriz_disciplina' => ['Anatomia', 'Fisiologia'],
+            'matriz_codigo' => ['AN01', 'FI02'],
+        ]);
+
+        $questao = Questao::where('numero', 1)->firstOrFail();
+        $this->assertSame('Clínica Médica', $questao->area);
+        $this->assertSame('HIV/AIDS', $questao->tema);
+        $this->assertSame('Avaliar', $questao->bloom_verbo);
+        $this->assertSame('facil', $questao->dificuldade_pedagogica);
+        $this->assertSame('0.3500', $questao->dificuldade_tri);
+        $this->assertSame(['Item 1', 'Item 2'], $questao->referencias()->where('tipo', 'matriz_prova')->pluck('valor')->all());
+        $this->assertSame(['Art. 5º'], $questao->referencias()->where('tipo', 'dcn')->pluck('valor')->all());
+        $this->assertCount(2, $questao->matrizes);
+        $this->assertSame('Anatomia', $questao->matrizes[0]->disciplina);
+        $this->assertSame(1, $questao->matrizes[0]->periodo);
+    }
+
+    public function test_reenviar_com_chips_vazios_apaga_referencias_e_matrizes_anteriores(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        $admin = $this->admin();
+
+        $this->actingAs($admin, 'admin')->post("/avaliacoes/{$avaliacao->codigo}/questoes", [
+            'numero' => 1,
+            'gabarito' => 'A',
+            'matriz_prova' => ['Item 1'],
+            'matriz_periodo' => ['1'],
+            'matriz_disciplina' => ['Anatomia'],
+            'matriz_codigo' => ['AN01'],
+        ]);
+        $questao = Questao::where('numero', 1)->firstOrFail();
+        $this->assertCount(1, $questao->referencias);
+        $this->assertCount(1, $questao->matrizes);
+
+        // Reenvia o mesmo formulário sem nenhum chip — o editor manual
+        // sempre representa o estado completo da questão, então limpar os
+        // campos e salvar de novo precisa apagar o que existia.
+        $this->actingAs($admin, 'admin')->post("/avaliacoes/{$avaliacao->codigo}/questoes", [
+            'numero' => 1,
+            'gabarito' => 'A',
+        ]);
+
+        $questao->refresh();
+        $this->assertCount(0, $questao->referencias);
+        $this->assertCount(0, $questao->matrizes);
+    }
+
+    public function test_tela_da_avaliacao_renderiza_editor_com_dados_da_questao(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        $admin = $this->admin();
+
+        $this->actingAs($admin, 'admin')->post("/avaliacoes/{$avaliacao->codigo}/questoes", [
+            'numero' => 1,
+            'gabarito' => 'B',
+            'area' => 'Clínica Médica',
+            'matriz_prova' => ['Item 1', 'Item 2'],
+            'matriz_periodo' => ['1'],
+            'matriz_disciplina' => ['Anatomia'],
+            'matriz_codigo' => ['AN01'],
+        ]);
+
+        $response = $this->actingAs($admin, 'admin')->get("/avaliacoes/{$avaliacao->codigo}");
+
+        $response->assertOk();
+        $response->assertSee('Editar', false);
+        $response->assertSee('data-tag-input', false);
+        $response->assertSee('Item 1', false);
+        $response->assertSee('assets/js/tag-input.js', false);
+    }
+
     public function test_excluir_e_restaurar_questao_recalcula_o_resumo_do_boletim(): void
     {
         $avaliacao = Avaliacao::create([]);

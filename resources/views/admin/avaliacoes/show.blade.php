@@ -140,22 +140,89 @@
 
 {{-- Editor manual de gabarito --}}
 <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-    <h2 class="font-semibold mb-1">Editor manual de gabarito</h2>
-    <p class="text-sm text-slate-500 mb-4">Adicione ou corrija uma questão sem precisar reimportar a planilha inteira.</p>
+    <div class="flex items-center justify-between mb-1">
+        <h2 id="editor-questao-titulo" class="font-semibold">Adicionar questão</h2>
+        <button type="button" id="editor-questao-cancelar" class="hidden text-sm text-slate-500 hover:underline">Cancelar edição</button>
+    </div>
+    <p class="text-sm text-slate-500 mb-4">
+        Adicione ou corrija uma questão sem precisar reimportar a planilha inteira — clique em "Editar" numa linha da
+        tabela abaixo para carregar todos os dados dela aqui.
+    </p>
 
-    <form method="POST" action="{{ route('avaliacoes.questoes.store', $avaliacao) }}" class="flex flex-wrap gap-3 items-end mb-6">
+    <form method="POST" action="{{ route('avaliacoes.questoes.store', $avaliacao) }}" id="form-editor-questao" class="space-y-4 mb-6">
         @csrf
-        <div>
-            <label class="block text-sm font-medium mb-1" for="numero">Número</label>
-            <input id="numero" name="numero" type="number" min="1" required
-                   class="w-28 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+
+        <div class="grid sm:grid-cols-2 lg:grid-cols-6 gap-4">
+            <div>
+                <label class="block text-sm font-medium mb-1" for="numero">Número</label>
+                <input id="numero" name="numero" type="number" min="1" required
+                       class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1" for="gabarito">Gabarito</label>
+                <input id="gabarito" name="gabarito" type="text" maxlength="10" required
+                       class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm uppercase">
+            </div>
+            <div class="lg:col-span-2">
+                <label class="block text-sm font-medium mb-1" for="area">Área</label>
+                <input id="area" name="area" type="text" maxlength="255" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            </div>
+            <div class="lg:col-span-2">
+                <label class="block text-sm font-medium mb-1" for="tema">Tema</label>
+                <input id="tema" name="tema" type="text" maxlength="255" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            </div>
+            <div class="lg:col-span-3">
+                <label class="block text-sm font-medium mb-1" for="habilidade">Habilidade</label>
+                <input id="habilidade" name="habilidade" type="text" maxlength="255" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1" for="bloom_nivel">Bloom (nível)</label>
+                <input id="bloom_nivel" name="bloom_nivel" type="text" maxlength="255" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1" for="bloom_verbo">Bloom (verbo)</label>
+                <input id="bloom_verbo" name="bloom_verbo" type="text" maxlength="255" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1" for="miller_nivel">Miller (nível)</label>
+                <input id="miller_nivel" name="miller_nivel" type="text" maxlength="255" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1" for="dificuldade_pedagogica">Dificuldade Pedagógica</label>
+                <select id="dificuldade_pedagogica" name="dificuldade_pedagogica" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    <option value="">—</option>
+                    <option value="facil">Fácil</option>
+                    <option value="medio">Médio</option>
+                    <option value="dificil">Difícil</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1" for="dificuldade_tri">Dificuldade TRI</label>
+                <input id="dificuldade_tri" name="dificuldade_tri" type="number" step="0.0001" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            </div>
         </div>
+
         <div>
-            <label class="block text-sm font-medium mb-1" for="gabarito">Gabarito</label>
-            <input id="gabarito" name="gabarito" type="text" maxlength="10" required
-                   class="w-28 rounded-lg border border-slate-300 px-3 py-2 text-sm uppercase">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Referências externas</p>
+            <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                @include('admin.avaliacoes._tag_input', ['name' => 'matriz_prova', 'label' => 'Matriz Prova'])
+                @include('admin.avaliacoes._tag_input', ['name' => 'dcn', 'label' => 'DCN'])
+                @include('admin.avaliacoes._tag_input', ['name' => 'portaria_inep', 'label' => 'Portaria INEP'])
+                @include('admin.avaliacoes._tag_input', ['name' => 'ppc', 'label' => 'PPC'])
+            </div>
         </div>
-        <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-5 py-2 text-sm">
+
+        <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Matriz curricular</p>
+            <p class="text-xs text-slate-400 mb-2">Informe na mesma ordem nas três listas — a 1ª entrada de cada uma forma um item da matriz, a 2ª forma outro, e assim por diante.</p>
+            <div class="grid sm:grid-cols-3 gap-4">
+                @include('admin.avaliacoes._tag_input', ['name' => 'matriz_periodo', 'label' => 'Período', 'placeholder' => 'Ex.: 1'])
+                @include('admin.avaliacoes._tag_input', ['name' => 'matriz_disciplina', 'label' => 'Disciplina'])
+                @include('admin.avaliacoes._tag_input', ['name' => 'matriz_codigo', 'label' => 'Código'])
+            </div>
+        </div>
+
+        <button type="submit" id="editor-questao-submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-5 py-2 text-sm">
             Salvar questão
         </button>
     </form>
@@ -169,23 +236,50 @@
                     <tr>
                         <th class="px-3 py-2">Nº</th>
                         <th class="px-3 py-2">Gabarito</th>
+                        <th class="px-3 py-2">Área</th>
+                        <th class="px-3 py-2">Tema</th>
                         <th class="px-3 py-2"></th>
                         <th class="px-3 py-2"></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     @foreach ($questoes as $questao)
+                        @php
+                            $referenciasPorTipo = $questao->referencias->groupBy('tipo')->map(fn ($grupo) => $grupo->pluck('valor')->values()->all());
+                            $dadosQuestao = [
+                                'numero' => $questao->numero,
+                                'gabarito' => $questao->gabarito,
+                                'area' => $questao->area,
+                                'tema' => $questao->tema,
+                                'habilidade' => $questao->habilidade,
+                                'bloom_nivel' => $questao->bloom_nivel,
+                                'bloom_verbo' => $questao->bloom_verbo,
+                                'miller_nivel' => $questao->miller_nivel,
+                                'dificuldade_pedagogica' => $questao->dificuldade_pedagogica,
+                                'dificuldade_tri' => $questao->dificuldade_tri,
+                                'matriz_prova' => $referenciasPorTipo->get('matriz_prova', []),
+                                'dcn' => $referenciasPorTipo->get('dcn', []),
+                                'portaria_inep' => $referenciasPorTipo->get('portaria_inep', []),
+                                'ppc' => $referenciasPorTipo->get('ppc', []),
+                                'matriz_periodo' => $questao->matrizes->pluck('periodo')->all(),
+                                'matriz_disciplina' => $questao->matrizes->pluck('disciplina')->all(),
+                                'matriz_codigo' => $questao->matrizes->pluck('codigo')->all(),
+                            ];
+                        @endphp
                         <tr class="{{ $questao->trashed() ? 'opacity-50' : '' }}">
                             <td class="px-3 py-2 font-mono">{{ $questao->numero }}</td>
                             <td class="px-3 py-2 font-bold">{{ $questao->gabarito ?: '—' }}</td>
+                            <td class="px-3 py-2 text-slate-500">{{ $questao->area ?: '—' }}</td>
+                            <td class="px-3 py-2 text-slate-500">{{ $questao->tema ?: '—' }}</td>
                             <td class="px-3 py-2 text-slate-400">{{ $questao->trashed() ? 'Excluída' : '' }}</td>
-                            <td class="px-3 py-2 text-right">
+                            <td class="px-3 py-2 text-right whitespace-nowrap">
                                 @if ($questao->trashed())
                                     <form method="POST" action="{{ route('avaliacoes.questoes.restore', [$avaliacao, $questao->id]) }}" class="inline">
                                         @csrf
                                         <button type="submit" class="text-blue-600 hover:underline">Restaurar</button>
                                     </form>
                                 @else
+                                    <button type="button" class="questao-editar-btn text-emerald-700 hover:underline mr-3" data-questao='@json($dadosQuestao)'>Editar</button>
                                     <form method="POST" action="{{ route('avaliacoes.questoes.destroy', [$avaliacao, $questao]) }}" class="inline"
                                           onsubmit="return confirm('Excluir a questão {{ $questao->numero }}?');">
                                         @csrf
@@ -201,6 +295,56 @@
         </div>
     @endif
 </div>
+
+<script src="{{ asset('assets/js/tag-input.js') }}"></script>
+<script>
+(function () {
+    var form = document.getElementById('form-editor-questao');
+    var titulo = document.getElementById('editor-questao-titulo');
+    var btnSubmit = document.getElementById('editor-questao-submit');
+    var btnCancelar = document.getElementById('editor-questao-cancelar');
+
+    var camposSimples = [
+        'numero', 'gabarito', 'area', 'tema', 'habilidade',
+        'bloom_nivel', 'bloom_verbo', 'miller_nivel',
+        'dificuldade_pedagogica', 'dificuldade_tri',
+    ];
+    var camposChips = ['matriz_prova', 'dcn', 'portaria_inep', 'ppc', 'matriz_periodo', 'matriz_disciplina', 'matriz_codigo'];
+
+    function resetarFormulario() {
+        form.reset();
+        TagInput.clearAll();
+        titulo.textContent = 'Adicionar questão';
+        btnSubmit.textContent = 'Salvar questão';
+        btnCancelar.classList.add('hidden');
+    }
+
+    document.querySelectorAll('.questao-editar-btn').forEach(function (botao) {
+        botao.addEventListener('click', function () {
+            var dados = JSON.parse(botao.dataset.questao);
+
+            camposSimples.forEach(function (campo) {
+                var el = document.getElementById(campo);
+                if (el) {
+                    el.value = dados[campo] === null || dados[campo] === undefined ? '' : dados[campo];
+                }
+            });
+
+            camposChips.forEach(function (campo) {
+                TagInput.setValues(campo, dados[campo]);
+            });
+
+            titulo.textContent = 'Editando a questão ' + dados.numero;
+            btnSubmit.textContent = 'Salvar alterações';
+            btnCancelar.classList.remove('hidden');
+
+            form.scrollIntoView({behavior: 'smooth', block: 'start'});
+        });
+    });
+
+    btnCancelar.addEventListener('click', resetarFormulario);
+})();
+</script>
 
 {{-- Questões críticas --}}
 @if (! empty($estatisticasErro))

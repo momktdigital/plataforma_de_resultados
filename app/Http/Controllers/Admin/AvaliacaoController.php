@@ -43,7 +43,7 @@ class AvaliacaoController extends Controller
     {
         $avaliacao->loadCount(['questoes', 'resultados', 'metricas']);
 
-        $questoes = $avaliacao->questoes()->withTrashed()->orderBy('numero')->get();
+        $questoes = $avaliacao->questoes()->withTrashed()->with(['matrizes', 'referencias'])->orderBy('numero')->get();
 
         return view('admin.avaliacoes.show', [
             'avaliacao' => $avaliacao,

@@ -18,6 +18,8 @@ use Illuminate\Support\Facades\DB;
  */
 class QuestaoImportService
 {
+    public function __construct(private QuestaoReferenciaService $referencias) {}
+
     private const NUMERO_PATTERNS = ['/^(questao|numero|item|q)$/', '/^quest/', '/^num/'];
 
     private const GABARITO_PATTERNS = ['/^(gabarito|resposta|alternativa|letra|correta)$/'];
@@ -157,17 +159,7 @@ class QuestaoImportService
             return;
         }
 
-        $total = max(count($periodos), count($disciplinas), count($codigos));
-
-        $questao->matrizes()->delete();
-
-        for ($i = 0; $i < $total; $i++) {
-            $questao->matrizes()->create([
-                'periodo' => isset($periodos[$i]) && is_numeric($periodos[$i]) ? (int) $periodos[$i] : null,
-                'disciplina' => $disciplinas[$i] ?? null,
-                'codigo' => $codigos[$i] ?? null,
-            ]);
-        }
+        $this->referencias->sincronizarMatrizes($questao, $periodos, $disciplinas, $codigos);
     }
 
     /**
@@ -177,8 +169,6 @@ class QuestaoImportService
      */
     private function sincronizarReferencias(Questao $questao, array $row): void
     {
-        $valoresPorTipo = [];
-
         foreach (self::REFERENCIA_LETRAS as $tipo => $letras) {
             $valores = [];
             foreach ($letras as $letra) {
@@ -189,13 +179,8 @@ class QuestaoImportService
             }
 
             if ($valores !== []) {
-                $valoresPorTipo[$tipo] = $valores;
+                $this->referencias->sincronizarReferencias($questao, $tipo, $valores);
             }
-        }
-
-        foreach ($valoresPorTipo as $tipo => $valores) {
-            $questao->referencias()->where('tipo', $tipo)->delete();
-            $questao->referencias()->createMany(array_map(fn ($valor) => ['tipo' => $tipo, 'valor' => $valor], $valores));
         }
     }
 
