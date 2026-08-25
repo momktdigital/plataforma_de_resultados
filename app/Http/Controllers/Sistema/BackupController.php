@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Services\Backup\BackupService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Throwable;
 
 class BackupController extends Controller
 {
@@ -30,7 +32,14 @@ class BackupController extends Controller
 
     public function store(BackupService $service): RedirectResponse
     {
-        $caminho = $service->gerar();
+        try {
+            $caminho = $service->gerar();
+        } catch (Throwable $e) {
+            Log::error('Falha ao gerar backup.', ['exception' => $e]);
+
+            return redirect()->route('sistema.backups.index')
+                ->withErrors(['backup' => 'Não foi possível gerar o backup: '.$e->getMessage()]);
+        }
 
         return redirect()->route('sistema.backups.index')
             ->with('status', 'Backup gerado: '.basename($caminho));

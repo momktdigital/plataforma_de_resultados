@@ -69,9 +69,14 @@ class BackupService
         $raiz = base_path();
         $excluidos = array_map(fn ($p) => $raiz.'/'.$p, self::EXCLUIR);
 
+        // CATCH_GET_CHILD: sem essa flag, uma única subpasta sem permissão de
+        // leitura (comum em symlinks/junctions do Windows, ex.: public/storage)
+        // derruba o backup inteiro com uma UnexpectedValueException — com ela,
+        // aquela subpasta é só pulada.
         $iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($raiz, FilesystemIterator::SKIP_DOTS),
             RecursiveIteratorIterator::SELF_FIRST,
+            RecursiveIteratorIterator::CATCH_GET_CHILD,
         );
 
         foreach ($iterator as $arquivo) {

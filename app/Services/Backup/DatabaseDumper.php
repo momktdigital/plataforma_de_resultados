@@ -105,12 +105,35 @@ class DatabaseDumper implements DatabaseDumperContract
         fclose($handle);
     }
 
+    /**
+     * Faz o SELECT diretamente pelo PDO (sem passar pelo query builder do
+     * Laravel) e desliga o buffer de resultado do driver MySQL — com
+     * `DB::table($tabela)->get()` a tabela inteira era carregada de uma vez
+     * na memória do PHP antes de escrever a primeira linha; numa tabela como
+     * `respostas`, que cresce uma linha por aluno×questão, isso estoura o
+     * `memory_limit` e derruba o backup com um 500 assim que o volume de
+     * dados passa de alguns milhares de linhas.
+     */
     private function escreverInserts($handle, string $tabela, PDO $pdo, callable $formatar): void
     {
-        foreach (DB::table($tabela)->get() as $linha) {
-            $valores = array_map($formatar, (array) $linha);
+        $mysql = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql';
 
-            fwrite($handle, "INSERT INTO \"{$tabela}\" VALUES (".implode(', ', $valores).");\n");
+        if ($mysql) {
+            $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, false);
+        }
+
+        $statement = $pdo->query("SELECT * FROM `{$tabela}`");
+
+        while ($linha = $statement->fetch(PDO::FETCH_ASSOC)) {
+            $valores = array_map($formatar, $linha);
+
+            fwrite($handle, "INSERT INTO `{$tabela}` VALUES (".implode(', ', $valores).");\n");
+        }
+
+        $statement->closeCursor();
+
+        if ($mysql) {
+            $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, true);
         }
 
         fwrite($handle, "\n");
