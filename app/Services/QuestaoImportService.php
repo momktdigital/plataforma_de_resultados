@@ -109,8 +109,15 @@ class QuestaoImportService
     {
         $campos = [];
 
+        $campos['area'] = HeaderResolver::findValue($row, ['/\barea\b/']);
+        $campos['tema'] = HeaderResolver::findValue($row, ['/\btema\b/']);
+        $campos['habilidade'] = HeaderResolver::findValue($row, ['/\bhabilidade\b/']);
+
         $campos['bloom_nivel'] = HeaderResolver::findValue($row, ['/(?=.*bloom)(?=.*nivel)/']);
-        $campos['bloom_verbo'] = HeaderResolver::findValue($row, ['/(?=.*bloom)(?=.*verbo)/']);
+        // "Taxonomia" sozinho também é aceito: nas planilhas dos coordenadores
+        // essa coluna já vem com os verbos de Bloom (Lembrar, Aplicar...), só
+        // sem "Bloom" no nome do cabeçalho.
+        $campos['bloom_verbo'] = HeaderResolver::findValue($row, ['/(?=.*bloom)(?=.*verbo)/', '/\btaxonomia\b/']);
         $campos['miller_nivel'] = HeaderResolver::findValue($row, ['/miller/']);
 
         $dificuldadePedagogica = HeaderResolver::findValue($row, ['/(?=.*dificuldade)(?=.*pedagog)/']);

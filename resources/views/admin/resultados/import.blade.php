@@ -25,10 +25,61 @@
     </form>
 </div>
 
-<div class="mt-6 max-w-2xl bg-blue-50 border border-blue-200 rounded-xl p-5 text-sm text-blue-900">
-    <p class="font-semibold mb-2">Formato do arquivo (uma linha por resposta):</p>
-    <p class="mb-2"><strong>Obrigatórias:</strong> CPF ou RA (ao menos uma das duas), Questão (número) e Resposta.</p>
-    <p class="mb-2"><strong>Opcional:</strong> Período (ex.: "2026/1") — só é necessário se o mesmo aluno puder refazer esta prova em períodos diferentes; sem essa coluna, todas as respostas do aluno nesta prova são tratadas como uma tentativa única.</p>
-    <p>Reimportar a mesma combinação de aluno + período + questão nesta prova atualiza a resposta em vez de duplicar.</p>
+<div class="mt-8 max-w-3xl">
+    <h2 class="font-semibold text-slate-800 mb-1">Como sua planilha deve ficar</h2>
+    <p class="text-sm text-slate-500 mb-4">
+        Formato "longo": <strong>uma linha por resposta a uma questão</strong> — se o aluno respondeu
+        50 questões, são 50 linhas para ele, não uma coluna por questão. A linha 1 é o cabeçalho.
+    </p>
+
+    <div class="flex flex-wrap gap-3 mb-3 text-xs font-medium">
+        <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Obrigatória</span>
+        <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span> Opcional</span>
+    </div>
+
+    <div class="overflow-x-auto border border-slate-200 rounded-xl shadow-sm bg-white">
+        <table class="text-xs border-collapse w-full">
+            <thead>
+                <tr>
+                    @foreach ([
+                        ['RA', 'obrigatoria'], ['CPF', 'obrigatoria'], ['Questão', 'obrigatoria'],
+                        ['Resposta', 'obrigatoria'], ['Período', 'opcional'],
+                    ] as [$rotulo, $tipo])
+                        <th @class([
+                                'px-2.5 py-2 text-left font-semibold whitespace-nowrap border-b border-slate-200',
+                                'bg-emerald-50 text-emerald-800' => $tipo === 'obrigatoria',
+                                'bg-slate-50 text-slate-600' => $tipo === 'opcional',
+                            ])>
+                            {{ $rotulo }}
+                        </th>
+                    @endforeach
+                </tr>
+            </thead>
+            <tbody class="text-slate-700">
+                @foreach ([
+                    ['2026001', '', 1, 'B', '2026/1'],
+                    ['2026001', '', 2, 'C', '2026/1'],
+                    ['2026001', '', 3, '', '2026/1'],
+                    ['', '11122233344', 1, 'A', '2026/1'],
+                ] as $linha)
+                    <tr class="odd:bg-white even:bg-slate-50/60">
+                        @foreach ($linha as $valor)
+                            <td class="px-2.5 py-1.5 whitespace-nowrap border-b border-slate-100 {{ $valor === '' ? 'text-slate-300' : '' }}">
+                                {{ $valor === '' ? '—' : $valor }}
+                            </td>
+                        @endforeach
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
+
+    <ul class="mt-4 space-y-1.5 text-sm text-slate-600 list-disc list-inside">
+        <li><strong>RA</strong> ou <strong>CPF</strong> — só precisa de uma das duas por linha (linha 4 do exemplo usa só CPF).</li>
+        <li><strong>Resposta</strong> precisa existir como coluna, mas pode ficar vazia numa linha — significa que o aluno deixou aquela questão em branco (linha 3 do exemplo).</li>
+        <li><strong>Período</strong> só é necessário se o mesmo aluno puder refazer esta prova em períodos diferentes; sem essa coluna, todas as respostas do aluno nesta prova contam como uma tentativa única.</li>
+        <li>Reimportar a mesma combinação de aluno + período + questão <strong>atualiza</strong> a resposta em vez de duplicar.</li>
+        <li>Aceita <code class="bg-slate-100 px-1 rounded">.xlsx</code>, <code class="bg-slate-100 px-1 rounded">.xls</code> ou <code class="bg-slate-100 px-1 rounded">.csv</code>.</li>
+    </ul>
 </div>
 @endsection

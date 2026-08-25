@@ -106,6 +106,40 @@ class QuestaoImportTest extends TestCase
         $this->assertNotSoftDeleted('questoes', ['numero' => 1]);
     }
 
+    public function test_importa_area_tema_habilidade_e_taxonomia_como_bloom_verbo(): void
+    {
+        $prova = Prova::create([]);
+
+        $csv = "Questão,Gabarito,Área,tema,habilidade,taxonomia\n"
+            .'1,B,"Clínica Médica","HIV/AIDS","E3 — Avaliação e Julgamento Ético-Profissional","Avaliar"'."\n";
+        $arquivo = UploadedFile::fake()->createWithContent('gabarito.csv', $csv);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post("/provas/{$prova->codigo}/questoes/import", ['arquivo' => $arquivo]);
+
+        $questao = Questao::where('numero', 1)->firstOrFail();
+        $this->assertSame('Clínica Médica', $questao->area);
+        $this->assertSame('HIV/AIDS', $questao->tema);
+        $this->assertSame('E3 — Avaliação e Julgamento Ético-Profissional', $questao->habilidade);
+        $this->assertSame('Avaliar', $questao->bloom_verbo);
+    }
+
+    public function test_coluna_sistema_nao_e_confundida_com_tema(): void
+    {
+        $prova = Prova::create([]);
+
+        // "Sistema" contém "tema" como substring — a coluna de tema só deve
+        // casar com a palavra inteira, não com pedaços de outras palavras.
+        $csv = "Questão,Gabarito,Sistema\n1,B,Cardiovascular\n";
+        $arquivo = UploadedFile::fake()->createWithContent('gabarito.csv', $csv);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post("/provas/{$prova->codigo}/questoes/import", ['arquivo' => $arquivo]);
+
+        $questao = Questao::where('numero', 1)->firstOrFail();
+        $this->assertNull($questao->tema);
+    }
+
     public function test_referencias_a_b_c_viram_linhas_em_questao_referencias(): void
     {
         $prova = Prova::create([]);

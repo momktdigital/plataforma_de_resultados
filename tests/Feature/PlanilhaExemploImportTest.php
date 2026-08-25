@@ -64,7 +64,11 @@ class PlanilhaExemploImportTest extends TestCase
 
         $q1 = Questao::where('numero', 1)->firstOrFail();
         $this->assertSame('B', $q1->gabarito);
-        $this->assertSame('Aplicar', $q1->bloom_nivel);
+        $this->assertSame('Clínica Médica', $q1->area);
+        $this->assertSame('HIV/AIDS', $q1->tema);
+        $this->assertSame('E3 — Avaliação e Julgamento Ético-Profissional', $q1->habilidade);
+        $this->assertSame('Aplicação', $q1->bloom_nivel);
+        $this->assertSame('Avaliar', $q1->bloom_verbo);
         $this->assertSame('facil', $q1->dificuldade_pedagogica);
         $this->assertCount(2, $q1->matrizes);
         $this->assertSame(['Item 1', 'Item 2'], $q1->referencias()->where('tipo', 'matriz_prova')->pluck('valor')->all());
