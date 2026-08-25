@@ -1,9 +1,9 @@
 @extends('layouts.app')
 
-@section('title', "Importar questões — Prova #{$prova->codigo}")
+@section('title', "Importar questões — Avaliacao #{$avaliacao->codigo}")
 
 @section('content')
-<a href="{{ route('provas.show', $prova) }}" class="text-sm text-slate-500 hover:underline">&larr; Prova #{{ $prova->codigo }}</a>
+<a href="{{ route('avaliacoes.show', $avaliacao) }}" class="text-sm text-slate-500 hover:underline">&larr; Avaliacao #{{ $avaliacao->codigo }}</a>
 <h1 class="text-2xl font-bold mt-2 mb-6">Importar questões e gabarito</h1>
 
 <a href="{{ asset('exemplos/questoes-exemplo.xlsx') }}"
@@ -12,7 +12,7 @@
 </a>
 
 <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 max-w-2xl">
-    <form method="POST" action="{{ route('provas.questoes.import.store', $prova) }}" enctype="multipart/form-data" class="space-y-4">
+    <form method="POST" action="{{ route('avaliacoes.questoes.import.store', $avaliacao) }}" enctype="multipart/form-data" class="space-y-4">
         @csrf
         <div>
             <label class="block text-sm font-medium mb-1" for="arquivo">Arquivo (.csv, .xlsx ou .xls)</label>
@@ -87,7 +87,7 @@
         <li><strong>Bloom (verbo)</strong> também aceita o cabeçalho <strong>Taxonomia</strong> — se sua planilha já chama essa coluna assim (com os verbos Lembrar/Aplicar/Analisar/Avaliar...), não precisa renomear.</li>
         <li><strong>Matriz (período/disciplina/código)</strong> aceitam vários valores na mesma célula, separados por vírgula, ponto-e-vírgula ou "|" (ver linha 1 do exemplo acima).</li>
         <li><strong>Matriz Prova, DCN, Portaria INEP e PPC</strong> guardam vários valores usando uma coluna por letra (A, B, C...) — deixe em branco as letras que não usar.</li>
-        <li>Reimportar o mesmo número de questão desta prova <strong>atualiza</strong> os dados em vez de duplicar.</li>
+        <li>Reimportar o mesmo número de questão desta avaliação <strong>atualiza</strong> os dados em vez de duplicar.</li>
         <li>Aceita <code class="bg-slate-100 px-1 rounded">.xlsx</code>, <code class="bg-slate-100 px-1 rounded">.xls</code> ou <code class="bg-slate-100 px-1 rounded">.csv</code>.</li>
     </ul>
 </div>

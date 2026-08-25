@@ -17,7 +17,7 @@
         @endif
 
         @foreach ($no['resultados'] as $r)
-            @include('portal._prova_card', ['r' => $r])
+            @include('portal._avaliacao_card', ['r' => $r])
         @endforeach
     </div>
 </li>

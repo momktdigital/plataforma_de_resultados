@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Aluno;
-use App\Models\Prova;
+use App\Models\Avaliacao;
 use App\Models\Resposta;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -35,24 +35,24 @@ class ImportarDadosLegadosTest extends TestCase
 
         $this->artisan('legado:importar')->assertExitCode(0);
 
-        $prova = Prova::where('nome', 'ENADE 2026')->firstOrFail();
-        $this->assertSame('https://exemplo.org/gabarito', $prova->link_comentado);
+        $avaliacao = Avaliacao::where('nome', 'ENADE 2026')->firstOrFail();
+        $this->assertSame('https://exemplo.org/gabarito', $avaliacao->link_comentado);
 
-        $this->assertDatabaseHas('questoes', ['prova_codigo' => $prova->codigo, 'numero' => 1, 'gabarito' => 'B']);
-        $this->assertDatabaseHas('questoes', ['prova_codigo' => $prova->codigo, 'numero' => 2, 'gabarito' => 'C']);
+        $this->assertDatabaseHas('questoes', ['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'B']);
+        $this->assertDatabaseHas('questoes', ['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 2, 'gabarito' => 'C']);
 
         $this->assertDatabaseHas('respostas', [
-            'prova_codigo' => $prova->codigo, 'ra' => '12345', 'periodo' => '2026/1', 'questao_numero' => 1, 'resposta' => 'B',
+            'avaliacao_codigo' => $avaliacao->codigo, 'ra' => '12345', 'periodo' => '2026/1', 'questao_numero' => 1, 'resposta' => 'B',
         ]);
         $this->assertDatabaseHas('respostas', [
-            'prova_codigo' => $prova->codigo, 'ra' => '12345', 'periodo' => '2026/1', 'questao_numero' => 2, 'resposta' => 'D',
+            'avaliacao_codigo' => $avaliacao->codigo, 'ra' => '12345', 'periodo' => '2026/1', 'questao_numero' => 2, 'resposta' => 'D',
         ]);
 
         $this->assertDatabaseHas('resultado_metricas', [
-            'prova_codigo' => $prova->codigo, 'ra' => '12345', 'nome_metrica' => 'Nota de Redação', 'valor' => '8.5',
+            'avaliacao_codigo' => $avaliacao->codigo, 'ra' => '12345', 'nome_metrica' => 'Nota de Redação', 'valor' => '8.5',
         ]);
         $this->assertDatabaseHas('resultado_metricas', [
-            'prova_codigo' => $prova->codigo, 'ra' => '12345', 'nome_metrica' => 'Total', 'valor' => '72',
+            'avaliacao_codigo' => $avaliacao->codigo, 'ra' => '12345', 'nome_metrica' => 'Total', 'valor' => '72',
         ]);
     }
 
@@ -80,12 +80,12 @@ class ImportarDadosLegadosTest extends TestCase
     public function test_preserva_exclusao_lixeira(): void
     {
         DB::table('gabaritos')->insert([
-            'nome_avaliacao' => 'Prova Antiga',
+            'nome_avaliacao' => 'Avaliacao Antiga',
             'respostas' => json_encode(['Q1' => 'A']),
             'created_at' => now(), 'updated_at' => now(), 'deleted_at' => now(),
         ]);
         DB::table('resultados')->insert([
-            'ra' => '111', 'periodo' => '2026/1', 'nome_avaliacao' => 'Prova Antiga',
+            'ra' => '111', 'periodo' => '2026/1', 'nome_avaliacao' => 'Avaliacao Antiga',
             'respostas' => json_encode(['Q1' => 'A']),
             'created_at' => now(), 'updated_at' => now(), 'deleted_at' => now(),
         ]);
@@ -106,7 +106,7 @@ class ImportarDadosLegadosTest extends TestCase
 
         $this->artisan('legado:importar --dry-run')->assertExitCode(0);
 
-        $this->assertDatabaseCount('provas', 0);
+        $this->assertDatabaseCount('avaliacoes', 0);
         $this->assertDatabaseCount('questoes', 0);
     }
 
@@ -127,7 +127,7 @@ class ImportarDadosLegadosTest extends TestCase
         $this->artisan('legado:importar')->assertExitCode(0);
         $this->artisan('legado:importar')->assertExitCode(0);
 
-        $this->assertDatabaseCount('provas', 1);
+        $this->assertDatabaseCount('avaliacoes', 1);
         $this->assertDatabaseCount('questoes', 1);
         $this->assertDatabaseCount('respostas', 1);
         $this->assertDatabaseCount('resultado_metricas', 1);

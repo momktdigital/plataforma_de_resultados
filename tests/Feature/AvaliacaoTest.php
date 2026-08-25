@@ -3,12 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\Admin;
+use App\Models\Avaliacao;
 use App\Models\Categoria;
-use App\Models\Prova;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-class ProvaTest extends TestCase
+class AvaliacaoTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -19,24 +19,24 @@ class ProvaTest extends TestCase
 
     public function test_criar_prova_nao_exige_nenhum_campo(): void
     {
-        $response = $this->actingAs($this->admin(), 'admin')->post('/provas', []);
+        $response = $this->actingAs($this->admin(), 'admin')->post('/avaliacoes', []);
 
-        $this->assertDatabaseCount('provas', 1);
+        $this->assertDatabaseCount('avaliacoes', 1);
 
-        $prova = Prova::first();
-        $response->assertRedirect(route('provas.show', $prova));
-        $this->assertNull($prova->nome);
-        $this->assertNotNull($prova->codigo);
+        $avaliacao = Avaliacao::first();
+        $response->assertRedirect(route('avaliacoes.show', $avaliacao));
+        $this->assertNull($avaliacao->nome);
+        $this->assertNotNull($avaliacao->codigo);
     }
 
     public function test_criar_prova_com_nome_e_tipo(): void
     {
-        $this->actingAs($this->admin(), 'admin')->post('/provas', [
+        $this->actingAs($this->admin(), 'admin')->post('/avaliacoes', [
             'nome' => 'ENADE 2026',
             'tipo' => 'Institucional',
         ]);
 
-        $this->assertDatabaseHas('provas', [
+        $this->assertDatabaseHas('avaliacoes', [
             'nome' => 'ENADE 2026',
             'tipo' => 'Institucional',
         ]);
@@ -46,35 +46,35 @@ class ProvaTest extends TestCase
     {
         $categoria = Categoria::create(['nome' => 'Simulados']);
 
-        $this->actingAs($this->admin(), 'admin')->post('/provas', [
+        $this->actingAs($this->admin(), 'admin')->post('/avaliacoes', [
             'categoria_id' => $categoria->id,
-            'data_prova' => '15/03/2026',
+            'data_avaliacao' => '15/03/2026',
         ]);
 
-        $prova = Prova::firstOrFail();
-        $this->assertSame($categoria->id, $prova->categoria_id);
-        $this->assertSame('2026-03-15', $prova->data_prova->format('Y-m-d'));
+        $avaliacao = Avaliacao::firstOrFail();
+        $this->assertSame($categoria->id, $avaliacao->categoria_id);
+        $this->assertSame('2026-03-15', $avaliacao->data_avaliacao->format('Y-m-d'));
     }
 
     public function test_atualiza_categoria_e_data_de_uma_prova_existente(): void
     {
-        $prova = Prova::create([]);
+        $avaliacao = Avaliacao::create([]);
         $categoria = Categoria::create(['nome' => 'Institucional']);
         $admin = $this->admin();
 
-        $this->actingAs($admin, 'admin')->put("/provas/{$prova->codigo}", [
+        $this->actingAs($admin, 'admin')->put("/avaliacoes/{$avaliacao->codigo}", [
             'categoria_id' => $categoria->id,
-            'data_prova' => '01/06/2026',
+            'data_avaliacao' => '01/06/2026',
         ]);
 
-        $prova->refresh();
-        $this->assertSame($categoria->id, $prova->categoria_id);
-        $this->assertSame('2026-06-01', $prova->data_prova->format('Y-m-d'));
+        $avaliacao->refresh();
+        $this->assertSame($categoria->id, $avaliacao->categoria_id);
+        $this->assertSame('2026-06-01', $avaliacao->data_avaliacao->format('Y-m-d'));
     }
 
     public function test_categoria_inexistente_e_rejeitada(): void
     {
-        $response = $this->actingAs($this->admin(), 'admin')->post('/provas', [
+        $response = $this->actingAs($this->admin(), 'admin')->post('/avaliacoes', [
             'categoria_id' => 999,
         ]);
 
@@ -85,7 +85,7 @@ class ProvaTest extends TestCase
     {
         $this->admin(); // sistema já instalado, mas o cliente não está autenticado
 
-        $this->get('/provas')->assertRedirect(route('login'));
-        $this->post('/provas')->assertRedirect(route('login'));
+        $this->get('/avaliacoes')->assertRedirect(route('login'));
+        $this->post('/avaliacoes')->assertRedirect(route('login'));
     }
 }

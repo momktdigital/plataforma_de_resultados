@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
- * Métrica agregada de um respondente numa prova/período que não é resposta
+ * Métrica agregada de um respondente numa avaliação/período que não é resposta
  * de uma questão específica (ex.: "Nota de Redação", "Total"). `aluno_chave`
  * é gerada pelo banco (COALESCE(cpf, ra)) e nunca deve ser atribuída
  * manualmente.
@@ -19,7 +19,7 @@ class ResultadoMetrica extends Model
     protected $table = 'resultado_metricas';
 
     protected $fillable = [
-        'prova_codigo',
+        'avaliacao_codigo',
         'aluno_id',
         'ra',
         'cpf',
@@ -28,9 +28,9 @@ class ResultadoMetrica extends Model
         'valor',
     ];
 
-    public function prova(): BelongsTo
+    public function avaliacao(): BelongsTo
     {
-        return $this->belongsTo(Prova::class, 'prova_codigo', 'codigo');
+        return $this->belongsTo(Avaliacao::class, 'avaliacao_codigo', 'codigo');
     }
 
     public function aluno(): BelongsTo

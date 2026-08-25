@@ -1,9 +1,9 @@
 @extends('layouts.app')
 
-@section('title', "Respondente — Prova #{$prova->codigo}")
+@section('title', "Respondente — Avaliação #{$avaliacao->codigo}")
 
 @section('content')
-<a href="{{ route('provas.respondentes.index', $prova) }}" class="text-sm text-slate-500 hover:underline">&larr; Resultados por aluno</a>
+<a href="{{ route('avaliacoes.respondentes.index', $avaliacao) }}" class="text-sm text-slate-500 hover:underline">&larr; Resultados por aluno</a>
 <h1 class="text-2xl font-bold mt-2 mb-1">
     {{ $respostas->first()->ra ?: $respostas->first()->cpf ?: $chave }}
 </h1>

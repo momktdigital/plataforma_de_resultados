@@ -3,7 +3,7 @@
 namespace App\Services\Legado;
 
 use App\Models\Aluno;
-use App\Models\Prova;
+use App\Models\Avaliacao;
 use App\Models\Questao;
 use App\Models\Resposta;
 use App\Models\ResultadoMetrica;
@@ -11,7 +11,7 @@ use RuntimeException;
 
 /**
  * Regra de transformação dos dados legados (`gabaritos`/`resultados`) para o
- * schema novo (`provas`/`questoes`/`respostas`/`resultado_metricas`) — usada
+ * schema novo (`avaliações`/`questoes`/`respostas`/`resultado_metricas`) — usada
  * tanto lendo direto do banco compartilhado (`legado:importar`) quanto a
  * partir de um arquivo de backup .sql enviado pelo admin. Um único lugar com
  * essa regra evita as duas fontes divergirem com o tempo.
@@ -22,21 +22,21 @@ use RuntimeException;
 class LegadoImportador
 {
     private array $contadores = [
-        'provas' => 0,
+        'avaliacoes' => 0,
         'questoes' => 0,
         'respostas' => 0,
         'metricas' => 0,
     ];
 
-    /** @var array<int, true> Códigos de Prova tocados nesta importação, para recalcular o resumo delas depois. */
-    private array $provasTocadas = [];
+    /** @var array<int, true> Códigos de Avaliacao tocados nesta importação, para recalcular o resumo delas depois. */
+    private array $avaliacoesTocadas = [];
 
     /**
      * @param  object  $linha  Precisa ter: nome_avaliacao, respostas, link_comentado, deleted_at.
      */
     public function importarGabarito(object $linha): void
     {
-        $prova = $this->localizarOuCriarProva($linha->nome_avaliacao, $linha->link_comentado ?? null);
+        $avaliacao = $this->localizarOuCriarAvaliacao($linha->nome_avaliacao, $linha->link_comentado ?? null);
         $agora = now();
         $deletedAt = $linha->deleted_at ?? null;
 
@@ -47,7 +47,7 @@ class LegadoImportador
             }
 
             $questoes[] = [
-                'prova_codigo' => $prova->codigo,
+                'avaliacao_codigo' => $avaliacao->codigo,
                 'numero' => (int) $matches[0],
                 'gabarito' => mb_strtoupper((string) $gabarito, 'UTF-8'),
                 'deleted_at' => $deletedAt,
@@ -60,10 +60,10 @@ class LegadoImportador
             return;
         }
 
-        // upsert (1 query para todas as questões desta prova) em vez de um
+        // upsert (1 query para todas as questões desta avaliação) em vez de um
         // find+save por questão — com milhares de linhas legadas, isso é a
         // diferença entre segundos e minutos de importação.
-        Questao::upsert($questoes, ['prova_codigo', 'numero'], ['gabarito', 'deleted_at', 'updated_at']);
+        Questao::upsert($questoes, ['avaliacao_codigo', 'numero'], ['gabarito', 'deleted_at', 'updated_at']);
         $this->contadores['questoes'] += count($questoes);
     }
 
@@ -72,7 +72,7 @@ class LegadoImportador
      */
     public function importarResultado(object $linha): void
     {
-        $prova = $this->localizarOuCriarProva($linha->nome_avaliacao, $linha->link_comentado ?? null);
+        $avaliacao = $this->localizarOuCriarAvaliacao($linha->nome_avaliacao, $linha->link_comentado ?? null);
         $ra = trim((string) $linha->ra) ?: null;
         $periodo = (string) ($linha->periodo ?? '');
         $alunoId = $ra !== null ? Aluno::where('ra', $ra)->value('id') : null;
@@ -86,7 +86,7 @@ class LegadoImportador
             }
 
             $respostas[] = [
-                'prova_codigo' => $prova->codigo,
+                'avaliacao_codigo' => $avaliacao->codigo,
                 'ra' => $ra,
                 'cpf' => null,
                 'periodo' => $periodo,
@@ -105,7 +105,7 @@ class LegadoImportador
             // pra decidir se cria ou atualiza cada linha.
             Resposta::upsert(
                 $respostas,
-                ['prova_codigo', 'aluno_chave', 'periodo', 'questao_numero'],
+                ['avaliacao_codigo', 'aluno_chave', 'periodo', 'questao_numero'],
                 ['resposta', 'aluno_id', 'deleted_at', 'updated_at'],
             );
             $this->contadores['respostas'] += count($respostas);
@@ -114,7 +114,7 @@ class LegadoImportador
         $metricas = [];
         foreach ($this->decodificarJson($linha->notas_finais ?? null) as $nomeMetrica => $valor) {
             $metricas[] = [
-                'prova_codigo' => $prova->codigo,
+                'avaliacao_codigo' => $avaliacao->codigo,
                 'ra' => $ra,
                 'cpf' => null,
                 'periodo' => $periodo,
@@ -130,39 +130,39 @@ class LegadoImportador
         if ($metricas !== []) {
             ResultadoMetrica::upsert(
                 $metricas,
-                ['prova_codigo', 'aluno_chave', 'periodo', 'nome_metrica'],
+                ['avaliacao_codigo', 'aluno_chave', 'periodo', 'nome_metrica'],
                 ['valor', 'aluno_id', 'deleted_at', 'updated_at'],
             );
             $this->contadores['metricas'] += count($metricas);
         }
     }
 
-    /** @return array{provas: int, questoes: int, respostas: int, metricas: int} */
+    /** @return array{avaliacoes: int, questoes: int, respostas: int, metricas: int} */
     public function resumo(): array
     {
         return $this->contadores;
     }
 
-    /** @return array<int, int> Códigos de Prova tocados nesta importação. */
-    public function provasTocadas(): array
+    /** @return array<int, int> Códigos de Avaliacao tocados nesta importação. */
+    public function avaliacoesTocadas(): array
     {
-        return array_keys($this->provasTocadas);
+        return array_keys($this->avaliacoesTocadas);
     }
 
-    private function localizarOuCriarProva(string $nomeAvaliacao, ?string $linkComentado): Prova
+    private function localizarOuCriarAvaliacao(string $nomeAvaliacao, ?string $linkComentado): Avaliacao
     {
-        $prova = Prova::firstOrCreate(['nome' => $nomeAvaliacao]);
-        $this->provasTocadas[$prova->codigo] = true;
+        $avaliacao = Avaliacao::firstOrCreate(['nome' => $nomeAvaliacao]);
+        $this->avaliacoesTocadas[$avaliacao->codigo] = true;
 
-        if ($prova->wasRecentlyCreated) {
-            $this->contadores['provas']++;
+        if ($avaliacao->wasRecentlyCreated) {
+            $this->contadores['avaliacoes']++;
         }
 
-        if ($linkComentado && ! $prova->link_comentado) {
-            $prova->update(['link_comentado' => $linkComentado]);
+        if ($linkComentado && ! $avaliacao->link_comentado) {
+            $avaliacao->update(['link_comentado' => $linkComentado]);
         }
 
-        return $prova;
+        return $avaliacao;
     }
 
     /** @return array<string, mixed> */

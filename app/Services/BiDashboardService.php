@@ -2,29 +2,29 @@
 
 namespace App\Services;
 
-use App\Models\Prova;
+use App\Models\Avaliacao;
 use App\Models\Resposta;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Painel de BI por Prova — equivalente ao dashboard de admin/index.php
+ * Painel de BI por Avaliação — equivalente ao dashboard de admin/index.php
  * (histograma de distribuição de acertos, radar por matéria, Top 5),
  * recalculado a partir do schema novo (`respostas`/`questao_matrizes`) em
  * vez do JSON por aluno do sistema legado.
  *
  * Cada agregação (nota por respondente, desempenho por disciplina) é feita
  * em SQL (JOIN + SUM(CASE...)/COUNT agrupados) — a versão anterior trazia
- * toda linha de `respostas` da prova pra um Collection do PHP e varria essa
+ * toda linha de `respostas` da avaliação pra um Collection do PHP e varria essa
  * coleção várias vezes (uma vez por questão com matriz, pra cada
- * disciplina), o que não escala: numa prova com 167 mil respostas isso
+ * disciplina), o que não escala: numa avaliação com 167 mil respostas isso
  * travava a página (mesma classe de problema corrigida em
  * EstatisticaErroService).
  */
 class BiDashboardService
 {
-    public function gerar(Prova $prova, string $periodo = ''): array
+    public function gerar(Avaliacao $avaliacao, string $periodo = ''): array
     {
-        $gabaritos = $prova->questoes()
+        $gabaritos = $avaliacao->questoes()
             ->whereNotNull('gabarito')
             ->where('gabarito', '!=', '')
             ->get(['id', 'numero', 'gabarito'])
@@ -37,14 +37,14 @@ class BiDashboardService
         $totalQuestoes = $gabaritos->count();
 
         $porRespondente = Resposta::query()
-            ->join('questoes', function ($join) use ($prova) {
+            ->join('questoes', function ($join) use ($avaliacao) {
                 $join->on('questoes.numero', '=', 'respostas.questao_numero')
-                    ->where('questoes.prova_codigo', $prova->codigo)
+                    ->where('questoes.avaliacao_codigo', $avaliacao->codigo)
                     ->whereNull('questoes.deleted_at')
                     ->whereNotNull('questoes.gabarito')
                     ->where('questoes.gabarito', '!=', '');
             })
-            ->where('respostas.prova_codigo', $prova->codigo)
+            ->where('respostas.avaliacao_codigo', $avaliacao->codigo)
             ->when($periodo !== '', fn ($query) => $query->where('respostas.periodo', $periodo))
             ->selectRaw('respostas.aluno_chave as aluno_chave, respostas.periodo as periodo')
             ->selectRaw('MAX(respostas.ra) as ra, MAX(respostas.cpf) as cpf')
@@ -81,19 +81,19 @@ class BiDashboardService
             'totalRespondentes' => $porRespondente->count(),
             'histograma' => $histograma,
             'top5' => $top5,
-            'radar' => $this->mediaPorDisciplina($prova, $periodo),
+            'radar' => $this->mediaPorDisciplina($avaliacao, $periodo),
         ];
     }
 
     /** @return array<string, float> */
-    private function mediaPorDisciplina(Prova $prova, string $periodo): array
+    private function mediaPorDisciplina(Avaliacao $avaliacao, string $periodo): array
     {
         // Pares (questão, disciplina) distintos primeiro — uma questão com
         // duas linhas de matriz para a MESMA disciplina (períodos/códigos
         // diferentes) não deve contar a resposta duas vezes.
         $paresQuestaoDisciplina = DB::table('questao_matrizes as m')
             ->join('questoes as q', 'q.id', '=', 'm.questao_id')
-            ->where('q.prova_codigo', $prova->codigo)
+            ->where('q.avaliacao_codigo', $avaliacao->codigo)
             ->whereNull('q.deleted_at')
             ->whereNotNull('q.gabarito')
             ->where('q.gabarito', '!=', '')
@@ -107,12 +107,12 @@ class BiDashboardService
         }
 
         $statsPorQuestao = Resposta::query()
-            ->join('questoes', function ($join) use ($prova) {
+            ->join('questoes', function ($join) use ($avaliacao) {
                 $join->on('questoes.numero', '=', 'respostas.questao_numero')
-                    ->where('questoes.prova_codigo', $prova->codigo)
+                    ->where('questoes.avaliacao_codigo', $avaliacao->codigo)
                     ->whereNull('questoes.deleted_at');
             })
-            ->where('respostas.prova_codigo', $prova->codigo)
+            ->where('respostas.avaliacao_codigo', $avaliacao->codigo)
             ->when($periodo !== '', fn ($query) => $query->where('respostas.periodo', $periodo))
             ->whereIn('respostas.questao_numero', $paresQuestaoDisciplina->pluck('numero')->unique())
             ->selectRaw('respostas.questao_numero as numero')

@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Admin;
-use App\Models\Prova;
+use App\Models\Avaliacao;
 use App\Models\Questao;
 use App\Models\Resposta;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -20,11 +20,11 @@ class LixeiraTest extends TestCase
 
     public function test_lista_provas_e_questoes_excluidas(): void
     {
-        $provaAtiva = Prova::create(['nome' => 'Ativa']);
-        $questao = Questao::create(['prova_codigo' => $provaAtiva->codigo, 'numero' => 1, 'gabarito' => 'A']);
+        $avaliacaoAtiva = Avaliacao::create(['nome' => 'Ativa']);
+        $questao = Questao::create(['avaliacao_codigo' => $avaliacaoAtiva->codigo, 'numero' => 1, 'gabarito' => 'A']);
         $questao->delete();
 
-        $provaExcluida = Prova::create(['nome' => 'Excluida']);
+        $provaExcluida = Avaliacao::create(['nome' => 'Excluida']);
         $provaExcluida->delete();
 
         $response = $this->actingAs($this->admin(), 'admin')->get('/lixeira');
@@ -36,41 +36,41 @@ class LixeiraTest extends TestCase
 
     public function test_restaura_prova_e_cascata_de_filhos(): void
     {
-        $prova = Prova::create([]);
-        $questao = Questao::create(['prova_codigo' => $prova->codigo, 'numero' => 1, 'gabarito' => 'A']);
-        Resposta::create(['prova_codigo' => $prova->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A']);
+        $avaliacao = Avaliacao::create([]);
+        $questao = Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A']);
 
-        $prova->questoes()->delete();
-        $prova->resultados()->delete();
-        $prova->delete();
+        $avaliacao->questoes()->delete();
+        $avaliacao->resultados()->delete();
+        $avaliacao->delete();
 
-        $response = $this->actingAs($this->admin(), 'admin')->post("/lixeira/provas/{$prova->codigo}/restaurar");
+        $response = $this->actingAs($this->admin(), 'admin')->post("/lixeira/avaliacoes/{$avaliacao->codigo}/restaurar");
 
         $response->assertRedirect();
-        $this->assertNotSoftDeleted('provas', ['codigo' => $prova->codigo]);
+        $this->assertNotSoftDeleted('avaliacoes', ['codigo' => $avaliacao->codigo]);
         $this->assertNotSoftDeleted('questoes', ['id' => $questao->id]);
-        $this->assertNotSoftDeleted('respostas', ['prova_codigo' => $prova->codigo]);
-        // Restaurar a prova recalcula o resumo do boletim com os dados de volta.
-        $this->assertDatabaseHas('resultado_resumos', ['prova_codigo' => $prova->codigo, 'ra' => '1', 'acertos' => 1, 'total' => 1]);
+        $this->assertNotSoftDeleted('respostas', ['avaliacao_codigo' => $avaliacao->codigo]);
+        // Restaurar a avaliacao recalcula o resumo do boletim com os dados de volta.
+        $this->assertDatabaseHas('resultado_resumos', ['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'acertos' => 1, 'total' => 1]);
     }
 
     public function test_exclui_prova_definitivamente_remove_filhos_via_fk_cascade(): void
     {
-        $prova = Prova::create([]);
-        Questao::create(['prova_codigo' => $prova->codigo, 'numero' => 1, 'gabarito' => 'A']);
-        $prova->delete();
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A']);
+        $avaliacao->delete();
 
-        $response = $this->actingAs($this->admin(), 'admin')->delete("/lixeira/provas/{$prova->codigo}");
+        $response = $this->actingAs($this->admin(), 'admin')->delete("/lixeira/avaliacoes/{$avaliacao->codigo}");
 
         $response->assertRedirect();
-        $this->assertDatabaseMissing('provas', ['codigo' => $prova->codigo]);
-        $this->assertDatabaseMissing('questoes', ['prova_codigo' => $prova->codigo]);
+        $this->assertDatabaseMissing('avaliacoes', ['codigo' => $avaliacao->codigo]);
+        $this->assertDatabaseMissing('questoes', ['avaliacao_codigo' => $avaliacao->codigo]);
     }
 
     public function test_restaura_e_exclui_questao_definitivamente(): void
     {
-        $prova = Prova::create([]);
-        $questao = Questao::create(['prova_codigo' => $prova->codigo, 'numero' => 1, 'gabarito' => 'A']);
+        $avaliacao = Avaliacao::create([]);
+        $questao = Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A']);
         $questao->delete();
         $admin = $this->admin();
 

@@ -4,8 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Admin;
 use App\Models\Aluno;
+use App\Models\Avaliacao;
 use App\Models\Configuracao;
-use App\Models\Prova;
 use App\Models\Questao;
 use App\Models\RateLimit2fa;
 use App\Models\Resposta;
@@ -45,10 +45,10 @@ class PortalTest extends TestCase
     public function test_consulta_sem_2fa_mostra_resultados_diretamente(): void
     {
         $aluno = $this->aluno();
-        $prova = Prova::create(['nome' => 'ENADE 2026']);
-        Questao::create(['prova_codigo' => $prova->codigo, 'numero' => 1, 'gabarito' => 'A']);
-        Resposta::create(['prova_codigo' => $prova->codigo, 'ra' => $aluno->ra, 'questao_numero' => 1, 'resposta' => 'A']);
-        app(ResumoResultadoService::class)->recalcular($prova->codigo);
+        $avaliacao = Avaliacao::create(['nome' => 'ENADE 2026']);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => $aluno->ra, 'questao_numero' => 1, 'resposta' => 'A']);
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
 
         $response = $this->followingRedirects()->post('/portal/consultar', [
             'cpf' => '123.456.789-09',
@@ -142,10 +142,10 @@ class PortalTest extends TestCase
     public function test_verificar_codigo_correto_mostra_resultados(): void
     {
         $aluno = $this->aluno(['email' => 'aluno@example.com']);
-        $prova = Prova::create(['nome' => 'ENADE 2026']);
-        Questao::create(['prova_codigo' => $prova->codigo, 'numero' => 1, 'gabarito' => 'A']);
-        Resposta::create(['prova_codigo' => $prova->codigo, 'ra' => $aluno->ra, 'questao_numero' => 1, 'resposta' => 'A']);
-        app(ResumoResultadoService::class)->recalcular($prova->codigo);
+        $avaliacao = Avaliacao::create(['nome' => 'ENADE 2026']);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => $aluno->ra, 'questao_numero' => 1, 'resposta' => 'A']);
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
 
         VerificacaoEmail::create([
             'cpf' => $aluno->cpf,

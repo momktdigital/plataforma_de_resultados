@@ -3,8 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Admin;
+use App\Models\Avaliacao;
 use App\Models\Categoria;
-use App\Models\Prova;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -73,7 +73,7 @@ class CategoriaTest extends TestCase
     public function test_nao_exclui_categoria_com_prova_vinculada(): void
     {
         $categoria = Categoria::create(['nome' => 'Simulados']);
-        Prova::create(['categoria_id' => $categoria->id]);
+        Avaliacao::create(['categoria_id' => $categoria->id]);
 
         $response = $this->actingAs($this->admin(), 'admin')->delete("/categorias/{$categoria->id}");
 

@@ -18,7 +18,7 @@ class SistemaNavegacaoTest extends TestCase
 
     public function test_menu_principal_tem_apenas_um_link_de_configuracoes(): void
     {
-        $html = $this->actingAs($this->admin(), 'admin')->get('/provas')->getContent();
+        $html = $this->actingAs($this->admin(), 'admin')->get('/avaliacoes')->getContent();
 
         $this->assertSame(1, substr_count($html, route('sistema.configuracoes.index')));
     }

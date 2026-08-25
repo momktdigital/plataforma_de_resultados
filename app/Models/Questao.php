@@ -14,7 +14,7 @@ class Questao extends Model
     protected $table = 'questoes';
 
     protected $fillable = [
-        'prova_codigo',
+        'avaliacao_codigo',
         'numero',
         'gabarito',
         'area',
@@ -35,9 +35,9 @@ class Questao extends Model
         ];
     }
 
-    public function prova(): BelongsTo
+    public function avaliacao(): BelongsTo
     {
-        return $this->belongsTo(Prova::class, 'prova_codigo', 'codigo');
+        return $this->belongsTo(Avaliacao::class, 'avaliacao_codigo', 'codigo');
     }
 
     public function matrizes(): HasMany
@@ -45,7 +45,7 @@ class Questao extends Model
         return $this->hasMany(QuestaoMatriz::class);
     }
 
-    /** Referências a matriz de prova, DCN, portaria INEP e PPC — ver App\Models\QuestaoReferencia. */
+    /** Referências a matriz de avaliacao, DCN, portaria INEP e PPC — ver App\Models\QuestaoReferencia. */
     public function referencias(): HasMany
     {
         return $this->hasMany(QuestaoReferencia::class);

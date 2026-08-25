@@ -15,12 +15,12 @@ class AuthenticationTest extends TestCase
     {
         Admin::create(['username' => 'coordenador', 'password_hash' => Hash::make('x')]);
 
-        $this->get('/provas')->assertRedirect(route('login'));
+        $this->get('/avaliacoes')->assertRedirect(route('login'));
     }
 
     public function test_fresh_install_without_admin_redirects_to_installer(): void
     {
-        $this->get('/provas')->assertRedirect(route('instalar.inicio'));
+        $this->get('/avaliacoes')->assertRedirect(route('instalar.inicio'));
         $this->get('/login')->assertRedirect(route('instalar.inicio'));
     }
 
@@ -36,7 +36,7 @@ class AuthenticationTest extends TestCase
             'password' => 'senha-secreta',
         ]);
 
-        $response->assertRedirect(route('provas.index'));
+        $response->assertRedirect(route('avaliacoes.index'));
         $this->assertAuthenticated('admin');
     }
 

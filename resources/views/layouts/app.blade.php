@@ -50,7 +50,7 @@
                 <ul class="space-y-1 px-3">
                     @php
                         $itensMenu = [
-                            ['rota' => 'provas.index', 'padrao' => 'provas.*', 'icone' => 'ph-exam', 'label' => 'Avaliações'],
+                            ['rota' => 'avaliacoes.index', 'padrao' => 'avaliacoes.*', 'icone' => 'ph-exam', 'label' => 'Avaliações'],
                             ['rota' => 'alunos.index', 'padrao' => 'alunos.*', 'icone' => 'ph-identification-card', 'label' => 'Alunos'],
                             ['rota' => 'categorias.index', 'padrao' => 'categorias.*', 'icone' => 'ph-tree-structure', 'label' => 'Categorias'],
                             ['rota' => 'lixeira.index', 'padrao' => 'lixeira.*', 'icone' => 'ph-trash', 'label' => 'Lixeira'],

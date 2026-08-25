@@ -12,7 +12,7 @@ class CategoriaController extends Controller
 {
     public function index(): View
     {
-        $todas = Categoria::withCount('provas')->orderBy('nome')->get();
+        $todas = Categoria::withCount('avaliacoes')->orderBy('nome')->get();
         $porPai = $todas->groupBy('categoria_pai_id');
 
         return view('admin.categorias.index', [
@@ -35,8 +35,8 @@ class CategoriaController extends Controller
             return back()->withErrors(['categoria' => 'Esta categoria tem subcategorias — exclua-as primeiro.']);
         }
 
-        if ($categoria->provas()->exists()) {
-            return back()->withErrors(['categoria' => 'Esta categoria tem provas vinculadas — mude a categoria delas primeiro.']);
+        if ($categoria->avaliacoes()->exists()) {
+            return back()->withErrors(['categoria' => 'Esta categoria tem avaliacoes vinculadas — mude a categoria delas primeiro.']);
         }
 
         $categoria->delete();

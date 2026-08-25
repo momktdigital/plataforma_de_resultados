@@ -1,9 +1,9 @@
 @extends('layouts.app')
 
-@section('title', "Importar resultados — Prova #{$prova->codigo}")
+@section('title', "Importar resultados — Avaliacao #{$avaliacao->codigo}")
 
 @section('content')
-<a href="{{ route('provas.show', $prova) }}" class="text-sm text-slate-500 hover:underline">&larr; Prova #{{ $prova->codigo }}</a>
+<a href="{{ route('avaliacoes.show', $avaliacao) }}" class="text-sm text-slate-500 hover:underline">&larr; Avaliacao #{{ $avaliacao->codigo }}</a>
 <h1 class="text-2xl font-bold mt-2 mb-6">Importar resultados</h1>
 
 <a href="{{ asset('exemplos/resultados-exemplo.xlsx') }}"
@@ -12,7 +12,7 @@
 </a>
 
 <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 max-w-2xl">
-    <form method="POST" action="{{ route('provas.resultados.import.store', $prova) }}" enctype="multipart/form-data" class="space-y-4">
+    <form method="POST" action="{{ route('avaliacoes.resultados.import.store', $avaliacao) }}" enctype="multipart/form-data" class="space-y-4">
         @csrf
         <div>
             <label class="block text-sm font-medium mb-1" for="arquivo">Arquivo (.csv, .xlsx ou .xls)</label>
@@ -77,7 +77,7 @@
     <ul class="mt-4 space-y-1.5 text-sm text-slate-600 list-disc list-inside">
         <li><strong>RA</strong> ou <strong>CPF</strong> — só precisa de uma das duas por linha (linha 4 do exemplo usa só CPF).</li>
         <li><strong>Resposta</strong> precisa existir como coluna, mas pode ficar vazia numa linha — significa que o aluno deixou aquela questão em branco (linha 3 do exemplo).</li>
-        <li><strong>Período</strong> só é necessário se o mesmo aluno puder refazer esta prova em períodos diferentes; sem essa coluna, todas as respostas do aluno nesta prova contam como uma tentativa única.</li>
+        <li><strong>Período</strong> só é necessário se o mesmo aluno puder refazer esta avaliação em períodos diferentes; sem essa coluna, todas as respostas do aluno nesta avaliação contam como uma tentativa única.</li>
         <li>Reimportar a mesma combinação de aluno + período + questão <strong>atualiza</strong> a resposta em vez de duplicar.</li>
         <li>Aceita <code class="bg-slate-100 px-1 rounded">.xlsx</code>, <code class="bg-slate-100 px-1 rounded">.xls</code> ou <code class="bg-slate-100 px-1 rounded">.csv</code>.</li>
     </ul>

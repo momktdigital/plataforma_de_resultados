@@ -10,7 +10,7 @@ class DatabaseSeeder extends Seeder
      * Seed the application's database.
      *
      * Nenhum seed padrão: administradores e alunos vêm do banco legado
-     * compartilhado; provas/questões/resultados vêm dos imports.
+     * compartilhado; avaliacoes/questões/resultados vêm dos imports.
      */
     public function run(): void
     {

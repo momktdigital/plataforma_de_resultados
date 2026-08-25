@@ -8,14 +8,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
- * Uma avaliação (prova, simulado, exame institucional...). O código é gerado
+ * Uma avaliação (simulado, exame institucional...). O código é gerado
  * automaticamente — não existe cadastro manual de identificador.
  */
-class Prova extends Model
+class Avaliacao extends Model
 {
     use SoftDeletes;
 
-    protected $table = 'provas';
+    protected $table = 'avaliacoes';
 
     protected $primaryKey = 'codigo';
 
@@ -25,13 +25,13 @@ class Prova extends Model
         'link_comentado',
         'criado_por',
         'categoria_id',
-        'data_prova',
+        'data_avaliacao',
     ];
 
     protected function casts(): array
     {
         return [
-            'data_prova' => 'date',
+            'data_avaliacao' => 'date',
         ];
     }
 
@@ -42,17 +42,17 @@ class Prova extends Model
 
     public function questoes(): HasMany
     {
-        return $this->hasMany(Questao::class, 'prova_codigo', 'codigo');
+        return $this->hasMany(Questao::class, 'avaliacao_codigo', 'codigo');
     }
 
     public function resultados(): HasMany
     {
-        return $this->hasMany(Resposta::class, 'prova_codigo', 'codigo');
+        return $this->hasMany(Resposta::class, 'avaliacao_codigo', 'codigo');
     }
 
     public function metricas(): HasMany
     {
-        return $this->hasMany(ResultadoMetrica::class, 'prova_codigo', 'codigo');
+        return $this->hasMany(ResultadoMetrica::class, 'avaliacao_codigo', 'codigo');
     }
 
     public function criadoPor(): BelongsTo

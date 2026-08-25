@@ -58,7 +58,7 @@
 </div>
 
 <div class="mt-6 max-w-3xl bg-blue-50 border border-blue-200 rounded-xl p-5 text-sm text-blue-900">
-    <p>Nas duas opções: uma Prova é criada (ou reaproveitada) por avaliação distinta, gabaritos viram Questões,
+    <p>Nas duas opções: uma Avaliação é criada (ou reaproveitada) por avaliação distinta, gabaritos viram Questões,
     resultados viram Respostas + Métricas, e registros já excluídos na lixeira do sistema antigo são preservados
     como excluídos aqui. É seguro repetir a importação — dados existentes são atualizados, nunca duplicados.</p>
 </div>
@@ -80,12 +80,12 @@
             @foreach ($tabelasLegadasLinhas as $tabela => $linhas)
                 <li>Tabela <code>{{ $tabela }}</code>: <strong>{{ $linhas }}</strong> linha(s).</li>
             @endforeach
-            <li>Provas já no schema novo: <strong>{{ $provasJaMigradas }}</strong>.</li>
+            <li>Avaliações já no schema novo: <strong>{{ $avaliacoesJaMigradas }}</strong>.</li>
         </ul>
 
-        @if ($provasJaMigradas === 0)
+        @if ($avaliacoesJaMigradas === 0)
             <p class="text-sm text-amber-700 font-semibold mb-4">
-                Nenhuma Prova encontrada no schema novo ainda — a exclusão fica bloqueada até que a importação
+                Nenhuma Avaliação encontrada no schema novo ainda — a exclusão fica bloqueada até que a importação
                 acima seja executada, para não perder os únicos dados existentes.
             </p>
         @endif
@@ -105,7 +105,7 @@
                     <p class="text-sm text-red-600 mt-1">{{ $message }}</p>
                 @enderror
             </div>
-            <button type="submit" @disabled($provasJaMigradas === 0)
+            <button type="submit" @disabled($avaliacoesJaMigradas === 0)
                     class="bg-red-600 hover:bg-red-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold rounded-lg px-5 py-2 text-sm">
                 Excluir tabelas legadas
             </button>

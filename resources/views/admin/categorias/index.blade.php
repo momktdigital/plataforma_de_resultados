@@ -3,10 +3,10 @@
 @section('title', 'Categorias — Avaliações')
 
 @section('content')
-<h1 class="text-2xl font-bold mb-6">Categorias de prova</h1>
+<h1 class="text-2xl font-bold mb-6">Categorias de avaliação</h1>
 <p class="text-sm text-slate-500 mb-6 max-w-2xl">
     Organizam o boletim do aluno no portal público em árvore (categoria →
-    subcategorias → provas). Uma prova sem categoria aparece à parte, em
+    subcategorias → avaliações). Uma avaliação sem categoria aparece à parte, em
     "Sem categoria".
 </p>
 

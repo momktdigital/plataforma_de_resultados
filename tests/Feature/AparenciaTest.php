@@ -38,7 +38,7 @@ class AparenciaTest extends TestCase
     {
         $admin = Admin::create(['username' => 'coordenador', 'password_hash' => bcrypt('x')]);
 
-        $response = $this->actingAs($admin, 'admin')->get('/provas');
+        $response = $this->actingAs($admin, 'admin')->get('/avaliacoes');
 
         $response->assertOk();
         $response->assertSee('accessibility-container', false);

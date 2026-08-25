@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Sistema;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ImportarBackupLegadoRequest;
-use App\Models\Prova;
+use App\Models\Avaliacao;
 use App\Services\Legado\BackupSqlParser;
 use App\Services\Legado\LegadoImportador;
 use App\Services\ResumoResultadoService;
@@ -18,7 +18,7 @@ use Throwable;
 
 class LegadoController extends Controller
 {
-    /** Tabelas do schema antigo, substituídas por `provas`/`questoes`/`respostas`/`resultado_metricas`. */
+    /** Tabelas do schema antigo, substituídas por `avaliacoes`/`questoes`/`respostas`/`resultado_metricas`. */
     private const TABELAS_LEGADAS = ['gabaritos', 'resultados'];
 
     public function index(): View
@@ -29,7 +29,7 @@ class LegadoController extends Controller
             'bancoCompartilhadoDisponivel' => Schema::hasTable('gabaritos') && Schema::hasTable('resultados'),
             'limiteUploadMb' => intdiv(LimitesUpload::limiteEfetivoEmKb(), 1024),
             'tabelasLegadasLinhas' => collect($tabelasExistentes)->mapWithKeys(fn ($t) => [$t => DB::table($t)->count()])->all(),
-            'provasJaMigradas' => Prova::count(),
+            'avaliacoesJaMigradas' => Avaliacao::count(),
         ]);
     }
 
@@ -37,7 +37,7 @@ class LegadoController extends Controller
      * Exclui as tabelas legadas (`gabaritos`/`resultados`) depois que os dados
      * já foram migrados para o schema novo — ação irreversível, por isso exige
      * confirmação explícita por texto e só é permitida se já existir ao menos
-     * uma Prova migrada (evita apagar o único lugar onde os dados existiam,
+     * uma Avaliação migrada (evita apagar o único lugar onde os dados existiam,
      * caso a importação nunca tenha rodado).
      */
     public function excluirTabelas(Request $request): RedirectResponse
@@ -53,9 +53,9 @@ class LegadoController extends Controller
                 ->with('status', 'Nenhuma tabela legada encontrada neste banco — nada a excluir.');
         }
 
-        if (Prova::count() === 0) {
+        if (Avaliacao::count() === 0) {
             return back()->withErrors([
-                'confirmacao' => 'Nenhuma Prova encontrada no schema novo ainda. Rode a importação (acima) antes de excluir as tabelas legadas — senão os dados seriam perdidos.',
+                'confirmacao' => 'Nenhuma Avaliacao encontrada no schema novo ainda. Rode a importação (acima) antes de excluir as tabelas legadas — senão os dados seriam perdidos.',
             ]);
         }
 
@@ -89,8 +89,8 @@ class LegadoController extends Controller
             );
         });
 
-        foreach ($importador->provasTocadas() as $provaCodigo) {
-            $resumos->recalcular($provaCodigo);
+        foreach ($importador->avaliacoesTocadas() as $avaliacaoCodigo) {
+            $resumos->recalcular($avaliacaoCodigo);
         }
 
         return redirect()->route('sistema.legado.index')
@@ -128,8 +128,8 @@ class LegadoController extends Controller
         $dryRun ? DB::rollBack() : DB::commit();
 
         if (! $dryRun) {
-            foreach ($importador->provasTocadas() as $provaCodigo) {
-                $resumos->recalcular($provaCodigo);
+            foreach ($importador->avaliacoesTocadas() as $avaliacaoCodigo) {
+                $resumos->recalcular($avaliacaoCodigo);
             }
         }
 
@@ -139,10 +139,10 @@ class LegadoController extends Controller
             ->with('status', $dryRun ? "[Simulação — nada foi gravado] {$mensagem}" : $mensagem);
     }
 
-    /** @param  array{provas: int, questoes: int, respostas: int, metricas: int}  $resumo */
+    /** @param  array{avaliacoes: int, questoes: int, respostas: int, metricas: int}  $resumo */
     private function resumoTexto(array $resumo): string
     {
-        return "Provas: {$resumo['provas']} · Questões: {$resumo['questoes']} · Respostas: {$resumo['respostas']} · Métricas: {$resumo['metricas']}";
+        return "Avaliacoes: {$resumo['avaliacoes']} · Questões: {$resumo['questoes']} · Respostas: {$resumo['respostas']} · Métricas: {$resumo['metricas']}";
     }
 
     /**

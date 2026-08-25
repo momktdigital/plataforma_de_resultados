@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\ConsultaResultadoRequest;
 use App\Models\Aluno;
+use App\Models\Avaliacao;
 use App\Models\Configuracao;
-use App\Models\Prova;
 use App\Models\VerificacaoEmail;
 use App\Services\Portal\CaptchaVerifier;
 use App\Services\Portal\RateLimit2faService;
@@ -20,7 +20,7 @@ use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 /**
  * Portal público de consulta de resultados — porta index.php + api/consulta.php
  * + api/verify_2fa.php + api/resend_2fa.php para cá. Diferença de fundo:
- * aqui os resultados vêm do schema novo (provas/questoes/respostas/
+ * aqui os resultados vêm do schema novo (avaliacoes/questoes/respostas/
  * resultado_metricas), não do JSON por aluno de `resultados`/`gabaritos`.
  *
  * Fluxo replicado fielmente do legado (sem sessão de autenticação — o CPF
@@ -224,8 +224,8 @@ class PortalController extends Controller
         return $this->renderizarResultados($aluno, $consultaService);
     }
 
-    /** Detalhe de uma única prova, pensado para abrir em nova aba a partir do boletim. */
-    public function resultadoProva(Prova $prova, Request $request, ResultadoConsultaService $consultaService): View|RedirectResponse
+    /** Detalhe de uma única avaliacao, pensado para abrir em nova aba a partir do boletim. */
+    public function resultadoAvaliacao(Avaliacao $avaliacao, Request $request, ResultadoConsultaService $consultaService): View|RedirectResponse
     {
         $aluno = $this->alunoAutenticado();
 
@@ -234,13 +234,13 @@ class PortalController extends Controller
         }
 
         $periodo = (string) $request->query('periodo', '');
-        $resultado = $consultaService->buscarUmaProva($aluno, $prova->codigo, $periodo);
+        $resultado = $consultaService->buscarUmaAvaliacao($aluno, $avaliacao->codigo, $periodo);
 
         if ($resultado === null) {
             abort(404);
         }
 
-        return view('portal.resultado-prova', ['aluno' => $aluno, 'r' => $resultado]);
+        return view('portal.resultado-avaliacao', ['aluno' => $aluno, 'r' => $resultado]);
     }
 
     /** Encerra a sessão do boletim — útil em computador compartilhado (labs, secretaria). */

@@ -21,7 +21,7 @@ class RootRouteTest extends TestCase
     {
         $admin = Admin::create(['username' => 'coordenador', 'password_hash' => bcrypt('x')]);
 
-        $this->actingAs($admin, 'admin')->get('/')->assertRedirect(route('provas.index'));
+        $this->actingAs($admin, 'admin')->get('/')->assertRedirect(route('avaliacoes.index'));
     }
 
     public function test_portal_publico_tem_link_discreto_para_login_administrativo(): void

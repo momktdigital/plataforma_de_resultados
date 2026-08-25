@@ -42,7 +42,7 @@ class LoginController extends Controller
         RateLimiter::clear($this->throttleKey($request));
         $request->session()->regenerate();
 
-        return redirect()->intended(route('provas.index'));
+        return redirect()->intended(route('avaliacoes.index'));
     }
 
     public function destroy(Request $request): RedirectResponse

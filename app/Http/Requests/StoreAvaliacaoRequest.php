@@ -4,7 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class StoreProvaRequest extends FormRequest
+class StoreAvaliacaoRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -12,7 +12,7 @@ class StoreProvaRequest extends FormRequest
     }
 
     /**
-     * Nenhum campo é obrigatório para criar uma Prova: o código é gerado
+     * Nenhum campo é obrigatório para criar uma Avaliação: o código é gerado
      * automaticamente pelo banco.
      */
     public function rules(): array
@@ -22,7 +22,7 @@ class StoreProvaRequest extends FormRequest
             'tipo' => ['nullable', 'string', 'max:100'],
             'link_comentado' => ['nullable', 'url', 'max:255'],
             'categoria_id' => ['nullable', 'integer', 'exists:categorias,id'],
-            'data_prova' => ['nullable', 'date_format:d/m/Y'],
+            'data_avaliacao' => ['nullable', 'date_format:d/m/Y'],
         ];
     }
 }

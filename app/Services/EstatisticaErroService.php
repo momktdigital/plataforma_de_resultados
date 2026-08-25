@@ -2,11 +2,11 @@
 
 namespace App\Services;
 
-use App\Models\Prova;
+use App\Models\Avaliacao;
 use App\Models\Resposta;
 
 /**
- * Taxa de erro por questão de uma Prova — equivalente ao painel "Questões
+ * Taxa de erro por questão de uma Avaliação — equivalente ao painel "Questões
  * críticas" de admin/avaliacao_editar.php, recalculado aqui a partir de
  * `respostas` (formato longo) em vez do antigo JSON por aluno.
  *
@@ -15,24 +15,24 @@ use App\Models\Resposta;
  * ->chunk() sobre a tabela toda, que pagina por LIMIT/OFFSET — cada chunk
  * fica mais lento que o anterior porque o banco tem que pular um offset
  * cada vez maior, um comportamento ~O(n²) que travava (timeout de 30s) numa
- * prova com 167 mil respostas.
+ * avaliação com 167 mil respostas.
  */
 class EstatisticaErroService
 {
     private const MAXIMO_EXIBIDO = 10;
 
     /** @return array<int, array{numero: int, acertos: int, erros: int, em_branco: int, taxa_erro: float}> */
-    public function calcular(Prova $prova): array
+    public function calcular(Avaliacao $avaliacao): array
     {
         $linhas = Resposta::query()
-            ->join('questoes', function ($join) use ($prova) {
+            ->join('questoes', function ($join) use ($avaliacao) {
                 $join->on('questoes.numero', '=', 'respostas.questao_numero')
-                    ->where('questoes.prova_codigo', $prova->codigo)
+                    ->where('questoes.avaliacao_codigo', $avaliacao->codigo)
                     ->whereNull('questoes.deleted_at')
                     ->whereNotNull('questoes.gabarito')
                     ->where('questoes.gabarito', '!=', '');
             })
-            ->where('respostas.prova_codigo', $prova->codigo)
+            ->where('respostas.avaliacao_codigo', $avaliacao->codigo)
             ->selectRaw('respostas.questao_numero as numero')
             ->selectRaw("SUM(CASE WHEN respostas.resposta IS NULL OR respostas.resposta = '' THEN 1 ELSE 0 END) as em_branco")
             ->selectRaw('SUM(CASE WHEN respostas.resposta = questoes.gabarito THEN 1 ELSE 0 END) as acertos')

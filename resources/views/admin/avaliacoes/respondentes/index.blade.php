@@ -1,13 +1,13 @@
 @extends('layouts.app')
 
-@section('title', "Resultados por aluno — Prova #{$prova->codigo}")
+@section('title', "Resultados por aluno — Avaliação #{$avaliacao->codigo}")
 
 @section('content')
-<a href="{{ route('provas.show', $prova) }}" class="text-sm text-slate-500 hover:underline">&larr; Prova #{{ $prova->codigo }}</a>
+<a href="{{ route('avaliacoes.show', $avaliacao) }}" class="text-sm text-slate-500 hover:underline">&larr; Avaliacao #{{ $avaliacao->codigo }}</a>
 <h1 class="text-2xl font-bold mt-2 mb-6">Resultados por aluno</h1>
 
 <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-6">
-    <form method="GET" action="{{ route('provas.respondentes.index', $prova) }}" class="flex flex-wrap gap-3">
+    <form method="GET" action="{{ route('avaliacoes.respondentes.index', $avaliacao) }}" class="flex flex-wrap gap-3">
         <input type="text" name="search" value="{{ $search }}" placeholder="Buscar por RA ou CPF..."
                class="flex-1 min-w-[200px] rounded-lg border border-slate-300 px-3 py-2 text-sm">
         <select name="periodo" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
@@ -20,7 +20,7 @@
             Filtrar
         </button>
         @if ($search !== '' || $periodo !== '')
-            <a href="{{ route('provas.respondentes.index', $prova) }}" class="border border-slate-300 bg-white text-slate-700 rounded-lg px-4 py-2 text-sm hover:bg-slate-50">
+            <a href="{{ route('avaliacoes.respondentes.index', $avaliacao) }}" class="border border-slate-300 bg-white text-slate-700 rounded-lg px-4 py-2 text-sm hover:bg-slate-50">
                 Limpar
             </a>
         @endif
@@ -29,8 +29,8 @@
 
 @if ($periodo !== '')
     <div class="mb-6 flex flex-wrap items-center gap-3">
-        <form method="POST" action="{{ route('provas.periodos.destroy', $prova) }}"
-              onsubmit="return confirm('Excluir todos os resultados do período \'{{ $periodo }}\' nesta prova?');">
+        <form method="POST" action="{{ route('avaliacoes.periodos.destroy', $avaliacao) }}"
+              onsubmit="return confirm('Excluir todos os resultados do período \'{{ $periodo }}\' nesta avaliação?');">
             @csrf
             @method('DELETE')
             <input type="hidden" name="periodo" value="{{ $periodo }}">
@@ -40,7 +40,7 @@
         </form>
 
         @if ($trashedNoPeriodo > 0)
-            <form method="POST" action="{{ route('provas.periodos.restore', $prova) }}">
+            <form method="POST" action="{{ route('avaliacoes.periodos.restore', $avaliacao) }}">
                 @csrf
                 <input type="hidden" name="periodo" value="{{ $periodo }}">
                 <button type="submit" class="text-sm text-blue-600 border border-blue-200 hover:bg-blue-50 rounded-lg px-3 py-1.5">
@@ -72,7 +72,7 @@
                     <td class="px-4 py-3">{{ $r->total_respostas }}</td>
                     <td class="px-4 py-3 text-slate-500">{{ \Illuminate\Support\Carbon::parse($r->updated_at)->format('d/m/Y H:i') }}</td>
                     <td class="px-4 py-3 text-right">
-                        <a href="{{ route('provas.respondentes.show', ['prova' => $prova, 'chave' => $r->aluno_chave, 'periodo' => $r->periodo]) }}"
+                        <a href="{{ route('avaliacoes.respondentes.show', ['avaliacao' => $avaliacao, 'chave' => $r->aluno_chave, 'periodo' => $r->periodo]) }}"
                            class="text-emerald-700 font-semibold hover:underline">
                             Ver
                         </a>

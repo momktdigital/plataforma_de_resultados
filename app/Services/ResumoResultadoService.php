@@ -5,25 +5,25 @@ namespace App\Services;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Mantém `resultado_resumos` — uma linha por aluno+prova+período já com
+ * Mantém `resultado_resumos` — uma linha por aluno+avaliação+período já com
  * acertos/total/percentual calculados, pra não recalcular isso (via JOIN
  * contra `respostas`/`questoes`) toda vez que um aluno abre o boletim no
  * portal. É a diferença entre a consulta mais usada do sistema custar "1
  * leitura indexada" ou "escanear a tabela de respostas inteira", que
- * cresce um pouco a cada aluno×prova×questão — com milhões de linhas ali,
+ * cresce um pouco a cada aluno×avaliação×questão — com milhões de linhas ali,
  * só a segunda opção já travaria o portal.
  *
- * `recalcular()` sempre é escamado a UMA prova (nunca à tabela toda), então
- * o custo é proporcional ao tamanho daquela prova — chamado depois de
+ * `recalcular()` sempre é escamado a UMA avaliação (nunca à tabela toda), então
+ * o custo é proporcional ao tamanho daquela avaliação — chamado depois de
  * qualquer mudança que afete o resultado dela: import de respostas, import/
  * edição/exclusão de questão (gabarito), ou exclusão de um período inteiro.
  */
 class ResumoResultadoService
 {
-    public function recalcular(int $provaCodigo): void
+    public function recalcular(int $avaliacaoCodigo): void
     {
         $total = DB::table('questoes')
-            ->where('prova_codigo', $provaCodigo)
+            ->where('avaliacao_codigo', $avaliacaoCodigo)
             ->whereNull('deleted_at')
             ->whereNotNull('gabarito')
             ->where('gabarito', '!=', '')
@@ -31,11 +31,11 @@ class ResumoResultadoService
 
         $linhas = DB::table('respostas as r')
             ->join('questoes as q', function ($join) {
-                $join->on('q.prova_codigo', '=', 'r.prova_codigo')
+                $join->on('q.avaliacao_codigo', '=', 'r.avaliacao_codigo')
                     ->on('q.numero', '=', 'r.questao_numero')
                     ->whereNull('q.deleted_at');
             })
-            ->where('r.prova_codigo', $provaCodigo)
+            ->where('r.avaliacao_codigo', $avaliacaoCodigo)
             ->whereNull('r.deleted_at')
             ->groupBy('r.aluno_chave', 'r.periodo')
             ->selectRaw(
@@ -45,8 +45,8 @@ class ResumoResultadoService
             )
             ->get();
 
-        DB::transaction(function () use ($provaCodigo, $total, $linhas) {
-            DB::table('resultado_resumos')->where('prova_codigo', $provaCodigo)->delete();
+        DB::transaction(function () use ($avaliacaoCodigo, $total, $linhas) {
+            DB::table('resultado_resumos')->where('avaliacao_codigo', $avaliacaoCodigo)->delete();
 
             if ($linhas->isEmpty()) {
                 return;
@@ -55,7 +55,7 @@ class ResumoResultadoService
             $agora = now();
 
             DB::table('resultado_resumos')->insert($linhas->map(fn ($linha) => [
-                'prova_codigo' => $provaCodigo,
+                'avaliacao_codigo' => $avaliacaoCodigo,
                 'aluno_chave' => $linha->aluno_chave,
                 'periodo' => $linha->periodo,
                 'ra' => $linha->ra,

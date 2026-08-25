@@ -3,23 +3,23 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Prova;
+use App\Models\Avaliacao;
 use App\Services\BiDashboardService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class BiController extends Controller
 {
-    public function index(Request $request, Prova $prova, BiDashboardService $service): View
+    public function index(Request $request, Avaliacao $avaliacao, BiDashboardService $service): View
     {
         $periodo = trim((string) $request->query('periodo', ''));
-        $periodosDisponiveis = $prova->resultados()->select('periodo')->distinct()->pluck('periodo');
+        $periodosDisponiveis = $avaliacao->resultados()->select('periodo')->distinct()->pluck('periodo');
 
-        return view('admin.provas.bi', [
-            'prova' => $prova,
+        return view('admin.avaliacoes.bi', [
+            'avaliacao' => $avaliacao,
             'periodo' => $periodo,
             'periodosDisponiveis' => $periodosDisponiveis,
-            'dados' => $service->gerar($prova, $periodo),
+            'dados' => $service->gerar($avaliacao, $periodo),
         ]);
     }
 }

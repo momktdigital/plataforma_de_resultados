@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Admin;
-use App\Models\Prova;
+use App\Models\Avaliacao;
 use App\Models\Questao;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -27,10 +27,10 @@ class PlanilhaExemploImportTest extends TestCase
 
     public function test_tela_de_import_de_questoes_linka_a_planilha_de_exemplo(): void
     {
-        $prova = Prova::create([]);
+        $avaliacao = Avaliacao::create([]);
 
         $response = $this->actingAs($this->admin(), 'admin')
-            ->get("/provas/{$prova->codigo}/questoes/import");
+            ->get("/avaliacoes/{$avaliacao->codigo}/questoes/import");
 
         $response->assertOk();
         $response->assertSee('exemplos/questoes-exemplo.xlsx', false);
@@ -39,10 +39,10 @@ class PlanilhaExemploImportTest extends TestCase
 
     public function test_tela_de_import_de_resultados_linka_a_planilha_de_exemplo(): void
     {
-        $prova = Prova::create([]);
+        $avaliacao = Avaliacao::create([]);
 
         $response = $this->actingAs($this->admin(), 'admin')
-            ->get("/provas/{$prova->codigo}/resultados/import");
+            ->get("/avaliacoes/{$avaliacao->codigo}/resultados/import");
 
         $response->assertOk();
         $response->assertSee('exemplos/resultados-exemplo.xlsx', false);
@@ -51,13 +51,13 @@ class PlanilhaExemploImportTest extends TestCase
 
     public function test_planilha_exemplo_de_questoes_importa_de_verdade(): void
     {
-        $prova = Prova::create([]);
+        $avaliacao = Avaliacao::create([]);
 
         $conteudo = file_get_contents(public_path('exemplos/questoes-exemplo.xlsx'));
         $arquivo = UploadedFile::fake()->createWithContent('questoes-exemplo.xlsx', $conteudo);
 
         $response = $this->actingAs($this->admin(), 'admin')
-            ->post("/provas/{$prova->codigo}/questoes/import", ['arquivo' => $arquivo]);
+            ->post("/avaliacoes/{$avaliacao->codigo}/questoes/import", ['arquivo' => $arquivo]);
 
         $response->assertSessionDoesntHaveErrors();
         $this->assertDatabaseCount('questoes', 3);
@@ -79,13 +79,13 @@ class PlanilhaExemploImportTest extends TestCase
 
     public function test_planilha_exemplo_de_resultados_importa_de_verdade(): void
     {
-        $prova = Prova::create([]);
+        $avaliacao = Avaliacao::create([]);
 
         $conteudo = file_get_contents(public_path('exemplos/resultados-exemplo.xlsx'));
         $arquivo = UploadedFile::fake()->createWithContent('resultados-exemplo.xlsx', $conteudo);
 
         $response = $this->actingAs($this->admin(), 'admin')
-            ->post("/provas/{$prova->codigo}/resultados/import", ['arquivo' => $arquivo]);
+            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", ['arquivo' => $arquivo]);
 
         $response->assertSessionDoesntHaveErrors();
         $this->assertDatabaseCount('respostas', 4);

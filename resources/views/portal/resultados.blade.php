@@ -31,11 +31,11 @@
         <button type="button" onclick="portalLimparFiltro()" class="text-sm text-slate-500 hover:text-primary underline">
             Limpar filtro
         </button>
-        <p id="filtro-vazio-aviso" class="hidden text-sm text-slate-500 ml-auto">Nenhuma prova no período selecionado.</p>
+        <p id="filtro-vazio-aviso" class="hidden text-sm text-slate-500 ml-auto">Nenhuma avaliação no período selecionado.</p>
     </div>
 @endif
 
-<p class="text-sm text-slate-500 mb-4">Clique numa prova para abrir o detalhamento numa aba nova e baixar o PDF dela.</p>
+<p class="text-sm text-slate-500 mb-4">Clique numa avaliação para abrir o detalhamento numa aba nova e baixar o PDF dela.</p>
 
 <div id="boletim">
     @if (empty($arvore) && empty($semCategoria))
@@ -55,7 +55,7 @@
         @endif
 
         @foreach ($semCategoria as $r)
-            @include('portal._prova_card', ['r' => $r])
+            @include('portal._avaliacao_card', ['r' => $r])
         @endforeach
     @endif
 </div>
@@ -71,7 +71,7 @@ function portalAplicarFiltro() {
     const inicio = document.getElementById('filtro-data-inicio').value;
     const fim = document.getElementById('filtro-data-fim').value;
 
-    document.querySelectorAll('.prova-card').forEach(function (card) {
+    document.querySelectorAll('.avaliacao-card').forEach(function (card) {
         const data = card.dataset.data;
         let visivel = true;
         if (data) {
@@ -83,7 +83,7 @@ function portalAplicarFiltro() {
 
     let algumVisivel = false;
     document.querySelectorAll('.categoria-no').forEach(function (no) {
-        const temCartaoVisivel = !!no.querySelector('.prova-card:not(.hidden)');
+        const temCartaoVisivel = !!no.querySelector('.avaliacao-card:not(.hidden)');
         no.classList.toggle('hidden', !temCartaoVisivel);
         if (temCartaoVisivel) algumVisivel = true;
         // Expande automaticamente quando o filtro restringe o resultado, pra não parecer vazio.
@@ -91,7 +91,7 @@ function portalAplicarFiltro() {
             no.querySelector('.categoria-conteudo').hidden = false;
         }
     });
-    document.querySelectorAll('#boletim > .prova-card').forEach(function (card) {
+    document.querySelectorAll('#boletim > .avaliacao-card').forEach(function (card) {
         if (!card.classList.contains('hidden')) algumVisivel = true;
     });
 

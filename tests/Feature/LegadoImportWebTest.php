@@ -43,7 +43,7 @@ class LegadoImportWebTest extends TestCase
 
         $response->assertRedirect(route('sistema.legado.index'));
         $response->assertSessionHas('status');
-        $this->assertDatabaseHas('provas', ['nome' => 'ENADE 2026']);
+        $this->assertDatabaseHas('avaliacoes', ['nome' => 'ENADE 2026']);
         $this->assertDatabaseHas('questoes', ['numero' => 1, 'gabarito' => 'B']);
         $this->assertDatabaseHas('respostas', ['ra' => '12345', 'questao_numero' => 1, 'resposta' => 'B']);
         // O resumo do boletim já é gerado nesta mesma importação, sem esperar
@@ -59,7 +59,7 @@ class LegadoImportWebTest extends TestCase
         $response = $this->actingAs($this->admin(), 'admin')->post('/sistema/legado/banco');
 
         $response->assertSessionHasErrors('banco');
-        $this->assertDatabaseCount('provas', 0);
+        $this->assertDatabaseCount('avaliacoes', 0);
     }
 
     public function test_importa_de_arquivo_de_backup_pela_interface(): void
@@ -75,7 +75,7 @@ class LegadoImportWebTest extends TestCase
             ->post('/sistema/legado/arquivo', ['arquivo' => $arquivo]);
 
         $response->assertRedirect(route('sistema.legado.index'));
-        $this->assertDatabaseHas('provas', ['nome' => 'Simulado']);
+        $this->assertDatabaseHas('avaliacoes', ['nome' => 'Simulado']);
         $this->assertDatabaseHas('questoes', ['numero' => 1, 'gabarito' => 'A']);
         $this->assertDatabaseHas('respostas', ['ra' => '999', 'resposta' => 'A']);
         $this->assertDatabaseHas('resultado_metricas', ['ra' => '999', 'nome_metrica' => 'Total', 'valor' => '10']);
@@ -93,7 +93,7 @@ class LegadoImportWebTest extends TestCase
 
         $response->assertSessionHas('status');
         $this->assertStringContainsString('Simulação', session('status'));
-        $this->assertDatabaseCount('provas', 0);
+        $this->assertDatabaseCount('avaliacoes', 0);
         $this->assertDatabaseCount('questoes', 0);
     }
 
@@ -156,7 +156,7 @@ class LegadoImportWebTest extends TestCase
         $response->assertSessionHas('status');
         $this->assertFalse(Schema::hasTable('gabaritos'));
         $this->assertFalse(Schema::hasTable('resultados'));
-        $this->assertDatabaseHas('provas', ['nome' => 'ENADE 2026']);
+        $this->assertDatabaseHas('avaliacoes', ['nome' => 'ENADE 2026']);
     }
 
     public function test_exclusao_avisa_quando_nao_ha_tabelas_legadas(): void

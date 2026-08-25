@@ -3,16 +3,16 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Prova;
+use App\Models\Avaliacao;
 use App\Models\Questao;
 use App\Services\ResumoResultadoService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
 /**
- * Lixeira global — equivalente a admin/lixeira.php. Lista Provas excluídas
+ * Lixeira global — equivalente a admin/lixeira.php. Lista Avaliacoes excluídas
  * (com tudo que elas continham) e Questões excluídas individualmente de
- * provas que continuam ativas; resultados/métricas excluídos em lote (ver
+ * avaliacoes que continuam ativas; resultados/métricas excluídos em lote (ver
  * RespondenteController::destroyPeriodo) são restaurados/expurgados por
  * período direto na tela de respondentes, não listados um a um aqui.
  */
@@ -20,37 +20,37 @@ class LixeiraController extends Controller
 {
     public function index(): View
     {
-        $provas = Prova::onlyTrashed()->orderByDesc('deleted_at')->get();
+        $avaliacoes = Avaliacao::onlyTrashed()->orderByDesc('deleted_at')->get();
 
         $questoes = Questao::onlyTrashed()
-            ->whereHas('prova')
-            ->with('prova')
+            ->whereHas('avaliacao')
+            ->with('avaliacao')
             ->orderByDesc('deleted_at')
             ->get();
 
-        return view('admin.lixeira.index', ['provas' => $provas, 'questoes' => $questoes]);
+        return view('admin.lixeira.index', ['avaliacoes' => $avaliacoes, 'questoes' => $questoes]);
     }
 
-    public function restoreProva(int $prova, ResumoResultadoService $resumos): RedirectResponse
+    public function restoreAvaliacao(int $avaliacao, ResumoResultadoService $resumos): RedirectResponse
     {
-        $provaModel = Prova::withTrashed()->findOrFail($prova);
-        $provaModel->restore();
-        $provaModel->questoes()->onlyTrashed()->restore();
-        $provaModel->resultados()->onlyTrashed()->restore();
-        $provaModel->metricas()->onlyTrashed()->restore();
+        $avaliacaoModel = Avaliacao::withTrashed()->findOrFail($avaliacao);
+        $avaliacaoModel->restore();
+        $avaliacaoModel->questoes()->onlyTrashed()->restore();
+        $avaliacaoModel->resultados()->onlyTrashed()->restore();
+        $avaliacaoModel->metricas()->onlyTrashed()->restore();
 
-        $resumos->recalcular($provaModel->codigo);
+        $resumos->recalcular($avaliacaoModel->codigo);
 
-        return back()->with('status', "Prova #{$provaModel->codigo} restaurada.");
+        return back()->with('status', "Avaliação #{$avaliacaoModel->codigo} restaurada.");
     }
 
-    public function forceDeleteProva(int $prova): RedirectResponse
+    public function forceDeleteAvaliacao(int $avaliacao): RedirectResponse
     {
-        $provaModel = Prova::withTrashed()->findOrFail($prova);
-        $codigo = $provaModel->codigo;
-        $provaModel->forceDelete();
+        $avaliacaoModel = Avaliacao::withTrashed()->findOrFail($avaliacao);
+        $codigo = $avaliacaoModel->codigo;
+        $avaliacaoModel->forceDelete();
 
-        return back()->with('status', "Prova #{$codigo} excluída permanentemente.");
+        return back()->with('status', "Avaliacao #{$codigo} excluída permanentemente.");
     }
 
     public function restoreQuestao(int $questao, ResumoResultadoService $resumos): RedirectResponse
@@ -58,7 +58,7 @@ class LixeiraController extends Controller
         $questaoModel = Questao::withTrashed()->findOrFail($questao);
         $questaoModel->restore();
 
-        $resumos->recalcular($questaoModel->prova_codigo);
+        $resumos->recalcular($questaoModel->avaliacao_codigo);
 
         return back()->with('status', "Questão {$questaoModel->numero} restaurada.");
     }
@@ -67,10 +67,10 @@ class LixeiraController extends Controller
     {
         $questaoModel = Questao::withTrashed()->findOrFail($questao);
         $numero = $questaoModel->numero;
-        $provaCodigo = $questaoModel->prova_codigo;
+        $avaliacaoCodigo = $questaoModel->avaliacao_codigo;
         $questaoModel->forceDelete();
 
-        $resumos->recalcular($provaCodigo);
+        $resumos->recalcular($avaliacaoCodigo);
 
         return back()->with('status', "Questão {$numero} excluída permanentemente.");
     }

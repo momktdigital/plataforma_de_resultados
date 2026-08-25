@@ -1,16 +1,16 @@
 {{--
-    Detalhe completo de uma única prova (gabarito, métricas) — pensado pra
+    Detalhe completo de uma única avaliação (gabarito, métricas) — pensado pra
     abrir em nova aba a partir do card resumido do boletim, deixando espaço
     pra outras análises que serão adicionadas aqui no futuro.
 --}}
 @extends('layouts.portal')
 
 @php
-    $nomeProva = $r['prova']->nome ?? "Prova #{$r['prova']->codigo}";
+    $nomeAvaliacao = $r['avaliacao']->nome ?? "Avaliação #{$r['avaliacao']->codigo}";
     $siteTitle = \App\Models\Configuracao::valor('site_title', 'Resultados DI');
 @endphp
 
-@section('title', "{$nomeProva} — {$aluno->ra}")
+@section('title', "{$nomeAvaliacao} — {$aluno->ra}")
 @section('container-class', 'max-w-3xl')
 
 @section('content')
@@ -18,23 +18,23 @@
     <a href="{{ route('portal.resultados') }}" class="inline-flex items-center text-sm font-medium text-slate-500 hover:text-primary transition-colors bg-white px-4 py-2 rounded-full shadow-sm border border-slate-200">
         <i class="ph-bold ph-arrow-left mr-2"></i> Voltar ao boletim
     </a>
-    <button type="button" onclick="portalExportarPdfProva()" class="btn-pdf-prova
+    <button type="button" onclick="portalExportarPdfAvaliacao()" class="btn-pdf-avaliacao
             inline-flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-white rounded-lg px-4 py-2 text-sm font-medium">
-        <i class="ph-bold ph-file-pdf mr-2 text-red-400"></i> Baixar PDF desta prova
+        <i class="ph-bold ph-file-pdf mr-2 text-red-400"></i> Baixar PDF desta avaliação
     </button>
 </div>
 
 <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 fade-in">
-    <div id="pdf-conteudo" data-prova-nome="{{ $nomeProva }}">
+    <div id="pdf-conteudo" data-avaliacao-nome="{{ $nomeAvaliacao }}">
         <div class="flex items-center justify-between mb-6">
             <div>
                 <h1 class="text-xl font-bold text-slate-800 flex items-center gap-2">
-                    <i class="ph-fill ph-exam text-primary"></i> {{ $nomeProva }}
+                    <i class="ph-fill ph-exam text-primary"></i> {{ $nomeAvaliacao }}
                 </h1>
                 <p class="text-sm text-slate-500 mt-0.5">
                     RA: <span class="font-bold text-slate-700">{{ $aluno->ra }}</span> — {{ $aluno->nome }}<br>
-                    @if ($r['prova']->data_prova)
-                        {{ $r['prova']->data_prova->format('d/m/Y') }} &middot;
+                    @if ($r['avaliacao']->data_avaliacao)
+                        {{ $r['avaliacao']->data_avaliacao->format('d/m/Y') }} &middot;
                     @endif
                     Período: {{ $r['periodo'] !== '' ? $r['periodo'] : '—' }}
                 </p>
@@ -47,8 +47,8 @@
             @endif
         </div>
 
-        @if ($r['prova']->link_comentado)
-            <a href="{{ $r['prova']->link_comentado }}" target="_blank" rel="noopener"
+        @if ($r['avaliacao']->link_comentado)
+            <a href="{{ $r['avaliacao']->link_comentado }}" target="_blank" rel="noopener"
                class="inline-flex items-center mb-4 text-sm font-medium text-primary hover:underline">
                 <i class="ph-bold ph-link mr-1.5"></i> Acessar gabarito comentado
             </a>
@@ -92,9 +92,9 @@
 const PORTAL_SITE_TITLE = @json($siteTitle);
 const PORTAL_ALUNO = {nome: @json($aluno->nome), ra: @json($aluno->ra)};
 
-function portalExportarPdfProva() {
+function portalExportarPdfAvaliacao() {
     const conteudo = document.getElementById('pdf-conteudo');
-    const btn = document.querySelector('.btn-pdf-prova');
+    const btn = document.querySelector('.btn-pdf-avaliacao');
     const originalHtml = btn.innerHTML;
     btn.innerHTML = '<i class="ph-bold ph-spinner-gap animate-spin mr-2"></i> Gerando...';
     btn.disabled = true;
@@ -112,11 +112,11 @@ function portalExportarPdfProva() {
         + '</div>';
     conteudo.insertBefore(cabecalho, conteudo.firstChild);
 
-    const nomeProvaArquivo = (conteudo.dataset.provaNome || 'prova').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+    const nomeAvaliacaoArquivo = (conteudo.dataset.avaliacaoNome || 'avaliacao').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
 
     html2pdf().from(conteudo).set({
         margin: 10,
-        filename: 'boletim-' + PORTAL_ALUNO.ra + '-' + nomeProvaArquivo + '.pdf',
+        filename: 'boletim-' + PORTAL_ALUNO.ra + '-' + nomeAvaliacaoArquivo + '.pdf',
         image: {type: 'jpeg', quality: 0.98},
         html2canvas: {scale: 2, useCORS: true, logging: false},
         jsPDF: {unit: 'mm', format: 'a4', orientation: 'portrait'},

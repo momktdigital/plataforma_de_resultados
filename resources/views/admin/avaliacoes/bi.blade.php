@@ -1,12 +1,12 @@
 @extends('layouts.app')
 
-@section('title', "Painel BI — Prova #{$prova->codigo}")
+@section('title', "Painel BI — Avaliação #{$avaliacao->codigo}")
 
 @section('content')
-<a href="{{ route('provas.show', $prova) }}" class="text-sm text-slate-500 hover:underline">&larr; Prova #{{ $prova->codigo }}</a>
+<a href="{{ route('avaliacoes.show', $avaliacao) }}" class="text-sm text-slate-500 hover:underline">&larr; Avaliacao #{{ $avaliacao->codigo }}</a>
 <h1 class="text-2xl font-bold mt-2 mb-6">Painel BI</h1>
 
-<form method="GET" action="{{ route('provas.bi', $prova) }}" class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-6 flex gap-3">
+<form method="GET" action="{{ route('avaliacoes.bi', $avaliacao) }}" class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-6 flex gap-3">
     <select name="periodo" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
         <option value="">Todos os períodos</option>
         @foreach ($periodosDisponiveis as $p)
@@ -20,7 +20,7 @@
 
 @if (!empty($dados['semGabarito']))
     <div class="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-6 text-sm">
-        Esta prova ainda não tem gabarito cadastrado — importe ou cadastre as questões antes de ver o painel.
+        Esta avaliação ainda não tem gabarito cadastrado — importe ou cadastre as questões antes de ver o painel.
     </div>
 @elseif (!empty($dados['semRespostas']))
     <div class="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-6 text-sm">
@@ -36,7 +36,7 @@
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
             <h2 class="font-semibold mb-4">Desempenho médio por disciplina</h2>
             @if (empty($dados['radar']))
-                <p class="text-sm text-slate-400">Nenhuma questão desta prova tem disciplina cadastrada na matriz (import de questões, coluna "Matriz (disciplina)").</p>
+                <p class="text-sm text-slate-400">Nenhuma questão desta avaliação tem disciplina cadastrada na matriz (import de questões, coluna "Matriz (disciplina)").</p>
             @else
                 <canvas id="grafico-radar" height="220"></canvas>
             @endif

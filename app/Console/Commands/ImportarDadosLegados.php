@@ -10,7 +10,7 @@ use Throwable;
 
 /**
  * Migra os dados das tabelas legadas `gabaritos` e `resultados` (aplicação
- * PHP original, mesmo banco) para o schema novo (`provas`, `questoes`,
+ * PHP original, mesmo banco) para o schema novo (`avaliacoes`, `questoes`,
  * `respostas`, `resultado_metricas`) — lendo direto das tabelas, via a
  * conexão de banco já configurada.
  *
@@ -59,7 +59,7 @@ class ImportarDadosLegados extends Command
         $this->table(
             ['Entidade', 'Processadas'],
             [
-                ['Provas (criadas ou já existentes)', $resumo['provas']],
+                ['Avaliacoes (criadas ou já existentes)', $resumo['avaliacoes']],
                 ['Questões (gabarito)', $resumo['questoes']],
                 ['Respostas', $resumo['respostas']],
                 ['Métricas (notas finais)', $resumo['metricas']],

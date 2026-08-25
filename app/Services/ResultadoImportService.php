@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Models\Aluno;
-use App\Models\Prova;
+use App\Models\Avaliacao;
 use App\Models\Resposta;
 use App\Support\HeaderResolver;
 use App\Support\ImportResult;
@@ -17,7 +17,7 @@ use RuntimeException;
  * respondente a uma questão. Únicos campos obrigatórios: CPF ou RA, Questão
  * e Resposta (a resposta pode ser vazia — significa que o aluno deixou em
  * branco — mas a coluna precisa existir). Período é opcional: só existe para
- * diferenciar tentativas do mesmo aluno na mesma prova em períodos diferentes.
+ * diferenciar tentativas do mesmo aluno na mesma avaliação em períodos diferentes.
  */
 class ResultadoImportService
 {
@@ -31,7 +31,7 @@ class ResultadoImportService
 
     private const PERIODO_PATTERNS = ['/^(periodo|periodo letivo|perletivo)$/'];
 
-    public function importar(Prova $prova, UploadedFile $file): ImportResult
+    public function importar(Avaliacao $avaliacao, UploadedFile $file): ImportResult
     {
         $rows = SpreadsheetReader::readRows($file);
         $resultado = new ImportResult;
@@ -43,7 +43,7 @@ class ResultadoImportService
         $header = array_keys($rows[0]);
         $this->validarCabecalho($header);
 
-        DB::transaction(function () use ($prova, $rows, $resultado) {
+        DB::transaction(function () use ($avaliacao, $rows, $resultado) {
             foreach ($rows as $index => $row) {
                 $resultado->registrarLinha();
                 $linha = $index + 2;
@@ -76,7 +76,7 @@ class ResultadoImportService
                     ->when($ra, fn ($query) => $query->orWhere('ra', $ra))
                     ->value('id');
 
-                $criada = $this->salvarResposta($prova, $ra, $cpf, $periodo, $numero, $resposta, $alunoId);
+                $criada = $this->salvarResposta($avaliacao, $ra, $cpf, $periodo, $numero, $resposta, $alunoId);
 
                 $criada ? $resultado->registrarCriada() : $resultado->registrarAtualizada();
             }
@@ -91,7 +91,7 @@ class ResultadoImportService
      * quando um registro novo foi criado (para contabilizar no resumo).
      */
     private function salvarResposta(
-        Prova $prova,
+        Avaliacao $avaliacao,
         ?string $ra,
         ?string $cpf,
         string $periodo,
@@ -100,7 +100,7 @@ class ResultadoImportService
         ?int $alunoId,
     ): bool {
         $resp = Resposta::withTrashed()
-            ->where('prova_codigo', $prova->codigo)
+            ->where('avaliacao_codigo', $avaliacao->codigo)
             ->where('questao_numero', $numero)
             ->where('periodo', $periodo)
             ->where('ra', $ra)
@@ -111,7 +111,7 @@ class ResultadoImportService
 
         if ($novo) {
             $resp = new Resposta([
-                'prova_codigo' => $prova->codigo,
+                'avaliacao_codigo' => $avaliacao->codigo,
                 'questao_numero' => $numero,
                 'periodo' => $periodo,
                 'ra' => $ra,

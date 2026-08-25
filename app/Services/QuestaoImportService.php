@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\Prova;
+use App\Models\Avaliacao;
 use App\Models\Questao;
 use App\Support\HeaderResolver;
 use App\Support\ImportResult;
@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Import de questões/gabarito (+ metadados pedagógicos opcionais) para uma
- * Prova já existente. Únicos campos obrigatórios por linha: Questão e
+ * Avaliação já existente. Únicos campos obrigatórios por linha: Questão e
  * Gabarito — todo o resto é preenchido só quando a coluna existir e tiver
  * valor na linha.
  */
@@ -37,12 +37,12 @@ class QuestaoImportService
         'ppc' => ['ppc'],
     ];
 
-    public function importar(Prova $prova, UploadedFile $file): ImportResult
+    public function importar(Avaliacao $avaliacao, UploadedFile $file): ImportResult
     {
         $rows = SpreadsheetReader::readRows($file);
         $resultado = new ImportResult;
 
-        DB::transaction(function () use ($prova, $rows, $resultado) {
+        DB::transaction(function () use ($avaliacao, $rows, $resultado) {
             foreach ($rows as $index => $row) {
                 $resultado->registrarLinha();
                 $linha = $index + 2; // +1 pelo cabeçalho, +1 por índice base 0
@@ -67,7 +67,7 @@ class QuestaoImportService
 
                 $atributos = $this->extrairMetadados($row);
 
-                $questao = $this->salvarQuestao($prova, $numero, $gabarito, $atributos);
+                $questao = $this->salvarQuestao($avaliacao, $numero, $gabarito, $atributos);
 
                 $questao->wasRecentlyCreated ? $resultado->registrarCriada() : $resultado->registrarAtualizada();
 
@@ -81,19 +81,19 @@ class QuestaoImportService
 
     /**
      * updateOrCreate "manual" que também restaura uma questão excluída
-     * (soft-delete) em vez de colidir com o índice único (prova, número).
+     * (soft-delete) em vez de colidir com o índice único (avaliação, número).
      *
      * @param  array<string, mixed>  $atributos
      */
-    private function salvarQuestao(Prova $prova, int $numero, string $gabarito, array $atributos): Questao
+    private function salvarQuestao(Avaliacao $avaliacao, int $numero, string $gabarito, array $atributos): Questao
     {
         $questao = Questao::withTrashed()
-            ->where('prova_codigo', $prova->codigo)
+            ->where('avaliacao_codigo', $avaliacao->codigo)
             ->where('numero', $numero)
             ->first();
 
         if ($questao === null) {
-            $questao = new Questao(['prova_codigo' => $prova->codigo, 'numero' => $numero]);
+            $questao = new Questao(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => $numero]);
         } elseif ($questao->trashed()) {
             $questao->restore();
         }

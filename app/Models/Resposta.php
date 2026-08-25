@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * Resposta de um respondente (identificado por CPF ou RA) a uma questão de
- * uma prova, num período letivo. `aluno_chave` é uma coluna gerada pelo banco
+ * uma avaliação, num período letivo. `aluno_chave` é uma coluna gerada pelo banco
  * (COALESCE(cpf, ra)) e nunca deve ser atribuída manualmente.
  *
  * Tabela `respostas` (não `resultados`) de propósito: a aplicação legada já
@@ -21,7 +21,7 @@ class Resposta extends Model
     protected $table = 'respostas';
 
     protected $fillable = [
-        'prova_codigo',
+        'avaliacao_codigo',
         'aluno_id',
         'ra',
         'cpf',
@@ -37,9 +37,9 @@ class Resposta extends Model
         ];
     }
 
-    public function prova(): BelongsTo
+    public function avaliacao(): BelongsTo
     {
-        return $this->belongsTo(Prova::class, 'prova_codigo', 'codigo');
+        return $this->belongsTo(Avaliacao::class, 'avaliacao_codigo', 'codigo');
     }
 
     public function aluno(): BelongsTo

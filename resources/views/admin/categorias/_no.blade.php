@@ -3,7 +3,7 @@
     <div class="flex items-center justify-between py-1.5">
         <span class="text-sm">
             {{ $categoria->nome }}
-            <span class="text-xs text-slate-400">({{ $categoria->provas_count }} prova(s))</span>
+            <span class="text-xs text-slate-400">({{ $categoria->avaliacoes_count }} avaliação(ões))</span>
         </span>
         <form method="POST" action="{{ route('categorias.destroy', $categoria) }}" class="inline"
               onsubmit="return confirm('Excluir a categoria {{ $categoria->nome }}?');">

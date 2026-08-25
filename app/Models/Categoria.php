@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Categoria de Prova em árvore (categoria_pai_id aponta pra outra Categoria,
+ * Categoria de Avaliação em árvore (categoria_pai_id aponta pra outra Categoria,
  * nulo = raiz). Usada para agrupar o boletim do aluno no portal público.
  */
 class Categoria extends Model
@@ -27,9 +27,9 @@ class Categoria extends Model
         return $this->hasMany(self::class, 'categoria_pai_id')->orderBy('nome');
     }
 
-    public function provas(): HasMany
+    public function avaliacoes(): HasMany
     {
-        return $this->hasMany(Prova::class);
+        return $this->hasMany(Avaliacao::class);
     }
 
     /** Caminho completo, ex.: "Simulados > 1º ao 4º período". */
@@ -42,7 +42,7 @@ class Categoria extends Model
      * Todas as categorias achatadas para um <select>, indentadas por
      * profundidade na árvore (ex.: "— Subcategoria"). Reaproveitado tanto
      * pelo formulário de categorias (escolher a categoria-mãe) quanto pelo
-     * de Provas (escolher a categoria da prova).
+     * de Avaliações (escolher a categoria da avaliação).
      *
      * @return array<int, array{id: int, label: string}>
      */

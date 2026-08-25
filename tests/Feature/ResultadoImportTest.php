@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Admin;
 use App\Models\Aluno;
-use App\Models\Prova;
+use App\Models\Avaliacao;
 use App\Models\Questao;
 use App\Models\Resposta;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -22,15 +22,15 @@ class ResultadoImportTest extends TestCase
 
     public function test_importa_resultados_por_ra(): void
     {
-        $prova = Prova::create([]);
+        $avaliacao = Avaliacao::create([]);
 
         $csv = "RA,Questão,Resposta\n12345,1,B\n12345,2,C\n";
         $arquivo = UploadedFile::fake()->createWithContent('resultados.csv', $csv);
 
         $response = $this->actingAs($this->admin(), 'admin')
-            ->post("/provas/{$prova->codigo}/resultados/import", ['arquivo' => $arquivo]);
+            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", ['arquivo' => $arquivo]);
 
-        $response->assertRedirect(route('provas.show', $prova));
+        $response->assertRedirect(route('avaliacoes.show', $avaliacao));
         $this->assertDatabaseCount('respostas', 2);
         $this->assertDatabaseHas('respostas', ['ra' => '12345', 'questao_numero' => 1, 'resposta' => 'B']);
     }
@@ -42,13 +42,13 @@ class ResultadoImportTest extends TestCase
             'cpf' => '11122233344',
             'data_nascimento' => '2000-01-01',
         ]);
-        $prova = Prova::create([]);
+        $avaliacao = Avaliacao::create([]);
 
         $csv = "CPF,Questão,Resposta\n111.222.333-44,1,A\n";
         $arquivo = UploadedFile::fake()->createWithContent('resultados.csv', $csv);
 
         $this->actingAs($this->admin(), 'admin')
-            ->post("/provas/{$prova->codigo}/resultados/import", ['arquivo' => $arquivo]);
+            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", ['arquivo' => $arquivo]);
 
         $this->assertDatabaseHas('respostas', [
             'cpf' => '11122233344',
@@ -58,26 +58,26 @@ class ResultadoImportTest extends TestCase
 
     public function test_linha_sem_cpf_e_sem_ra_e_ignorada(): void
     {
-        $prova = Prova::create([]);
+        $avaliacao = Avaliacao::create([]);
 
         $csv = "RA,Questão,Resposta\n123,1,B\n,2,C\n";
         $arquivo = UploadedFile::fake()->createWithContent('resultados.csv', $csv);
 
         $this->actingAs($this->admin(), 'admin')
-            ->post("/provas/{$prova->codigo}/resultados/import", ['arquivo' => $arquivo]);
+            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", ['arquivo' => $arquivo]);
 
         $this->assertDatabaseCount('respostas', 1);
     }
 
     public function test_arquivo_sem_coluna_de_questao_e_rejeitado(): void
     {
-        $prova = Prova::create([]);
+        $avaliacao = Avaliacao::create([]);
 
         $csv = "RA,Resposta\n123,B\n";
         $arquivo = UploadedFile::fake()->createWithContent('resultados.csv', $csv);
 
         $response = $this->actingAs($this->admin(), 'admin')
-            ->post("/provas/{$prova->codigo}/resultados/import", ['arquivo' => $arquivo]);
+            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", ['arquivo' => $arquivo]);
 
         $response->assertSessionHasErrors('arquivo');
         $this->assertDatabaseCount('respostas', 0);
@@ -85,16 +85,16 @@ class ResultadoImportTest extends TestCase
 
     public function test_reimportar_atualiza_em_vez_de_duplicar(): void
     {
-        $prova = Prova::create([]);
+        $avaliacao = Avaliacao::create([]);
         $admin = $this->admin();
 
         $primeiro = UploadedFile::fake()->createWithContent('resultados.csv', "RA,Questão,Resposta\n123,1,B\n");
         $this->actingAs($admin, 'admin')
-            ->post("/provas/{$prova->codigo}/resultados/import", ['arquivo' => $primeiro]);
+            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", ['arquivo' => $primeiro]);
 
         $segundo = UploadedFile::fake()->createWithContent('resultados.csv', "RA,Questão,Resposta\n123,1,D\n");
         $this->actingAs($admin, 'admin')
-            ->post("/provas/{$prova->codigo}/resultados/import", ['arquivo' => $segundo]);
+            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", ['arquivo' => $segundo]);
 
         $this->assertDatabaseCount('respostas', 1);
         $this->assertDatabaseHas('respostas', ['ra' => '123', 'questao_numero' => 1, 'resposta' => 'D']);
@@ -102,7 +102,7 @@ class ResultadoImportTest extends TestCase
 
     public function test_mesmo_aluno_em_periodos_diferentes_nao_se_sobrescreve(): void
     {
-        $prova = Prova::create([]);
+        $avaliacao = Avaliacao::create([]);
         $admin = $this->admin();
 
         $primeiro = UploadedFile::fake()->createWithContent(
@@ -110,14 +110,14 @@ class ResultadoImportTest extends TestCase
             "RA,Período,Questão,Resposta\n123,2025/1,1,B\n"
         );
         $this->actingAs($admin, 'admin')
-            ->post("/provas/{$prova->codigo}/resultados/import", ['arquivo' => $primeiro]);
+            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", ['arquivo' => $primeiro]);
 
         $segundo = UploadedFile::fake()->createWithContent(
             'resultados.csv',
             "RA,Período,Questão,Resposta\n123,2025/2,1,C\n"
         );
         $this->actingAs($admin, 'admin')
-            ->post("/provas/{$prova->codigo}/resultados/import", ['arquivo' => $segundo]);
+            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", ['arquivo' => $segundo]);
 
         $this->assertDatabaseCount('respostas', 2);
         $this->assertDatabaseHas('respostas', ['ra' => '123', 'periodo' => '2025/1', 'resposta' => 'B']);
@@ -126,19 +126,19 @@ class ResultadoImportTest extends TestCase
 
     public function test_reimportar_apos_exclusao_restaura_em_vez_de_falhar(): void
     {
-        $prova = Prova::create([]);
+        $avaliacao = Avaliacao::create([]);
         $admin = $this->admin();
 
         $arquivo = UploadedFile::fake()->createWithContent('resultados.csv', "RA,Questão,Resposta\n123,1,B\n");
         $this->actingAs($admin, 'admin')
-            ->post("/provas/{$prova->codigo}/resultados/import", ['arquivo' => $arquivo]);
+            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", ['arquivo' => $arquivo]);
 
         Resposta::where('ra', '123')->first()->delete();
         $this->assertSoftDeleted('respostas', ['ra' => '123']);
 
         $reimportado = UploadedFile::fake()->createWithContent('resultados.csv', "RA,Questão,Resposta\n123,1,B\n");
         $response = $this->actingAs($admin, 'admin')
-            ->post("/provas/{$prova->codigo}/resultados/import", ['arquivo' => $reimportado]);
+            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", ['arquivo' => $reimportado]);
 
         $response->assertSessionDoesntHaveErrors();
         $this->assertDatabaseCount('respostas', 1);
@@ -147,18 +147,18 @@ class ResultadoImportTest extends TestCase
 
     public function test_import_recalcula_o_resumo_do_boletim(): void
     {
-        $prova = Prova::create([]);
-        Questao::create(['prova_codigo' => $prova->codigo, 'numero' => 1, 'gabarito' => 'B']);
-        Questao::create(['prova_codigo' => $prova->codigo, 'numero' => 2, 'gabarito' => 'C']);
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'B']);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 2, 'gabarito' => 'C']);
 
         $csv = "RA,Questão,Resposta\n123,1,B\n123,2,D\n";
         $arquivo = UploadedFile::fake()->createWithContent('resultados.csv', $csv);
 
         $this->actingAs($this->admin(), 'admin')
-            ->post("/provas/{$prova->codigo}/resultados/import", ['arquivo' => $arquivo]);
+            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", ['arquivo' => $arquivo]);
 
         $this->assertDatabaseHas('resultado_resumos', [
-            'prova_codigo' => $prova->codigo,
+            'avaliacao_codigo' => $avaliacao->codigo,
             'ra' => '123',
             'acertos' => 1,
             'total' => 2,
