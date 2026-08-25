@@ -2,10 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\GerarBackupJob;
 use App\Models\Admin;
+use App\Models\ConfiguracaoSistema;
 use App\Services\Backup\BackupService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 use ZipArchive;
 
@@ -89,6 +92,68 @@ class BackupTest extends TestCase
         $this->actingAs($admin, 'admin')
             ->get("/sistema/backups/{$arquivo}/download")
             ->assertOk();
+    }
+
+    public function test_gerar_backup_enfileira_o_job_em_vez_de_rodar_na_requisicao(): void
+    {
+        // A geração roda fora do ciclo de vida da requisição HTTP justamente
+        // para não travar/derrubar a tela num dump grande — este teste
+        // garante que o clique só ENFILEIRA o trabalho, sem esperar o dump
+        // terminar (Queue::fake() intercepta antes do job realmente rodar).
+        Queue::fake();
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post('/sistema/backups')
+            ->assertRedirect(route('sistema.backups.index'));
+
+        Queue::assertPushed(GerarBackupJob::class);
+    }
+
+    public function test_job_de_backup_registra_status_processando_e_concluido(): void
+    {
+        $this->assertNull(ConfiguracaoSistema::valor('backup_status'));
+
+        (new GerarBackupJob)->handle(app(BackupService::class));
+
+        $this->assertSame('concluido', ConfiguracaoSistema::valor('backup_status'));
+        $this->assertNull(ConfiguracaoSistema::valor('backup_erro'));
+    }
+
+    public function test_job_de_backup_registra_status_erro_quando_falha(): void
+    {
+        $job = new GerarBackupJob;
+        $excecao = new \RuntimeException('disco cheio');
+
+        $job->failed($excecao);
+
+        $this->assertSame('erro', ConfiguracaoSistema::valor('backup_status'));
+        $this->assertSame('disco cheio', ConfiguracaoSistema::valor('backup_erro'));
+    }
+
+    public function test_tela_de_backups_mostra_aviso_enquanto_gera_e_esconde_o_botao(): void
+    {
+        ConfiguracaoSistema::definir('backup_status', 'processando');
+        ConfiguracaoSistema::definir('backup_iniciado_em', now()->toIso8601String());
+
+        $response = $this->actingAs($this->admin(), 'admin')->get('/sistema/backups');
+
+        $response->assertOk();
+        $response->assertSee('Backup em andamento');
+        $response->assertDontSee('Gerar backup agora');
+    }
+
+    public function test_tela_de_backups_mostra_erro_do_ultimo_backup_que_falhou(): void
+    {
+        ConfiguracaoSistema::definir('backup_status', 'erro');
+        ConfiguracaoSistema::definir('backup_erro', 'mysqldump indisponível.');
+
+        $response = $this->actingAs($this->admin(), 'admin')->get('/sistema/backups');
+
+        $response->assertOk();
+        $response->assertSee('O último backup falhou');
+        $response->assertSee('mysqldump indisponível.');
+        // Falhou não é "em andamento" — o botão pra tentar de novo continua disponível.
+        $response->assertSee('Gerar backup agora');
     }
 
     public function test_download_rejeita_nome_de_arquivo_fora_do_padrao(): void

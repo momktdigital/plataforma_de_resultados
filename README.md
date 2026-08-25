@@ -548,13 +548,32 @@ php artisan sistema:backup
 ```
 
 Gera um `.zip` com o dump completo do banco (`database.sql`, via
-`mysqldump` quando disponível no servidor) mais todos os arquivos da
-aplicação — exceto `vendor/`, `node_modules/` e caches, que são
-reproduzíveis via `composer install`/`npm install` a partir do
-`composer.lock`/`package-lock.json` incluídos. **Inclui o `.env` real**, com
-credenciais — por isso o download só é permitido para administradores
-autenticados, nunca por link direto. Mantém automaticamente só os N backups
-mais recentes (configurável em **Configurações**, padrão 5).
+`mysqldump` quando disponível no servidor, ou um dump em PHP puro lendo a
+tabela por cursor — sem carregar tudo na memória de uma vez — quando não
+está) mais todos os arquivos da aplicação — exceto `vendor/`,
+`node_modules/` e caches, que são reproduzíveis via `composer
+install`/`npm install` a partir do `composer.lock`/`package-lock.json`
+incluídos. **Inclui o `.env` real**, com credenciais — por isso o download
+só é permitido para administradores autenticados, nunca por link direto.
+Mantém automaticamente só os N backups mais recentes (configurável em
+**Configurações**, padrão 5).
+
+**Clicar em "Gerar backup agora" não gera o arquivo na hora** — só
+enfileira `App\Jobs\GerarBackupJob` (`ConfiguracaoSistema.backup_status`
+vai para `processando`) e a tela volta imediatamente, atualizando-se
+sozinha a cada alguns segundos até o job terminar (`concluido`) ou falhar
+(`erro`, com a mensagem exibida). Um dump completo de uma base com volume
+real de dados facilmente passa do tempo de execução de uma requisição
+HTTP; processado pela fila, quem gera o arquivo é o worker
+(`php artisan queue:work`), que como processo CLI não tem esse limite.
+**Sem um worker rodando, o backup fica pendente indefinidamente** — em
+produção, garanta `php artisan queue:work` como processo persistente
+(supervisor/systemd) ou, no Windows, `php artisan queue:work
+--stop-when-empty` agendado no Agendador de Tarefas a cada poucos minutos.
+O comando `sistema:backup` acima roda fora da fila (síncrono) e é a opção
+certa para backups agendados via cron/Agendador de Tarefas — inclusive
+usado internamente pelo atualizador (ver abaixo), que precisa que o backup
+já exista antes de prosseguir.
 
 ## Configurações (`/sistema/configuracoes`)
 
@@ -580,3 +599,8 @@ O servidor precisa de acesso a shell/Composer (usado pelo atualizador para
 rodar `composer install` após cada atualização) e, idealmente, ao binário
 `mysqldump` (usado nos backups — sem ele, cai para um dump em PHP puro,
 mais lento mas funcional).
+
+Precisa também de um worker de fila rodando continuamente
+(`php artisan queue:work`, `QUEUE_CONNECTION=database` por padrão — sem
+worker, o backup sob demanda pela interface (ver "Backups" acima) nunca
+sai do estado "processando").

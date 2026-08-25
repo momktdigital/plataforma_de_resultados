@@ -3,7 +3,9 @@
 namespace App\Console\Commands;
 
 use App\Services\Backup\BackupService;
+use App\Services\Backup\BackupStatusTracker;
 use Illuminate\Console\Command;
+use Throwable;
 
 class GerarBackup extends Command
 {
@@ -15,8 +17,18 @@ class GerarBackup extends Command
     {
         $this->info('Gerando backup...');
 
-        $caminho = $service->gerar();
+        BackupStatusTracker::iniciar();
 
+        try {
+            $caminho = $service->gerar();
+        } catch (Throwable $e) {
+            BackupStatusTracker::falhar($e);
+            $this->error('Falha ao gerar backup: '.$e->getMessage());
+
+            return self::FAILURE;
+        }
+
+        BackupStatusTracker::concluir();
         $this->info('Backup criado em: '.$caminho);
 
         return self::SUCCESS;

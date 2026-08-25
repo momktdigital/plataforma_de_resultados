@@ -3,7 +3,8 @@
 namespace App\Http\Controllers\Sistema;
 
 use App\Http\Controllers\Controller;
-use App\Services\Backup\BackupService;
+use App\Jobs\GerarBackupJob;
+use App\Models\ConfiguracaoSistema;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
@@ -27,22 +28,31 @@ class BackupController extends Controller
             ])
             ->values();
 
-        return view('admin.sistema.backups', ['backups' => $backups]);
+        return view('admin.sistema.backups', [
+            'backups' => $backups,
+            'backupStatus' => ConfiguracaoSistema::valor('backup_status', 'concluido'),
+            'backupErro' => ConfiguracaoSistema::valor('backup_erro'),
+            'backupIniciadoEm' => ConfiguracaoSistema::valor('backup_iniciado_em'),
+        ]);
     }
 
-    public function store(BackupService $service): RedirectResponse
+    public function store(): RedirectResponse
     {
+        // Em produção (fila assíncrona) o job roda fora desta requisição — se
+        // ele falhar, GerarBackupJob::failed() já registra o erro. Este
+        // try/catch cobre o caso de QUEUE_CONNECTION=sync (ex.: testes) ou de
+        // uma falha ao simplesmente enfileirar o job.
         try {
-            $caminho = $service->gerar();
+            GerarBackupJob::dispatch();
         } catch (Throwable $e) {
-            Log::error('Falha ao gerar backup.', ['exception' => $e]);
+            Log::error('Falha ao solicitar backup.', ['exception' => $e]);
 
             return redirect()->route('sistema.backups.index')
                 ->withErrors(['backup' => 'Não foi possível gerar o backup: '.$e->getMessage()]);
         }
 
         return redirect()->route('sistema.backups.index')
-            ->with('status', 'Backup gerado: '.basename($caminho));
+            ->with('status', 'Backup solicitado — está sendo gerado em segundo plano.');
     }
 
     public function download(string $nome): BinaryFileResponse
