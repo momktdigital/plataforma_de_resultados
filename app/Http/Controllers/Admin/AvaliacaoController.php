@@ -7,6 +7,7 @@ use App\Http\Requests\StoreAvaliacaoRequest;
 use App\Models\Avaliacao;
 use App\Models\Categoria;
 use App\Services\EstatisticaErroService;
+use App\Services\Visualizacoes\VisualizacaoConfigService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -39,16 +40,20 @@ class AvaliacaoController extends Controller
             ->with('status', "Avaliação #{$avaliacao->codigo} criada com sucesso.");
     }
 
-    public function show(Avaliacao $avaliacao): View
+    public function show(Avaliacao $avaliacao, VisualizacaoConfigService $visualizacaoConfig): View
     {
         $avaliacao->loadCount(['questoes', 'resultados', 'metricas']);
 
         $questoes = $avaliacao->questoes()->withTrashed()->with(['matrizes', 'referencias'])->orderBy('numero')->get();
 
+        $estadoVisualizacoes = $visualizacaoConfig->estadoCompleto($avaliacao);
+
         return view('admin.avaliacoes.show', [
             'avaliacao' => $avaliacao,
             'questoes' => $questoes,
-            'estatisticasErro' => (new EstatisticaErroService)->calcular($avaliacao),
+            'estatisticasErro' => $estadoVisualizacoes['questoes_criticas']['visivelAdmin']
+                ? (new EstatisticaErroService)->calcular($avaliacao)
+                : [],
             'opcoesCategoria' => Categoria::opcoesSelect(),
         ]);
     }

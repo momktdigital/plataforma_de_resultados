@@ -68,6 +68,10 @@
                class="inline-block border border-slate-300 text-slate-700 hover:bg-slate-50 font-semibold rounded-lg px-4 py-2 text-sm">
                 Painel BI
             </a>
+            <a href="{{ route('avaliacoes.visualizacoes.edit', $avaliacao) }}"
+               class="inline-block border border-slate-300 text-slate-700 hover:bg-slate-50 font-semibold rounded-lg px-4 py-2 text-sm">
+                Configurar visualizações
+            </a>
         </div>
     </div>
 </div>

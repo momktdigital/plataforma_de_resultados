@@ -40,7 +40,7 @@
                     Período: {{ $r['periodo'] !== '' ? $r['periodo'] : '—' }}
                 </p>
             </div>
-            @if ($r['total'] > 0)
+            @if ($estado['nota_geral']['visivelAluno'] && $r['total'] > 0)
                 <div class="text-right shrink-0">
                     <div class="text-3xl font-black text-primary">{{ $r['percentual'] }}%</div>
                     <div class="text-xs text-slate-500 font-medium">{{ $r['acertos'] }}/{{ $r['total'] }} acertos</div>
@@ -56,8 +56,12 @@
         @endif
 
         @php
-            $metricaTotal = $r['metricas']->first(fn ($m) => mb_strtolower(trim($m->nome_metrica), 'UTF-8') === 'total');
-            $outrasMetricas = $metricaTotal ? $r['metricas']->reject(fn ($m) => $m->is($metricaTotal)) : $r['metricas'];
+            $metricaTotal = $estado['metricas_nomeadas']['visivelAluno']
+                ? $r['metricas']->first(fn ($m) => mb_strtolower(trim($m->nome_metrica), 'UTF-8') === 'total')
+                : null;
+            $outrasMetricas = $estado['metricas_nomeadas']['visivelAluno']
+                ? ($metricaTotal ? $r['metricas']->reject(fn ($m) => $m->is($metricaTotal)) : $r['metricas'])
+                : collect();
         @endphp
 
         @if ($metricaTotal)
@@ -83,27 +87,151 @@
             </div>
         @endif
 
-        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Detalhamento das respostas</p>
-        <div class="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
-            @foreach ($r['respostas'] as $resposta)
-                @php
-                    $correta = $r['gabaritos'][$resposta->questao_numero] ?? null;
-                    $marcada = $resposta->resposta ?: '';
-                    $cor = 'bg-slate-400';
-                    if ($correta !== null && $correta !== '') {
-                        $cor = $marcada === $correta ? 'bg-green-500' : ($marcada === '' ? 'bg-slate-400' : 'bg-red-500');
-                    }
-                @endphp
-                <div class="rounded-lg overflow-hidden border border-slate-200 shadow-sm">
-                    <div class="{{ $cor }} text-white text-[10px] text-center font-bold py-1">Q{{ $resposta->questao_numero }}</div>
-                    <div class="bg-white text-center font-bold text-sm py-1.5 {{ $marcada === '' ? 'text-slate-300' : 'text-slate-700' }}">
-                        {{ $marcada !== '' ? $marcada : '-' }}
+        @if ($estado['grade_questoes']['visivelAluno'])
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Detalhamento das respostas</p>
+            <div class="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2 mb-6">
+                @foreach ($r['respostas'] as $resposta)
+                    @php
+                        $correta = $r['gabaritos'][$resposta->questao_numero] ?? null;
+                        $marcada = $resposta->resposta ?: '';
+                        $cor = 'bg-slate-400';
+                        if ($correta !== null && $correta !== '') {
+                            $cor = $marcada === $correta ? 'bg-green-500' : ($marcada === '' ? 'bg-slate-400' : 'bg-red-500');
+                        }
+                    @endphp
+                    <div class="rounded-lg overflow-hidden border border-slate-200 shadow-sm">
+                        <div class="{{ $cor }} text-white text-[10px] text-center font-bold py-1">Q{{ $resposta->questao_numero }}</div>
+                        <div class="bg-white text-center font-bold text-sm py-1.5 {{ $marcada === '' ? 'text-slate-300' : 'text-slate-700' }}">
+                            {{ $marcada !== '' ? $marcada : '-' }}
+                        </div>
                     </div>
+                @endforeach
+            </div>
+        @endif
+
+        @if ($estado['comparativo_turma']['visivelAluno'] && $comparativoTurma)
+            <div class="mb-6 bg-slate-50 border border-slate-100 rounded-xl p-4">
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Comparativo com a turma {{ $comparativoTurma['turma'] }}</p>
+                <div class="flex items-center gap-6 text-sm">
+                    <div><span class="text-slate-500">Você:</span> <span class="font-black text-primary">{{ $comparativoTurma['suaMedia'] }}%</span></div>
+                    <div><span class="text-slate-500">Média da turma:</span> <span class="font-black text-slate-700">{{ $comparativoTurma['mediaTurma'] }}%</span></div>
+                    <div class="text-xs text-slate-400">({{ $comparativoTurma['respondentesTurma'] }} respondente(s))</div>
                 </div>
-            @endforeach
-        </div>
+            </div>
+        @endif
+
+        @if ($estado['ranking_percentil']['visivelAluno'] && $rankingPercentil)
+            <div class="mb-6 bg-slate-50 border border-slate-100 rounded-xl p-4">
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Posição relativa</p>
+                <p class="text-sm">
+                    Você está no percentil <span class="font-black text-primary">{{ $rankingPercentil['percentil'] }}</span> —
+                    posição {{ $rankingPercentil['posicao'] }} de {{ $rankingPercentil['totalRespondentes'] }} respondente(s).
+                </p>
+            </div>
+        @endif
+
+        @if ($estado['radar_disciplina']['visivelAluno'] && ! empty($radarDisciplina))
+            <div class="mb-6">
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Desempenho por disciplina</p>
+                <canvas id="grafico-radar-disciplina" height="220"></canvas>
+            </div>
+        @endif
+
+        @if (($estado['desempenho_bloom']['visivelAluno'] && ! empty($desempenhoBloom)) || ($estado['desempenho_miller']['visivelAluno'] && ! empty($desempenhoMiller)))
+            <div class="grid sm:grid-cols-2 gap-4 mb-6">
+                @if ($estado['desempenho_bloom']['visivelAluno'] && ! empty($desempenhoBloom))
+                    <div>
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Desempenho por nível de Bloom</p>
+                        <canvas id="grafico-bloom" height="200"></canvas>
+                    </div>
+                @endif
+                @if ($estado['desempenho_miller']['visivelAluno'] && ! empty($desempenhoMiller))
+                    <div>
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Desempenho por nível de Miller</p>
+                        <canvas id="grafico-miller" height="200"></canvas>
+                    </div>
+                @endif
+            </div>
+        @endif
+
+        @if ($estado['evolucao_categoria']['visivelAluno'] && ! empty($evolucaoHistorica) && count($evolucaoHistorica) >= 2)
+            <div class="mb-6">
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Evolução histórica na categoria</p>
+                <canvas id="grafico-evolucao" height="200"></canvas>
+            </div>
+        @endif
+
+        @if ($estado['comparativo_questao']['visivelAluno'] && ! empty($comparativoQuestao))
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Sua resposta x turma, por questão</p>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-slate-50 text-slate-500 text-left">
+                            <tr><th class="px-3 py-2">Questão</th><th class="px-3 py-2">Sua resposta</th><th class="px-3 py-2">Gabarito</th><th class="px-3 py-2">% turma acertou</th></tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @foreach ($comparativoQuestao as $q)
+                                <tr>
+                                    <td class="px-3 py-2 font-mono">Q{{ $q['numero'] }}</td>
+                                    <td class="px-3 py-2 {{ $q['acertou'] ? 'text-green-600 font-bold' : 'text-red-600 font-bold' }}">{{ $q['sua_resposta'] ?: '—' }}</td>
+                                    <td class="px-3 py-2">{{ $q['gabarito'] }}</td>
+                                    <td class="px-3 py-2">{{ $q['taxa_acerto_turma'] }}%</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        @endif
     </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+@if ($estado['radar_disciplina']['visivelAluno'] && ! empty($radarDisciplina))
+new Chart(document.getElementById('grafico-radar-disciplina'), {
+    type: 'radar',
+    data: {
+        labels: {{ Js::from(array_keys($radarDisciplina)) }},
+        datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($radarDisciplina)) }}, backgroundColor: 'rgba(0,180,141,0.2)', borderColor: '#00b48d' }],
+    },
+    options: { scales: { r: { beginAtZero: true, max: 100 } } },
+});
+@endif
+
+@if ($estado['desempenho_bloom']['visivelAluno'] && ! empty($desempenhoBloom))
+new Chart(document.getElementById('grafico-bloom'), {
+    type: 'bar',
+    data: {
+        labels: {{ Js::from(array_keys($desempenhoBloom)) }},
+        datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($desempenhoBloom)) }}, backgroundColor: '#00b48d' }],
+    },
+    options: { indexAxis: 'y', scales: { x: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
+});
+@endif
+
+@if ($estado['desempenho_miller']['visivelAluno'] && ! empty($desempenhoMiller))
+new Chart(document.getElementById('grafico-miller'), {
+    type: 'bar',
+    data: {
+        labels: {{ Js::from(array_keys($desempenhoMiller)) }},
+        datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($desempenhoMiller)) }}, backgroundColor: '#00b48d' }],
+    },
+    options: { indexAxis: 'y', scales: { x: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
+});
+@endif
+
+@if ($estado['evolucao_categoria']['visivelAluno'] && ! empty($evolucaoHistorica) && count($evolucaoHistorica) >= 2)
+new Chart(document.getElementById('grafico-evolucao'), {
+    type: 'line',
+    data: {
+        labels: {{ Js::from(array_column($evolucaoHistorica, 'nome')) }},
+        datasets: [{ label: '% de acerto', data: {{ Js::from(array_column($evolucaoHistorica, 'percentual')) }}, borderColor: '#00b48d', backgroundColor: 'rgba(0,180,141,0.2)', tension: 0.2 }],
+    },
+    options: { scales: { y: { beginAtZero: true, max: 100 } } },
+});
+@endif
+</script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script>
