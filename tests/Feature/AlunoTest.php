@@ -50,6 +50,72 @@ class AlunoTest extends TestCase
         $this->assertDatabaseCount('alunos', 1);
     }
 
+    public function test_email_institucional_e_derivado_do_ra(): void
+    {
+        $aluno = Aluno::create(['ra' => '67926', 'cpf' => '12345678909', 'data_nascimento' => '2000-01-01']);
+
+        $this->assertSame('67926@somos.unifaa.edu.br', $aluno->email_institucional);
+    }
+
+    public function test_foto_url_usa_cod_perfil_e_tamanho(): void
+    {
+        $comFoto = Aluno::create(['ra' => '1', 'cod_perfil' => '222710']);
+        $semFoto = Aluno::create(['ra' => '2']);
+
+        $this->assertSame('https://faa.jacad.com.br/academico/images/perfil-v2/222710/300', $comFoto->fotoUrl(300));
+        $this->assertNull($semFoto->fotoUrl());
+    }
+
+    public function test_cria_aluno_sem_cpf_e_nascimento(): void
+    {
+        $response = $this->actingAs($this->admin(), 'admin')->post('/alunos', [
+            'ra' => '2026001',
+            'nome' => 'Sem CPF Ainda',
+        ]);
+
+        $response->assertRedirect(route('alunos.index'));
+        $aluno = Aluno::where('ra', '2026001')->firstOrFail();
+        $this->assertNull($aluno->cpf);
+        $this->assertNull($aluno->data_nascimento);
+    }
+
+    public function test_atualiza_dados_pessoais_e_de_matricula_do_aluno(): void
+    {
+        $aluno = Aluno::create([
+            'ra' => '2026001',
+            'cpf' => '12345678909',
+            'data_nascimento' => '2000-01-01',
+        ]);
+
+        $response = $this->actingAs($this->admin(), 'admin')->put("/alunos/{$aluno->id}", [
+            'ra' => '2026001',
+            'cpf' => '12345678909',
+            'data_nascimento' => '02/02/2002',
+            'nome' => 'Novo Nome',
+            'sexo' => 'FEMININO',
+            'cor_raca' => 'PARDA',
+            'religiao' => 'CATOLICA',
+            'estado_civil' => 'SOLTEIRO',
+            'cidade' => 'VALENCA',
+            'uf' => 'rj',
+            'celular' => '24999998888',
+            'matriz' => 'MEDICINA 3390',
+            'cod_perfil' => '222710',
+        ]);
+
+        $response->assertRedirect(route('alunos.index'));
+        $aluno->refresh();
+        $this->assertSame('FEMININO', $aluno->sexo);
+        $this->assertSame('PARDA', $aluno->cor_raca);
+        $this->assertSame('CATOLICA', $aluno->religiao);
+        $this->assertSame('SOLTEIRO', $aluno->estado_civil);
+        $this->assertSame('VALENCA', $aluno->cidade);
+        $this->assertSame('RJ', $aluno->uf);
+        $this->assertSame('24999998888', $aluno->celular);
+        $this->assertSame('MEDICINA 3390', $aluno->matriz);
+        $this->assertSame('222710', $aluno->cod_perfil);
+    }
+
     public function test_atualiza_aluno_existente(): void
     {
         $aluno = Aluno::create([

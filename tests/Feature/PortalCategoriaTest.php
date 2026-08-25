@@ -48,6 +48,18 @@ class PortalCategoriaTest extends TestCase
         return $avaliacao;
     }
 
+    public function test_boletim_mostra_primeiro_nome_e_resumo_de_desempenho(): void
+    {
+        $aluno = $this->aluno();
+        $this->resultadoNaAvaliacao($aluno, null, null, 'Avaliacao Solta');
+
+        $response = $this->followingRedirects()->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
+
+        $response->assertOk();
+        $response->assertSee('Fulano');
+        $response->assertSee('100%');
+    }
+
     public function test_prova_sem_categoria_aparece_fora_da_arvore(): void
     {
         $aluno = $this->aluno();
