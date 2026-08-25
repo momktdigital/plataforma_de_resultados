@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\LixeiraController;
 use App\Http\Controllers\Admin\MatriculaImportController;
 use App\Http\Controllers\Admin\PerfilController;
 use App\Http\Controllers\Admin\QuestaoController;
+use App\Http\Controllers\Admin\QuestaoExportController;
 use App\Http\Controllers\Admin\QuestaoImportController;
 use App\Http\Controllers\Admin\RespondenteController;
 use App\Http\Controllers\Admin\ResultadoImportController;
@@ -91,6 +92,10 @@ Route::middleware('instalado')->group(function () {
         Route::post('/avaliacoes/{avaliacao}/questoes', [QuestaoController::class, 'store'])->name('avaliacoes.questoes.store');
         Route::delete('/avaliacoes/{avaliacao}/questoes/{questao}', [QuestaoController::class, 'destroy'])->name('avaliacoes.questoes.destroy');
         Route::post('/avaliacoes/{avaliacao}/questoes/{questao}/restaurar', [QuestaoController::class, 'restore'])->name('avaliacoes.questoes.restore');
+
+        Route::get('/avaliacoes/{avaliacao}/questoes/exportar/xlsx', [QuestaoExportController::class, 'xlsx'])->name('avaliacoes.questoes.export.xlsx');
+        Route::get('/avaliacoes/{avaliacao}/questoes/exportar/csv', [QuestaoExportController::class, 'csv'])->name('avaliacoes.questoes.export.csv');
+        Route::get('/avaliacoes/{avaliacao}/questoes/exportar/pdf', [QuestaoExportController::class, 'pdf'])->name('avaliacoes.questoes.export.pdf');
 
         Route::get('/avaliacoes/{avaliacao}/resultados/import', [ResultadoImportController::class, 'create'])
             ->name('avaliacoes.resultados.import');

@@ -230,15 +230,40 @@
     @if ($questoes->isEmpty())
         <p class="text-sm text-slate-400">Nenhuma questão cadastrada ainda.</p>
     @else
-        <div class="overflow-x-auto">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <p class="text-xs text-slate-400">Role a tabela para o lado para ver todas as colunas.</p>
+            <div class="flex gap-2 text-xs font-medium">
+                <a href="{{ route('avaliacoes.questoes.export.xlsx', $avaliacao) }}" class="inline-flex items-center gap-1 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg px-3 py-1.5">
+                    <i class="ph ph-file-xls"></i> Exportar .xlsx
+                </a>
+                <a href="{{ route('avaliacoes.questoes.export.csv', $avaliacao) }}" class="inline-flex items-center gap-1 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg px-3 py-1.5">
+                    <i class="ph ph-file-csv"></i> Exportar .csv
+                </a>
+                <a href="{{ route('avaliacoes.questoes.export.pdf', $avaliacao) }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg px-3 py-1.5">
+                    <i class="ph ph-file-pdf"></i> Exportar .pdf
+                </a>
+            </div>
+        </div>
+        <div class="overflow-x-auto border border-slate-200 rounded-xl">
             <table class="w-full text-sm">
                 <thead class="bg-slate-50 text-slate-500 text-left">
                     <tr>
-                        <th class="px-3 py-2">Nº</th>
-                        <th class="px-3 py-2">Gabarito</th>
-                        <th class="px-3 py-2">Área</th>
-                        <th class="px-3 py-2">Tema</th>
-                        <th class="px-3 py-2"></th>
+                        <th class="px-3 py-2 whitespace-nowrap">Nº</th>
+                        <th class="px-3 py-2 whitespace-nowrap">Gabarito</th>
+                        <th class="px-3 py-2 whitespace-nowrap">Área</th>
+                        <th class="px-3 py-2 whitespace-nowrap">Tema</th>
+                        <th class="px-3 py-2 whitespace-nowrap">Habilidade</th>
+                        <th class="px-3 py-2 whitespace-nowrap">Bloom (nível)</th>
+                        <th class="px-3 py-2 whitespace-nowrap">Bloom (verbo)</th>
+                        <th class="px-3 py-2 whitespace-nowrap">Miller</th>
+                        <th class="px-3 py-2 whitespace-nowrap">Dif. Pedagógica</th>
+                        <th class="px-3 py-2 whitespace-nowrap">Dif. TRI</th>
+                        <th class="px-3 py-2 whitespace-nowrap">Matriz Prova</th>
+                        <th class="px-3 py-2 whitespace-nowrap">DCN</th>
+                        <th class="px-3 py-2 whitespace-nowrap">Portaria INEP</th>
+                        <th class="px-3 py-2 whitespace-nowrap">PPC</th>
+                        <th class="px-3 py-2 whitespace-nowrap">Matriz curricular</th>
+                        <th class="px-3 py-2 whitespace-nowrap">Status</th>
                         <th class="px-3 py-2"></th>
                     </tr>
                 </thead>
@@ -265,13 +290,27 @@
                                 'matriz_disciplina' => $questao->matrizes->pluck('disciplina')->all(),
                                 'matriz_codigo' => $questao->matrizes->pluck('codigo')->all(),
                             ];
+                            $matrizCurricular = $questao->matrizes
+                                ->map(fn ($m) => collect([$m->periodo, $m->disciplina, $m->codigo])->filter()->implode(' · '))
+                                ->implode('; ');
                         @endphp
                         <tr class="{{ $questao->trashed() ? 'opacity-50' : '' }}">
-                            <td class="px-3 py-2 font-mono">{{ $questao->numero }}</td>
-                            <td class="px-3 py-2 font-bold">{{ $questao->gabarito ?: '—' }}</td>
-                            <td class="px-3 py-2 text-slate-500">{{ $questao->area ?: '—' }}</td>
-                            <td class="px-3 py-2 text-slate-500">{{ $questao->tema ?: '—' }}</td>
-                            <td class="px-3 py-2 text-slate-400">{{ $questao->trashed() ? 'Excluída' : '' }}</td>
+                            <td class="px-3 py-2 font-mono whitespace-nowrap">{{ $questao->numero }}</td>
+                            <td class="px-3 py-2 font-bold whitespace-nowrap">{{ $questao->gabarito ?: '—' }}</td>
+                            <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $questao->area ?: '—' }}</td>
+                            <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $questao->tema ?: '—' }}</td>
+                            <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $questao->habilidade ?: '—' }}</td>
+                            <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $questao->bloom_nivel ?: '—' }}</td>
+                            <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $questao->bloom_verbo ?: '—' }}</td>
+                            <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $questao->miller_nivel ?: '—' }}</td>
+                            <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $questao->dificuldade_pedagogica ?: '—' }}</td>
+                            <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $questao->dificuldade_tri ?? '—' }}</td>
+                            <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $referenciasPorTipo->get('matriz_prova') ? implode('; ', $referenciasPorTipo->get('matriz_prova')) : '—' }}</td>
+                            <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $referenciasPorTipo->get('dcn') ? implode('; ', $referenciasPorTipo->get('dcn')) : '—' }}</td>
+                            <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $referenciasPorTipo->get('portaria_inep') ? implode('; ', $referenciasPorTipo->get('portaria_inep')) : '—' }}</td>
+                            <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $referenciasPorTipo->get('ppc') ? implode('; ', $referenciasPorTipo->get('ppc')) : '—' }}</td>
+                            <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $matrizCurricular ?: '—' }}</td>
+                            <td class="px-3 py-2 text-slate-400 whitespace-nowrap">{{ $questao->trashed() ? 'Excluída' : '' }}</td>
                             <td class="px-3 py-2 text-right whitespace-nowrap">
                                 @if ($questao->trashed())
                                     <form method="POST" action="{{ route('avaliacoes.questoes.restore', [$avaliacao, $questao->id]) }}" class="inline">
