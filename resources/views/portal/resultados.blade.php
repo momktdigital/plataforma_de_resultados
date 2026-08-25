@@ -1,18 +1,14 @@
 @extends('layouts.portal')
 
-@section('title', "Boletim — {$aluno->ra}")
+@section('title', "Resultados — {$aluno->ra}")
 @section('container-class', 'max-w-5xl')
 
 @php
-    $primeiroNome = $aluno->nome ? mb_convert_case(explode(' ', trim($aluno->nome))[0], MB_CASE_TITLE, 'UTF-8') : $aluno->ra;
+    $nomeCompleto = $aluno->nome ? mb_convert_case(mb_strtolower(trim($aluno->nome), 'UTF-8'), MB_CASE_TITLE, 'UTF-8') : $aluno->ra;
 @endphp
 
 @section('content')
 <div class="mb-6 fade-in">
-    <a href="{{ route('portal.sair') }}" class="inline-flex items-center text-sm font-medium text-slate-500 hover:text-primary transition-colors bg-white px-4 py-2 rounded-full shadow-sm border border-slate-200 mb-4">
-        <i class="ph-bold ph-arrow-left mr-2"></i> Nova consulta
-    </a>
-
     <div class="relative overflow-hidden rounded-3xl shadow-lg" style="background: linear-gradient(135deg, #00b48d 0%, #009e7d 55%, #007a61 100%);">
         <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(circle at 85% 15%, white 0, transparent 45%), radial-gradient(circle at 10% 90%, white 0, transparent 40%);"></div>
 
@@ -34,7 +30,7 @@
 
             <div class="min-w-0 flex-1">
                 <p id="saudacao-portal" class="text-white/80 text-sm font-medium uppercase tracking-wide">Olá</p>
-                <h1 class="text-2xl sm:text-3xl font-black text-white truncate">{{ $primeiroNome }}</h1>
+                <h1 class="text-2xl sm:text-3xl font-black text-white truncate">{{ $nomeCompleto }}</h1>
                 <p class="text-white/85 text-sm mt-1">
                     RA {{ $aluno->ra }}
                     @if ($aluno->curso) &middot; {{ $aluno->curso }} @endif
@@ -65,34 +61,56 @@
 })();
 </script>
 
-@if (! empty($arvore) || ! empty($semCategoria))
+@if (! empty($periodosDisponiveis) || ! empty($arvore) || ! empty($semCategoria))
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-6 flex flex-wrap items-end gap-3">
-        <div>
-            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1" for="filtro-data-inicio">De</label>
-            <input id="filtro-data-inicio" type="date" oninput="portalAplicarFiltro()"
-                   class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
-        </div>
-        <div>
-            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1" for="filtro-data-fim">Até</label>
-            <input id="filtro-data-fim" type="date" oninput="portalAplicarFiltro()"
-                   class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
-        </div>
-        <button type="button" onclick="portalLimparFiltro()" class="text-sm text-slate-500 hover:text-primary underline">
-            Limpar filtro
-        </button>
-        <p id="filtro-vazio-aviso" class="hidden text-sm text-slate-500 ml-auto">Nenhuma avaliação no período selecionado.</p>
+        @if (! empty($periodosDisponiveis))
+            <form method="GET" action="{{ route('portal.resultados') }}">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1" for="periodo-letivo">Período letivo</label>
+                <select id="periodo-letivo" name="periodo_letivo" onchange="this.form.submit()"
+                        class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm bg-white min-w-[140px]">
+                    <option value="" {{ $periodoSelecionado === '' ? 'selected' : '' }}>Todos</option>
+                    @foreach ($periodosDisponiveis as $p)
+                        <option value="{{ $p }}" {{ $periodoSelecionado === $p ? 'selected' : '' }}>{{ $p }}</option>
+                    @endforeach
+                </select>
+            </form>
+        @endif
+
+        @if (! empty($arvore) || ! empty($semCategoria))
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1" for="filtro-data-inicio">De</label>
+                <input id="filtro-data-inicio" type="date" oninput="portalAplicarFiltro()"
+                       class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1" for="filtro-data-fim">Até</label>
+                <input id="filtro-data-fim" type="date" oninput="portalAplicarFiltro()"
+                       class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+            </div>
+            <button type="button" onclick="portalLimparFiltro()" class="text-sm text-slate-500 hover:text-primary underline">
+                Limpar filtro
+            </button>
+            <p id="filtro-vazio-aviso" class="hidden text-sm text-slate-500 ml-auto">Nenhuma avaliação no período selecionado.</p>
+        @endif
     </div>
 @endif
 
-<p class="text-sm text-slate-500 mb-4">Clique numa avaliação para abrir o detalhamento numa aba nova e baixar o PDF dela.</p>
+<p class="text-sm text-slate-500 mb-4">Clique numa avaliação para ver o detalhamento e baixar o PDF dela.</p>
 
-<div id="boletim">
+<div id="resultados-lista">
     @if (empty($arvore) && empty($semCategoria))
         <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-12 text-center">
             <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 mb-4">
                 <i class="ph ph-exam text-3xl text-slate-400"></i>
             </div>
-            <p class="text-slate-500">Você não possui resultados cadastrados no momento.</p>
+            @if (! empty($periodosDisponiveis) && $periodoSelecionado !== '')
+                <p class="text-slate-500 mb-3">Nenhum resultado encontrado para o período letivo "{{ $periodoSelecionado }}".</p>
+                <a href="{{ route('portal.resultados', ['periodo_letivo' => '']) }}" class="text-primary font-semibold hover:underline text-sm">
+                    Ver todos os períodos
+                </a>
+            @else
+                <p class="text-slate-500">Você não possui resultados cadastrados no momento.</p>
+            @endif
         </div>
     @else
         @if (! empty($arvore))
@@ -140,7 +158,7 @@ function portalAplicarFiltro() {
             no.querySelector('.categoria-conteudo').hidden = false;
         }
     });
-    document.querySelectorAll('#boletim > .avaliacao-card').forEach(function (card) {
+    document.querySelectorAll('#resultados-lista > .avaliacao-card').forEach(function (card) {
         if (!card.classList.contains('hidden')) algumVisivel = true;
     });
 

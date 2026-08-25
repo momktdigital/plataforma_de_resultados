@@ -58,4 +58,20 @@ class AparenciaTest extends TestCase
         $css = file_get_contents(public_path('assets/css/accessibility.css'));
         $this->assertStringContainsString('.asw-widget', $css);
     }
+
+    public function test_gatilho_do_vlibras_usa_a_api_atual_do_widget(): void
+    {
+        $js = file_get_contents(public_path('assets/js/accessibility.js'));
+
+        // v7.6.0 do plugin não usa mais `[vw-access-button]` como seletor —
+        // expõe `window.VLibrasWidget.open()` pra abrir o tradutor.
+        $this->assertStringNotContainsString("querySelector('[vw-access-button]')", $js);
+        $this->assertStringContainsString('VLibrasWidget.open()', $js);
+
+        $css = file_get_contents(public_path('assets/css/accessibility.css'));
+        $this->assertStringContainsString('#vlibras-access-wrapper', $css);
+        // A regra de CSS em si (não o comentário explicativo acima dela) não
+        // deve mais usar o seletor antigo, que não existe no DOM da v7.6.0.
+        $this->assertStringNotContainsString("\n[vw-access-button] {", $css);
+    }
 }

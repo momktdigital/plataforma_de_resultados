@@ -213,7 +213,7 @@ class PortalController extends Controller
      * id do aluno na sessão — nada de repassar isso por querystring, senão
      * qualquer um poderia adivinhar/alterar a URL e ver boletim alheio.
      */
-    public function resultados(ResultadoConsultaService $consultaService): View|RedirectResponse
+    public function resultados(Request $request, ResultadoConsultaService $consultaService): View|RedirectResponse
     {
         $aluno = $this->alunoAutenticado();
 
@@ -221,10 +221,10 @@ class PortalController extends Controller
             return redirect()->route('portal.consulta');
         }
 
-        return $this->renderizarResultados($aluno, $consultaService);
+        return $this->renderizarResultados($aluno, $consultaService, $request);
     }
 
-    /** Detalhe de uma única avaliacao, pensado para abrir em nova aba a partir do boletim. */
+    /** Detalhe de uma única avaliacao, aberto a partir da tela de Resultados. */
     public function resultadoAvaliacao(Avaliacao $avaliacao, Request $request, ResultadoConsultaService $consultaService): View|RedirectResponse
     {
         $aluno = $this->alunoAutenticado();
@@ -265,9 +265,33 @@ class PortalController extends Controller
         return $id ? Aluno::find($id) : null;
     }
 
-    private function renderizarResultados(Aluno $aluno, ResultadoConsultaService $consultaService): View
+    /**
+     * "Período letivo", nesta tela, é o mesmo campo `periodo` já usado em
+     * todo o resto do import/exibição de resultados (a coluna "Período"/
+     * "Período Letivo" da planilha de resultados — ver
+     * ResultadoImportService) — não existe uma dimensão própria separada.
+     * O filtro por padrão mostra só o período letivo mais recente (`''` na
+     * query string = "Todos", igual ao filtro equivalente no admin).
+     */
+    private function renderizarResultados(Aluno $aluno, ResultadoConsultaService $consultaService, Request $request): View
     {
-        $resultados = $consultaService->buscarPorAluno($aluno);
+        $todos = $consultaService->buscarPorAluno($aluno);
+
+        $periodosDisponiveis = collect($todos)
+            ->pluck('periodo')
+            ->filter(fn ($p) => $p !== null && $p !== '')
+            ->unique()
+            ->sortDesc()
+            ->values()
+            ->all();
+
+        $periodoSelecionado = $request->has('periodo_letivo')
+            ? (string) $request->query('periodo_letivo', '')
+            : (string) ($periodosDisponiveis[0] ?? '');
+
+        $resultados = $periodoSelecionado === ''
+            ? $todos
+            : collect($todos)->filter(fn ($r) => $r['periodo'] === $periodoSelecionado)->values()->all();
 
         $comPercentual = collect($resultados)->pluck('percentual')->filter(fn ($p) => $p !== null);
 
@@ -275,6 +299,8 @@ class PortalController extends Controller
             'aluno' => $aluno,
             'totalAvaliacoes' => count($resultados),
             'mediaGeral' => $comPercentual->isNotEmpty() ? round($comPercentual->avg(), 1) : null,
+            'periodosDisponiveis' => $periodosDisponiveis,
+            'periodoSelecionado' => $periodoSelecionado,
             ...$consultaService->montarArvore($resultados),
         ]);
     }

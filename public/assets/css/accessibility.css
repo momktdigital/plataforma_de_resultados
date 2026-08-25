@@ -5,8 +5,11 @@ html {
     transition: filter 0.3s ease;
 }
 
-/* Hide VLibras floating access button since we trigger it from the toolbar */
-[vw-access-button] {
+/* Hide VLibras's own floating access button since we trigger it from the
+   toolbar instead. v7.6.0 renders it as `#vlibras-access-wrapper` (a Shadow
+   DOM host appended straight to <body>) instead of the old `[vw-access-button]`
+   markup — hiding the host element hides its whole shadow tree too. */
+#vlibras-access-wrapper {
     display: none !important;
 }
 
@@ -29,14 +32,14 @@ html.theme-high-contrast {
 html.theme-dark img,
 html.theme-dark video,
 html.theme-dark iframe,
-html.theme-dark [vw-plugin-wrapper] {
+html.theme-dark #vlibras-app-root {
     filter: invert(1) hue-rotate(180deg);
 }
 
 html.theme-high-contrast img,
 html.theme-high-contrast video,
 html.theme-high-contrast iframe,
-html.theme-high-contrast [vw-plugin-wrapper] {
+html.theme-high-contrast #vlibras-app-root {
     filter: invert(1) contrast(0.66) grayscale(1);
 }
 

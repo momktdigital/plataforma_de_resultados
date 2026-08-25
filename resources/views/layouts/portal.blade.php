@@ -45,7 +45,55 @@
                 <span class="font-bold text-xl tracking-tight text-slate-800">{{ $siteTitle }}</span>
             @endif
         </a>
-        <div class="accessibility-container"></div>
+        <div class="flex items-center gap-2 sm:gap-3">
+            <div class="accessibility-container"></div>
+
+            @isset($aluno)
+                <div class="relative">
+                    <button type="button" onclick="portalToggleContaMenu()" id="portal-conta-botao"
+                            class="flex items-center gap-1.5 rounded-full hover:bg-slate-100 p-1 pr-2 transition-colors"
+                            title="{{ $aluno->nome ?: $aluno->ra }}">
+                        @if ($aluno->fotoUrl())
+                            <img src="{{ $aluno->fotoUrl(60) }}" alt="Foto de {{ $aluno->nome ?: $aluno->ra }}"
+                                 class="w-9 h-9 rounded-full object-cover border border-slate-200"
+                                 onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='flex';">
+                            <span style="display:none" class="w-9 h-9 rounded-full bg-primary/10 text-primary items-center justify-center text-sm font-bold">
+                                {{ mb_strtoupper(mb_substr($aluno->nome ?: $aluno->ra, 0, 1)) }}
+                            </span>
+                        @else
+                            <span class="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">
+                                {{ mb_strtoupper(mb_substr($aluno->nome ?: $aluno->ra, 0, 1)) }}
+                            </span>
+                        @endif
+                        <i class="ph-bold ph-caret-down text-slate-400 text-xs hidden sm:inline"></i>
+                    </button>
+
+                    <div id="portal-conta-menu" hidden
+                         class="absolute right-0 top-full mt-2 w-56 bg-white border border-slate-200 shadow-lg rounded-xl overflow-hidden z-50">
+                        <div class="px-4 py-3 border-b border-slate-100">
+                            <p class="text-sm font-bold text-slate-800 truncate">{{ $aluno->nome ?: $aluno->ra }}</p>
+                            <p class="text-xs text-slate-500">RA {{ $aluno->ra }}</p>
+                        </div>
+                        <a href="{{ route('portal.sair') }}" class="flex items-center gap-2 px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors">
+                            <i class="ph-bold ph-sign-out"></i> Sair
+                        </a>
+                    </div>
+                </div>
+
+                <script>
+                function portalToggleContaMenu() {
+                    document.getElementById('portal-conta-menu').hidden = ! document.getElementById('portal-conta-menu').hidden;
+                }
+                document.addEventListener('click', function (evento) {
+                    const botao = document.getElementById('portal-conta-botao');
+                    const menu = document.getElementById('portal-conta-menu');
+                    if (botao && menu && !menu.hidden && !botao.contains(evento.target) && !menu.contains(evento.target)) {
+                        menu.hidden = true;
+                    }
+                });
+                </script>
+            @endisset
+        </div>
     </div>
 </div>
 
