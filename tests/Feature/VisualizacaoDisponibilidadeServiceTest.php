@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Aluno;
 use App\Models\Avaliacao;
+use App\Models\Categoria;
 use App\Models\Questao;
 use App\Models\QuestaoMatriz;
 use App\Models\Resposta;
@@ -110,7 +111,7 @@ class VisualizacaoDisponibilidadeServiceTest extends TestCase
 
     public function test_evolucao_categoria_exige_categoria_e_pelo_menos_duas_avaliacoes_com_resumo(): void
     {
-        $categoria = \App\Models\Categoria::create(['nome' => 'Simulados']);
+        $categoria = Categoria::create(['nome' => 'Simulados']);
         $avaliacao1 = Avaliacao::create(['categoria_id' => $categoria->id]);
         Questao::create(['avaliacao_codigo' => $avaliacao1->codigo, 'numero' => 1, 'gabarito' => 'A']);
         Resposta::create(['avaliacao_codigo' => $avaliacao1->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A']);

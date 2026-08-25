@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Avaliacao;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -330,7 +331,7 @@ class RelatorioAdminService
         return $radar;
     }
 
-    /** @return \Illuminate\Support\Collection<int, object{campo: ?string, acertos: int, total: int}> */
+    /** @return Collection<int, object{campo: ?string, acertos: int, total: int}> */
     private function acertosPorQuestaoComCampo(Avaliacao $avaliacao, string $campo, string $periodo = '')
     {
         return DB::table('respostas as r')

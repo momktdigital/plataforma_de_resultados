@@ -35,7 +35,7 @@
     $temAlgumVisivel = collect($estado)->contains(fn ($item) => $item['visivelAdmin']);
 @endphp
 
-@if (! $temAlgumVisivel)
+@if (! $temAlgumVisivel && empty($dados['semGabarito']) && empty($dados['semRespostas']))
     <div class="bg-slate-50 border border-slate-200 text-slate-500 rounded-xl p-6 text-sm">
         Nenhum visual está habilitado para o administrativo nesta avaliação.
         <a href="{{ route('avaliacoes.visualizacoes.edit', $avaliacao) }}" class="text-emerald-700 font-medium hover:underline">Configure aqui.</a>

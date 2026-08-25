@@ -3,10 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\Admin;
+use App\Models\Aluno;
 use App\Models\Avaliacao;
 use App\Models\Questao;
 use App\Models\QuestaoMatriz;
 use App\Models\Resposta;
+use App\Services\ResumoResultadoService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -86,11 +88,11 @@ class AvaliacaoVisualizacaoTest extends TestCase
         $avaliacao = Avaliacao::create([]);
         $questao = Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A']);
         QuestaoMatriz::create(['questao_id' => $questao->id, 'disciplina' => 'Anatomia']);
-        \App\Models\Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2026001', 'questao_numero' => 1, 'resposta' => 'A']);
-        app(\App\Services\ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2026001', 'questao_numero' => 1, 'resposta' => 'A']);
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
 
         $this->admin();
-        $aluno = \App\Models\Aluno::create([
+        $aluno = Aluno::create([
             'ra' => '2026001', 'cpf' => '12345678909', 'data_nascimento' => '2000-03-15', 'nome' => 'Fulano',
         ]);
 

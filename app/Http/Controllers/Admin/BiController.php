@@ -25,9 +25,10 @@ class BiController extends Controller
         $estado = $visualizacaoConfig->estadoCompleto($avaliacao);
         $visivel = fn (string $chave) => $estado[$chave]['visivelAdmin'];
 
-        $dados = ($visivel('histograma') || $visivel('top5') || $visivel('radar_disciplina'))
-            ? $biService->gerar($avaliacao, $periodo)
-            : [];
+        // Sempre calculado (não só quando histograma/top5/radar estão habilitados): o
+        // aviso de "sem gabarito"/"sem respostas" precisa aparecer independente da
+        // configuração de visuais, senão a página fica em branco sem explicar o motivo.
+        $dados = $biService->gerar($avaliacao, $periodo);
 
         return view('admin.avaliacoes.bi', [
             'avaliacao' => $avaliacao,
