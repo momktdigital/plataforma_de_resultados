@@ -1,200 +1,606 @@
-# Resultados DI - Plataforma de Avaliações e Rankings
+# Avaliações
 
-![PHP 8+](https://img.shields.io/badge/PHP-8.0+-777BB4.svg?logo=php&logoColor=white)
-![MySQL](https://img.shields.io/badge/MySQL-8.0+-4479A1.svg?logo=mysql&logoColor=white)
-![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.x-38B2AC.svg?logo=tailwind-css&logoColor=white)
-![Chart.js](https://img.shields.io/badge/Chart.js-4.x-FF6384.svg?logo=chart.js&logoColor=white)
+Aplicação Laravel responsável pelo cadastro de **Avaliações**, import de
+**Questões/Gabarito** (com metadados pedagógicos opcionais) e import de
+**Resultados**, além do portal público do aluno (2FA), login administrativo,
+CRUD de alunos e configurações. Substitui o antigo módulo experimental "DI"
+— o nome foi abandonado porque o sistema passou a suportar avaliações de
+vários tipos, não só o Diagnóstico Institucional.
 
-Um sistema web completo, responsivo e seguro focado na publicação e análise de resultados de simulados, provas e avaliações acadêmicas (UNIFAA/FAA). O sistema garante a privacidade do aluno exigindo CPF + Data de Nascimento e, opcionalmente, um segundo fator de autenticação por e-mail (2FA), e oferece um Dashboard Administrativo com recursos de *Business Intelligence* (BI) para o corpo docente/coordenação.
+Este repositório já foi um app legado em PHP puro (mesmas funções — portal
+público do aluno, 2FA, login administrativo, CRUD de alunos e
+configurações), reescrito do zero nesta aplicação Laravel; o código antigo
+foi removido depois que todas as suas funções foram portadas e validadas em
+produção (ver histórico do repositório caso precise consultar o código
+legado). O schema herdou as tabelas `admins` e `alunos` desse app legado
+sem alterá-las, e adiciona as tabelas novas descritas abaixo.
 
----
+## Modelagem de dados
 
-## 🚀 Funcionalidades Principais
+| Tabela | Campos obrigatórios | Observação |
+|---|---|---|
+| `categorias` | `nome` | Árvore (`categoria_pai_id` aponta pra outra `categorias`, nulo = raiz) — agrupa o boletim do aluno no portal por categoria/subcategoria. |
+| `avaliacoes` | — (código gerado automaticamente) | `nome`/`tipo`/`link_comentado` são só identificação, totalmente opcionais. `categoria_id` (opcional) e `data_avaliacao` (opcional, distinta de `created_at`) alimentam o agrupamento e a ordenação/filtro por data no portal. |
+| `questoes` | `avaliacao_codigo`, `numero`, `gabarito` | O resto que é **um valor só** por questão (Bloom, Miller, dificuldade) é opcional e vira coluna. O que pode ter **vários valores** (matriz da avaliação, DCN, Portaria INEP, PPC) vira linhas em `questao_referencias` — ver abaixo. Suporta soft-delete. |
+| `questao_matrizes` | `questao_id` | Uma questão pode estar em mais de um período/disciplina/código de matriz — por isso é uma tabela filha (1:N), não colunas fixas. |
+| `questao_referencias` | `questao_id`, `tipo`, `valor` | Referências da questão a matriz de avaliação/DCN/Portaria INEP/PPC — uma linha por valor, `tipo` diz a qual grupo pertence. Existiam como colunas numeradas (`dcn_a`, `dcn_b`...); viraram tabela porque é um grupo repetitivo (0..N valores), não um atributo de valor único, e o número de colunas era só um palpite (ver "Performance e escala" abaixo). |
+| `respostas` | `avaliacao_codigo`, (`ra` OU `cpf`), `questao_numero` | Formato longo: uma linha por resposta de um respondente a uma questão, num período (`periodo`, opcional — default `''`). `aluno_chave` é uma coluna gerada pelo banco (`COALESCE(cpf, ra)`) usada no índice único que evita duplicar a mesma resposta num reimport; `ra`/`cpf` também têm índice próprio (ver "Performance e escala"). Chama-se `respostas`, não `resultados`, porque a aplicação legada já tem uma tabela `resultados` no mesmo banco. |
+| `resultado_metricas` | `avaliacao_codigo`, (`ra` OU `cpf`), `nome_metrica` | Métricas agregadas por aluno+avaliação+período que não são resposta de uma questão (ex.: "Nota de Redação", "Total") — equivalente ao antigo JSON `resultados.notas_finais`, como linhas em vez de colunas dinâmicas. Mesma lógica de índice em `ra`/`cpf` que `respostas`. |
+| `resultado_resumos` | `avaliacao_codigo`, `aluno_chave`, `periodo` | Cache de leitura: acertos/total/percentual já calculados por aluno+avaliação+período, mantida por `App\Services\ResumoResultadoService`. Nunca gravada diretamente pela aplicação — ver "Performance e escala". |
 
-### Para o Aluno (Front-End — `index.php`)
-* **Acesso Seguro:** Consulta por CPF e Data de Nascimento, com proteção anti-bot via **Google reCAPTCHA v2** ou **hCaptcha** (mutuamente exclusivos, configuráveis pelo painel).
-* **2FA por E-mail (opcional):** Quando ativado em Configurações, o sistema envia um código de 6 dígitos por e-mail (via SMTP/PHPMailer) antes de liberar o boletim. Inclui reenvio de código com cooldown progressivo (1, 2, 5, 10 min) e bloqueio por IP após tentativas malsucedidas (`api/consulta.php`, `api/verify_2fa.php`, `api/resend_2fa.php`).
-* **Acessibilidade Completa:** Redimensionamento dinâmico de texto (A+ / A-), temas Claro/Escuro/Alto Contraste (persistidos em `localStorage`) e integração com o tradutor **VLibras**.
-* **Layout Fluido:** SPA em JavaScript Vanilla (`assets/js/app.js`), sem reload de página entre busca, 2FA e resultado.
-* **Espelho de Desempenho:** Cards por disciplina (Total vs. Percentual), mapa de respostas detalhado (Q1 a Q100) e um **painel de estatísticas de desempenho** (% de acerto, corretas/erradas/brancas e breakdown por área/matéria) quando há gabarito vinculado.
-* **Correção em Tempo Real:** Comparação automática entre a resposta do aluno e o gabarito oficial, com badges coloridas (Verde = Acerto, Vermelho = Erro, Cinza = Anulada).
-* **Exportação em PDF:** Geração do boletim em PDF diretamente no navegador (html2pdf).
+`admins`, `alunos`, `gabaritos` e `resultados` (a tabela legada, não confundir
+com `respostas`) têm migrations próprias aqui, mas elas só criam a tabela
+**se ela ainda não existir** (`Schema::hasTable`) — em produção, onde essas
+tabelas já existem via `database.sql` da aplicação legada, elas são no-ops.
+Isso permite rodar `php artisan migrate` com segurança tanto em produção
+(banco já populado) quanto em um ambiente novo/de testes (banco vazio, onde
+`gabaritos`/`resultados` legados ficam disponíveis para o comando de migração
+de dados abaixo poder ler algo).
 
-### Para o Administrador (Back-End — `admin/`)
-* **Painel de Configurações Globais** (`configuracoes.php`): título do site, logotipo (versões clara e escura, com upload de imagem), reCAPTCHA/hCaptcha, SMTP para o 2FA (host, porta, usuário, senha, remetente) e template do e-mail de código (com placeholders `[NOME_DO_ALUNO]` e `[CODIGO]`) — com botão de teste de envio SMTP (`api_test_smtp.php` / `api_verify_test_smtp.php`).
-* **Upsert Dinâmico via CSV:** upload de resultados (`upload.php`) e de gabaritos (`process_gabarito.php`) lê vírgula ou ponto-e-vírgula, mapeia colunas automaticamente e permite reenviar planilhas para corrigir métricas sem duplicar registros.
-* **Parse Flexível de Colunas:** colunas `Q1`, `Q2`... viram o mapa de respostas do aluno; colunas finais (ex.: `Clínica Médica - Total de acertos`, `Nota de Redação`, `Total`) são empacotadas em `JSON` não-relacional, permitindo provas com estruturas diferentes na mesma tabela.
-* **BI e Analytics** (`index.php` do admin): histograma de distribuição de acertos, gráfico radar de desempenho médio por matéria e Top 5 alunos por avaliação (via Chart.js), com filtro por avaliação/período.
-* **CRUDs Completos:** Alunos (`alunos.php`, `aluno_form.php`, `aluno_editar.php`), Avaliações/Gabaritos (`avaliacoes.php`, `avaliacao_editar.php`), Resultados (`resultados.php`, com exclusão em massa por período/avaliação), Administradores (`usuarios.php`) e Perfil (`perfil.php`).
-* **Lixeira (Soft-Delete)** (`lixeira.php`): resultados e gabaritos excluídos vão para `deleted_at` em vez de serem apagados; permite restaurar individualmente, restaurar tudo ou excluir permanentemente.
-* **Backup Manual** (`backup.php`): gera e baixa um dump `.sql` completo do banco (estrutura + dados de todas as tabelas) sob demanda.
+> **Se for referenciar `admins`/`alunos` com foreign key numa migration
+> nova:** use `$table->integer('coluna')->nullable()` + `$table->foreign(...)`
+> — **não** `$table->foreignId()` (que gera `BIGINT UNSIGNED`). O
+> `database.sql` legado define `admins.id`/`alunos.id` como `INT` simples;
+> o MySQL exige que os dois lados de uma FK tenham o mesmo tipo, e essa
+> troca já causou `errno 150` em produção (ver `avaliacoes.criado_por`,
+> `respostas.aluno_id`, `resultado_metricas.aluno_id` como exemplo).
+> Testes rodam em SQLite, que não enforce isso — só um banco MySQL real
+> pega esse tipo de erro, por isso testamos manualmente contra MariaDB
+> antes de publicar qualquer migration que toque nessas duas tabelas.
 
-### 🎓 Importação de matrícula por Excel (em desenvolvimento)
-Está em andamento uma evolução do cadastro de alunos para suportar planilhas Excel (`.xlsx`/`.xls`, além de `.csv`) com parsing 100% client-side (biblioteca [SheetJS/xlsx.js](https://github.com/SheetJS/sheetjs) via CDN + `admin/js/di_parser.js`), pensada para coordenadores de curso analisarem resultados por curso/período letivo.
+## Performance e escala
 
-* `admin/upload_alunos.php` foi reescrito: agora lê o arquivo no navegador, mostra pré-visualização (contagens, cursos/períodos detectados, avisos) e envia os dados em lotes (`BATCH_SIZE = 200`) via `fetch`/JSON para `admin/alunos_di_process.php`, com barra de progresso.
-* Novas colunas mapeadas na matrícula: **Cód. Perfil, RA, Nome, Status, Per. Letivo, Curso, Turma, Período, Dt. Nascimento, CPF, Email** — com reconhecimento de várias grafias de cabeçalho (ex.: `RA`/`Matricula`/`MatriculaAluno`).
-* Um esboço de controle de acesso por curso já existe no código (`$_SESSION['admin_role']` = `coordinator`/`superadmin` e `$_SESSION['admin_curso']` filtram o que é importado em `upload_alunos.php` e `alunos_di_process.php`), mas **ainda não há como definir essas sessões**: `admin/login.php` não as popula, a tabela `admins` não tem colunas `role`/`curso`, e o menu (`admin/includes/header.php`) ainda não filtra itens por perfil.
+Pensado para o sistema processar milhões de resultados sem travar. O ponto
+de partida é notar que nem toda tabela cresce do mesmo jeito: `avaliacoes` e
+`questoes` crescem com o número de avaliações/questões cadastradas (limitado
+— dezenas de milhares, no máximo); `respostas` e `resultado_metricas` crescem
+com **aluno × avaliação × período × questão/métrica** — uma única avaliação de 100
+questões com 10.000 respondentes já é 1 milhão de linhas sozinha. É nessas
+duas que qualquer decisão de schema/índice precisa ser pensada para escala;
+nas outras, quase qualquer desenho funciona igual de bem.
 
-> ⚠️ **Atenção — pendência de banco de dados:** para a importação de matrícula funcionar de ponta a ponta ainda falta uma migration que adicione à tabela `alunos` as colunas `cod_perfil`, `status`, `periodo_letivo`, `periodo` e `turma` (usadas pelo `UPSERT` de `admin/alunos_di_process.php`) e crie a tabela `cursos` (referenciada no mesmo arquivo). Sem isso, a importação de matrícula por Excel falha.
+- **Coluna vs. tabela filha em `questoes`:** um atributo opcional de **valor
+  único** por questão (`bloom_nivel`, `dificuldade_tri`...) é uma coluna
+  nullable — normal, não custa nada em espaço/performance. Um atributo que
+  pode ter **vários valores** por questão, mas foi modelado como colunas
+  numeradas (`dcn_a`, `dcn_b`, `ppc_a..d`) é um grupo repetitivo disfarçado —
+  vira tabela filha (`questao_referencias`), senão qualquer novo valor além
+  do que "a/b/c/d" previu exige alterar a tabela de novo. Mesma lógica já
+  usada em `questao_matrizes` para período/disciplina/código.
+- **Índice em `ra`/`cpf` de `respostas`/`resultado_metricas`:** o boletim do
+  portal busca essas tabelas filtrando por `ra` OU `cpf`, sem saber de
+  antemão qual avaliação ou qual das duas colunas está preenchida. Sem um
+  índice em cada coluna, essa busca é um full table scan — inofensivo com
+  poucas linhas, mas é exatamente a consulta que trava com milhões delas
+  (a mais usada do sistema, ainda por cima). `Schema::index('ra')` +
+  `Schema::index('cpf')` bastam para o MySQL fazer um index-merge na busca.
+- **`resultado_resumos` como cache de leitura:** calcular "quantas questões
+  o aluno acertou nesta avaliação" exige comparar cada resposta com o gabarito —
+  um JOIN entre `respostas` e `questoes`. Fazer isso a cada vez que um aluno
+  abre o boletim significa refazer esse JOIN toda hora, mesmo que ninguém
+  tenha respondido nada novo desde a última consulta. `resultado_resumos`
+  guarda o resultado desse cálculo (uma linha por aluno+avaliação+período) e é
+  recalculada por `App\Services\ResumoResultadoService::recalcular($avaliacaoCodigo)`
+  — sempre **para uma avaliação só** (nunca a tabela toda), com uma única query
+  agregada (`JOIN` + `GROUP BY` + `SUM(CASE...)`), depois de qualquer coisa
+  que mude o resultado dela: import de respostas/gabarito (`ResultadoImportController`,
+  `QuestaoImportController`, `LegadoController`), edição/exclusão manual de
+  uma questão (`QuestaoController`, `LixeiraController`) ou exclusão/
+  restauração de um período inteiro (`RespondenteController`). O boletim
+  (`ResultadoConsultaService::buscarPorAluno`) só lê dessa tabela — nunca
+  escaneia `respostas` para montar a lista. A tela de detalhe de uma avaliação
+  (`buscarUmaAvaliacao`) ainda busca as respostas individuais pra montar a grade
+  de Q1..Qn (isso é sempre uma avaliação só, nunca escala com o total do
+  sistema), mas usa o mesmo resumo pra acertos/total/percentual — garante
+  que a lista e o detalhe sempre mostrem o mesmo número, e tem um fallback
+  que recalcula na hora caso o resumo não exista por algum motivo.
 
-> ℹ️ As funções de import de **gabarito com metadados** e **resultados por questão** que existiam aqui como protótipo (`parseQuestoes`/`parseAlunos` em `admin/js/di_parser.js`, tabelas `di_sessoes`/`di_questoes` nunca criadas) foram descontinuadas e substituídas pelo módulo **[Avaliações](avaliacoes/README.md)** — uma aplicação Laravel separada, que passou a cobrir Provas/Questões/Resultados de forma completa (schema normalizado, campos opcionais, imports com relatório de linhas ignoradas). O nome "DI" foi abandonado ali porque o sistema passou a suportar avaliações de vários tipos, não só o Diagnóstico Institucional. `api/consulta.php` ainda faz uma tentativa (silenciosa, em `try/catch`) de consultar `di_questoes` para enriquecer o portal do aluno — é código órfão, mantido por ora porque a integração do portal com os novos dados de Avaliações fica para uma etapa futura.
+## Alunos (`/alunos`)
 
----
+CRUD completo de alunos — porta `admin/alunos.php`/`aluno_form.php` da
+aplicação legada para cá. Listagem com busca por RA/CPF/Nome e paginação,
+criação e edição exigem RA, CPF (11 dígitos, usado como login no portal
+público) e Data de Nascimento; Curso, Câmpus e E-mail são opcionais.
+Excluir um aluno remove só o cadastro de acesso, não seus resultados.
 
-## 📊 Módulo de Avaliações (`avaliacoes/`)
+### Importação de matrícula (`/alunos/importar`)
 
-Aplicação **Laravel** separada, no diretório [`avaliacoes/`](avaliacoes/README.md), responsável pelo cadastro de Provas e pelo import de Questões/Gabarito e de Resultados. É onde o antigo protótipo "DI" de gabarito com metadados e resultados por questão foi reconstruído do zero — com schema normalizado (campos obrigatórios mínimos, todo o resto opcional) e boas práticas de import (upsert sem duplicar, relatório de linhas ignoradas). Compartilha o mesmo banco de dados desta aplicação (usa `admins` para login e `alunos` para resolver CPF/RA), mas roda como um app PHP/Laravel independente, com seu próprio document root (`avaliacoes/public/`) — ver [`avaliacoes/README.md`](avaliacoes/README.md) para instalação, modelagem de dados e formatos de import.
+Reconstrói, do lado do servidor, o antigo fluxo client-side de
+`admin/upload_alunos.php`/`alunos_di_process.php` (parsing em
+`admin/js/di_parser.js`). Upload de uma planilha `.csv`/`.xlsx`/`.xls`:
 
-Também tem ciclo de vida próprio para facilitar colocar em outro servidor: um **wizard de instalação** (`/instalar`, guarda conexão de banco + primeiro admin), um **atualizador** que busca a última Release pública do GitHub e aplica sozinho (gera backup, roda migrations pendentes, atualiza o código), e **backup completo sob demanda** (banco + arquivos, para download pelo admin).
+- **Obrigatórias por linha:** RA (aceita `Matricula`/`MatriculaAluno`), Per.
+  Letivo (ex.: `2026/1`, aceita `2026.1`), Curso, Período (ex.: `5º`, aceita
+  `P5`/`5`) — linha sem alguma das quatro é ignorada, sem derrubar o import.
+- **Opcionais:** Cód. Perfil, Nome, Status/Situação, Turma, Dt. Nascimento,
+  CPF, Email.
+- RA é o identificador único (mesma coluna `UNIQUE` da tabela `alunos`):
+  reimportar atualiza em vez de duplicar. Campos de identidade
+  (nome/CPF/nascimento/email/cód. perfil) só são sobrescritos quando a
+  planilha traz um valor novo — não apagam um cadastro já completado
+  manualmente; Status/Per. Letivo/Período/Turma sempre refletem a última
+  planilha importada.
+- Cada curso visto na planilha é registrado em `cursos` (só para telas de
+  referência/filtro — não há hoje nenhuma tela de gestão de cursos).
 
----
+> **Correção em relação ao protótipo legado:** `alunos_di_process.php` já
+> gravava `cod_perfil`/`status`/`periodo_letivo`/`periodo`/`turma` e uma
+> tabela `cursos`, mas nenhuma migration em nenhum dos dois apps chegou a
+> criar essas colunas/tabela — a importação de matrícula sempre falhava em
+> produção. As migrations daqui resolvem isso e também tornam `cpf`/
+> `data_nascimento` nullable em `alunos` (a planilha de matrícula nunca
+> garantiu os dois; só o cadastro manual em `/alunos` exige ambos, por
+> serem a credencial de login do aluno no portal público).
 
-## 🛠 Arquitetura e Stack Tecnológico
+## Administradores (`/administradores`) e Perfil (`/perfil`)
 
-* **Back-end:** PHP 8+ (Orientado a Objetos e Funcional) com `PDO` (prepared statements) contra *SQL Injection*.
-* **Database:** MySQL/MariaDB. Modelagem híbrida: dados relacionais (RA, Período, Avaliação, CPF, Email) em colunas isoladas; métricas de acertos condensadas em colunas `JSON`.
-* **Segurança:** `password_hash()`/`password_verify()`; sessão de admin protegida; **CSRF token** por sessão (`includes/csrf_helper.php`) em formulários administrativos; **rate limiting por IP** para o 2FA (`includes/rate_limit_helper.php`); reCAPTCHA v2 / hCaptcha na área pública e no login administrativo; arquivo de configuração de banco fora de acesso web direto (`.htaccess` com `Require all denied`).
-* **E-mail:** [PHPMailer](https://github.com/PHPMailer/PHPMailer) (`includes/PHPMailer/`) via SMTP (compatível com Amazon SES) para o envio dos códigos de 2FA.
-* **Front-end UI:** TailwindCSS via CDN + Phosphor Icons.
-* **Data-Viz:** Chart.js (dashboard administrativo) e parsing de planilhas com SheetJS (importação de matrícula).
-* **Front-end Público:** JavaScript Vanilla (SPA), IMask.js (máscaras de CPF/data) e html2pdf (exportação de boletim).
+Porta `admin/usuarios.php` (CRUD de administradores: listar, criar, excluir —
+não é possível excluir a própria conta logada) e `admin/perfil.php` (troca de
+senha, exige confirmar a senha atual) para cá. Mesma tabela `admins`
+herdada do schema da aplicação legada, então uma conta já cadastrada
+antes de o app legado ser removido continua funcionando aqui normalmente.
 
----
+## Configurações do portal público (`/sistema/portal`)
 
-## 📂 Estrutura de Diretórios
+Porta `admin/configuracoes.php` (+ `api_test_smtp.php`/`api_verify_test_smtp.php`)
+para uma aba própria em Configurações, gravando na tabela `configuracoes`
+(schema herdado da aplicação legada):
+
+- **Aparência:** título do site e logo (fundo claro/escuro). O arquivo é
+  salvo em `public/uploads/logos/` (`App\Support\LogoUploader`) e servido
+  como um arquivo estático comum, sem controller/rota dedicados — só o
+  `basename()` do caminho salvo em `configuracoes.site_logo` é usado pra
+  montar a URL (`asset('uploads/logos/'.basename(...))`), então uma
+  instalação migrada de uma base com o valor antigo (`assets/img/xxx.png`,
+  do layout da aplicação legada) continua exibindo a logo certa sem
+  precisar atualizar a tabela.
+- **CAPTCHA:** Google reCAPTCHA v2 ou hCaptcha (mutuamente exclusivos).
+- **SMTP + template do e-mail de 2FA:** host/porta/usuário/senha (senha em
+  branco não altera a já salva), remetente e template com `[NOME_DO_ALUNO]`/
+  `[CODIGO]`, com o mesmo botão de "testar envio" do legado (envia um
+  código de 6 dígitos via SMTP puro do Symfony Mailer — não usa o
+  `config/mail.php` do Laravel, pois as credenciais vêm do banco, editáveis
+  pelo admin).
+
+## Categorias de avaliação (`/categorias`)
+
+Árvore de categoria/subcategoria (sem limite de profundidade) para agrupar
+o boletim do aluno no portal público — ex.: "Simulados" → "1º ao 4º
+período" → cada avaliação dentro. Uma Avaliação sem categoria continua funcionando
+normalmente, só aparece à parte no boletim ("Sem categoria"). Excluir uma
+categoria é bloqueado enquanto ela tiver subcategorias ou avaliações vinculadas
+(mude-as de categoria primeiro) — evita apagar organização por engano.
+
+## Gestão de uma Avaliação (`/avaliacoes/{codigo}`)
+
+Além dos imports, a tela de uma Avaliação agora cobre o que
+`admin/avaliacao_editar.php`, `admin/resultados.php` e `admin/lixeira.php`
+faziam sobre o schema legado (JSON por aluno), recalculado sobre o schema
+normalizado (`questoes`/`respostas`/`resultado_metricas`):
+
+- **Editar configurações:** nome, tipo, link do gabarito comentado,
+  categoria (opcional — ver [Categorias de avaliação](#categorias-de-avaliação-categorias))
+  e data em que a avaliação foi aplicada (opcional, distinta de "criada em").
+- **Editor manual de gabarito:** cria ou corrige uma questão por vez (sem
+  reimportar a planilha inteira); reenviar o mesmo número restaura uma
+  questão excluída em vez de duplicar (mesma regra do import). Gabarito é
+  obrigatório — a coluna é `NOT NULL`, mesma regra já aplicada pelo import
+  em lote (uma linha sem gabarito é ignorada, não vira questão "anulada").
+- **Questões críticas:** taxa de erro por questão entre os respondentes
+  (`App\Services\EstatisticaErroService`), maiores erros primeiro. A conta é
+  feita em SQL (`JOIN` + `SUM(CASE...)` agrupado por questão) — uma versão
+  anterior trazia cada resposta pra PHP via `->chunk()`, que pagina por
+  `LIMIT`/`OFFSET` e degrada conforme o offset cresce; numa avaliação com 167
+  mil respostas isso estourava o `max_execution_time` (500 na tela).
+- **Excluir avaliação:** soft-delete em cascata (questões, respostas, métricas).
+
+### Resultados por aluno (`/avaliacoes/{codigo}/respondentes`)
+
+Uma linha por respondente + período (equivalente a uma linha de
+`admin/resultados.php`, sem o JSON): busca por RA/CPF, filtro por período,
+"ver" abre as respostas comparadas ao gabarito (verde/vermelho) e as
+métricas daquele respondente. Excluir/restaurar é sempre por período dentro
+da avaliação (`resultados.php` também excluía por período, mas globalmente —
+aqui é escopado à avaliação porque o schema novo já separa por avaliação).
+
+### Painel BI (`/avaliacoes/{codigo}/bi`)
+
+Substitui o dashboard de `admin/index.php` (Chart.js): histograma de
+distribuição de % de acerto, radar de desempenho médio por disciplina (usa
+`questao_matrizes.disciplina` — só aparece se o import de questões trouxe
+essa coluna) e Top 5. Filtro por período. `App\Services\BiDashboardService`
+concentra o cálculo — mesma correção de performance da EstatisticaErroService
+acima: a nota de cada respondente e a média por disciplina são agregadas em
+SQL, não varrendo um Collection do PHP com todas as respostas da avaliação.
+
+## Lixeira (`/lixeira`)
+
+Substitui `admin/lixeira.php`. Lista Avaliações excluídas (restaurar traz de
+volta questões/respostas/métricas junto) e Questões excluídas
+individualmente de avaliações que continuam ativas. Resultados/métricas
+excluídos em lote por período são restaurados/expurgados direto na tela de
+"Resultados por aluno" da avaliação (acima), não aparecem aqui um a um — seriam
+potencialmente milhares de linhas por avaliação, ao contrário do schema legado
+(uma linha por aluno).
+
+## Portal público do aluno (`/portal`)
+
+Porta `index.php` (SPA de consulta pública) + `api/consulta.php` +
+`api/verify_2fa.php` + `api/resend_2fa.php` para cá — sem exigir login de
+admin, server-rendered (formulários simples, sem SPA em JS). Reaproveita as
+tabelas legadas `verificacoes_email` e `rate_limit_2fa` (migrations
+próprias, mesmo padrão idempotente das demais tabelas compartilhadas), mas
+busca o boletim no **schema novo** (`respostas`/`resultado_metricas`/
+`questoes` por Avaliação), não no JSON de `resultados`/`gabaritos`.
+
+**A raiz do site (`/`) é o portal público**: quem acessa deslogado cai
+direto na tela de consulta; um administrador já logado é redirecionado
+para `/avaliacoes`. O acesso à área administrativa (`/login`) fica só num link
+discreto no rodapé das telas do portal — não é destacado na página.
+
+Fluxo, igual ao legado até a verificação (o CPF circula pelos passos via
+campo oculto, sem sessão de autenticação); só depois de CPF+Data de
+Nascimento (e 2FA, se ativo) confirmados é que entra uma sessão — só pra
+permitir uma URL própria do boletim (item 5 abaixo), nunca antes disso:
+
+1. **`GET /portal`** — formulário de CPF + Data de Nascimento (ambos com
+   máscara via IMask, igual ao cadastro manual de aluno) + CAPTCHA se ativo
+   em Configurações → Portal público.
+2. **`POST /portal/consultar`** — valida CAPTCHA (`App\Services\Portal\CaptchaVerifier`,
+   chama o siteverify do Google/hCaptcha), localiza o aluno por CPF + data
+   de nascimento. Se SMTP/2FA estiver ativo em Configurações, emite um
+   código de 6 dígitos (`verificacoes_email`) e envia por e-mail
+   (`App\Services\Portal\SmtpEmailSender`, mesmo SMTP puro via Symfony
+   Mailer usado no teste de envio de Configurações); senão, mostra o
+   boletim direto.
+3. **`POST /portal/verificar`** — valida o código; 3 erros seguidos ou
+   código expirado manda de volta para `/portal`. Bloqueio por IP após 10
+   tentativas falhas em 1h (`App\Services\Portal\RateLimit2faService`,
+   tabela `rate_limit_2fa`) — reescrito com Eloquent em vez do
+   `ON DUPLICATE KEY ... IF(...)` só-MySQL do legado, para funcionar também
+   em SQLite (testes). Diferente do legado, o IP do cliente vem de
+   `$request->ip()` (respeita `trusted proxies` do Laravel) em vez de
+   confiar cegamente em `CF-Connecting-IP`/`X-Forwarded-For` — o legado
+   permitia um cliente falsificar esses cabeçalhos para escapar do (ou
+   incriminar outro IP no) rate limit.
+4. **`POST /portal/reenviar`** — reenvia o mesmo código (só estende a
+   validade), respeitando o cooldown progressivo (1, 2, 5, 10 min).
+5. **Boletim** (`GET /portal/resultados`) — depois que `consultar()`/
+   `verificar()` confirmam CPF+Data de Nascimento (e o código de 2FA, se
+   ativo), o controller grava `session(['portal_aluno_id' => $aluno->id])`
+   e redireciona (POST/Redirect/GET) para esta rota — é a única exceção ao
+   fluxo "sem sessão" do portal, e existe só pra permitir uma URL própria
+   (ver abaixo). As avaliações são agrupadas na árvore de
+   [categorias](#categorias-de-avaliação-categorias)
+   (`App\Services\Portal\ResultadoConsultaService::montarArvore` — só
+   entram categorias em que o aluno tem algum resultado, direto ou numa
+   subcategoria; uma avaliação sem categoria aparece à parte). Cada categoria é
+   um acordeão colapsável (clique pra expandir); dentro dela, cada avaliação
+   aparece como um **card resumido** (nome, data, % de acerto). Um filtro
+   por período (De/Até) esconde os cards fora do intervalo e as categorias
+   que ficam vazias — tudo client-side, sem nova consulta ao servidor.
+
+   **O detalhe de cada avaliação abre em nova aba** (`GET
+   /portal/resultados/avaliacoes/{avaliacao}?periodo=`,
+   `App\Services\Portal\ResultadoConsultaService::buscarUmaAvaliacao`), não
+   mais num modal — pensado pra deixar espaço a outras análises que serão
+   adicionadas ali no futuro, sem espremer tudo num popup. Essa rota
+   também exige a sessão do boletim e, além disso, confere que a
+   avaliação/período pedidos realmente pertencem ao aluno autenticado (senão,
+   404) — a URL carrega só o código da avaliação, nunca dado nenhum do aluno,
+   então adivinhar/alterar um código de avaliação na barra de endereço não
+   revela boletim alheio. A tela de detalhe mostra o comparativo completo
+   (`respostas` x gabarito de `questoes`; notas finais de
+   `resultado_metricas`; link do gabarito comentado; grade de respostas
+   colorida verde/vermelho) e o botão de **baixar o PDF daquela avaliação**
+   (não existe mais um "baixar tudo" do boletim inteiro). O PDF ganha um
+   cabeçalho próprio (nome do site, nome do aluno, RA, data/hora de
+   geração) inserido antes de capturar e removido depois — mesma técnica
+   do legado, mas por avaliação em vez de uma vez só pra tudo.
+
+   **`GET /portal/sair`** encerra essa sessão (usado pelo link "Nova
+   consulta" no boletim) — importante em computador compartilhado
+   (laboratório, secretaria), pra não deixar o boletim acessível pro
+   próximo que abrir o navegador.
+
+## Aparência e acessibilidade
+
+O visual segue a mesma identidade do app legado — sem isso, as duas
+aplicações convivendo no mesmo domínio ficariam com "cara" diferente:
+Tailwind via CDN com a paleta `primary #00b48d`/`secondary`/`dark`, fonte
+Inter (Google Fonts) e [Phosphor Icons](https://phosphoricons.com/). O
+layout do portal público, do login e do painel administrativo (agora uma
+sidebar escura, como o `admin/includes/header.php` legado, em vez do
+topbar fino que tinha antes) foram redesenhados nesse padrão; as telas de
+gestão internas (CRUDs) ainda usam um estilo mais simples — não foram o
+foco desta rodada.
+
+**Acessibilidade** — dois mecanismos complementares, presentes em toda
+tela (`resources/views/partials/accessibility-*.blade.php`):
+
+- **Barra própria** (`public/assets/js/accessibility.js` +
+  `public/assets/css/accessibility.css`, baseados no
+  `assets/js/accessibility.js` legado): tema Claro/Escuro/Alto Contraste
+  (via `filter: invert()/contrast()` no `<html>`, persistido em
+  `localStorage`), um botão que abre o **VLibras** (tradutor de Libras do
+  governo federal, injetado sob demanda) e um botão que abre o **Sienna**
+  (ver abaixo). Os ícones de aumentar/diminuir fonte (A+/A-) do legado
+  foram removidos — com o widget Sienna cobrindo ajuste de tamanho de
+  texto (entre outros perfis), a barra ficava com controles redundantes.
+  Aparece no rodapé do portal público e na topbar do painel
+  administrativo.
+- **[Sienna](https://accessibility-widget.pages.dev/accessibility/)**
+  (`sienna-accessibility.umd.js` via jsDelivr, carregado em toda página):
+  widget de terceiro, gratuito e open-source, com perfis prontos (TDAH,
+  dislexia, baixa visão, etc.), ajuste de fonte, cursor ampliado e redução
+  de animação. **Não substitui a barra própria** — não inclui VLibras nem
+  tema de alto contraste equivalente. O botão flutuante que o Sienna cria
+  sozinho (`.asw-widget`) fica oculto via CSS — igual já era feito com o
+  `[vw-access-button]` do VLibras — e é a barra própria quem dispara o
+  clique nele (`.asw-menu-btn`) a partir do próprio botão da barra, pra
+  não conviver com dois balões flutuantes de cantos diferentes na tela.
+  Vale registrar a ressalva de acessibilidade real: "widgets overlay"
+  como este são vistos com desconfiança por usuários de leitor de tela
+  (ajustam a página por fora, sem corrigir HTML semântico/ARIA/foco de
+  teclado); foi incluído a pedido, como complemento à barra própria, não
+  como solução única de acessibilidade.
+
+## Autenticação
+
+Não há cadastro de usuário nem redefinição de senha por e-mail neste módulo.
+O guard `admin` autentica contra a tabela `admins` já existente (mesmo hash
+bcrypt gerado por `password_hash()` no PHP legado) — quem já tem acesso ao
+painel administrativo entra aqui com as mesmas credenciais. Login tem
+rate limiting (5 tentativas / 60s por usuário+IP).
+
+## Instalação
+
+Passos únicos, feitos por SSH (preparam o código; não tocam em banco nem em admin):
+
 ```bash
-/
-├── admin/
-│   ├── includes/
-│   │   ├── config_helper.php   # getConfig()/setConfig() sobre a tabela `configuracoes`
-│   │   ├── header.php          # Layout + sidebar + sessão + CSRF
-│   │   └── footer.php          # Fecha layout + toggle do menu mobile
-│   ├── js/
-│   │   └── di_parser.js        # Parsing de Excel/CSV (matrícula, resultados, gabarito, âncoras) — módulo DI
-│   ├── index.php               # Dashboard BI e Gráficos (Chart.js)
-│   ├── login.php                # Entrada na área restrita (CAPTCHA opcional)
-│   ├── logout.php               # Encerra sessão
-│   ├── perfil.php               # Troca de senha do próprio admin
-│   ├── configuracoes.php        # Título, logos, reCAPTCHA/hCaptcha, SMTP e template do e-mail 2FA
-│   ├── usuarios.php             # CRUD de administradores
-│   ├── alunos.php               # Listagem/busca de alunos (RA, CPF, Nome)
-│   ├── aluno_form.php           # Formulário de criação/edição de aluno
-│   ├── aluno_novo.php           # Atalho para aluno_form.php
-│   ├── aluno_editar.php         # Editor de respostas/notas de um resultado específico
-│   ├── upload_alunos.php        # Importação de alunos (Excel/CSV, client-side) — módulo DI em construção
-│   ├── alunos_di_process.php    # Endpoint AJAX que grava o upsert de alunos em lote (JSON)
-│   ├── process_upload_alunos.php# Handler legado de CSV de alunos (upload direto ao servidor)
-│   ├── upload_form.php          # Formulário de upload de resultados (.csv)
-│   ├── upload.php               # Processa o CSV de resultados (Q1..Qn + notas finais)
-│   ├── upload_gabarito.php      # Formulário de upload do gabarito oficial (.csv)
-│   ├── process_gabarito.php     # Processa o CSV do gabarito
-│   ├── avaliacoes.php           # Lista avaliações/gabaritos com estatísticas
-│   ├── avaliacao_editar.php     # Edição manual do gabarito e estatísticas de erro por questão
-│   ├── resultados.php           # Listagem/filtro/exclusão de resultados
-│   ├── lixeira.php              # Restauração/expurgo de registros com soft-delete
-│   ├── backup.php               # Download de dump .sql completo do banco
-│   ├── api_test_smtp.php        # Envia e-mail de teste com código (config. SMTP)
-│   └── api_verify_test_smtp.php # Valida o código do e-mail de teste
-├── api/
-│   ├── consulta.php             # Endpoint principal: valida CPF/Nascimento, CAPTCHA, dispara 2FA e retorna resultados
-│   ├── verify_2fa.php           # Valida o código de 2FA e retorna os resultados
-│   └── resend_2fa.php           # Reenvia o código de 2FA respeitando cooldown
-├── assets/
-│   ├── css/
-│   │   └── accessibility.css    # Temas Escuro/Alto Contraste
-│   ├── js/
-│   │   ├── app.js               # SPA pública: busca, 2FA, resultados, painel de estatísticas
-│   │   └── accessibility.js     # Fonte, temas e VLibras
-│   └── img/                     # Logotipos enviados via Configurações
-├── config/
-│   ├── db.config.php            # Credenciais de conexão (host, db, usuário, senha, charset)
-│   └── .htaccess                # Bloqueia acesso web direto à pasta
-├── includes/
-│   ├── Database.php             # Singleton/wrapper PDO, lê config/db.config.php
-│   ├── csrf_helper.php          # Geração/validação de token CSRF
-│   ├── rate_limit_helper.php    # Bloqueio por IP para tentativas de 2FA
-│   ├── PHPMailer/                # Biblioteca de envio de e-mail (SMTP)
-│   └── .htaccess                # Bloqueia acesso web direto à pasta
-├── migrations/
-│   ├── 001_add_performance_indexes.sql   # Índices em `resultados` e `verificacoes_email`
-│   └── 002_add_deleted_at_columns.sql    # Coluna `deleted_at` (soft-delete) em resultados/gabaritos
-├── database.sql                 # DDL completo (todas as tabelas + configurações padrão)
-├── index.php                    # Landing Page Pública / SPA do aluno
-├── pre_commit.php               # Script utilitário: valida a conexão com o banco
-├── test_cuj.py                  # Script Playwright ad-hoc (login admin → configurações)
-└── test_cuj2.py                 # Script Playwright ad-hoc (busca pública)
+composer install
+cp .env.example .env
+php artisan key:generate
 ```
 
----
+Aponte o document root do servidor web para `public/` (ver "Deploy" abaixo)
+e acesse a aplicação pelo navegador — como ainda não há
+nenhum administrador cadastrado, você cai automaticamente no **wizard de
+instalação** (`/instalar`), que cobre o resto:
 
-## 🗄️ Modelagem do Banco de Dados
+1. Verifica requisitos (versão do PHP, extensões, permissões de escrita).
+2. Testa a conexão com o banco e grava no `.env` (não precisa editar o
+   arquivo manualmente).
+3. Roda as migrations.
+4. Cria o primeiro usuário administrador.
 
-Tabelas criadas por `database.sql`:
+O wizard **bloqueia sozinho** assim que existir um administrador — não dá
+pra reabri-lo depois num site em produção. Se o deploy apontar para o mesmo
+banco que a aplicação legada (que já tem admins cadastrados), o wizard nem
+aparece: o sistema já se considera instalado.
 
-| Tabela | Finalidade |
-|---|---|
-| `admins` | Usuários do painel administrativo (`username`, `password_hash`). Usuário padrão `admin`/`admin` inserido via `INSERT IGNORE`. |
-| `alunos` | Cadastro do aluno: `ra`, `cpf`, `data_nascimento` (chave de consulta pública), `nome`, `curso`, `campus`, `email` (usado no 2FA). |
-| `resultados` | Um registro por aluno + período + avaliação (`UNIQUE (ra, periodo, nome_avaliacao)`). `respostas` e `notas_finais` em `JSON`. Suporta soft-delete (`deleted_at`). |
-| `gabaritos` | Gabarito oficial por avaliação (`UNIQUE nome_avaliacao`), respostas em `JSON`, suporta soft-delete. |
-| `verificacoes_email` | Códigos de 2FA emitidos por CPF (código, expiração, tentativas falhas, contagem de reenvios). |
-| `rate_limit_2fa` | Bloqueio por IP após tentativas de 2FA malsucedidas (`tentativas`, `bloqueado_ate`). |
-| `configuracoes` | Chave/valor genérico: CAPTCHA, SMTP, template de e-mail, título/logo do site. |
+Prefere fazer manualmente por SSH em vez do wizard? Também funciona:
 
-**Migrations aplicadas depois do `database.sql`** (idempotentes, seguras para reexecutar):
-1. `migrations/001_add_performance_indexes.sql` — índices em `resultados` (avaliação, período, soft-delete) e `verificacoes_email` (CPF).
-2. `migrations/002_add_deleted_at_columns.sql` — adiciona `deleted_at` a `resultados`/`gabaritos` (só necessário se o banco já existia antes do soft-delete; `database.sql` novo já cria a coluna).
+```bash
+php artisan migrate
+php artisan tinker --execute="App\Models\Admin::create(['username' => 'admin', 'password_hash' => Hash::make('sua-senha')])"
+```
 
-> A tabela `cursos` e as colunas extras de `alunos` (`cod_perfil`, `status`, `periodo_letivo`, `periodo`, `turma`) usadas pela importação de matrícula **ainda não têm migration** — ver seção "Importação de matrícula por Excel" acima. As tabelas `di_sessoes`/`di_questoes` que chegaram a ser cogitadas para gabarito com metadados nunca foram criadas e não serão — essa funcionalidade foi reconstruída no módulo [Avaliações](avaliacoes/README.md), com seu próprio schema (`provas`, `questoes`, `questao_matrizes`, `resultados`), documentado no README dentro de `avaliacoes/`.
+## Testes
 
----
+```bash
+php artisan test
+```
 
-## ⚙️ Instalação e Configuração
+Os testes rodam contra SQLite em memória (configurado em `phpunit.xml`) —
+não é preciso um MySQL rodando nem tocar no banco de produção para testar.
 
-### Requisitos:
-* PHP 8.0+
-* Servidor Web (Apache/Nginx/PHP Built-in)
-* Servidor MySQL 8.0+ ou MariaDB (com suporte a colunas `JSON`)
-* (Opcional, para 2FA) Uma conta SMTP (ex.: Amazon SES)
+## Formatos de import
 
-### Passos:
-1. Clone este repositório para o diretório de execução do seu servidor web (`htdocs`, `www`, etc).
-2. Execute o script `database.sql` no MySQL — ele cria o banco `resultados_di` (via `CREATE DATABASE IF NOT EXISTS`) e todas as tabelas.
-3. Execute, em ordem, as migrations em `migrations/` (`001_...` e depois `002_...`) — são seguras para rodar mesmo em bancos já existentes, pois verificam antes de alterar.
-4. Edite `config/db.config.php` com as credenciais do seu MySQL (host, `db_name`, `username`, `password`, `charset`). Em produção, mova este arquivo para fora do docroot e ajuste o caminho lido em `includes/Database.php`.
-5. Acesse o sistema via navegador: `http://localhost/seu-diretorio/`.
-6. Acesse o painel em `http://localhost/seu-diretorio/admin`.
-   - **Usuário Padrão:** `admin`
-   - **Senha Padrão:** `admin`
-   - *(Recomenda-se ir em "Meu Perfil" e alterar a senha imediatamente após o primeiro acesso)*.
-7. Em **Configurações**, ajuste título do site, logotipo (claro/escuro), reCAPTCHA/hCaptcha e, se desejar 2FA por e-mail, os dados de SMTP e o template do código (use o botão de teste de envio para validar as credenciais antes de ativar `smtp_ativo`).
+As duas telas de import (abaixo) têm um botão **"Baixar planilha de exemplo
+(.xlsx)"** — arquivos em `public/exemplos/`, com o cabeçalho exato reconhecido
+pelo import, algumas linhas de exemplo e uma segunda aba ("Instruções")
+explicando o que preencher; comentários nas células do cabeçalho explicam
+cada coluna. Coberto por teste (`PlanilhaExemploImportTest`) que importa os
+dois arquivos de verdade, então se o formato reconhecido mudar (`HeaderResolver`,
+`QuestaoImportService`, `ResultadoImportService`) e a planilha de exemplo não
+for atualizada junto, o teste quebra.
 
----
+### Questões / Gabarito (`/avaliacoes/{codigo}/questoes/import`)
 
-## 📄 Formatos de Arquivos Esperados
+Uma linha por questão. Colunas reconhecidas (cabeçalho flexível, com ou sem
+acento):
 
-### CSV de Resultados (`admin/upload_form.php` → `upload.php`)
-- **Identificação Obrigatória:** colunas `RA` e `Período`.
-- **Questões:** colunas nomeadas `Q1`, `Q2`, `Q3`... viram o mapa de respostas do aluno.
-- **Notas/Ranking:** demais colunas finais (ex.: `Total`, `Acertos Totais`, `Pontuação Final`) são empacotadas em `notas_finais` (JSON) e usadas no Ranking dos Melhores.
-- **Gráficos por Matéria:** o algoritmo identifica a "matéria" cortando o título da coluna antes de um hífen (ex.: `Cirurgia - Total de acertos` → agrupa em "Cirurgia" no radar).
-- Cada upload é vinculado a uma **Avaliação** e **Período** escolhidos no formulário; reenviar o mesmo arquivo faz `UPSERT` (não duplica).
+- **Obrigatórias:** `Questão` (aceita `Questao`, `Número`, `Item`, `#`), `Gabarito` (aceita `Resposta`, `Alternativa`, `Letra`, `Correta`).
+- **Opcionais:** `Matriz Prova (campo A/B/C)`, `Bloom (nível)`, `Bloom (verbo)`, `Miller (nível)`, `Dificuldade Pedagógica` (fácil/médio/difícil), `Dificuldade TRI`, `DCN (campo A/B)`, `Portaria INEP (campo A/B/C)`, `PPC (campo A/B/C/D)`, `Matriz (período)`, `Matriz (disciplina)`, `Matriz (código)`.
+- As três colunas de Matriz (período/disciplina/código) aceitam **múltiplos valores por célula**, separados por `,`, `;` ou `|` — cada posição vira uma linha em `questao_matrizes`. `Matriz Prova`, `DCN`, `Portaria INEP` e `PPC` são um valor por coluna de campo (A/B/C/D) — cada um vira uma linha em `questao_referencias` (ver "Performance e escala").
+- Reimportar o mesmo número de questão desta avaliação **atualiza** em vez de duplicar.
 
-### CSV do Gabarito (`admin/upload_gabarito.php` → `process_gabarito.php`)
-- Formato vertical: Coluna 1 = título da questão (`Q1`), Coluna 2 = alternativa correta (`B`).
-- Questão enviada em branco é tratada como **Anulada** para todos os alunos.
+### Resultados (`/avaliacoes/{codigo}/resultados/import`)
 
-### CSV de Alunos — legado (`admin/process_upload_alunos.php`, acionado a partir de `upload_alunos.php`)
-- Colunas obrigatórias: `RA`, `CPF`, `Dt. Nascimento` (DD/MM/AAAA).
-- Colunas opcionais: `Nome`, `Curso`, `Câmpus/Polo`, `Email` (necessário se o 2FA estiver ativo).
-- Aluno já existente (pelo RA) é atualizado (upsert).
+Uma linha por resposta (formato longo, não uma coluna por questão):
 
-### Excel/CSV de Matrícula — módulo DI (`admin/upload_alunos.php`, novo fluxo client-side)
-- Colunas reconhecidas (com variações de grafia): `Cód. Perfil` (opcional), `RA`/`Matricula` (obrigatória), `Nome` (opcional), `Status`/`Situação` (opcional), `Per. Letivo` (obrigatória, ex. `2026/1`), `Curso` (obrigatória), `Turma` (opcional), `Período` (obrigatória, ex. `5º`), `Dt. Nascimento` (opcional), `CPF` (opcional), `Email` (opcional).
-- Todo o parsing acontece no navegador (SheetJS); o envio ao servidor é em lotes de 200 registros via JSON.
-- **Requer as migrations pendentes** descritas na seção "Módulo DI" para funcionar sem erro.
+- **Obrigatórias:** `CPF` OU `RA` (ao menos uma), `Questão`, `Resposta` (pode vir vazia — significa que o respondente deixou em branco).
+- **Opcional:** `Período` (ex.: `2026/1`) — só é necessário se o mesmo aluno puder refazer a mesma avaliação em períodos diferentes; sem essa coluna, todas as respostas do aluno nesta avaliação contam como uma tentativa única.
+- Se o CPF/RA bater com um aluno já cadastrado em `alunos`, o resultado é vinculado a ele (`aluno_id`); caso contrário, fica registrado só com o identificador enviado, sem exigir que o aluno já esteja importado.
+- Reimportar a mesma combinação avaliação + identificador + período + questão **atualiza** em vez de duplicar.
 
----
+## Painel de Configurações (`/sistema/configuracoes`)
 
-Desenvolvido com foco em acessibilidade universal, velocidade extrema de carregamento e interface limpa (UX/UI).
+Migração de dados legados, backups, atualização e os ajustes do sistema
+vivem todos sob um único item de menu — **Configurações** — com abas
+(Geral / Backups / Dados legados / Atualizações). São quatro controllers
+e conjuntos de rotas independentes por baixo (nada de lógica compartilhada
+forçada só pela UI), a aba (`resources/views/admin/sistema/_subnav.blade.php`)
+é só a navegação comum entre eles.
+
+## Migração dos dados legados (`/sistema/legado`)
+
+Duas formas de importar, a mesma regra de transformação nas duas (uma única
+implementação em `App\Services\Legado\LegadoImportador`, para não divergir):
+
+**1. Direto do banco compartilhado** — quando esta aplicação está configurada
+no mesmo banco que a aplicação legada:
+
+```bash
+php artisan legado:importar --dry-run   # mostra o que seria migrado, sem gravar nada
+php artisan legado:importar             # migra de verdade
+```
+
+Ou pelo painel, em "Dados legados" → "Importar do banco".
+
+**2. De um arquivo de backup `.sql`** — quando o sistema legado está em outro
+servidor e você só tem o arquivo gerado por "Backup Manual" no painel antigo
+(`admin/backup.php`). Envie o arquivo em "Dados legados" → "De um arquivo de
+backup", com opção de simular antes (mostra os números sem gravar nada).
+
+> **Segurança:** o arquivo enviado é só **interpretado como dados** — as
+> linhas `INSERT INTO` de `gabaritos`/`resultados` são extraídas por um
+> parser dedicado (`App\Services\Legado\BackupSqlParser`), e todo o resto do
+> arquivo (schema, outras tabelas) é ignorado. **O SQL do arquivo nunca é
+> executado** contra o banco — evita que um backup malicioso ou corrompido
+> (com `DROP TABLE`, etc.) rode qualquer comando.
+>
+> **Tamanho:** teto da aplicação é 100 MB, mas o limite real também depende
+> do `php.ini` do servidor (`post_max_size`/`upload_max_filesize`) — a tela
+> mostra o limite efetivo antes do envio. Se o backup for maior que isso, o
+> PHP recusa a requisição antes de chegar à aplicação (erro 413); aumente
+> essas duas diretivas (e `client_max_body_size` no Nginx, se houver) e
+> reinicie o PHP-FPM/Apache.
+
+Nos dois casos, o que é lido e para onde vai:
+
+- Uma `Avaliacao` é criada (ou reaproveitada) por `nome_avaliacao` distinto.
+- `gabaritos.respostas` (JSON) vira linhas em `questoes`; `gabaritos.link_comentado` vira `avaliacoes.link_comentado`.
+- `resultados.respostas` (JSON) vira linhas em `respostas`, carregando o `periodo` original.
+- `resultados.notas_finais` (JSON) vira linhas em `resultado_metricas`, uma por chave (ex.: "Nota de Redação", "Total").
+- Registros que já estavam na lixeira (`deleted_at` preenchido) são migrados como soft-deleted no schema novo — nada da lixeira se perde nem vira visível de repente.
+- **Idempotente:** pode rodar de novo a qualquer momento (ex.: depois de um novo upload na aplicação antiga) sem duplicar nada — encontra os registros existentes e atualiza.
+- **Em lote:** cada linha legada (aluno+avaliação) grava suas respostas/métricas com um `upsert` só, não uma consulta por questão — importar milhares de alunos leva segundos, não minutos. Testado com 2.000 alunos × 50 questões (100 mil respostas) em ~9s contra MySQL local.
+
+Nenhuma informação das duas tabelas legadas fica sem um lugar no schema novo:
+`ra`/`periodo`/`nome_avaliacao`/`respostas`/`notas_finais`/`link_comentado`
+(de ambas as tabelas) e o estado de exclusão são todos preservados.
+
+### Excluir as tabelas legadas depois de migrar
+
+A mesma tela ("Dados legados") tem uma segunda seção pra excluir
+`gabaritos`/`resultados` do banco depois que a migração acima já rodou —
+essas duas tabelas ficam existindo só como fonte pro import; uma vez que os
+dados já estão em `avaliacoes`/`questoes`/`respostas`/`resultado_metricas`, elas
+não são mais lidas por nada. **Não confundir com `admins`, `alunos`,
+`configuracoes`, `verificacoes_email` e `rate_limit_2fa`** — essas
+continuam sendo usadas diretamente pela aplicação (não foram substituídas
+por um schema novo) e não são tocadas por esta ação.
+
+Por ser irreversível (`DROP TABLE`), a exclusão tem três travas:
+
+1. **Confirmação por texto** — precisa digitar `EXCLUIR` no campo antes de
+   enviar (mais um `confirm()` no navegador).
+2. **Bloqueio automático se nada foi migrado ainda** — se não existir
+   nenhuma `Avaliacao` no schema novo, o botão fica desabilitado e o servidor
+   também recusa a exclusão, pra não apagar o único lugar onde os dados
+   existiam.
+3. A tela mostra a contagem de linhas em cada tabela legada e de Avaliações já
+   migradas, para conferir antes de excluir — e o texto recomenda gerar um
+   [backup completo](#backups-sistemabackups) antes, já que a ação não pode
+   ser desfeita.
+
+## Versionamento
+
+A versão instalada fica no arquivo `VERSION` (raiz desta pasta, ex.: `1.0.0`)
+— acompanha o código a cada commit/tag. Releases publicadas no GitHub usam
+tag `vX.Y.Z` correspondente. `php artisan migrate --force` (chamado
+automaticamente pelo wizard e pelo atualizador) só aplica as migrations que
+ainda não rodaram nesse banco — o Laravel já rastreia isso sozinho pela
+tabela `migrations`, então versões novas nunca reaplicam o que já existe.
+
+## Atualização (`/sistema/atualizacao`)
+
+```bash
+php artisan sistema:atualizar --check   # só verifica se há versão nova
+php artisan sistema:atualizar           # verifica e aplica
+```
+
+Também disponível para o administrador pela interface, em **Atualizações**.
+O processo busca a última *Release* pública do repositório configurado em
+**Configurações** (ou `ATUALIZACAO_REPOSITORIO` no `.env`, se nunca tiver
+sido definido pela interface — formato `owner/repo`) e, se houver uma versão
+mais nova que a instalada:
+
+1. Gera um backup completo (ver seção abaixo) — sempre, sem exceção.
+2. Coloca a aplicação em modo de manutenção.
+3. Baixa e extrai a Release, copiando por cima os arquivos do repositório
+   — preservando `.env` e `storage/` intocados.
+4. Roda `composer install --no-dev` e as migrations pendentes.
+5. Grava a nova versão em `VERSION` e sai do modo de manutenção.
+
+Se qualquer passo falhar **depois** que os arquivos já começaram a ser
+substituídos, o atualizador tenta reverter automaticamente a aplicação a
+partir do backup gerado no passo 1 antes de reportar o erro. Uma falha
+*antes* disso (download, extração) não mexe em nada — só sai do modo de
+manutenção e mostra o erro.
+
+## Backups (`/sistema/backups`)
+
+```bash
+php artisan sistema:backup
+```
+
+Gera um `.zip` com o dump completo do banco (`database.sql`, via
+`mysqldump` quando disponível no servidor, ou um dump em PHP puro lendo a
+tabela por cursor — sem carregar tudo na memória de uma vez — quando não
+está) mais todos os arquivos da aplicação — exceto `vendor/`,
+`node_modules/` e caches, que são reproduzíveis via `composer
+install`/`npm install` a partir do `composer.lock`/`package-lock.json`
+incluídos. **Inclui o `.env` real**, com credenciais — por isso o download
+só é permitido para administradores autenticados, nunca por link direto.
+Mantém automaticamente só os N backups mais recentes (configurável em
+**Configurações**, padrão 5).
+
+**Clicar em "Gerar backup agora" não gera o arquivo na hora** — só
+enfileira `App\Jobs\GerarBackupJob` (`ConfiguracaoSistema.backup_status`
+vai para `processando`) e a tela volta imediatamente, atualizando-se
+sozinha a cada alguns segundos até o job terminar (`concluido`) ou falhar
+(`erro`, com a mensagem exibida). Um dump completo de uma base com volume
+real de dados facilmente passa do tempo de execução de uma requisição
+HTTP; processado pela fila, quem gera o arquivo é o worker
+(`php artisan queue:work`), que como processo CLI não tem esse limite.
+**Sem um worker rodando, o backup fica pendente indefinidamente** — em
+produção, garanta `php artisan queue:work` como processo persistente
+(supervisor/systemd) ou, no Windows, `php artisan queue:work
+--stop-when-empty` agendado no Agendador de Tarefas a cada poucos minutos.
+O comando `sistema:backup` acima roda fora da fila (síncrono) e é a opção
+certa para backups agendados via cron/Agendador de Tarefas — inclusive
+usado internamente pelo atualizador (ver abaixo), que precisa que o backup
+já exista antes de prosseguir.
+
+## Configurações (`/sistema/configuracoes`)
+
+Tela para ajustar, sem precisar de acesso ao servidor:
+
+- **Repositório do GitHub para atualizações** (`owner/repositorio`).
+- **Quantos backups manter** (os mais antigos além desse número são apagados
+  a cada novo backup).
+
+Guardado na tabela `configuracoes_sistema` (chave/valor — nome escolhido
+para não colidir com a tabela `configuracoes` da aplicação legada, que tem
+outra finalidade). Um valor não definido aqui cai no padrão do `.env`/
+`config/sistema.php`.
+
+## Deploy
+
+Esta é uma aplicação Laravel padrão: o document root do servidor web deve
+apontar para `public/` (nunca para a raiz do repositório) — configure um
+vhost apontando pra essa pasta, mantendo o `mod_rewrite`/`try_files` do
+Laravel.
+
+O servidor precisa de acesso a shell/Composer (usado pelo atualizador para
+rodar `composer install` após cada atualização) e, idealmente, ao binário
+`mysqldump` (usado nos backups — sem ele, cai para um dump em PHP puro,
+mais lento mas funcional).
+
+Precisa também de um worker de fila rodando continuamente
+(`php artisan queue:work`, `QUEUE_CONNECTION=database` por padrão — sem
+worker, o backup sob demanda pela interface (ver "Backups" acima) nunca
+sai do estado "processando").

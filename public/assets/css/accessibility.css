@@ -1,0 +1,52 @@
+/* Accessibility Styles — mesma lógica de assets/css/accessibility.css do app legado */
+
+/* Base font transition for smooth resizing */
+html {
+    transition: filter 0.3s ease;
+}
+
+/* Hide VLibras floating access button since we trigger it from the toolbar */
+[vw-access-button] {
+    display: none !important;
+}
+
+/* Hide Sienna's own floating widget button since we trigger it from the toolbar */
+.asw-widget {
+    display: none !important;
+}
+
+/* Dark Mode (Escuro) */
+html.theme-dark {
+    filter: invert(0.92) hue-rotate(180deg);
+}
+
+/* High Contrast Mode (Alto Contraste) */
+html.theme-high-contrast {
+    filter: invert(1) contrast(1.5) grayscale(1);
+}
+
+/* Revert filters for images, videos, and specific elements so they look normal */
+html.theme-dark img,
+html.theme-dark video,
+html.theme-dark iframe,
+html.theme-dark [vw-plugin-wrapper] {
+    filter: invert(1) hue-rotate(180deg);
+}
+
+html.theme-high-contrast img,
+html.theme-high-contrast video,
+html.theme-high-contrast iframe,
+html.theme-high-contrast [vw-plugin-wrapper] {
+    filter: invert(1) contrast(0.66) grayscale(1);
+}
+
+/* Tratamento para exibir a logo clara/escura dinamicamente */
+html.theme-dark .logo-light,
+html.theme-high-contrast .logo-light {
+    display: none !important;
+}
+
+html.theme-dark .logo-dark,
+html.theme-high-contrast .logo-dark {
+    display: block !important;
+}
