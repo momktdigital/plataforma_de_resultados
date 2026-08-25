@@ -266,19 +266,19 @@ class PortalController extends Controller
     }
 
     /**
-     * "Período letivo", nesta tela, é o mesmo campo `periodo` já usado em
-     * todo o resto do import/exibição de resultados (a coluna "Período"/
-     * "Período Letivo" da planilha de resultados — ver
-     * ResultadoImportService) — não existe uma dimensão própria separada.
-     * O filtro por padrão mostra só o período letivo mais recente (`''` na
-     * query string = "Todos", igual ao filtro equivalente no admin).
+     * "Período letivo" (2026/1, 2026/2...) é o semestre, derivado da data da
+     * avaliação por ResultadoConsultaService::periodoLetivo() — não confundir
+     * com `periodo` (`$r['periodo']`), que é o período do CURSO do aluno
+     * (ex.: "5º"), vindo da planilha de resultados. O filtro por padrão
+     * mostra só o período letivo mais recente (`''` na query string =
+     * "Todos", igual ao filtro equivalente no admin).
      */
     private function renderizarResultados(Aluno $aluno, ResultadoConsultaService $consultaService, Request $request): View
     {
         $todos = $consultaService->buscarPorAluno($aluno);
 
         $periodosDisponiveis = collect($todos)
-            ->pluck('periodo')
+            ->pluck('periodo_letivo')
             ->filter(fn ($p) => $p !== null && $p !== '')
             ->unique()
             ->sortDesc()
@@ -291,7 +291,7 @@ class PortalController extends Controller
 
         $resultados = $periodoSelecionado === ''
             ? $todos
-            : collect($todos)->filter(fn ($r) => $r['periodo'] === $periodoSelecionado)->values()->all();
+            : collect($todos)->filter(fn ($r) => $r['periodo_letivo'] === $periodoSelecionado)->values()->all();
 
         $comPercentual = collect($resultados)->pluck('percentual')->filter(fn ($p) => $p !== null);
 

@@ -132,12 +132,22 @@ function portalExportarPdfAvaliacao() {
 
     const nomeAvaliacaoArquivo = (conteudo.dataset.avaliacaoNome || 'avaliacao').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
 
+    // Página única do tamanho exato do conteúdo, em vez do formato A4 fixo:
+    // com A4 fixo, o html2pdf pagina o conteúdo em várias páginas cortando
+    // no meio de cards/linhas sempre que ele passa da altura de uma folha.
+    const margemMm = 10;
+    const larguraA4Mm = 210;
+    const larguraUtilMm = larguraA4Mm - margemMm * 2;
+    const proporcao = conteudo.scrollHeight / conteudo.scrollWidth;
+    const alturaPaginaMm = larguraUtilMm * proporcao + margemMm * 2;
+
     html2pdf().from(conteudo).set({
-        margin: 10,
+        margin: margemMm,
         filename: 'resultado-' + PORTAL_ALUNO.ra + '-' + nomeAvaliacaoArquivo + '.pdf',
         image: {type: 'jpeg', quality: 0.98},
         html2canvas: {scale: 2, useCORS: true, logging: false},
-        jsPDF: {unit: 'mm', format: 'a4', orientation: 'portrait'},
+        jsPDF: {unit: 'mm', format: [larguraA4Mm, alturaPaginaMm], orientation: 'portrait'},
+        pagebreak: {mode: 'avoid-all'},
     }).save().then(function () {
         cabecalho.remove();
         btn.innerHTML = originalHtml;
