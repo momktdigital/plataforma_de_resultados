@@ -12,6 +12,7 @@
                 <tr>
                     <th class="px-4 py-3 w-16">ID</th>
                     <th class="px-4 py-3">Usuário</th>
+                    <th class="px-4 py-3">E-mail</th>
                     <th class="px-4 py-3">Criado em</th>
                     <th class="px-4 py-3"></th>
                 </tr>
@@ -26,10 +27,12 @@
                                 <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">Você</span>
                             @endif
                         </td>
+                        <td class="px-4 py-3 text-slate-500">{{ $admin->email ?: '—' }}</td>
                         <td class="px-4 py-3 text-slate-500">{{ $admin->created_at->format('d/m/Y') }}</td>
-                        <td class="px-4 py-3 text-right">
+                        <td class="px-4 py-3 text-right whitespace-nowrap">
+                            <a href="{{ route('administradores.edit', $admin) }}" class="text-emerald-700 hover:underline mr-3">Editar</a>
                             @if ($admin->id !== auth('admin')->id())
-                                <form method="POST" action="{{ route('administradores.destroy', $admin) }}"
+                                <form method="POST" action="{{ route('administradores.destroy', $admin) }}" class="inline"
                                       onsubmit="return confirm('Tem certeza que deseja excluir o administrador {{ $admin->username }}?');">
                                     @csrf
                                     @method('DELETE')
@@ -53,6 +56,12 @@
                 <label class="block text-sm font-medium mb-1" for="username">Nome de usuário</label>
                 <input id="username" name="username" type="text" required value="{{ old('username') }}"
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1" for="email">E-mail (opcional)</label>
+                <input id="email" name="email" type="email" value="{{ old('email') }}"
+                       class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                <p class="text-xs text-slate-500 mt-1">Necessário pra esta conta poder usar "esqueci minha senha".</p>
             </div>
             <div>
                 <label class="block text-sm font-medium mb-1" for="password">Senha</label>

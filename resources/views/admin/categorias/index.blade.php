@@ -19,7 +19,7 @@
         @else
             <ul>
                 @foreach ($raizes as $categoria)
-                    @include('admin.categorias._no', ['categoria' => $categoria, 'porPai' => $porPai])
+                    @include('admin.categorias._no', ['categoria' => $categoria, 'porPai' => $porPai, 'opcoesSelect' => $opcoesSelect])
                 @endforeach
             </ul>
         @endif

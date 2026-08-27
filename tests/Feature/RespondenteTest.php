@@ -117,6 +117,20 @@ class RespondenteTest extends TestCase
         $this->assertNotSoftDeleted('respostas', ['ra' => '111', 'periodo' => '2026/1']);
         $this->assertNotSoftDeleted('resultado_metricas', ['ra' => '111', 'periodo' => '2026/1']);
         $this->assertDatabaseHas('resultado_resumos', ['ra' => '111', 'periodo' => '2026/1']);
+
+        // Trilha de auditoria: quem excluiu e quem restaurou o período.
+        $this->assertDatabaseHas('atividades', [
+            'admin_username' => $admin->username,
+            'acao' => 'periodo.excluido',
+            'alvo_tipo' => 'Avaliacao',
+            'alvo_id' => (string) $avaliacao->codigo,
+        ]);
+        $this->assertDatabaseHas('atividades', [
+            'admin_username' => $admin->username,
+            'acao' => 'periodo.restaurado',
+            'alvo_tipo' => 'Avaliacao',
+            'alvo_id' => (string) $avaliacao->codigo,
+        ]);
     }
 
     public function test_guest_nao_acessa_respondentes(): void

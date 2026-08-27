@@ -10,6 +10,7 @@ use App\Support\SpreadsheetReader;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
+use Throwable;
 
 /**
  * Import de resultados no formato "longo": uma linha por resposta de um
@@ -59,15 +60,11 @@ class ResultadoImportService
         $chavesExistentes = $this->buscarChavesExistentes($avaliacao->codigo);
 
         DB::transaction(function () use ($avaliacao, $linhas, $alunoIds, $chavesExistentes, $resultado) {
-            $registros = $this->montarRegistros($avaliacao, $linhas, $alunoIds, $chavesExistentes, $resultado);
+            $registros = $this->montarRegistros($avaliacao, $linhas, $alunoIds);
+            $vistas = [];
 
-            $agora = now();
-            foreach (array_chunk(array_values($registros), self::TAMANHO_LOTE) as $lote) {
-                DB::table('respostas')->upsert(
-                    array_map(fn (array $r) => $r + ['created_at' => $agora, 'updated_at' => $agora], $lote),
-                    ['avaliacao_codigo', 'aluno_chave', 'periodo', 'questao_numero'],
-                    ['resposta', 'aluno_id', 'deleted_at', 'updated_at']
-                );
+            foreach (array_chunk($registros, self::TAMANHO_LOTE, true) as $lote) {
+                $this->salvarLote($lote, $chavesExistentes, $vistas, $resultado);
             }
         });
 
@@ -100,7 +97,7 @@ class ResultadoImportService
      * linhas inválidas já são registradas como ignoradas aqui.
      *
      * @param  array<int, array<string, mixed>>  $rows
-     * @return array<int, array{ra: ?string, cpf: ?string, numero: int, resposta: ?string, periodo: string}>
+     * @return array<int, array{linha: int, ra: ?string, cpf: ?string, numero: int, resposta: ?string, periodo: string}>
      */
     private function normalizarLinhas(array $rows, ImportResult $resultado): array
     {
@@ -129,6 +126,7 @@ class ResultadoImportService
             }
 
             $linhas[] = [
+                'linha' => $linha,
                 'ra' => $ra !== null ? trim($ra) : null,
                 'cpf' => $cpf !== null ? preg_replace('/\D/', '', $cpf) : null,
                 'numero' => (int) $matches[0],
@@ -197,37 +195,24 @@ class ResultadoImportService
     }
 
     /**
-     * Monta os registros a upsertar e contabiliza criada(s)/atualizada(s) —
-     * seguindo a mesma ordem das linhas do arquivo, então uma chave repetida
-     * dentro do próprio arquivo conta como "criada" na primeira ocorrência e
-     * "atualizada" nas seguintes (e só a última vale no upsert, igual ao
-     * comportamento anterior de salvar linha a linha).
+     * Monta os registros a upsertar — segue a mesma ordem das linhas do
+     * arquivo, então uma chave repetida dentro do próprio arquivo mantém só
+     * a última ocorrência (mesmo comportamento de salvar linha a linha).
+     * Cada registro carrega 'linha' (número da linha original, pra atribuir
+     * o erro corretamente se essa chave falhar ao salvar) — removido antes
+     * de virar a linha do upsert.
      *
-     * @param  array<int, array{ra: ?string, cpf: ?string, numero: int, resposta: ?string, periodo: string}>  $linhas
+     * @param  array<int, array{linha: int, ra: ?string, cpf: ?string, numero: int, resposta: ?string, periodo: string}>  $linhas
      * @param  array{porCpf: array<string, int>, porRa: array<string, int>}  $alunoIds
-     * @param  array<string, true>  $chavesExistentes
-     * @return array<string, array<string, mixed>>
+     * @return array<string, array{linha: int, dados: array<string, mixed>}>
      */
-    private function montarRegistros(
-        Avaliacao $avaliacao,
-        array $linhas,
-        array $alunoIds,
-        array $chavesExistentes,
-        ImportResult $resultado,
-    ): array {
+    private function montarRegistros(Avaliacao $avaliacao, array $linhas, array $alunoIds): array
+    {
         $registros = [];
-        $vistas = [];
 
         foreach ($linhas as $linha) {
             $alunoChave = $linha['cpf'] ?? $linha['ra'];
             $chave = "{$linha['periodo']}|{$linha['numero']}|{$alunoChave}";
-
-            if (isset($chavesExistentes[$chave]) || isset($vistas[$chave])) {
-                $resultado->registrarAtualizada();
-            } else {
-                $resultado->registrarCriada();
-            }
-            $vistas[$chave] = true;
 
             $candidatos = array_filter([
                 $linha['cpf'] !== null ? ($alunoIds['porCpf'][$linha['cpf']] ?? null) : null,
@@ -235,17 +220,79 @@ class ResultadoImportService
             ], fn ($id) => $id !== null);
 
             $registros[$chave] = [
-                'avaliacao_codigo' => $avaliacao->codigo,
-                'questao_numero' => $linha['numero'],
-                'periodo' => $linha['periodo'],
-                'ra' => $linha['ra'],
-                'cpf' => $linha['cpf'],
-                'resposta' => $linha['resposta'],
-                'aluno_id' => $candidatos === [] ? null : min($candidatos),
-                'deleted_at' => null,
+                'linha' => $linha['linha'],
+                'dados' => [
+                    'avaliacao_codigo' => $avaliacao->codigo,
+                    'questao_numero' => $linha['numero'],
+                    'periodo' => $linha['periodo'],
+                    'ra' => $linha['ra'],
+                    'cpf' => $linha['cpf'],
+                    'resposta' => $linha['resposta'],
+                    'aluno_id' => $candidatos === [] ? null : min($candidatos),
+                    'deleted_at' => null,
+                ],
             ];
         }
 
         return $registros;
+    }
+
+    /**
+     * Salva um lote inteiro num único upsert() (caminho rápido — o normal).
+     * Se o lote falhar (ex.: MySQL em modo estrito rejeitando um valor que
+     * não cabe numa coluna varchar estreita), reprocessa o MESMO lote linha a
+     * linha, isolando só a(s) linha(s) problemática(s) via
+     * ImportResult::ignorarLinha() em vez de derrubar o import inteiro —
+     * mesma ideia que MatriculaImportService já aplica.
+     *
+     * @param  array<string, array{linha: int, dados: array<string, mixed>}>  $lote
+     * @param  array<string, true>  $chavesExistentes
+     * @param  array<string, true>  $vistas
+     */
+    private function salvarLote(array $lote, array $chavesExistentes, array &$vistas, ImportResult $resultado): void
+    {
+        $agora = now();
+
+        try {
+            DB::table('respostas')->upsert(
+                array_map(fn (array $r) => $r['dados'] + ['created_at' => $agora, 'updated_at' => $agora], array_values($lote)),
+                ['avaliacao_codigo', 'aluno_chave', 'periodo', 'questao_numero'],
+                ['resposta', 'aluno_id', 'deleted_at', 'updated_at']
+            );
+
+            foreach ($lote as $chave => $registro) {
+                $this->registrarSucesso($chave, $chavesExistentes, $vistas, $resultado);
+            }
+
+            return;
+        } catch (Throwable) {
+            // Segue pro fallback linha a linha abaixo.
+        }
+
+        foreach ($lote as $chave => $registro) {
+            try {
+                DB::table('respostas')->upsert(
+                    [$registro['dados'] + ['created_at' => $agora, 'updated_at' => $agora]],
+                    ['avaliacao_codigo', 'aluno_chave', 'periodo', 'questao_numero'],
+                    ['resposta', 'aluno_id', 'deleted_at', 'updated_at']
+                );
+
+                $this->registrarSucesso($chave, $chavesExistentes, $vistas, $resultado);
+            } catch (Throwable $e) {
+                $resultado->ignorarLinha($registro['linha'], 'Falha ao salvar: '.$e->getMessage());
+            }
+        }
+    }
+
+    /** @param  array<string, true>  $chavesExistentes @param  array<string, true>  $vistas */
+    private function registrarSucesso(string $chave, array $chavesExistentes, array &$vistas, ImportResult $resultado): void
+    {
+        if (isset($chavesExistentes[$chave]) || isset($vistas[$chave])) {
+            $resultado->registrarAtualizada();
+        } else {
+            $resultado->registrarCriada();
+        }
+
+        $vistas[$chave] = true;
     }
 }

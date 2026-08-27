@@ -7,6 +7,7 @@ use App\Models\Aluno;
 use App\Models\Avaliacao;
 use App\Models\ResultadoResumo;
 use App\Services\ResumoResultadoService;
+use App\Support\AtividadeLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -145,6 +146,11 @@ class RespondenteController extends Controller
 
         $resumos->recalcular($avaliacao->codigo);
 
+        AtividadeLogger::registrar('periodo.excluido', 'Avaliacao', $avaliacao->codigo, [
+            'periodo' => $periodo,
+            'registros_excluidos' => $excluidas,
+        ]);
+
         return redirect()
             ->route('avaliacoes.respondentes.index', $avaliacao)
             ->with('status', "Resultados do período '{$periodo}' excluídos ({$excluidas} registro(s)).");
@@ -158,6 +164,11 @@ class RespondenteController extends Controller
         $restauradas += $avaliacao->metricas()->onlyTrashed()->where('periodo', $periodo)->restore();
 
         $resumos->recalcular($avaliacao->codigo);
+
+        AtividadeLogger::registrar('periodo.restaurado', 'Avaliacao', $avaliacao->codigo, [
+            'periodo' => $periodo,
+            'registros_restaurados' => $restauradas,
+        ]);
 
         return redirect()
             ->route('avaliacoes.respondentes.index', ['avaliacao' => $avaliacao, 'periodo' => $periodo])

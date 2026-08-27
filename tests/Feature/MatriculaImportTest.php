@@ -180,6 +180,19 @@ class MatriculaImportTest extends TestCase
         $this->assertDatabaseCount('alunos', 0);
     }
 
+    public function test_import_registra_admin_arquivo_e_contagem_na_trilha_de_auditoria(): void
+    {
+        $admin = $this->admin();
+        $arquivo = UploadedFile::fake()->createWithContent('matricula.csv', "RA,Per. Letivo,Curso,Período\n2026001,2026/1,Medicina,5\n");
+
+        $this->actingAs($admin, 'admin')->post('/alunos/importar', ['arquivo' => $arquivo]);
+
+        $this->assertDatabaseHas('atividades', [
+            'admin_id' => $admin->id,
+            'acao' => 'import.matricula',
+        ]);
+    }
+
     public function test_job_de_import_de_matricula_registra_status_processando_e_concluido(): void
     {
         $arquivo = UploadedFile::fake()->createWithContent('matricula.csv', "RA,Per. Letivo,Curso,Período\n2026001,2026/1,Medicina,5\n");

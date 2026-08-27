@@ -13,6 +13,13 @@
 
 <div class="bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 overflow-hidden">
     <div class="p-8">
+        @if (session('status'))
+            <div class="bg-emerald-900/30 border border-emerald-800 text-emerald-300 p-4 mb-6 rounded-lg text-sm flex items-start gap-2">
+                <i class="ph-fill ph-check-circle text-xl mt-0.5"></i>
+                <span>{{ session('status') }}</span>
+            </div>
+        @endif
+
         @if ($errors->any())
             <div class="bg-red-900/30 border border-red-800 text-red-300 p-4 mb-6 rounded-lg text-sm flex items-start gap-2">
                 <i class="ph-fill ph-warning-circle text-xl mt-0.5"></i>
@@ -55,6 +62,12 @@
                 <i class="ph-bold ph-sign-in mr-2 text-lg"></i> Entrar no Sistema
             </button>
         </form>
+
+        <div class="text-center mt-4">
+            <a href="{{ route('senha.esqueci') }}" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">
+                Esqueci minha senha
+            </a>
+        </div>
     </div>
 
     <div class="bg-slate-900/50 px-8 py-4 border-t border-slate-700 text-center">

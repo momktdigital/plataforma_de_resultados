@@ -7,6 +7,7 @@ use App\Http\Requests\ImportArquivoRequest;
 use App\Jobs\ImportarMatriculaJob;
 use App\Support\ImportStatusTracker;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
@@ -26,9 +27,11 @@ class MatriculaImportController extends Controller
         $arquivo = $request->file('arquivo');
         $caminho = $arquivo->store('imports');
 
+        $admin = Auth::guard('admin')->user();
+
         // Ver ResultadoImportController::store() — mesmo raciocínio do try/catch.
         try {
-            ImportarMatriculaJob::dispatch($caminho, $arquivo->getClientOriginalName());
+            ImportarMatriculaJob::dispatch($caminho, $arquivo->getClientOriginalName(), $admin?->id, $admin?->username);
         } catch (Throwable $e) {
             Storage::delete($caminho);
             Log::error('Falha ao solicitar import de matrícula.', ['exception' => $e]);

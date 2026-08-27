@@ -39,10 +39,12 @@ class LegadoImportWebTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
 
-        $response = $this->actingAs($this->admin(), 'admin')->post('/sistema/legado/banco');
+        $admin = $this->admin();
+        $response = $this->actingAs($admin, 'admin')->post('/sistema/legado/banco');
 
         $response->assertRedirect(route('sistema.legado.index'));
         $response->assertSessionHas('status');
+        $this->assertDatabaseHas('atividades', ['admin_id' => $admin->id, 'acao' => 'import.legado_banco']);
         $this->assertDatabaseHas('avaliacoes', ['nome' => 'ENADE 2026']);
         $this->assertDatabaseHas('questoes', ['numero' => 1, 'gabarito' => 'B']);
         $this->assertDatabaseHas('respostas', ['ra' => '12345', 'questao_numero' => 1, 'resposta' => 'B']);
@@ -71,10 +73,12 @@ class LegadoImportWebTest extends TestCase
 
         $arquivo = UploadedFile::fake()->createWithContent('backup.sql', $sql);
 
-        $response = $this->actingAs($this->admin(), 'admin')
+        $admin = $this->admin();
+        $response = $this->actingAs($admin, 'admin')
             ->post('/sistema/legado/arquivo', ['arquivo' => $arquivo]);
 
         $response->assertRedirect(route('sistema.legado.index'));
+        $this->assertDatabaseHas('atividades', ['admin_id' => $admin->id, 'acao' => 'import.legado_arquivo']);
         $this->assertDatabaseHas('avaliacoes', ['nome' => 'Simulado']);
         $this->assertDatabaseHas('questoes', ['numero' => 1, 'gabarito' => 'A']);
         $this->assertDatabaseHas('respostas', ['ra' => '999', 'resposta' => 'A']);

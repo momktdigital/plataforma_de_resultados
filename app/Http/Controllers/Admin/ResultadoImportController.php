@@ -8,6 +8,7 @@ use App\Jobs\ImportarResultadosJob;
 use App\Models\Avaliacao;
 use App\Support\ImportStatusTracker;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
@@ -32,8 +33,10 @@ class ResultadoImportController extends Controller
         // ele falhar, ImportarResultadosJob::failed() já registra o erro.
         // Este try/catch cobre o caso de QUEUE_CONNECTION=sync (ex.: testes)
         // ou de uma falha ao simplesmente enfileirar o job.
+        $admin = Auth::guard('admin')->user();
+
         try {
-            ImportarResultadosJob::dispatch($avaliacao->codigo, $caminho, $arquivo->getClientOriginalName());
+            ImportarResultadosJob::dispatch($avaliacao->codigo, $caminho, $arquivo->getClientOriginalName(), $admin?->id, $admin?->username);
         } catch (Throwable $e) {
             Storage::delete($caminho);
             Log::error('Falha ao solicitar import de resultados.', ['exception' => $e]);

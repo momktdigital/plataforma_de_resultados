@@ -45,6 +45,21 @@
     </div>
 @endif
 
+@if ($backupDesatualizado)
+    <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 text-amber-900 px-4 py-3 text-sm">
+        <p class="font-semibold mb-1">Backup desatualizado.</p>
+        <p>
+            @if ($backups->isEmpty())
+                Nenhum backup foi gerado ainda.
+            @else
+                O backup mais recente tem mais de 7 dias.
+            @endif
+            Não há nenhum agendamento automático rodando <code class="bg-amber-100 px-1 rounded">sistema:backup</code> —
+            gere um backup manualmente abaixo ou configure o agendador do Laravel no servidor.
+        </p>
+    </div>
+@endif
+
 <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 text-amber-900 px-4 py-3 text-sm">
     O arquivo gerado contém o banco de dados completo e o `.env` da aplicação — inclui credenciais sensíveis. Guarde-o com cuidado.
 </div>

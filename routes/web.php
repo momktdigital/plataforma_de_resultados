@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AlunoController;
 use App\Http\Controllers\Admin\AvaliacaoController;
 use App\Http\Controllers\Admin\AvaliacaoVisualizacaoController;
 use App\Http\Controllers\Admin\BiController;
+use App\Http\Controllers\Admin\BuscaGlobalController;
 use App\Http\Controllers\Admin\CategoriaController;
 use App\Http\Controllers\Admin\LixeiraController;
 use App\Http\Controllers\Admin\MatriculaImportController;
@@ -14,9 +15,11 @@ use App\Http\Controllers\Admin\QuestaoExportController;
 use App\Http\Controllers\Admin\QuestaoImportController;
 use App\Http\Controllers\Admin\RespondenteController;
 use App\Http\Controllers\Admin\ResultadoImportController;
+use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\InstallController;
 use App\Http\Controllers\PortalController;
+use App\Http\Controllers\Sistema\AtividadeController;
 use App\Http\Controllers\Sistema\AtualizacaoController;
 use App\Http\Controllers\Sistema\BackupController;
 use App\Http\Controllers\Sistema\ConfiguracaoController;
@@ -55,10 +58,21 @@ Route::middleware('instalado')->group(function () {
         Route::post('/login', [LoginController::class, 'store'])
             ->middleware('throttle:10,1')
             ->name('login.attempt');
+
+        Route::get('/esqueci-senha', [ForgotPasswordController::class, 'create'])->name('senha.esqueci');
+        Route::post('/esqueci-senha', [ForgotPasswordController::class, 'store'])
+            ->middleware('throttle:5,1')
+            ->name('senha.esqueci.enviar');
+        Route::get('/redefinir-senha/{token}', [ForgotPasswordController::class, 'edit'])->name('senha.redefinir.edit');
+        Route::post('/redefinir-senha/{token}', [ForgotPasswordController::class, 'update'])
+            ->middleware('throttle:10,1')
+            ->name('senha.redefinir.salvar');
     });
 
     Route::middleware('auth:admin')->group(function () {
         Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
+
+        Route::get('/buscar', [BuscaGlobalController::class, 'index'])->name('busca.index');
 
         Route::get('/alunos', [AlunoController::class, 'index'])->name('alunos.index');
         Route::get('/alunos/importar', [MatriculaImportController::class, 'create'])->name('alunos.importar');
@@ -71,6 +85,8 @@ Route::middleware('instalado')->group(function () {
 
         Route::get('/administradores', [AdministradorController::class, 'index'])->name('administradores.index');
         Route::post('/administradores', [AdministradorController::class, 'store'])->name('administradores.store');
+        Route::get('/administradores/{admin}/editar', [AdministradorController::class, 'edit'])->name('administradores.edit');
+        Route::put('/administradores/{admin}', [AdministradorController::class, 'update'])->name('administradores.update');
         Route::delete('/administradores/{admin}', [AdministradorController::class, 'destroy'])->name('administradores.destroy');
 
         Route::get('/perfil', [PerfilController::class, 'edit'])->name('perfil.edit');
@@ -78,6 +94,8 @@ Route::middleware('instalado')->group(function () {
 
         Route::get('/categorias', [CategoriaController::class, 'index'])->name('categorias.index');
         Route::post('/categorias', [CategoriaController::class, 'store'])->name('categorias.store');
+        Route::get('/categorias/{categoria}/editar', [CategoriaController::class, 'edit'])->name('categorias.edit');
+        Route::put('/categorias/{categoria}', [CategoriaController::class, 'update'])->name('categorias.update');
         Route::delete('/categorias/{categoria}', [CategoriaController::class, 'destroy'])->name('categorias.destroy');
 
         Route::get('/avaliacoes', [AvaliacaoController::class, 'index'])->name('avaliacoes.index');
@@ -128,6 +146,8 @@ Route::middleware('instalado')->group(function () {
             Route::get('/atualizacao', [AtualizacaoController::class, 'index'])->name('atualizacao.index');
             Route::post('/atualizacao/verificar', [AtualizacaoController::class, 'verificar'])->name('atualizacao.verificar');
             Route::post('/atualizacao', [AtualizacaoController::class, 'store'])->name('atualizacao.store');
+
+            Route::get('/atividades', [AtividadeController::class, 'index'])->name('atividades.index');
 
             Route::get('/legado', [LegadoController::class, 'index'])->name('legado.index');
             Route::post('/legado/banco', [LegadoController::class, 'importarDoBanco'])->name('legado.banco');

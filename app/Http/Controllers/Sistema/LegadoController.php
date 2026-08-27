@@ -8,6 +8,7 @@ use App\Models\Avaliacao;
 use App\Services\Legado\BackupSqlParser;
 use App\Services\Legado\LegadoImportador;
 use App\Services\ResumoResultadoService;
+use App\Support\AtividadeLogger;
 use App\Support\Concerns\PermiteImportacaoLonga;
 use App\Support\LimitesUpload;
 use Illuminate\Http\RedirectResponse;
@@ -96,6 +97,8 @@ class LegadoController extends Controller
             $resumos->recalcular($avaliacaoCodigo);
         }
 
+        AtividadeLogger::registrar('import.legado_banco', null, null, $importador->resumo());
+
         return redirect()->route('sistema.legado.index')
             ->with('status', $this->resumoTexto($importador->resumo()));
     }
@@ -134,6 +137,11 @@ class LegadoController extends Controller
             foreach ($importador->avaliacoesTocadas() as $avaliacaoCodigo) {
                 $resumos->recalcular($avaliacaoCodigo);
             }
+
+            AtividadeLogger::registrar('import.legado_arquivo', null, null, [
+                ...$importador->resumo(),
+                'arquivo' => $request->file('arquivo')->getClientOriginalName(),
+            ]);
         }
 
         $mensagem = $this->resumoTexto($importador->resumo());

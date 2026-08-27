@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreAdministradorRequest;
+use App\Http\Requests\UpdateAdministradorRequest;
 use App\Models\Admin;
+use App\Support\AtividadeLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -21,14 +23,47 @@ class AdministradorController extends Controller
 
     public function store(StoreAdministradorRequest $request): RedirectResponse
     {
-        Admin::create([
+        $admin = Admin::create([
             'username' => $request->validated('username'),
+            'email' => $request->validated('email'),
             'password_hash' => Hash::make($request->validated('password')),
         ]);
+
+        AtividadeLogger::registrar('administrador.criado', 'Admin', $admin->id, ['username' => $admin->username]);
 
         return redirect()
             ->route('administradores.index')
             ->with('status', "Administrador '{$request->validated('username')}' criado com sucesso.");
+    }
+
+    public function edit(Admin $admin): View
+    {
+        return view('admin.administradores.edit', ['admin' => $admin]);
+    }
+
+    public function update(UpdateAdministradorRequest $request, Admin $admin): RedirectResponse
+    {
+        $usernameAntes = $admin->username;
+
+        $admin->username = $request->validated('username');
+        $admin->email = $request->validated('email');
+
+        $senhaRedefinida = ! empty($request->validated('password'));
+        if ($senhaRedefinida) {
+            $admin->password_hash = Hash::make($request->validated('password'));
+        }
+
+        $admin->save();
+
+        AtividadeLogger::registrar('administrador.editado', 'Admin', $admin->id, [
+            'username_antes' => $usernameAntes,
+            'username_depois' => $admin->username,
+            'senha_redefinida' => $senhaRedefinida,
+        ]);
+
+        return redirect()
+            ->route('administradores.index')
+            ->with('status', "Administrador '{$admin->username}' atualizado com sucesso.");
     }
 
     public function destroy(Admin $admin): RedirectResponse
@@ -37,7 +72,10 @@ class AdministradorController extends Controller
             return back()->withErrors(['admin' => 'Você não pode excluir a sua própria conta logada.']);
         }
 
+        $username = $admin->username;
         $admin->delete();
+
+        AtividadeLogger::registrar('administrador.excluido', 'Admin', $admin->id, ['username' => $username]);
 
         return redirect()->route('administradores.index')->with('status', 'Administrador excluído com sucesso.');
     }

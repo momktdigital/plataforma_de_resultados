@@ -54,7 +54,11 @@ return [
 
         'stack' => [
             'driver' => 'stack',
-            'channels' => explode(',', (string) env('LOG_STACK', 'single')),
+            // 'daily' (não 'single') de propósito: um canal único sem
+            // rotação vira um storage/logs/laravel.log que só cresce —
+            // numa instalação de longa duração isso é espaço em disco
+            // desperdiçado e um arquivo cada vez mais lento de abrir/grep.
+            'channels' => explode(',', (string) env('LOG_STACK', 'daily')),
             'ignore_exceptions' => false,
         ],
 

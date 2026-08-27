@@ -81,6 +81,40 @@ class AvaliacaoTest extends TestCase
         $response->assertSessionHasErrors('categoria_id');
     }
 
+    public function test_busca_por_nome(): void
+    {
+        Avaliacao::create(['nome' => 'ENADE 2026']);
+        Avaliacao::create(['nome' => 'Simulado Interno']);
+
+        $response = $this->actingAs($this->admin(), 'admin')->get('/avaliacoes?search=ENADE');
+
+        $response->assertOk();
+        $response->assertSee('ENADE 2026');
+        $response->assertDontSee('Simulado Interno');
+    }
+
+    public function test_busca_por_tipo(): void
+    {
+        Avaliacao::create(['nome' => 'Prova 1', 'tipo' => 'Institucional']);
+        Avaliacao::create(['nome' => 'Prova 2', 'tipo' => 'Simulado']);
+
+        $response = $this->actingAs($this->admin(), 'admin')->get('/avaliacoes?search=Institucional');
+
+        $response->assertSee('Prova 1');
+        $response->assertDontSee('Prova 2');
+    }
+
+    public function test_busca_por_codigo(): void
+    {
+        $avaliacao = Avaliacao::create(['nome' => 'Prova Alvo']);
+        Avaliacao::create(['nome' => 'Outra prova']);
+
+        $response = $this->actingAs($this->admin(), 'admin')->get("/avaliacoes?search={$avaliacao->codigo}");
+
+        $response->assertSee('Prova Alvo');
+        $response->assertDontSee('Outra prova');
+    }
+
     public function test_guest_nao_acessa_provas(): void
     {
         $this->admin(); // sistema já instalado, mas o cliente não está autenticado

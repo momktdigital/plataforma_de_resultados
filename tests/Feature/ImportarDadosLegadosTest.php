@@ -56,6 +56,68 @@ class ImportarDadosLegadosTest extends TestCase
         ]);
     }
 
+    public function test_recalcula_o_resumo_do_boletim_apos_migrar(): void
+    {
+        DB::table('gabaritos')->insert([
+            'nome_avaliacao' => 'ENADE 2026',
+            'respostas' => json_encode(['Q1' => 'B', 'Q2' => 'C']),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('resultados')->insert([
+            'ra' => '12345', 'periodo' => '2026/1', 'nome_avaliacao' => 'ENADE 2026',
+            'respostas' => json_encode(['Q1' => 'B', 'Q2' => 'D']),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->artisan('legado:importar')->assertExitCode(0);
+
+        $avaliacao = Avaliacao::where('nome', 'ENADE 2026')->firstOrFail();
+
+        // Sem o recalcular(), resultado_resumos fica vazio (boletim zerado)
+        // até alguma ação não relacionada disparar o recálculo.
+        $this->assertDatabaseHas('resultado_resumos', [
+            'avaliacao_codigo' => $avaliacao->codigo,
+            'ra' => '12345',
+            'acertos' => 1,
+            'total' => 2,
+        ]);
+    }
+
+    public function test_registra_na_trilha_de_auditoria(): void
+    {
+        DB::table('gabaritos')->insert([
+            'nome_avaliacao' => 'ENADE 2026',
+            'respostas' => json_encode(['Q1' => 'B']),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->artisan('legado:importar')->assertExitCode(0);
+
+        $this->assertDatabaseHas('atividades', [
+            'admin_id' => null,
+            'admin_username' => 'CLI: legado:importar',
+            'acao' => 'import.legado_cli',
+        ]);
+    }
+
+    public function test_dry_run_nao_recalcula_o_resumo(): void
+    {
+        DB::table('gabaritos')->insert([
+            'nome_avaliacao' => 'ENADE 2026',
+            'respostas' => json_encode(['Q1' => 'B']),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('resultados')->insert([
+            'ra' => '12345', 'periodo' => '2026/1', 'nome_avaliacao' => 'ENADE 2026',
+            'respostas' => json_encode(['Q1' => 'B']),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->artisan('legado:importar --dry-run')->assertExitCode(0);
+
+        $this->assertDatabaseCount('resultado_resumos', 0);
+    }
+
     public function test_vincula_aluno_existente_pelo_ra(): void
     {
         $aluno = Aluno::create(['ra' => '999', 'cpf' => '11122233344', 'data_nascimento' => '2000-01-01']);

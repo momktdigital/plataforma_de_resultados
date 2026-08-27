@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Avaliacao;
 use App\Services\ResultadoImportService;
 use App\Services\ResumoResultadoService;
+use App\Support\AtividadeLogger;
 use App\Support\ImportStatusTracker;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -36,6 +37,11 @@ class ImportarResultadosJob implements ShouldQueue
         private readonly int $avaliacaoCodigo,
         private readonly string $caminhoArmazenado,
         private readonly string $nomeOriginal,
+        // Capturado no controller (dentro da requisição, com sessão de admin
+        // disponível) — o worker da fila que roda este job não tem sessão
+        // nenhuma, então não daria pra descobrir isso de dentro do handle().
+        private readonly ?int $adminId = null,
+        private readonly ?string $adminUsername = null,
     ) {}
 
     public function handle(ResultadoImportService $service, ResumoResultadoService $resumos): void
@@ -49,6 +55,14 @@ class ImportarResultadosJob implements ShouldQueue
             $resumos->recalcular($avaliacao->codigo);
 
             ImportStatusTracker::concluir('resultados', (string) $avaliacao->codigo, $resultado);
+
+            AtividadeLogger::registrarComoAdmin($this->adminId, $this->adminUsername, 'import.resultados', 'Avaliacao', $avaliacao->codigo, [
+                'arquivo' => $this->nomeOriginal,
+                'linhas' => $resultado->totalLinhas(),
+                'criadas' => $resultado->criadas(),
+                'atualizadas' => $resultado->atualizadas(),
+                'ignoradas' => $resultado->totalIgnoradas(),
+            ]);
         } finally {
             Storage::delete($this->caminhoArmazenado);
         }
@@ -58,6 +72,11 @@ class ImportarResultadosJob implements ShouldQueue
     {
         ImportStatusTracker::falhar('resultados', (string) $this->avaliacaoCodigo, $e);
         Storage::delete($this->caminhoArmazenado);
+
+        AtividadeLogger::registrarComoAdmin($this->adminId, $this->adminUsername, 'import.resultados_falhou', 'Avaliacao', $this->avaliacaoCodigo, [
+            'arquivo' => $this->nomeOriginal,
+            'erro' => $e->getMessage(),
+        ]);
     }
 
     private function arquivo(): UploadedFile

@@ -12,6 +12,7 @@ use App\Services\ResumoResultadoService;
 use App\Support\ImportStatusTracker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -218,6 +219,23 @@ class QuestaoImportTest extends TestCase
         $this->assertDatabaseCount('questoes', 0);
     }
 
+    public function test_import_registra_admin_arquivo_e_contagem_na_trilha_de_auditoria(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        $admin = $this->admin();
+        $arquivo = UploadedFile::fake()->createWithContent('gabarito.csv', "Questão,Gabarito\n1,B\n");
+
+        $this->actingAs($admin, 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/questoes/import", ['arquivo' => $arquivo]);
+
+        $this->assertDatabaseHas('atividades', [
+            'admin_id' => $admin->id,
+            'acao' => 'import.questoes',
+            'alvo_tipo' => 'Avaliacao',
+            'alvo_id' => (string) $avaliacao->codigo,
+        ]);
+    }
+
     public function test_job_de_import_de_questoes_registra_status_processando_e_concluido(): void
     {
         $avaliacao = Avaliacao::create([]);
@@ -232,6 +250,40 @@ class QuestaoImportTest extends TestCase
         $status = ImportStatusTracker::status('questoes', (string) $avaliacao->codigo);
         $this->assertSame('concluido', $status['status']);
         $this->assertDatabaseCount('questoes', 1);
+    }
+
+    public function test_uma_linha_com_gabarito_invalido_para_o_banco_nao_derruba_o_import_inteiro(): void
+    {
+        // SQLite (usado nos testes) não aplica limite de varchar nem modo
+        // estrito como o MySQL de produção — um trigger reproduz a mesma
+        // falha real (gabarito varchar(5) rejeitando um valor mais longo)
+        // pra provar que uma célula ruim não derruba o lote inteiro.
+        DB::unprepared("
+            CREATE TRIGGER limitar_gabarito
+            BEFORE INSERT ON questoes
+            FOR EACH ROW WHEN length(NEW.gabarito) > 5
+            BEGIN
+                SELECT RAISE(ABORT, 'gabarito muito longo');
+            END
+        ");
+
+        $avaliacao = Avaliacao::create([]);
+        $csv = "Questão,Gabarito\n1,B\n2,ABCDEFGHIJ\n3,C\n";
+        $arquivo = UploadedFile::fake()->createWithContent('gabarito.csv', $csv);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/questoes/import", ['arquivo' => $arquivo]);
+
+        $this->assertDatabaseHas('questoes', ['numero' => 1, 'gabarito' => 'B']);
+        $this->assertDatabaseHas('questoes', ['numero' => 3, 'gabarito' => 'C']);
+        $this->assertDatabaseMissing('questoes', ['numero' => 2]);
+
+        $status = ImportStatusTracker::status('questoes', (string) $avaliacao->codigo);
+        $this->assertSame('concluido', $status['status']);
+        $this->assertNotEmpty($status['ignoradas']);
+        $this->assertStringContainsString('gabarito muito longo', $status['ignoradas'][0]['motivo']);
+
+        DB::unprepared('DROP TRIGGER limitar_gabarito');
     }
 
     public function test_job_de_import_de_questoes_registra_status_erro_quando_falha(): void

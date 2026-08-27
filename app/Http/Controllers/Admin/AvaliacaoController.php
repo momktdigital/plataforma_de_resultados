@@ -9,21 +9,34 @@ use App\Models\Categoria;
 use App\Services\EstatisticaErroService;
 use App\Services\Visualizacoes\VisualizacaoConfigService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class AvaliacaoController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
+        $search = trim((string) $request->query('search', ''));
+
         $avaliacoes = Avaliacao::with('categoria')
             ->withCount(['questoes', 'resultados'])
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($query) use ($search) {
+                    $query->where('nome', 'like', "%{$search}%")
+                        ->orWhere('tipo', 'like', "%{$search}%")
+                        ->when(is_numeric($search), fn ($query) => $query->orWhere('codigo', (int) $search));
+                });
+            })
             ->latest('codigo')
-            ->paginate(20);
+            ->paginate(20)
+            ->withQueryString();
 
         return view('admin.avaliacoes.index', [
             'avaliacoes' => $avaliacoes,
+            'search' => $search,
             'opcoesCategoria' => Categoria::opcoesSelect(),
         ]);
     }
@@ -46,11 +59,24 @@ class AvaliacaoController extends Controller
 
         $questoes = $avaliacao->questoes()->withTrashed()->with(['matrizes', 'referencias'])->orderBy('numero')->get();
 
+        // Editar gabarito/anulação recalcula a nota de todo mundo que já
+        // respondeu na hora — a tela usa isso pra só pedir confirmação
+        // quando a questão editada já tem resposta de verdade (ver
+        // admin.avaliacoes.show, form-editor-questao).
+        $respostasPorNumero = DB::table('respostas')
+            ->where('avaliacao_codigo', $avaliacao->codigo)
+            ->whereNull('deleted_at')
+            ->select('questao_numero')
+            ->selectRaw('COUNT(*) as total')
+            ->groupBy('questao_numero')
+            ->pluck('total', 'questao_numero');
+
         $estadoVisualizacoes = $visualizacaoConfig->estadoCompleto($avaliacao);
 
         return view('admin.avaliacoes.show', [
             'avaliacao' => $avaliacao,
             'questoes' => $questoes,
+            'respostasPorNumero' => $respostasPorNumero,
             'estatisticasErro' => $estadoVisualizacoes['questoes_criticas']['visivelAdmin']
                 ? (new EstatisticaErroService)->calcular($avaliacao)
                 : [],

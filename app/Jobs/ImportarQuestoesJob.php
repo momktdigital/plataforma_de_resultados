@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Avaliacao;
 use App\Services\QuestaoImportService;
 use App\Services\ResumoResultadoService;
+use App\Support\AtividadeLogger;
 use App\Support\ImportStatusTracker;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -32,6 +33,9 @@ class ImportarQuestoesJob implements ShouldQueue
         private readonly int $avaliacaoCodigo,
         private readonly string $caminhoArmazenado,
         private readonly string $nomeOriginal,
+        // Capturado no controller — ver ImportarResultadosJob para o motivo.
+        private readonly ?int $adminId = null,
+        private readonly ?string $adminUsername = null,
     ) {}
 
     public function handle(QuestaoImportService $service, ResumoResultadoService $resumos): void
@@ -48,6 +52,14 @@ class ImportarQuestoesJob implements ShouldQueue
             $resumos->recalcular($avaliacao->codigo);
 
             ImportStatusTracker::concluir('questoes', (string) $avaliacao->codigo, $resultado);
+
+            AtividadeLogger::registrarComoAdmin($this->adminId, $this->adminUsername, 'import.questoes', 'Avaliacao', $avaliacao->codigo, [
+                'arquivo' => $this->nomeOriginal,
+                'linhas' => $resultado->totalLinhas(),
+                'criadas' => $resultado->criadas(),
+                'atualizadas' => $resultado->atualizadas(),
+                'ignoradas' => $resultado->totalIgnoradas(),
+            ]);
         } finally {
             Storage::delete($this->caminhoArmazenado);
         }
@@ -57,6 +69,11 @@ class ImportarQuestoesJob implements ShouldQueue
     {
         ImportStatusTracker::falhar('questoes', (string) $this->avaliacaoCodigo, $e);
         Storage::delete($this->caminhoArmazenado);
+
+        AtividadeLogger::registrarComoAdmin($this->adminId, $this->adminUsername, 'import.questoes_falhou', 'Avaliacao', $this->avaliacaoCodigo, [
+            'arquivo' => $this->nomeOriginal,
+            'erro' => $e->getMessage(),
+        ]);
     }
 
     private function arquivo(): UploadedFile

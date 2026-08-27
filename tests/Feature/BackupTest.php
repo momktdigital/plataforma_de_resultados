@@ -181,4 +181,36 @@ class BackupTest extends TestCase
 
         $this->get('/sistema/backups')->assertRedirect(route('login'));
     }
+
+    public function test_tela_avisa_quando_nao_ha_nenhum_backup(): void
+    {
+        $response = $this->actingAs($this->admin(), 'admin')->get('/sistema/backups');
+
+        $response->assertOk();
+        $response->assertSee('Backup desatualizado');
+        $response->assertSee('Nenhum backup foi gerado ainda.');
+    }
+
+    public function test_tela_avisa_quando_o_backup_mais_recente_tem_mais_de_7_dias(): void
+    {
+        app(BackupService::class)->gerar();
+        $arquivo = File::files(storage_path('app/backups'))[0]->getPathname();
+        touch($arquivo, now()->subDays(8)->timestamp);
+
+        $response = $this->actingAs($this->admin(), 'admin')->get('/sistema/backups');
+
+        $response->assertOk();
+        $response->assertSee('Backup desatualizado');
+        $response->assertSee('O backup mais recente tem mais de 7 dias.');
+    }
+
+    public function test_tela_nao_avisa_quando_ha_backup_recente(): void
+    {
+        app(BackupService::class)->gerar();
+
+        $response = $this->actingAs($this->admin(), 'admin')->get('/sistema/backups');
+
+        $response->assertOk();
+        $response->assertDontSee('Backup desatualizado');
+    }
 }

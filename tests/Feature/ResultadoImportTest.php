@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Jobs\ImportarResultadosJob;
 use App\Models\Admin;
 use App\Models\Aluno;
+use App\Models\Atividade;
 use App\Models\Avaliacao;
 use App\Models\ConfiguracaoSistema;
 use App\Models\Questao;
@@ -14,6 +15,7 @@ use App\Services\ResumoResultadoService;
 use App\Support\ImportStatusTracker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -172,6 +174,40 @@ class ResultadoImportTest extends TestCase
         ]);
     }
 
+    public function test_uma_linha_com_resposta_invalida_para_o_banco_nao_derruba_o_import_inteiro(): void
+    {
+        // SQLite (usado nos testes) não aplica limite de varchar nem modo
+        // estrito como o MySQL de produção — um trigger reproduz a mesma
+        // falha real (resposta varchar(10) rejeitando um valor mais longo)
+        // pra provar que uma célula ruim não derruba o lote inteiro.
+        DB::unprepared("
+            CREATE TRIGGER limitar_resposta
+            BEFORE INSERT ON respostas
+            FOR EACH ROW WHEN length(NEW.resposta) > 10
+            BEGIN
+                SELECT RAISE(ABORT, 'resposta muito longa');
+            END
+        ");
+
+        $avaliacao = Avaliacao::create([]);
+        $csv = "RA,Questão,Resposta\n1,1,B\n2,2,TEXTOMUITOLONGODEMAIS\n3,3,C\n";
+        $arquivo = UploadedFile::fake()->createWithContent('resultados.csv', $csv);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", ['arquivo' => $arquivo]);
+
+        $this->assertDatabaseHas('respostas', ['ra' => '1', 'questao_numero' => 1, 'resposta' => 'B']);
+        $this->assertDatabaseHas('respostas', ['ra' => '3', 'questao_numero' => 3, 'resposta' => 'C']);
+        $this->assertDatabaseMissing('respostas', ['ra' => '2']);
+
+        $status = ImportStatusTracker::status('resultados', (string) $avaliacao->codigo);
+        $this->assertSame('concluido', $status['status']);
+        $this->assertNotEmpty($status['ignoradas']);
+        $this->assertStringContainsString('resposta muito longa', $status['ignoradas'][0]['motivo']);
+
+        DB::unprepared('DROP TRIGGER limitar_resposta');
+    }
+
     public function test_import_enfileira_o_job_em_vez_de_rodar_na_requisicao(): void
     {
         // Uma planilha de 100 mil+ linhas facilmente passa do tempo de
@@ -189,6 +225,28 @@ class ResultadoImportTest extends TestCase
 
         Queue::assertPushed(ImportarResultadosJob::class);
         $this->assertDatabaseCount('respostas', 0);
+    }
+
+    public function test_import_registra_admin_arquivo_e_contagem_na_trilha_de_auditoria(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        $admin = $this->admin();
+        $arquivo = UploadedFile::fake()->createWithContent('resultados.csv', "RA,Questão,Resposta\n123,1,B\n");
+
+        $this->actingAs($admin, 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", ['arquivo' => $arquivo]);
+
+        $this->assertDatabaseHas('atividades', [
+            'admin_id' => $admin->id,
+            'admin_username' => $admin->username,
+            'acao' => 'import.resultados',
+            'alvo_tipo' => 'Avaliacao',
+            'alvo_id' => (string) $avaliacao->codigo,
+        ]);
+
+        $atividade = Atividade::where('acao', 'import.resultados')->firstOrFail();
+        $this->assertSame('resultados.csv', $atividade->detalhes['arquivo']);
+        $this->assertSame(1, $atividade->detalhes['criadas']);
     }
 
     public function test_job_de_import_de_resultados_registra_status_processando_e_concluido(): void

@@ -73,6 +73,21 @@
     });
 </script>
 
+<div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-6">
+    <form method="GET" action="{{ route('avaliacoes.index') }}" class="flex gap-3">
+        <input type="text" name="search" value="{{ $search }}" placeholder="Buscar por código, nome ou tipo..."
+               class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+        <button type="submit" class="bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-lg px-4 py-2 text-sm">
+            Buscar
+        </button>
+        @if ($search !== '')
+            <a href="{{ route('avaliacoes.index') }}" class="border border-slate-300 bg-white text-slate-700 rounded-lg px-4 py-2 text-sm hover:bg-slate-50">
+                Limpar
+            </a>
+        @endif
+    </form>
+</div>
+
 <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
     <table class="w-full text-sm">
         <thead class="bg-slate-50 text-slate-500 text-left">

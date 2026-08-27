@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnsureInstalled;
 use App\Http\Middleware\EnsureNotInstalled;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -14,6 +15,16 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    ->withSchedule(function (Schedule $schedule): void {
+        // Precisa do cron do servidor rodando `php artisan schedule:run` a cada
+        // minuto (veja a doc do Laravel) — sem isso nada aqui dispara sozinho.
+        $schedule->command('sistema:backup')->daily()->onOneServer();
+
+        // Só verifica e avisa (não aplica sozinho): aplicar uma atualização
+        // sem supervisão contraria a confirmação manual de tag/hash exigida
+        // na tela de atualização (ver AtualizacaoController).
+        $schedule->command('sistema:atualizar --check')->daily()->onOneServer();
+    })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'instalado' => EnsureInstalled::class,

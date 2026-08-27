@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Services\MatriculaImportService;
+use App\Support\AtividadeLogger;
 use App\Support\ImportStatusTracker;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -30,6 +31,9 @@ class ImportarMatriculaJob implements ShouldQueue
     public function __construct(
         private readonly string $caminhoArmazenado,
         private readonly string $nomeOriginal,
+        // Capturado no controller — ver ImportarResultadosJob para o motivo.
+        private readonly ?int $adminId = null,
+        private readonly ?string $adminUsername = null,
     ) {}
 
     public function handle(MatriculaImportService $service): void
@@ -40,6 +44,14 @@ class ImportarMatriculaJob implements ShouldQueue
             $resultado = $service->importar($this->arquivo());
 
             ImportStatusTracker::concluir('matricula', '', $resultado);
+
+            AtividadeLogger::registrarComoAdmin($this->adminId, $this->adminUsername, 'import.matricula', null, null, [
+                'arquivo' => $this->nomeOriginal,
+                'linhas' => $resultado->totalLinhas(),
+                'criadas' => $resultado->criadas(),
+                'atualizadas' => $resultado->atualizadas(),
+                'ignoradas' => $resultado->totalIgnoradas(),
+            ]);
         } finally {
             Storage::delete($this->caminhoArmazenado);
         }
@@ -49,6 +61,11 @@ class ImportarMatriculaJob implements ShouldQueue
     {
         ImportStatusTracker::falhar('matricula', '', $e);
         Storage::delete($this->caminhoArmazenado);
+
+        AtividadeLogger::registrarComoAdmin($this->adminId, $this->adminUsername, 'import.matricula_falhou', null, null, [
+            'arquivo' => $this->nomeOriginal,
+            'erro' => $e->getMessage(),
+        ]);
     }
 
     private function arquivo(): UploadedFile

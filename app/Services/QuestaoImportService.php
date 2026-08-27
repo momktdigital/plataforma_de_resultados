@@ -9,6 +9,7 @@ use App\Support\ImportResult;
 use App\Support\SpreadsheetReader;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * Import de questões/gabarito (+ metadados pedagógicos opcionais) para uma
@@ -72,32 +73,12 @@ class QuestaoImportService
             ->all();
 
         DB::transaction(function () use ($avaliacao, $linhas, $numeros, $existentes, $resultado) {
-            $registros = [];
+            $registros = $this->montarRegistros($avaliacao, $linhas);
             $vistos = [];
+            $falharam = [];
 
-            foreach ($linhas as $linha) {
-                if (isset($existentes[$linha['numero']]) || isset($vistos[$linha['numero']])) {
-                    $resultado->registrarAtualizada();
-                } else {
-                    $resultado->registrarCriada();
-                }
-                $vistos[$linha['numero']] = true;
-
-                $registros[$linha['numero']] = array_merge($linha['atributos'], [
-                    'avaliacao_codigo' => $avaliacao->codigo,
-                    'numero' => $linha['numero'],
-                    'gabarito' => $linha['gabarito'],
-                    'deleted_at' => null,
-                ]);
-            }
-
-            $agora = now();
-            foreach (array_chunk(array_values($registros), self::TAMANHO_LOTE) as $lote) {
-                DB::table('questoes')->upsert(
-                    array_map(fn (array $r) => $r + ['created_at' => $agora, 'updated_at' => $agora], $lote),
-                    ['avaliacao_codigo', 'numero'],
-                    self::CAMPOS_ATUALIZAVEIS
-                );
+            foreach (array_chunk($registros, self::TAMANHO_LOTE, true) as $lote) {
+                $this->salvarLote($lote, $existentes, $vistos, $falharam, $resultado);
             }
 
             $questoes = Questao::where('avaliacao_codigo', $avaliacao->codigo)
@@ -106,7 +87,14 @@ class QuestaoImportService
                 ->keyBy('numero');
 
             foreach ($linhas as $linha) {
+                if (isset($falharam[$linha['numero']])) {
+                    continue;
+                }
+
                 $questao = $questoes->get($linha['numero']);
+                if ($questao === null) {
+                    continue;
+                }
 
                 $this->sincronizarMatrizes($questao, $linha['row']);
                 $this->sincronizarReferencias($questao, $linha['row']);
@@ -120,7 +108,7 @@ class QuestaoImportService
      * Valida e normaliza cada linha da planilha, sem tocar o banco.
      *
      * @param  array<int, array<string, mixed>>  $rows
-     * @return array<int, array{numero: int, gabarito: string, atributos: array<string, string|null>, row: array<string, mixed>}>
+     * @return array<int, array{linha: int, numero: int, gabarito: string, atributos: array<string, string|null>, row: array<string, mixed>}>
      */
     private function normalizarLinhas(array $rows, ImportResult $resultado): array
     {
@@ -146,6 +134,7 @@ class QuestaoImportService
             }
 
             $linhas[] = [
+                'linha' => $linha,
                 'numero' => (int) $matches[0],
                 'gabarito' => mb_strtoupper($gabarito, 'UTF-8'),
                 'atributos' => $this->extrairMetadados($row),
@@ -154,6 +143,96 @@ class QuestaoImportService
         }
 
         return $linhas;
+    }
+
+    /**
+     * Monta os registros a upsertar — uma chave (numero) repetida dentro do
+     * próprio arquivo mantém só a última ocorrência. Cada registro carrega
+     * 'linha' (número da linha original), pra atribuir o erro corretamente
+     * se esse numero falhar ao salvar — removido antes de virar a linha do
+     * upsert.
+     *
+     * @param  array<int, array{linha: int, numero: int, gabarito: string, atributos: array<string, string|null>}>  $linhas
+     * @return array<int, array{linha: int, dados: array<string, mixed>}>
+     */
+    private function montarRegistros(Avaliacao $avaliacao, array $linhas): array
+    {
+        $registros = [];
+
+        foreach ($linhas as $linha) {
+            $registros[$linha['numero']] = [
+                'linha' => $linha['linha'],
+                'dados' => array_merge($linha['atributos'], [
+                    'avaliacao_codigo' => $avaliacao->codigo,
+                    'numero' => $linha['numero'],
+                    'gabarito' => $linha['gabarito'],
+                    'deleted_at' => null,
+                ]),
+            ];
+        }
+
+        return $registros;
+    }
+
+    /**
+     * Salva um lote inteiro num único upsert() (caminho rápido — o normal).
+     * Se o lote falhar (ex.: MySQL em modo estrito rejeitando um valor que
+     * não cabe numa coluna), reprocessa o MESMO lote linha a linha, isolando
+     * só o(s) número(s) problemático(s) via ImportResult::ignorarLinha() em
+     * vez de derrubar o import inteiro — mesma ideia que
+     * MatriculaImportService já aplica.
+     *
+     * @param  array<int, array{linha: int, dados: array<string, mixed>}>  $lote
+     * @param  array<int, true>  $existentes
+     * @param  array<int, true>  $vistos
+     * @param  array<int, true>  $falharam
+     */
+    private function salvarLote(array $lote, array $existentes, array &$vistos, array &$falharam, ImportResult $resultado): void
+    {
+        $agora = now();
+
+        try {
+            DB::table('questoes')->upsert(
+                array_map(fn (array $r) => $r['dados'] + ['created_at' => $agora, 'updated_at' => $agora], array_values($lote)),
+                ['avaliacao_codigo', 'numero'],
+                self::CAMPOS_ATUALIZAVEIS
+            );
+
+            foreach ($lote as $numero => $registro) {
+                $this->registrarSucesso($numero, $existentes, $vistos, $resultado);
+            }
+
+            return;
+        } catch (Throwable) {
+            // Segue pro fallback linha a linha abaixo.
+        }
+
+        foreach ($lote as $numero => $registro) {
+            try {
+                DB::table('questoes')->upsert(
+                    [$registro['dados'] + ['created_at' => $agora, 'updated_at' => $agora]],
+                    ['avaliacao_codigo', 'numero'],
+                    self::CAMPOS_ATUALIZAVEIS
+                );
+
+                $this->registrarSucesso($numero, $existentes, $vistos, $resultado);
+            } catch (Throwable $e) {
+                $falharam[$numero] = true;
+                $resultado->ignorarLinha($registro['linha'], 'Falha ao salvar: '.$e->getMessage());
+            }
+        }
+    }
+
+    /** @param  array<int, true>  $existentes @param  array<int, true>  $vistos */
+    private function registrarSucesso(int $numero, array $existentes, array &$vistos, ImportResult $resultado): void
+    {
+        if (isset($existentes[$numero]) || isset($vistos[$numero])) {
+            $resultado->registrarAtualizada();
+        } else {
+            $resultado->registrarCriada();
+        }
+
+        $vistos[$numero] = true;
     }
 
     /** @return array<string, string|null> */

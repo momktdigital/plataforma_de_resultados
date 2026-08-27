@@ -291,6 +291,7 @@
                                 'matriz_periodo' => $questao->matrizes->pluck('periodo')->all(),
                                 'matriz_disciplina' => $questao->matrizes->pluck('disciplina')->all(),
                                 'matriz_codigo' => $questao->matrizes->pluck('codigo')->all(),
+                                'respostas_count' => $respostasPorNumero->get($questao->numero, 0),
                             ];
                             $matrizCurricular = $questao->matrizes
                                 ->map(fn ($m) => collect([$m->periodo, $m->disciplina, $m->codigo])->filter()->implode(' · '))
@@ -360,17 +361,25 @@
     ];
     var camposChips = ['matriz_prova', 'dcn', 'portaria_inep', 'ppc', 'matriz_periodo', 'matriz_disciplina', 'matriz_codigo'];
 
+    // Preenchido quando "Editar" é clicado — usado no submit pra saber se
+    // gabarito/anulada_modo mudaram numa questão que já tem resposta (ver
+    // mais abaixo): editar isso recalcula a nota de todo mundo na hora, sem
+    // desfazer, então merece confirmação extra além do salvar comum.
+    var questaoCarregada = null;
+
     function resetarFormulario() {
         form.reset();
         TagInput.clearAll();
         titulo.textContent = 'Adicionar questão';
         btnSubmit.textContent = 'Salvar questão';
         btnCancelar.classList.add('hidden');
+        questaoCarregada = null;
     }
 
     document.querySelectorAll('.questao-editar-btn').forEach(function (botao) {
         botao.addEventListener('click', function () {
             var dados = JSON.parse(botao.dataset.questao);
+            questaoCarregada = dados;
 
             camposSimples.forEach(function (campo) {
                 var el = document.getElementById(campo);
@@ -392,6 +401,26 @@
     });
 
     btnCancelar.addEventListener('click', resetarFormulario);
+
+    form.addEventListener('submit', function (event) {
+        if (! questaoCarregada || ! questaoCarregada.respostas_count) {
+            return;
+        }
+
+        var gabaritoMudou = document.getElementById('gabarito').value.trim().toUpperCase() !== (questaoCarregada.gabarito || '');
+        var anulacaoMudou = document.getElementById('anulada_modo').value !== (questaoCarregada.anulada_modo || '');
+
+        if (! gabaritoMudou && ! anulacaoMudou) {
+            return;
+        }
+
+        var aviso = 'Esta questão já tem ' + questaoCarregada.respostas_count + ' resposta(s) registrada(s). '
+            + 'Mudar o gabarito ou a anulação recalcula a nota de todo mundo que já respondeu agora mesmo, sem desfazer. Continuar?';
+
+        if (! confirm(aviso)) {
+            event.preventDefault();
+        }
+    });
 })();
 </script>
 
