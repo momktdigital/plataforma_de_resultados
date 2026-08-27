@@ -2,13 +2,17 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ImportarQuestoesJob;
 use App\Models\Admin;
 use App\Models\Avaliacao;
 use App\Models\Questao;
 use App\Models\Resposta;
+use App\Services\QuestaoImportService;
 use App\Services\ResumoResultadoService;
+use App\Support\ImportStatusTracker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class QuestaoImportTest extends TestCase
@@ -30,7 +34,7 @@ class QuestaoImportTest extends TestCase
         $response = $this->actingAs($this->admin(), 'admin')
             ->post("/avaliacoes/{$avaliacao->codigo}/questoes/import", ['arquivo' => $arquivo]);
 
-        $response->assertRedirect(route('avaliacoes.show', $avaliacao));
+        $response->assertRedirect(route('avaliacoes.questoes.import', $avaliacao));
         $this->assertDatabaseCount('questoes', 2);
         $this->assertDatabaseHas('questoes', ['numero' => 1, 'gabarito' => 'B', 'bloom_nivel' => null]);
     }
@@ -197,5 +201,48 @@ class QuestaoImportTest extends TestCase
             ->post("/avaliacoes/{$avaliacao->codigo}/questoes/import", ['arquivo' => $arquivo]);
 
         $this->assertDatabaseHas('resultado_resumos', ['ra' => '123', 'acertos' => 1, 'total' => 1]);
+    }
+
+    public function test_import_enfileira_o_job_em_vez_de_rodar_na_requisicao(): void
+    {
+        Queue::fake();
+
+        $avaliacao = Avaliacao::create([]);
+        $arquivo = UploadedFile::fake()->createWithContent('gabarito.csv', "Questão,Gabarito\n1,B\n");
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/questoes/import", ['arquivo' => $arquivo])
+            ->assertRedirect(route('avaliacoes.questoes.import', $avaliacao));
+
+        Queue::assertPushed(ImportarQuestoesJob::class);
+        $this->assertDatabaseCount('questoes', 0);
+    }
+
+    public function test_job_de_import_de_questoes_registra_status_processando_e_concluido(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        $arquivo = UploadedFile::fake()->createWithContent('gabarito.csv', "Questão,Gabarito\n1,B\n");
+        $caminho = $arquivo->store('imports');
+
+        (new ImportarQuestoesJob($avaliacao->codigo, $caminho, $arquivo->getClientOriginalName()))->handle(
+            app(QuestaoImportService::class),
+            app(ResumoResultadoService::class),
+        );
+
+        $status = ImportStatusTracker::status('questoes', (string) $avaliacao->codigo);
+        $this->assertSame('concluido', $status['status']);
+        $this->assertDatabaseCount('questoes', 1);
+    }
+
+    public function test_job_de_import_de_questoes_registra_status_erro_quando_falha(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        $job = new ImportarQuestoesJob($avaliacao->codigo, 'imports/inexistente.csv', 'inexistente.csv');
+
+        $job->failed(new \RuntimeException('falha simulada'));
+
+        $status = ImportStatusTracker::status('questoes', (string) $avaliacao->codigo);
+        $this->assertSame('erro', $status['status']);
+        $this->assertSame('falha simulada', $status['erro']);
     }
 }

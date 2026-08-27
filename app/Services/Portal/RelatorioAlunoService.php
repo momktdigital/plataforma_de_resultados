@@ -25,7 +25,14 @@ class RelatorioAlunoService
         private readonly AlunoVinculoResolver $alunoResolver = new AlunoVinculoResolver,
     ) {}
 
-    /** @return array{turma: string, suaMedia: float, mediaTurma: float, respondentesTurma: int}|null */
+    /**
+     * A única das duas consultas de resultado_resumos que continua trazendo
+     * a Collection inteira: comparativoTurma() precisa do percentual de cada
+     * respondente pra agrupar por turma via AlunoVinculoResolver, algo que
+     * rankingPercentil() (logo abaixo) não precisa mais fazer.
+     *
+     * @return array{turma: string, suaMedia: float, mediaTurma: float, respondentesTurma: int}|null
+     */
     public function comparativoTurma(Aluno $aluno, Avaliacao $avaliacao, string $periodo): ?array
     {
         if (empty($aluno->turma)) {
@@ -61,29 +68,48 @@ class RelatorioAlunoService
         ];
     }
 
-    /** @return array{posicao: int, totalRespondentes: int, percentil: float}|null */
+    /**
+     * Ao contrário de comparativoTurma() (que precisa de toda a Collection
+     * pra agrupar por turma), o ranking só precisa da própria nota do aluno e
+     * de duas contagens — resolvidas em SQL (COUNT) em vez de carregar
+     * `resultado_resumos` inteira pra PHP só pra comparar percentuais.
+     *
+     * @return array{posicao: int, totalRespondentes: int, percentil: float}|null
+     */
     public function rankingPercentil(Aluno $aluno, Avaliacao $avaliacao, string $periodo): ?array
     {
-        $resumos = DB::table('resultado_resumos')
+        $base = DB::table('resultado_resumos')
             ->where('avaliacao_codigo', $avaliacao->codigo)
             ->where('periodo', $periodo)
-            ->whereNotNull('percentual')
-            ->select('ra', 'cpf', 'percentual')
-            ->get();
+            ->whereNotNull('percentual');
 
-        // Casa por ra OU cpf (nunca uma chave só) pelo mesmo motivo de
-        // comparativoTurma() logo acima: `aluno_chave` é COALESCE(cpf, ra) da
-        // LINHA importada, que pode não ter cpf preenchido mesmo quando o
-        // cadastro do Aluno tem — presumir "$aluno->cpf ?: $aluno->ra" aqui
-        // deixava de encontrar a própria linha do aluno nesse caso.
-        $suaLinha = $resumos->first(fn ($r) => $r->ra === $aluno->ra || ($aluno->cpf && $r->cpf === $aluno->cpf));
-        if ($suaLinha === null || $resumos->count() < 2) {
+        // Casa por ra OU cpf (nunca uma chave só) pelo mesmo motivo do
+        // comentário de mediaTurma() logo acima: `aluno_chave` é
+        // COALESCE(cpf, ra) da LINHA importada, que pode não ter cpf
+        // preenchido mesmo quando o cadastro do Aluno tem — presumir
+        // "$aluno->cpf ?: $aluno->ra" aqui deixava de encontrar a própria
+        // linha do aluno nesse caso.
+        $suaNota = (clone $base)
+            ->where(function ($query) use ($aluno) {
+                $query->where('ra', $aluno->ra);
+                if ($aluno->cpf) {
+                    $query->orWhere('cpf', $aluno->cpf);
+                }
+            })
+            ->value('percentual');
+
+        if ($suaNota === null) {
             return null;
         }
 
-        $suaNota = (float) $suaLinha->percentual;
-        $total = $resumos->count();
-        $posicao = $resumos->filter(fn ($r) => (float) $r->percentual > $suaNota)->count() + 1;
+        $suaNota = (float) $suaNota;
+        $total = (clone $base)->count();
+
+        if ($total < 2) {
+            return null;
+        }
+
+        $posicao = (clone $base)->where('percentual', '>', $suaNota)->count() + 1;
 
         return [
             'posicao' => $posicao,

@@ -2,11 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ImportarMatriculaJob;
 use App\Models\Admin;
 use App\Models\Aluno;
 use App\Models\Curso;
+use App\Services\MatriculaImportService;
+use App\Support\ImportStatusTracker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class MatriculaImportTest extends TestCase
@@ -26,7 +30,7 @@ class MatriculaImportTest extends TestCase
         $response = $this->actingAs($this->admin(), 'admin')
             ->post('/alunos/importar', ['arquivo' => $arquivo]);
 
-        $response->assertRedirect(route('alunos.index'));
+        $response->assertRedirect(route('alunos.importar'));
         $this->assertDatabaseHas('alunos', [
             'ra' => '2026001',
             'nome' => 'Ana Silva',
@@ -70,8 +74,10 @@ class MatriculaImportTest extends TestCase
         $response = $this->actingAs($this->admin(), 'admin')
             ->post('/alunos/importar', ['arquivo' => $arquivo]);
 
-        $response->assertRedirect(route('alunos.index'));
-        $response->assertSessionHas('importIgnoradas');
+        $response->assertRedirect(route('alunos.importar'));
+        $status = ImportStatusTracker::status('matricula');
+        $this->assertSame('concluido', $status['status']);
+        $this->assertNotEmpty($status['ignoradas']);
         $this->assertDatabaseMissing('alunos', ['ra' => '2026001']);
         $this->assertDatabaseHas('alunos', ['ra' => '2026002', 'cpf' => '98765432100']);
     }
@@ -158,5 +164,42 @@ class MatriculaImportTest extends TestCase
         $this->admin();
 
         $this->get('/alunos/importar')->assertRedirect(route('login'));
+    }
+
+    public function test_import_enfileira_o_job_em_vez_de_rodar_na_requisicao(): void
+    {
+        Queue::fake();
+
+        $arquivo = UploadedFile::fake()->createWithContent('matricula.csv', "RA,Per. Letivo,Curso,Período\n2026001,2026/1,Medicina,5\n");
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post('/alunos/importar', ['arquivo' => $arquivo])
+            ->assertRedirect(route('alunos.importar'));
+
+        Queue::assertPushed(ImportarMatriculaJob::class);
+        $this->assertDatabaseCount('alunos', 0);
+    }
+
+    public function test_job_de_import_de_matricula_registra_status_processando_e_concluido(): void
+    {
+        $arquivo = UploadedFile::fake()->createWithContent('matricula.csv', "RA,Per. Letivo,Curso,Período\n2026001,2026/1,Medicina,5\n");
+        $caminho = $arquivo->store('imports');
+
+        (new ImportarMatriculaJob($caminho, $arquivo->getClientOriginalName()))->handle(app(MatriculaImportService::class));
+
+        $status = ImportStatusTracker::status('matricula');
+        $this->assertSame('concluido', $status['status']);
+        $this->assertDatabaseHas('alunos', ['ra' => '2026001']);
+    }
+
+    public function test_job_de_import_de_matricula_registra_status_erro_quando_falha(): void
+    {
+        $job = new ImportarMatriculaJob('imports/inexistente.csv', 'inexistente.csv');
+
+        $job->failed(new \RuntimeException('falha simulada'));
+
+        $status = ImportStatusTracker::status('matricula');
+        $this->assertSame('erro', $status['status']);
+        $this->assertSame('falha simulada', $status['erro']);
     }
 }

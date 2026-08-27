@@ -24,8 +24,35 @@ use Illuminate\Support\Facades\DB;
  */
 class AlunoVinculoResolver
 {
+    /**
+     * Memoização por (avaliacaoCodigo, periodo) durante o ciclo de vida da
+     * requisição — cada visual do painel BI instancia sua própria cópia desta
+     * classe (não é resolvida via container), então um cache de instância não
+     * seria compartilhado entre os vários serviços chamados na mesma
+     * requisição; um cache estático é. Estático é seguro aqui porque, fora do
+     * Octane, cada requisição HTTP roda o script do zero — estáticos não
+     * atravessam requisições. Nos testes (processo único do PHPUnit), ver
+     * reset em Tests\TestCase::setUp().
+     *
+     * @var array<string, Collection<string, Aluno>>
+     */
+    private static array $cache = [];
+
     /** @return Collection<string, Aluno> chaveada por aluno_chave */
     public function resolver(int $avaliacaoCodigo, string $periodo = ''): Collection
+    {
+        $chave = $avaliacaoCodigo.'|'.$periodo;
+
+        return self::$cache[$chave] ??= $this->resolverSemCache($avaliacaoCodigo, $periodo);
+    }
+
+    /** Limpa o cache estático — chamado entre os testes para não vazar dados de um caso para outro. */
+    public static function limparCache(): void
+    {
+        self::$cache = [];
+    }
+
+    private function resolverSemCache(int $avaliacaoCodigo, string $periodo): Collection
     {
         $respondentes = DB::table('resultado_resumos')
             ->where('avaliacao_codigo', $avaliacaoCodigo)

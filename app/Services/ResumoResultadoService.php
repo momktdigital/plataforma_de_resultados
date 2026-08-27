@@ -61,19 +61,24 @@ class ResumoResultadoService
 
             $agora = now();
 
-            DB::table('resultado_resumos')->insert($linhas->map(fn ($linha) => [
-                'avaliacao_codigo' => $avaliacaoCodigo,
-                'aluno_chave' => $linha->aluno_chave,
-                'periodo' => $linha->periodo,
-                'ra' => $linha->ra,
-                'cpf' => $linha->cpf,
-                'aluno_id' => $linha->aluno_id,
-                'acertos' => (int) $linha->acertos,
-                'total' => $total,
-                'percentual' => $total > 0 ? round($linha->acertos / $total * 100, 1) : null,
-                'created_at' => $agora,
-                'updated_at' => $agora,
-            ])->all());
+            // Em blocos, não tudo de uma vez: uma avaliação com muitos
+            // milhares de respondentes num único INSERT arrisca estourar o
+            // max_allowed_packet do MySQL.
+            $linhas->chunk(500)->each(function ($lote) use ($avaliacaoCodigo, $total, $agora) {
+                DB::table('resultado_resumos')->insert($lote->map(fn ($linha) => [
+                    'avaliacao_codigo' => $avaliacaoCodigo,
+                    'aluno_chave' => $linha->aluno_chave,
+                    'periodo' => $linha->periodo,
+                    'ra' => $linha->ra,
+                    'cpf' => $linha->cpf,
+                    'aluno_id' => $linha->aluno_id,
+                    'acertos' => (int) $linha->acertos,
+                    'total' => $total,
+                    'percentual' => $total > 0 ? round($linha->acertos / $total * 100, 1) : null,
+                    'created_at' => $agora,
+                    'updated_at' => $agora,
+                ])->all());
+            });
         });
     }
 }

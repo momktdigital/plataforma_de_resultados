@@ -26,17 +26,6 @@
     </form>
 </div>
 
-@if (session('importIgnoradas') && count(session('importIgnoradas')))
-    <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 text-amber-900 px-4 py-3 text-sm">
-        <p class="font-semibold mb-2">{{ count(session('importIgnoradas')) }} linha(s) ignorada(s):</p>
-        <ul class="list-disc pl-5 space-y-0.5 max-h-48 overflow-y-auto">
-            @foreach (session('importIgnoradas') as $ignorada)
-                <li>Linha {{ $ignorada['linha'] }}: {{ $ignorada['motivo'] }}</li>
-            @endforeach
-        </ul>
-    </div>
-@endif
-
 <div class="grid sm:grid-cols-2 gap-6 mb-6">
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
         <h2 class="font-semibold mb-1">Questões e gabarito</h2>

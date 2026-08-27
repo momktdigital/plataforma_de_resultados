@@ -69,7 +69,18 @@ class MatriculaImportService
         // o mesmo punhado de cursos se repete em quase toda linha.
         $cursosConhecidos = Curso::pluck('nome')->flip()->all();
 
-        DB::transaction(function () use ($rows, $resultado, &$cursosConhecidos) {
+        // Mesma ideia para o próprio Aluno: o custo dominante do import é o
+        // Aluno::where('ra', ...)->first() repetido a cada linha — carregar
+        // todos os RAs da planilha de uma vez (whereIn) troca milhares de
+        // idas ao banco por uma só.
+        $ras = collect($rows)
+            ->map(fn ($row) => HeaderResolver::findValue($row, self::RA_PATTERNS))
+            ->filter()
+            ->unique()
+            ->values();
+        $alunosPorRa = $ras->isEmpty() ? [] : Aluno::whereIn('ra', $ras)->get()->keyBy('ra')->all();
+
+        DB::transaction(function () use ($rows, $resultado, &$cursosConhecidos, &$alunosPorRa) {
             foreach ($rows as $index => $row) {
                 $resultado->registrarLinha();
                 $linha = $index + 2; // +1 pelo cabeçalho, +1 por índice base 0
@@ -101,7 +112,7 @@ class MatriculaImportService
                 // inteira — registra como ignorada, com o motivo, e segue
                 // pras próximas milhares de linhas.
                 try {
-                    $this->salvarAluno($resultado, $ra, $curso, $periodoLetivo, $periodo, $row);
+                    $this->salvarAluno($resultado, $ra, $curso, $periodoLetivo, $periodo, $row, $alunosPorRa);
 
                     if (! isset($cursosConhecidos[$curso])) {
                         Curso::firstOrCreate(['nome' => $curso]);
@@ -116,14 +127,18 @@ class MatriculaImportService
         return $resultado;
     }
 
-    /** @param  array<string, mixed>  $row */
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  array<string, Aluno>  $alunosPorRa
+     */
     private function salvarAluno(
         ImportResult $resultado,
         string $ra,
         string $curso,
         string $periodoLetivo,
         string $periodo,
-        array $row
+        array $row,
+        array &$alunosPorRa,
     ): void {
         $nome = HeaderResolver::findValue($row, self::NOME_PATTERNS);
         $cpf = HeaderResolver::findValue($row, self::CPF_PATTERNS);
@@ -141,10 +156,10 @@ class MatriculaImportService
         $uf = HeaderResolver::findValue($row, self::UF_PATTERNS);
         $celular = HeaderResolver::findValue($row, self::CELULAR_PATTERNS);
 
-        $aluno = Aluno::where('ra', $ra)->first();
+        $aluno = $alunosPorRa[$ra] ?? null;
 
         if ($aluno === null) {
-            Aluno::create([
+            $aluno = Aluno::create([
                 'ra' => $ra,
                 'nome' => $nome,
                 'cpf' => $cpf,
@@ -165,6 +180,10 @@ class MatriculaImportService
                 'uf' => $uf,
                 'celular' => $celular,
             ]);
+            // Uma linha seguinte com o mesmo RA (planilha com duplicata) deve
+            // ver este aluno como já existente, igual ao comportamento do
+            // Aluno::where('ra', ...)->first() original.
+            $alunosPorRa[$ra] = $aluno;
             $resultado->registrarCriada();
 
             return;

@@ -3,17 +3,6 @@
 @section('title', 'Alunos — Avaliações')
 
 @section('content')
-@if (session('importIgnoradas') && count(session('importIgnoradas')))
-    <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 text-amber-900 px-4 py-3 text-sm">
-        <p class="font-semibold mb-2">{{ count(session('importIgnoradas')) }} linha(s) ignorada(s):</p>
-        <ul class="list-disc pl-5 space-y-0.5 max-h-48 overflow-y-auto">
-            @foreach (session('importIgnoradas') as $ignorada)
-                <li>Linha {{ $ignorada['linha'] }}: {{ $ignorada['motivo'] }}</li>
-            @endforeach
-        </ul>
-    </div>
-@endif
-
 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
     <h1 class="text-2xl font-bold">Alunos</h1>
     <div class="flex gap-2">

@@ -39,42 +39,77 @@ class QuestaoImportService
         'ppc' => ['ppc'],
     ];
 
+    /** Colunas de `questoes` sobrescritas pelo upsert() a cada reimport (fora as chaves avaliacao_codigo/numero). */
+    private const CAMPOS_ATUALIZAVEIS = [
+        'gabarito', 'area', 'tema', 'habilidade', 'bloom_nivel', 'bloom_verbo',
+        'miller_nivel', 'dificuldade_pedagogica', 'dificuldade_tri', 'deleted_at', 'updated_at',
+    ];
+
+    /** Tamanho dos lotes do upsert() — ver ResultadoImportService::TAMANHO_LOTE. */
+    private const TAMANHO_LOTE = 500;
+
     public function importar(Avaliacao $avaliacao, UploadedFile $file): ImportResult
     {
         $rows = SpreadsheetReader::readRows($file);
         $resultado = new ImportResult;
 
-        DB::transaction(function () use ($avaliacao, $rows, $resultado) {
-            foreach ($rows as $index => $row) {
-                $resultado->registrarLinha();
-                $linha = $index + 2; // +1 pelo cabeçalho, +1 por índice base 0
+        $linhas = $this->normalizarLinhas($rows, $resultado);
 
-                $numeroBruto = HeaderResolver::findValue($row, self::NUMERO_PATTERNS);
-                $gabarito = HeaderResolver::findValue($row, self::GABARITO_PATTERNS);
+        if ($linhas === []) {
+            return $resultado;
+        }
 
-                if ($numeroBruto === null || ! preg_match('/\d+/', $numeroBruto, $matches)) {
-                    $resultado->ignorarLinha($linha, 'Coluna de Questão ausente ou sem número.');
+        $numeros = array_values(array_unique(array_column($linhas, 'numero')));
 
-                    continue;
+        // withTrashed(): uma questão soft-deletada ainda ocupa o índice único
+        // (avaliacao_codigo, numero) — reimportá-la conta como "atualizada"
+        // (restaurada), não "criada".
+        $existentes = Questao::withTrashed()
+            ->where('avaliacao_codigo', $avaliacao->codigo)
+            ->whereIn('numero', $numeros)
+            ->pluck('numero')
+            ->flip()
+            ->all();
+
+        DB::transaction(function () use ($avaliacao, $linhas, $numeros, $existentes, $resultado) {
+            $registros = [];
+            $vistos = [];
+
+            foreach ($linhas as $linha) {
+                if (isset($existentes[$linha['numero']]) || isset($vistos[$linha['numero']])) {
+                    $resultado->registrarAtualizada();
+                } else {
+                    $resultado->registrarCriada();
                 }
+                $vistos[$linha['numero']] = true;
 
-                if ($gabarito === null) {
-                    $resultado->ignorarLinha($linha, 'Coluna de Gabarito ausente ou vazia.');
+                $registros[$linha['numero']] = array_merge($linha['atributos'], [
+                    'avaliacao_codigo' => $avaliacao->codigo,
+                    'numero' => $linha['numero'],
+                    'gabarito' => $linha['gabarito'],
+                    'deleted_at' => null,
+                ]);
+            }
 
-                    continue;
-                }
+            $agora = now();
+            foreach (array_chunk(array_values($registros), self::TAMANHO_LOTE) as $lote) {
+                DB::table('questoes')->upsert(
+                    array_map(fn (array $r) => $r + ['created_at' => $agora, 'updated_at' => $agora], $lote),
+                    ['avaliacao_codigo', 'numero'],
+                    self::CAMPOS_ATUALIZAVEIS
+                );
+            }
 
-                $numero = (int) $matches[0];
-                $gabarito = mb_strtoupper($gabarito, 'UTF-8');
+            $questoes = Questao::where('avaliacao_codigo', $avaliacao->codigo)
+                ->whereIn('numero', $numeros)
+                ->get()
+                ->keyBy('numero');
 
-                $atributos = $this->extrairMetadados($row);
+            foreach ($linhas as $linha) {
+                $questao = $questoes->get($linha['numero']);
 
-                $questao = $this->salvarQuestao($avaliacao, $numero, $gabarito, $atributos);
-
-                $questao->wasRecentlyCreated ? $resultado->registrarCriada() : $resultado->registrarAtualizada();
-
-                $this->sincronizarMatrizes($questao, $row);
-                $this->sincronizarReferencias($questao, $row);
+                $this->sincronizarMatrizes($questao, $linha['row']);
+                $this->sincronizarReferencias($questao, $linha['row']);
             }
         });
 
@@ -82,28 +117,43 @@ class QuestaoImportService
     }
 
     /**
-     * updateOrCreate "manual" que também restaura uma questão excluída
-     * (soft-delete) em vez de colidir com o índice único (avaliação, número).
+     * Valida e normaliza cada linha da planilha, sem tocar o banco.
      *
-     * @param  array<string, mixed>  $atributos
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array{numero: int, gabarito: string, atributos: array<string, string|null>, row: array<string, mixed>}>
      */
-    private function salvarQuestao(Avaliacao $avaliacao, int $numero, string $gabarito, array $atributos): Questao
+    private function normalizarLinhas(array $rows, ImportResult $resultado): array
     {
-        $questao = Questao::withTrashed()
-            ->where('avaliacao_codigo', $avaliacao->codigo)
-            ->where('numero', $numero)
-            ->first();
+        $linhas = [];
 
-        if ($questao === null) {
-            $questao = new Questao(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => $numero]);
-        } elseif ($questao->trashed()) {
-            $questao->restore();
+        foreach ($rows as $index => $row) {
+            $resultado->registrarLinha();
+            $linha = $index + 2; // +1 pelo cabeçalho, +1 por índice base 0
+
+            $numeroBruto = HeaderResolver::findValue($row, self::NUMERO_PATTERNS);
+            $gabarito = HeaderResolver::findValue($row, self::GABARITO_PATTERNS);
+
+            if ($numeroBruto === null || ! preg_match('/\d+/', $numeroBruto, $matches)) {
+                $resultado->ignorarLinha($linha, 'Coluna de Questão ausente ou sem número.');
+
+                continue;
+            }
+
+            if ($gabarito === null) {
+                $resultado->ignorarLinha($linha, 'Coluna de Gabarito ausente ou vazia.');
+
+                continue;
+            }
+
+            $linhas[] = [
+                'numero' => (int) $matches[0],
+                'gabarito' => mb_strtoupper($gabarito, 'UTF-8'),
+                'atributos' => $this->extrairMetadados($row),
+                'row' => $row,
+            ];
         }
 
-        $questao->fill(array_merge($atributos, ['gabarito' => $gabarito]));
-        $questao->save();
-
-        return $questao;
+        return $linhas;
     }
 
     /** @return array<string, string|null> */

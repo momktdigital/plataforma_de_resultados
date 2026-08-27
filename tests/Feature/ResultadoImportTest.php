@@ -2,13 +2,17 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ImportarResultadosJob;
 use App\Models\Admin;
 use App\Models\Aluno;
 use App\Models\Avaliacao;
+use App\Models\ConfiguracaoSistema;
 use App\Models\Questao;
 use App\Models\Resposta;
+use App\Support\ImportStatusTracker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class ResultadoImportTest extends TestCase
@@ -30,7 +34,7 @@ class ResultadoImportTest extends TestCase
         $response = $this->actingAs($this->admin(), 'admin')
             ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", ['arquivo' => $arquivo]);
 
-        $response->assertRedirect(route('avaliacoes.show', $avaliacao));
+        $response->assertRedirect(route('avaliacoes.resultados.import', $avaliacao));
         $this->assertDatabaseCount('respostas', 2);
         $this->assertDatabaseHas('respostas', ['ra' => '12345', 'questao_numero' => 1, 'resposta' => 'B']);
     }
@@ -164,5 +168,66 @@ class ResultadoImportTest extends TestCase
             'total' => 2,
             'percentual' => 50.0,
         ]);
+    }
+
+    public function test_import_enfileira_o_job_em_vez_de_rodar_na_requisicao(): void
+    {
+        // Uma planilha de 100 mil+ linhas facilmente passa do tempo de
+        // execução do PHP/timeout do proxy se processada na própria
+        // requisição — este teste garante que o upload só ENFILEIRA o
+        // trabalho (Queue::fake() intercepta antes do job realmente rodar).
+        Queue::fake();
+
+        $avaliacao = Avaliacao::create([]);
+        $arquivo = UploadedFile::fake()->createWithContent('resultados.csv', "RA,Questão,Resposta\n123,1,B\n");
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", ['arquivo' => $arquivo])
+            ->assertRedirect(route('avaliacoes.resultados.import', $avaliacao));
+
+        Queue::assertPushed(ImportarResultadosJob::class);
+        $this->assertDatabaseCount('respostas', 0);
+    }
+
+    public function test_job_de_import_de_resultados_registra_status_processando_e_concluido(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        $arquivo = UploadedFile::fake()->createWithContent('resultados.csv', "RA,Questão,Resposta\n123,1,B\n");
+        $caminho = $arquivo->store('imports');
+
+        (new ImportarResultadosJob($avaliacao->codigo, $caminho, $arquivo->getClientOriginalName()))->handle(
+            app(\App\Services\ResultadoImportService::class),
+            app(\App\Services\ResumoResultadoService::class),
+        );
+
+        $status = ImportStatusTracker::status('resultados', (string) $avaliacao->codigo);
+        $this->assertSame('concluido', $status['status']);
+        $this->assertStringContainsString('1 criada(s)', $status['resumo']);
+        $this->assertDatabaseCount('respostas', 1);
+    }
+
+    public function test_job_de_import_de_resultados_registra_status_erro_quando_falha(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        $job = new ImportarResultadosJob($avaliacao->codigo, 'imports/inexistente.csv', 'inexistente.csv');
+
+        $job->failed(new \RuntimeException('coluna de questão ausente'));
+
+        $status = ImportStatusTracker::status('resultados', (string) $avaliacao->codigo);
+        $this->assertSame('erro', $status['status']);
+        $this->assertSame('coluna de questão ausente', $status['erro']);
+    }
+
+    public function test_tela_de_import_mostra_aviso_enquanto_processa_e_desabilita_o_botao(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        ConfiguracaoSistema::definir("import_resultados_{$avaliacao->codigo}_status", 'processando');
+        ConfiguracaoSistema::definir("import_resultados_{$avaliacao->codigo}_iniciado_em", now()->toIso8601String());
+
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->get("/avaliacoes/{$avaliacao->codigo}/resultados/import");
+
+        $response->assertOk();
+        $response->assertSee('Import em andamento');
     }
 }
