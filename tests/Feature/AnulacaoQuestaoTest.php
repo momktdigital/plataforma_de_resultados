@@ -8,6 +8,7 @@ use App\Models\Avaliacao;
 use App\Models\Questao;
 use App\Models\Resposta;
 use App\Services\EstatisticaErroService;
+use App\Services\Portal\RelatorioAlunoService;
 use App\Services\RelatorioAdminService;
 use App\Services\ResumoResultadoService;
 use App\Support\Anulacao;
@@ -161,9 +162,16 @@ class AnulacaoQuestaoTest extends TestCase
 
         $detalhe = $this->get(route('portal.resultados.avaliacao', ['avaliacao' => $avaliacao->codigo, 'periodo' => '']));
         $detalhe->assertOk();
-        // Só a questão 2 (Bradicardia) conta como lacuna — a 1 (COVID) foi
-        // excluída da prova (distribuir_pontuacao) e não deve aparecer.
-        $detalhe->assertSee('Bradicardia');
-        $detalhe->assertDontSee('COVID');
+        // A página ainda pode citar "COVID" em outros lugares (ex.: filtro
+        // de tema no detalhamento das respostas, que lista toda questão
+        // respondida) — o que importa é que o cartão de lacunas em si só
+        // cite a questão que realmente conta na prova (Bradicardia).
+        $detalhe->assertSeeInOrder(['Lacunas de aprendizagem', 'Bradicardia']);
+
+        $respostas = Resposta::where('avaliacao_codigo', $avaliacao->codigo)->get();
+        $gabaritos = Questao::where('avaliacao_codigo', $avaliacao->codigo)->pluck('gabarito', 'numero');
+        $lacunas = app(RelatorioAlunoService::class)
+            ->lacunasEConsolidados($respostas, $gabaritos, $avaliacao);
+        $this->assertStringNotContainsString('COVID', json_encode($lacunas));
     }
 }

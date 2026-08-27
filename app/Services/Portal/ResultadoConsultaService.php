@@ -95,7 +95,7 @@ class ResultadoConsultaService
         return $this->montarResultado($aluno, $avaliacao, $periodo, $respostas);
     }
 
-    /** @return array{avaliacao: Avaliacao, periodo: string, respostas: Collection, gabaritos: Collection, anuladas: Collection, acertos: int, total: int, percentual: ?float, metricas: Collection} */
+    /** @return array{avaliacao: Avaliacao, periodo: string, respostas: Collection, gabaritos: Collection, anuladas: Collection, questoesMeta: Collection, acertos: int, total: int, percentual: ?float, metricas: Collection} */
     private function montarResultado(Aluno $aluno, Avaliacao $avaliacao, string $periodo, Collection $respostas): array
     {
         // 'anuladas' guarda o anulada_modo de TODA questão anulada (mesmo as
@@ -104,8 +104,11 @@ class ResultadoConsultaService
         // distribuir_pontuacao: elas não contam mais na prova, então o
         // detalhamento trata a questão como sem gabarito (cinza), igual já
         // acontece hoje quando a questão não tem gabarito cadastrado.
-        $questoesComGabarito = $avaliacao->questoes()->whereNotNull('gabarito')->where('gabarito', '!=', '')->get(['numero', 'gabarito', 'anulada_modo']);
+        // 'questoesMeta' (área/tema por número) alimenta o popup de detalhe
+        // da questão no "Detalhamento das respostas".
+        $questoesComGabarito = $avaliacao->questoes()->whereNotNull('gabarito')->where('gabarito', '!=', '')->get(['numero', 'gabarito', 'area', 'tema', 'anulada_modo']);
         $anuladas = $questoesComGabarito->pluck('anulada_modo', 'numero')->filter();
+        $questoesMeta = $questoesComGabarito->keyBy('numero')->map(fn ($q) => ['area' => $q->area, 'tema' => $q->tema]);
         $gabaritos = $questoesComGabarito
             ->filter(fn ($q) => ! Anulacao::distribuida($q->anulada_modo))
             ->pluck('gabarito', 'numero');
@@ -143,6 +146,7 @@ class ResultadoConsultaService
             'respostas' => $respostas,
             'gabaritos' => $gabaritos,
             'anuladas' => $anuladas,
+            'questoesMeta' => $questoesMeta,
             'acertos' => $acertos,
             'total' => $total,
             'percentual' => $percentual,

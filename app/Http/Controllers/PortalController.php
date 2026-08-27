@@ -261,6 +261,7 @@ class PortalController extends Controller
             'rankingPercentil' => $visivel('ranking_percentil') ? $relatorioService->rankingPercentil($aluno, $avaliacao, $periodo) : null,
             'radarDisciplina' => $visivel('radar_disciplina') ? $relatorioService->radarDisciplina($respostas, $gabaritos, $avaliacao) : null,
             'desempenhoArea' => $visivel('desempenho_area') ? $relatorioService->desempenhoPorArea($respostas, $gabaritos, $avaliacao) : null,
+            'desempenhoAreaContagem' => $visivel('desempenho_area') ? $relatorioService->desempenhoPorAreaComContagem($respostas, $gabaritos, $avaliacao) : null,
             'lacunasConsolidados' => $visivel('lacunas_conhecimentos') ? $relatorioService->lacunasEConsolidados($respostas, $gabaritos, $avaliacao) : null,
             'desempenhoBloom' => $visivel('desempenho_bloom') ? $relatorioService->desempenhoPorBloom($respostas, $gabaritos, $avaliacao) : null,
             'desempenhoMiller' => $visivel('desempenho_miller') ? $relatorioService->desempenhoPorMiller($respostas, $gabaritos, $avaliacao) : null,

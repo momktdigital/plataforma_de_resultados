@@ -333,6 +333,27 @@ class RelatorioAlunoService
      */
     private function mediaPorAgrupamentoMultiplo(Collection $respostas, Collection $gabaritos, Collection $gruposPorNumero, ?Collection $anuladasPorNumero = null): array
     {
+        $acumulado = $this->contagemPorAgrupamentoMultiplo($respostas, $gabaritos, $gruposPorNumero, $anuladasPorNumero);
+
+        $resultado = [];
+        foreach ($acumulado as $grupo => $s) {
+            $resultado[$grupo] = $s['total'] > 0 ? round($s['acertos'] / $s['total'] * 100, 1) : 0.0;
+        }
+
+        return $resultado;
+    }
+
+    /**
+     * Cada questão pode entrar em mais de um grupo (uma questão com 2 disciplinas
+     * na matriz conta o acerto/erro pra cada uma) — por isso o mapa é
+     * numero => lista de grupos, não numero => grupo único.
+     *
+     * @param  Collection<int, array<int, string>>  $gruposPorNumero
+     * @param  ?Collection<int, ?string>  $anuladasPorNumero  numero => anulada_modo
+     * @return array<string, array{acertos: int, total: int}>
+     */
+    private function contagemPorAgrupamentoMultiplo(Collection $respostas, Collection $gabaritos, Collection $gruposPorNumero, ?Collection $anuladasPorNumero = null): array
+    {
         $acumulado = [];
 
         foreach ($respostas as $resposta) {
@@ -357,9 +378,39 @@ class RelatorioAlunoService
             }
         }
 
+        return $acumulado;
+    }
+
+    /**
+     * Versão de desempenhoPorArea() com a contagem bruta (não só o %) —
+     * usada pelos cards "total por área" do boletim, que mostram o valor
+     * absoluto de acertos em destaque e o percentual entre parênteses.
+     *
+     * @return array<string, array{acertos: int, total: int, percentual: float}>
+     */
+    public function desempenhoPorAreaComContagem(Collection $respostas, Collection $gabaritos, Avaliacao $avaliacao): array
+    {
+        $linhas = DB::table('questoes')
+            ->where('avaliacao_codigo', $avaliacao->codigo)
+            ->whereNull('deleted_at')
+            ->whereNotNull('area')
+            ->where('area', '!=', '')
+            ->select('numero', 'area as valor', 'anulada_modo')
+            ->get()
+            ->keyBy('numero');
+
+        $valoresPorNumero = $linhas->map(fn ($l) => [$l->valor]);
+        $anuladasPorNumero = $linhas->pluck('anulada_modo', 'numero');
+
+        $acumulado = $this->contagemPorAgrupamentoMultiplo($respostas, $gabaritos, $valoresPorNumero, $anuladasPorNumero);
+
         $resultado = [];
-        foreach ($acumulado as $grupo => $s) {
-            $resultado[$grupo] = $s['total'] > 0 ? round($s['acertos'] / $s['total'] * 100, 1) : 0.0;
+        foreach ($acumulado as $area => $s) {
+            $resultado[$area] = [
+                'acertos' => $s['acertos'],
+                'total' => $s['total'],
+                'percentual' => $s['total'] > 0 ? round($s['acertos'] / $s['total'] * 100, 1) : 0.0,
+            ];
         }
 
         return $resultado;

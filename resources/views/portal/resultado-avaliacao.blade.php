@@ -90,28 +90,74 @@
             </div>
         @endif
 
-        @if ($estado['grade_questoes']['visivelAluno'])
+        @if ($estado['desempenho_area']['visivelAluno'] && ! empty($desempenhoAreaContagem))
             <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                <i class="ph-bold ph-squares-four text-primary"></i> Detalhamento das respostas
+                <i class="ph-bold ph-chart-bar text-primary"></i> Total por área
             </p>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                @foreach (collect($desempenhoAreaContagem)->sortByDesc(fn ($d) => $d['percentual']) as $area => $dados)
+                    <div class="bg-slate-50 border border-slate-100 rounded-lg p-3">
+                        <div class="text-xs font-bold text-slate-500 uppercase truncate" title="{{ $area }}">{{ $area }}</div>
+                        <div class="text-lg font-black text-slate-800">
+                            {{ $dados['acertos'] }}<span class="text-xs font-normal text-slate-400"> ({{ $dados['percentual'] }}%)</span>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        @endif
+
+        @if ($estado['grade_questoes']['visivelAluno'])
+            @php
+                $areasDetalhe = $r['questoesMeta']->pluck('area')->filter()->unique()->sort()->values();
+                $temasDetalhe = $r['questoesMeta']->pluck('tema')->filter()->unique()->sort()->values();
+            @endphp
+            <div class="flex items-center justify-between flex-wrap gap-3 mb-3">
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                    <i class="ph-bold ph-squares-four text-primary"></i> Detalhamento das respostas
+                </p>
+                @if ($areasDetalhe->isNotEmpty() || $temasDetalhe->isNotEmpty())
+                    <div class="flex flex-wrap gap-2">
+                        @if ($areasDetalhe->isNotEmpty())
+                            <select id="filtro-detalhe-area" onchange="portalFiltrarDetalheQuestoes()" class="text-xs rounded-lg border border-slate-300 px-2 py-1.5">
+                                <option value="">Todas as áreas</option>
+                                @foreach ($areasDetalhe as $area)
+                                    <option value="{{ $area }}">{{ $area }}</option>
+                                @endforeach
+                            </select>
+                        @endif
+                        @if ($temasDetalhe->isNotEmpty())
+                            <select id="filtro-detalhe-tema" onchange="portalFiltrarDetalheQuestoes()" class="text-xs rounded-lg border border-slate-300 px-2 py-1.5">
+                                <option value="">Todos os temas</option>
+                                @foreach ($temasDetalhe as $tema)
+                                    <option value="{{ $tema }}">{{ $tema }}</option>
+                                @endforeach
+                            </select>
+                        @endif
+                    </div>
+                @endif
+            </div>
             <div class="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2 mb-6">
                 @foreach ($r['respostas'] as $resposta)
                     @php
                         $anuladaModo = $r['anuladas'][$resposta->questao_numero] ?? null;
                         $correta = $r['gabaritos'][$resposta->questao_numero] ?? null;
                         $marcada = $resposta->resposta ?: '';
+                        $meta = $r['questoesMeta'][$resposta->questao_numero] ?? null;
                         $cor = 'bg-slate-400';
                         if ($correta !== null && $correta !== '') {
                             $acertou = \App\Support\Anulacao::acertou($marcada, $correta, $anuladaModo);
                             $cor = $acertou ? 'bg-green-500' : ($marcada === '' ? 'bg-slate-400' : 'bg-red-500');
                         }
                     @endphp
-                    <div class="rounded-lg overflow-hidden border border-slate-200 shadow-sm" @if ($anuladaModo) title="Questão anulada — não conta na nota" @endif>
+                    <button type="button" onclick="portalAbrirDetalheQuestao({{ $resposta->questao_numero }})"
+                            data-area="{{ $meta['area'] ?? '' }}" data-tema="{{ $meta['tema'] ?? '' }}"
+                            class="detalhe-questao-item rounded-lg overflow-hidden border border-slate-200 shadow-sm text-left cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all"
+                            @if ($anuladaModo) title="Questão anulada — não conta na nota" @endif>
                         <div class="{{ $cor }} text-white text-[10px] text-center font-bold py-1">Q{{ $resposta->questao_numero }}{{ $anuladaModo ? '*' : '' }}</div>
                         <div class="bg-white text-center font-bold text-sm py-1.5 {{ $marcada === '' ? 'text-slate-300' : 'text-slate-700' }}">
                             {{ $marcada !== '' ? $marcada : '-' }}
                         </div>
-                    </div>
+                    </button>
                 @endforeach
             </div>
             @if ($r['anuladas']->isNotEmpty())
@@ -270,6 +316,38 @@
     </div>
 </div>
 
+<div id="modal-detalhe-questao" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 p-4" onclick="if (event.target === this) portalFecharDetalheQuestao()">
+    <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5">
+        <div class="flex items-center justify-between mb-4">
+            <h3 id="modal-detalhe-titulo" class="font-bold text-slate-800"></h3>
+            <button type="button" onclick="portalFecharDetalheQuestao()" class="text-slate-400 hover:text-slate-600">
+                <i class="ph-bold ph-x text-lg"></i>
+            </button>
+        </div>
+        <div id="modal-detalhe-anulada" class="hidden text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+            Questão anulada — não conta na nota.
+        </div>
+        <dl class="space-y-2 text-sm">
+            <div id="modal-detalhe-area-linha" class="hidden flex justify-between gap-3">
+                <dt class="text-slate-500">Área</dt>
+                <dd id="modal-detalhe-area" class="font-medium text-slate-700 text-right"></dd>
+            </div>
+            <div id="modal-detalhe-tema-linha" class="hidden flex justify-between gap-3">
+                <dt class="text-slate-500">Tema</dt>
+                <dd id="modal-detalhe-tema" class="font-medium text-slate-700 text-right"></dd>
+            </div>
+            <div class="flex justify-between gap-3">
+                <dt class="text-slate-500">Sua resposta</dt>
+                <dd id="modal-detalhe-sua-resposta" class="font-bold text-right"></dd>
+            </div>
+            <div class="flex justify-between gap-3">
+                <dt class="text-slate-500">Resposta correta</dt>
+                <dd id="modal-detalhe-gabarito" class="font-bold text-emerald-700 text-right"></dd>
+            </div>
+        </dl>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script>
 @if ($estado['comparativo_turma']['visivelAluno'] && $comparativoTurma)
@@ -352,6 +430,68 @@ new Chart(document.getElementById('grafico-evolucao'), {
 <script>
 const PORTAL_SITE_TITLE = @json($siteTitle);
 const PORTAL_ALUNO = {nome: @json($aluno->nome), ra: @json($aluno->ra)};
+const PORTAL_QUESTOES = {{ Js::from(
+    $r['respostas']->mapWithKeys(function ($resposta) use ($r) {
+        $meta = $r['questoesMeta'][$resposta->questao_numero] ?? null;
+
+        return [$resposta->questao_numero => [
+            'area' => $meta['area'] ?? null,
+            'tema' => $meta['tema'] ?? null,
+            'suaResposta' => $resposta->resposta ?: null,
+            'gabarito' => $r['gabaritos'][$resposta->questao_numero] ?? null,
+            'anulada' => ($r['anuladas'][$resposta->questao_numero] ?? null) !== null,
+        ]];
+    })
+) }};
+
+function portalAbrirDetalheQuestao(numero) {
+    const q = PORTAL_QUESTOES[numero];
+    if (!q) return;
+
+    document.getElementById('modal-detalhe-titulo').textContent = 'Questão ' + numero;
+    document.getElementById('modal-detalhe-anulada').classList.toggle('hidden', !q.anulada);
+
+    const areaLinha = document.getElementById('modal-detalhe-area-linha');
+    areaLinha.classList.toggle('hidden', !q.area);
+    if (q.area) document.getElementById('modal-detalhe-area').textContent = q.area;
+
+    const temaLinha = document.getElementById('modal-detalhe-tema-linha');
+    temaLinha.classList.toggle('hidden', !q.tema);
+    if (q.tema) document.getElementById('modal-detalhe-tema').textContent = q.tema;
+
+    const suaResposta = document.getElementById('modal-detalhe-sua-resposta');
+    suaResposta.textContent = q.suaResposta || 'Em branco';
+    suaResposta.className = 'font-bold text-right ' + ((q.anulada || q.suaResposta === q.gabarito) ? 'text-emerald-700' : 'text-red-600');
+
+    document.getElementById('modal-detalhe-gabarito').textContent = q.gabarito || '—';
+
+    const modal = document.getElementById('modal-detalhe-questao');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function portalFecharDetalheQuestao() {
+    const modal = document.getElementById('modal-detalhe-questao');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') portalFecharDetalheQuestao();
+});
+
+function portalFiltrarDetalheQuestoes() {
+    const areaSel = document.getElementById('filtro-detalhe-area');
+    const temaSel = document.getElementById('filtro-detalhe-tema');
+    const area = areaSel ? areaSel.value : '';
+    const tema = temaSel ? temaSel.value : '';
+
+    document.querySelectorAll('.detalhe-questao-item').forEach(function (item) {
+        const matchArea = !area || item.dataset.area === area;
+        const matchTema = !tema || item.dataset.tema === tema;
+        item.style.display = (matchArea && matchTema) ? '' : 'none';
+    });
+}
 
 function portalExportarPdfAvaliacao() {
     const conteudo = document.getElementById('pdf-conteudo');

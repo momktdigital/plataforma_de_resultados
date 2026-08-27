@@ -150,6 +150,44 @@ class AvaliacaoVisualizacaoTest extends TestCase
         $detalhe->assertSee('Bradicardia');
     }
 
+    public function test_aluno_ve_cards_de_total_por_area_e_filtro_de_detalhe_por_area_e_tema(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A', 'area' => 'Pediatria', 'tema' => 'COVID']);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 2, 'gabarito' => 'B', 'area' => 'Pediatria', 'tema' => 'Bradicardia']);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 3, 'gabarito' => 'C', 'area' => 'Ginecologia', 'tema' => 'Úlceras']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2026001', 'questao_numero' => 1, 'resposta' => 'A']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2026001', 'questao_numero' => 2, 'resposta' => 'X']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2026001', 'questao_numero' => 3, 'resposta' => 'C']);
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+
+        $this->admin();
+        Aluno::create(['ra' => '2026001', 'cpf' => '12345678909', 'data_nascimento' => '2000-03-15', 'nome' => 'Fulano']);
+
+        $this->followingRedirects()->post('/portal/consultar', [
+            'cpf' => '123.456.789-09',
+            'data_nascimento' => '15/03/2000',
+        ]);
+
+        $detalhe = $this->get(route('portal.resultados.avaliacao', ['avaliacao' => $avaliacao->codigo, 'periodo' => '']));
+        $detalhe->assertOk();
+
+        // Cards "Total por área": Pediatria acertou 1 de 2 (50%).
+        $detalhe->assertSee('Total por área');
+        $detalhe->assertSeeInOrder(['Pediatria', '1', '(50%)']);
+
+        // Filtros de área/tema no detalhamento das respostas.
+        $detalhe->assertSee('filtro-detalhe-area', false);
+        $detalhe->assertSee('filtro-detalhe-tema', false);
+        $detalhe->assertSee('Ginecologia');
+        $detalhe->assertSee('Úlceras');
+
+        // Dados da questão embutidos pro popup de detalhe (área/tema/sua
+        // resposta/gabarito), um por número de questão respondida.
+        $detalhe->assertSee('PORTAL_QUESTOES', false);
+        $detalhe->assertSee('data-area="Pediatria" data-tema="Bradicardia"', false);
+    }
+
     public function test_percentil_aparece_mesmo_quando_resposta_importada_so_tem_ra_mas_aluno_tem_cpf_cadastrado(): void
     {
         $avaliacao = Avaliacao::create([]);
