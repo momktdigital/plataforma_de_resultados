@@ -58,6 +58,31 @@ class RelatorioAdminServiceTest extends TestCase
         $this->assertTrue($alternativaB2['ehDistrator']);
     }
 
+    public function test_analise_alternativas_nunca_marca_blank_ou_hifen_como_distrator(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A']);
+
+        // "BLANK"/"-" (sentinelas reais da importação — ver Resposta::
+        // SENTINELAS_SEM_RESPOSTA) são maioria aqui, mais que qualquer
+        // alternativa errada de verdade — mas nenhuma das duas pode ganhar
+        // o rótulo de distrator, só B pode (única alternativa errada real).
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2', 'questao_numero' => 1, 'resposta' => 'B']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '3', 'questao_numero' => 1, 'resposta' => 'BLANK']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '4', 'questao_numero' => 1, 'resposta' => 'BLANK']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '5', 'questao_numero' => 1, 'resposta' => '-']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '6', 'questao_numero' => 1, 'resposta' => '-']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '7', 'questao_numero' => 1, 'resposta' => '-']);
+
+        $resultado = (new RelatorioAdminService)->analiseAlternativas($avaliacao);
+
+        $alternativas = collect($resultado[0]['alternativas'])->keyBy('letra');
+        $this->assertFalse($alternativas['BLANK']['ehDistrator']);
+        $this->assertFalse($alternativas['-']['ehDistrator']);
+        $this->assertTrue($alternativas['B']['ehDistrator']);
+    }
+
     public function test_analise_alternativas_sem_respostas_retorna_lista_vazia(): void
     {
         $avaliacao = Avaliacao::create([]);

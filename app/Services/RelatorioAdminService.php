@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Avaliacao;
+use App\Models\Resposta;
 use App\Support\AlunoVinculoResolver;
 use App\Support\Anulacao;
 use App\Support\FiltroDemografico;
@@ -331,8 +332,16 @@ class RelatorioAdminService
             $totalRespostas = array_sum($contagens);
             $acertos = ($gabarito !== null && $gabarito !== '') ? ($contagens[$gabarito] ?? 0) : 0;
 
+            // '—' é o placeholder sintético desta query pra NULL/'' (via
+            // COALESCE acima) — mas a maioria das importações reais nunca
+            // grava NULL/'': usa sentinelas próprias ("BLANK", "-") que
+            // passam direto pelo COALESCE sem cair nele. Nenhuma das duas
+            // é uma alternativa de verdade, então nenhuma pode ser
+            // "distrator" — ver Resposta::ehSemResposta().
+            $semResposta = fn (string $alternativa) => $alternativa === '—' || Resposta::ehSemResposta($alternativa);
+
             $distrator = collect($contagens)
-                ->reject(fn ($total, $alternativa) => $alternativa === $gabarito || $alternativa === '—' || $total === 0)
+                ->reject(fn ($total, $alternativa) => $alternativa === $gabarito || $semResposta($alternativa) || $total === 0)
                 ->sortDesc()
                 ->keys()
                 ->first();
@@ -345,7 +354,7 @@ class RelatorioAdminService
                     'ehGabarito' => $gabarito !== null && $gabarito !== '' && $alternativa === $gabarito,
                     'ehDistrator' => $alternativa === $distrator,
                 ])
-                ->sortBy(fn ($a) => $a['letra'] === '—' ? 'zzzzzzzz' : $a['letra'])
+                ->sortBy(fn ($a) => $semResposta($a['letra']) ? 'zzzzzzzz'.$a['letra'] : $a['letra'])
                 ->values()
                 ->all();
 

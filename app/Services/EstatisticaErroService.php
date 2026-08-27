@@ -38,9 +38,9 @@ class EstatisticaErroService
             })
             ->where('respostas.avaliacao_codigo', $avaliacao->codigo)
             ->selectRaw('respostas.questao_numero as numero')
-            ->selectRaw("SUM(CASE WHEN respostas.resposta IS NULL OR respostas.resposta = '' THEN 1 ELSE 0 END) as em_branco")
+            ->selectRaw('SUM(CASE WHEN '.Resposta::semRespostaSql('respostas.resposta').' THEN 1 ELSE 0 END) as em_branco')
             ->selectRaw('SUM(CASE WHEN respostas.resposta = questoes.gabarito THEN 1 ELSE 0 END) as acertos')
-            ->selectRaw("SUM(CASE WHEN respostas.resposta IS NOT NULL AND respostas.resposta != '' AND respostas.resposta != questoes.gabarito THEN 1 ELSE 0 END) as erros")
+            ->selectRaw('SUM(CASE WHEN NOT '.Resposta::semRespostaSql('respostas.resposta').' AND respostas.resposta != questoes.gabarito THEN 1 ELSE 0 END) as erros')
             ->groupBy('respostas.questao_numero')
             ->get();
 

@@ -382,7 +382,7 @@
 
 @if ($estado['analise_alternativas']['visivelAdmin'] && $analiseAlternativas !== null)
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-        <h2 class="font-semibold mb-1">Análise de alternativas por questão <span class="font-normal text-slate-400 text-sm">(ordenado por % de acerto)</span></h2>
+        <h2 class="font-semibold mb-1">Análise de alternativas por questão <span id="alternativas-ordenacao-label" class="font-normal text-slate-400 text-sm">(ordenado por % de acerto)</span></h2>
         @if (empty($analiseAlternativas))
             <p class="text-sm text-slate-400">Sem dados suficientes.</p>
         @else
@@ -392,20 +392,24 @@
                 <span class="inline-flex items-center gap-1.5"><span class="font-bold">*</span> questão anulada — não conta na nota</span>
             </p>
             <div class="overflow-x-auto max-h-[40rem] overflow-y-auto">
-                <table class="text-sm border-collapse w-full">
+                <table id="tabela-alternativas" class="text-sm border-collapse w-full">
                     <thead>
                         <tr class="sticky top-0 bg-white z-10 text-left text-slate-500">
-                            <th class="px-3 py-2">Questão</th>
+                            <th class="px-3 py-2">
+                                <button type="button" onclick="ordenarTabelaAlternativas('numero')" class="font-semibold hover:text-emerald-700 hover:underline">Questão</button>
+                            </th>
                             <th class="px-3 py-2">Área</th>
                             <th class="px-3 py-2">Tema</th>
                             <th class="px-3 py-2">Gabarito</th>
-                            <th class="px-3 py-2">% acerto</th>
+                            <th class="px-3 py-2">
+                                <button type="button" onclick="ordenarTabelaAlternativas('percentual')" class="font-semibold hover:text-emerald-700 hover:underline">% acerto</button>
+                            </th>
                             <th class="px-3 py-2">Distribuição</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
                         @foreach ($analiseAlternativas as $q)
-                            <tr @if ($q['anulada']) title="Questão anulada — não conta na nota" @endif>
+                            <tr data-numero="{{ $q['numero'] }}" data-percentual="{{ $q['percentualAcerto'] }}" @if ($q['anulada']) title="Questão anulada — não conta na nota" @endif>
                                 <td class="px-3 py-2 font-bold text-slate-600 font-mono whitespace-nowrap">Q{{ $q['numero'] }}{{ $q['anulada'] ? '*' : '' }}</td>
                                 <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $q['area'] ?? '—' }}</td>
                                 <td class="px-3 py-2 text-slate-500">{{ $q['tema'] ?? '—' }}</td>
@@ -599,5 +603,20 @@ new Chart(document.getElementById('grafico-evolucao'), {
     options: { scales: { y: { beginAtZero: true, max: 100 } } },
 });
 @endif
+
+function ordenarTabelaAlternativas(campo) {
+    var tabela = document.getElementById('tabela-alternativas');
+    if (!tabela) return;
+    var tbody = tabela.querySelector('tbody');
+    var linhas = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+    linhas.sort(function (a, b) {
+        return parseFloat(a.dataset[campo]) - parseFloat(b.dataset[campo]);
+    });
+    linhas.forEach(function (linha) { tbody.appendChild(linha); });
+    var label = document.getElementById('alternativas-ordenacao-label');
+    if (label) {
+        label.textContent = campo === 'numero' ? '(ordenado por número da questão)' : '(ordenado por % de acerto)';
+    }
+}
 </script>
 @endsection
