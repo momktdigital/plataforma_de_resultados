@@ -76,6 +76,17 @@ class InstallController extends Controller
         return redirect()->route('instalar.migrar');
     }
 
+    /**
+     * Etapa GET só mostra a confirmação — quem de fato roda as migrations é
+     * migrar() (POST). Uma rota GET com efeito colateral (rodar migrate)
+     * seria alcançável por um crawler/bot de preview de link, mesmo atrás do
+     * middleware `nao-instalado`.
+     */
+    public function confirmarMigracao(): View
+    {
+        return view('instalar.confirmar-migracao');
+    }
+
     public function migrar(): View
     {
         Artisan::call('migrate', ['--force' => true]);

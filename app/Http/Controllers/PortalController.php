@@ -88,7 +88,7 @@ class PortalController extends Controller
             return view('portal.verificar', ['cpf' => $cpf, 'emailOculto' => $this->ocultarEmail($aluno->email)]);
         }
 
-        return $this->autenticarEIrParaResultados($aluno);
+        return $this->autenticarEIrParaResultados($request, $aluno);
     }
 
     public function verificar(Request $request, RateLimit2faService $rateLimiter): View|RedirectResponse
@@ -151,7 +151,7 @@ class PortalController extends Controller
             return redirect()->route('portal.consulta')->withErrors(['cpf' => 'Aluno não encontrado.']);
         }
 
-        return $this->autenticarEIrParaResultados($aluno);
+        return $this->autenticarEIrParaResultados($request, $aluno);
     }
 
     public function reenviar(Request $request, SmtpEmailSender $mailer): View|RedirectResponse
@@ -272,16 +272,30 @@ class PortalController extends Controller
         ]);
     }
 
-    /** Encerra a sessão do boletim — útil em computador compartilhado (labs, secretaria). */
-    public function sair(): RedirectResponse
+    /**
+     * Encerra a sessão do boletim — útil em computador compartilhado (labs,
+     * secretaria). invalidate() (não só forget()) + regenerateToken(), igual
+     * a Auth\LoginController::destroy(): descarta o ID de sessão inteiro,
+     * não só o vínculo com o aluno, senão quem soubesse esse ID de sessão
+     * continuaria com acesso mesmo depois do "sair".
+     */
+    public function sair(Request $request): RedirectResponse
     {
-        session()->forget('portal_aluno_id');
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
 
         return redirect()->route('portal.consulta');
     }
 
-    private function autenticarEIrParaResultados(Aluno $aluno): RedirectResponse
+    /**
+     * regenerate() no momento da autenticação — mesmo padrão de
+     * Auth\LoginController::store() — pra um ID de sessão fixado antes do
+     * login (ex.: por quem usou o computador antes, num lab/secretaria) não
+     * continuar válido depois que o aluno se autentica.
+     */
+    private function autenticarEIrParaResultados(Request $request, Aluno $aluno): RedirectResponse
     {
+        $request->session()->regenerate();
         session(['portal_aluno_id' => $aluno->id]);
 
         return redirect()->route('portal.resultados');

@@ -141,4 +141,57 @@ class UpdateServiceTest extends TestCase
 
         $this->assertSame($versaoOriginal, File::get(base_path('VERSION')));
     }
+
+    public function test_baixar_para_confirmacao_so_baixa_e_calcula_o_hash_sem_aplicar_nada(): void
+    {
+        $destino = $this->criarDestinoFalso('1.0.0');
+        $zip = $this->criarPacoteFalso('1.1.0');
+        $this->fakeGithub('v1.1.0', $zip);
+
+        $pacote = $this->service($destino)->baixarParaConfirmacao();
+        $this->diretoriosTemporarios[] = $pacote['zip_path'];
+
+        $this->assertSame('1.1.0', $pacote['versao']);
+        $this->assertSame(hash_file('sha256', $pacote['zip_path']), $pacote['sha256']);
+        // Nada da aplicação foi tocado ainda — nem o VERSION, nem manutenção.
+        $this->assertSame("1.0.0\n", File::get($destino.'/VERSION'));
+        $this->assertFalse(app()->isDownForMaintenance());
+    }
+
+    public function test_aplicar_confirmado_com_hash_correto_aplica_a_atualizacao(): void
+    {
+        $destino = $this->criarDestinoFalso('1.0.0');
+        $zip = $this->criarPacoteFalso('1.1.0');
+        $this->fakeGithub('v1.1.0', $zip);
+
+        $service = $this->service($destino);
+        $pacote = $service->baixarParaConfirmacao();
+
+        $resultado = $service->aplicarConfirmado($pacote['zip_path'], $pacote['sha256'], $pacote['versao']);
+
+        $this->assertSame('atualizado', $resultado['status']);
+        $this->assertSame("1.1.0\n", File::get($destino.'/VERSION'));
+        $this->assertFileExists($destino.'/marcador.txt');
+        $this->assertFalse(app()->isDownForMaintenance());
+    }
+
+    public function test_aplicar_confirmado_rejeita_hash_que_nao_bate_sem_tocar_a_aplicacao(): void
+    {
+        // Simula o pacote baixado ter sido trocado/corrompido entre a tela
+        // de confirmação e o clique em aplicar — o hash mostrado ao admin
+        // não é mais o do arquivo em disco.
+        $destino = $this->criarDestinoFalso('1.0.0');
+        $zip = $this->criarPacoteFalso('1.1.0');
+        $this->fakeGithub('v1.1.0', $zip);
+
+        $service = $this->service($destino);
+        $pacote = $service->baixarParaConfirmacao();
+        $this->diretoriosTemporarios[] = $pacote['zip_path'];
+
+        $resultado = $service->aplicarConfirmado($pacote['zip_path'], 'hash-errado', $pacote['versao']);
+
+        $this->assertSame('erro', $resultado['status']);
+        $this->assertSame("1.0.0\n", File::get($destino.'/VERSION'));
+        $this->assertFalse(app()->isDownForMaintenance());
+    }
 }

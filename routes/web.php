@@ -29,7 +29,8 @@ Route::middleware('nao-instalado')->prefix('instalar')->name('instalar.')->group
     Route::get('/', [InstallController::class, 'inicio'])->name('inicio');
     Route::get('/banco', [InstallController::class, 'formularioBanco'])->name('banco');
     Route::post('/banco', [InstallController::class, 'testarEGravarBanco'])->name('banco.gravar');
-    Route::get('/migrar', [InstallController::class, 'migrar'])->name('migrar');
+    Route::get('/migrar', [InstallController::class, 'confirmarMigracao'])->name('migrar');
+    Route::post('/migrar', [InstallController::class, 'migrar'])->name('migrar.store');
     Route::get('/admin', [InstallController::class, 'formularioAdmin'])->name('admin');
     Route::post('/admin', [InstallController::class, 'criarAdmin'])->name('admin.criar');
 });
@@ -125,6 +126,7 @@ Route::middleware('instalado')->group(function () {
             Route::get('/backups/{nome}/download', [BackupController::class, 'download'])->name('backups.download');
 
             Route::get('/atualizacao', [AtualizacaoController::class, 'index'])->name('atualizacao.index');
+            Route::post('/atualizacao/verificar', [AtualizacaoController::class, 'verificar'])->name('atualizacao.verificar');
             Route::post('/atualizacao', [AtualizacaoController::class, 'store'])->name('atualizacao.store');
 
             Route::get('/legado', [LegadoController::class, 'index'])->name('legado.index');

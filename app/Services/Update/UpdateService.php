@@ -17,11 +17,21 @@ use ZipArchive;
 /**
  * Atualiza a aplicação a partir da última Release pública do GitHub.
  *
- * Fluxo: gera backup → modo de manutenção → baixa e extrai o pacote →
+ * Fluxo: gera backup → modo de manutenção → extrai o pacote já baixado →
  * substitui os arquivos (preservando `.env` e `storage/`) → composer install
  * → migrations → grava a nova versão → sai da manutenção. Se algo falhar
  * depois que os arquivos já começaram a ser substituídos, tenta restaurar a
  * aplicação a partir do backup que acabou de gerar.
+ *
+ * Dois caminhos de entrada: atualizar() (baixa e aplica tudo de uma vez —
+ * usado por `sistema:atualizar`, um comando de CLI, onde quem já tem acesso
+ * ao servidor pra rodar o comando não ganha nada de novo automatizando isso)
+ * e o par baixarParaConfirmacao()/aplicarConfirmado() (usado pelo painel
+ * admin — baixa e mostra tag+hash pro admin conferir manualmente ANTES de
+ * qualquer arquivo da aplicação ser tocado, já que ali um clique acidental
+ * ou uma sessão de admin comprometida não deveria bastar pra baixar e
+ * aplicar código de um repositório potencialmente comprometido sem nenhuma
+ * checagem fora de banda).
  */
 class UpdateService
 {
@@ -77,10 +87,73 @@ class UpdateService
             return ['status' => 'ja_atualizado', 'mensagens' => ['Nenhuma atualização disponível.']];
         }
 
-        $mensagens = [];
+        try {
+            $zipTemp = $this->baixarZip($disponivel['zip_url']);
+        } catch (Throwable $e) {
+            return ['status' => 'erro', 'mensagens' => ['ERRO: '.$e->getMessage()]];
+        }
+
+        return $this->aplicarZip($zipTemp, $disponivel['versao'], ['Pacote da nova versão baixado.']);
+    }
+
+    /**
+     * Baixa o pacote da versão disponível e calcula o SHA-256 sem tocar em
+     * nenhum arquivo da aplicação — usado pelo painel admin
+     * (Sistema\AtualizacaoController), que exige o admin conferir e
+     * confirmar manualmente a tag/hash antes de aplicarConfirmado() rodar de
+     * verdade. As releases deste repositório não publicam assinatura GPG pra
+     * verificar automaticamente; a confirmação humana é o que evita que um
+     * clique em "atualizar" vire execução de código totalmente automática
+     * caso o repositório (ou uma dependência do build) seja comprometido.
+     *
+     * @return array{versao: string, notas: string, zip_path: string, sha256: string}
+     */
+    public function baixarParaConfirmacao(): array
+    {
+        $disponivel = $this->verificarAtualizacao();
+
+        if ($disponivel === null) {
+            throw new RuntimeException('Nenhuma atualização disponível.');
+        }
+
+        $zipTemp = $this->baixarZip($disponivel['zip_url']);
+
+        return [
+            'versao' => $disponivel['versao'],
+            'notas' => $disponivel['notas'],
+            'zip_path' => $zipTemp,
+            'sha256' => hash_file('sha256', $zipTemp),
+        ];
+    }
+
+    /**
+     * Aplica um pacote já baixado por baixarParaConfirmacao(). Reconfere o
+     * SHA-256 aqui — o zip temporário pode ter sido trocado ou apagado entre
+     * a tela de confirmação e este clique — pra garantir que o que é
+     * aplicado é exatamente o que foi mostrado ao admin.
+     *
+     * @return array{status: string, versao?: string, mensagens: array<int, string>}
+     */
+    public function aplicarConfirmado(string $zipPath, string $shaConfirmado, string $versao): array
+    {
+        if (! File::exists($zipPath) || ! hash_equals($shaConfirmado, (string) hash_file('sha256', $zipPath))) {
+            return [
+                'status' => 'erro',
+                'mensagens' => ['O pacote baixado não é mais o mesmo que foi confirmado (ou expirou) — solicite a atualização novamente.'],
+            ];
+        }
+
+        return $this->aplicarZip($zipPath, $versao, ["Pacote confirmado pelo admin (SHA-256 {$shaConfirmado})."]);
+    }
+
+    /**
+     * @param  array<int, string>  $mensagens  mensagens já acumuladas antes deste ponto (ex.: "pacote baixado"/"confirmado pelo admin").
+     * @return array{status: string, versao?: string, mensagens: array<int, string>}
+     */
+    private function aplicarZip(string $zipTemp, string $versao, array $mensagens): array
+    {
         $arquivosSubstituidos = false;
         $caminhoBackup = null;
-        $zipTemp = null;
         $pastaExtraida = null;
 
         try {
@@ -89,9 +162,6 @@ class UpdateService
 
             Artisan::call('down', ['--retry' => 60]);
             $mensagens[] = 'Modo de manutenção ativado.';
-
-            $zipTemp = $this->baixarZip($disponivel['zip_url']);
-            $mensagens[] = 'Pacote da nova versão baixado.';
 
             $pastaExtraida = $this->extrairZip($zipTemp);
             $origem = $this->localizarSubpasta($pastaExtraida);
@@ -109,8 +179,8 @@ class UpdateService
             Artisan::call('migrate', ['--force' => true]);
             $mensagens[] = 'Migrations executadas.';
 
-            File::put($this->destino.'/VERSION', $disponivel['versao']."\n");
-            $mensagens[] = "Versão atualizada para {$disponivel['versao']}.";
+            File::put($this->destino.'/VERSION', $versao."\n");
+            $mensagens[] = "Versão atualizada para {$versao}.";
 
             Artisan::call('optimize:clear');
 
@@ -121,16 +191,14 @@ class UpdateService
             Artisan::call('up');
             $mensagens[] = 'Modo de manutenção desativado.';
 
-            return ['status' => 'atualizado', 'versao' => $disponivel['versao'], 'mensagens' => $mensagens];
+            return ['status' => 'atualizado', 'versao' => $versao, 'mensagens' => $mensagens];
         } catch (Throwable $e) {
             $mensagens[] = 'ERRO: '.$e->getMessage();
             $mensagens = array_merge($mensagens, $this->tentarRecuperar($arquivosSubstituidos, $caminhoBackup));
 
             return ['status' => 'erro', 'mensagens' => $mensagens];
         } finally {
-            if ($zipTemp) {
-                @unlink($zipTemp);
-            }
+            @unlink($zipTemp);
             if ($pastaExtraida) {
                 File::deleteDirectory($pastaExtraida);
             }
