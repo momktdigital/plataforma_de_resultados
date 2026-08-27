@@ -9,8 +9,10 @@ use App\Models\Configuracao;
 use App\Models\VerificacaoEmail;
 use App\Services\Portal\CaptchaVerifier;
 use App\Services\Portal\RateLimit2faService;
+use App\Services\Portal\RelatorioAlunoService;
 use App\Services\Portal\ResultadoConsultaService;
 use App\Services\Portal\SmtpEmailSender;
+use App\Services\Visualizacoes\VisualizacaoConfigService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -225,8 +227,13 @@ class PortalController extends Controller
     }
 
     /** Detalhe de uma única avaliacao, aberto a partir da tela de Resultados. */
-    public function resultadoAvaliacao(Avaliacao $avaliacao, Request $request, ResultadoConsultaService $consultaService): View|RedirectResponse
-    {
+    public function resultadoAvaliacao(
+        Avaliacao $avaliacao,
+        Request $request,
+        ResultadoConsultaService $consultaService,
+        RelatorioAlunoService $relatorioService,
+        VisualizacaoConfigService $visualizacaoConfig,
+    ): View|RedirectResponse {
         $aluno = $this->alunoAutenticado();
 
         if ($aluno === null) {
@@ -240,7 +247,29 @@ class PortalController extends Controller
             abort(404);
         }
 
-        return view('portal.resultado-avaliacao', ['aluno' => $aluno, 'r' => $resultado]);
+        $estado = $visualizacaoConfig->estadoCompleto($avaliacao);
+        $visivel = fn (string $chave) => $estado[$chave]['visivelAluno'];
+
+        $respostas = $resultado['respostas'];
+        $gabaritos = $resultado['gabaritos'];
+
+        return view('portal.resultado-avaliacao', [
+            'aluno' => $aluno,
+            'r' => $resultado,
+            'estado' => $estado,
+            'comparativoTurma' => $visivel('comparativo_turma') ? $relatorioService->comparativoTurma($aluno, $avaliacao, $periodo) : null,
+            'rankingPercentil' => $visivel('ranking_percentil') ? $relatorioService->rankingPercentil($aluno, $avaliacao, $periodo) : null,
+            'radarDisciplina' => $visivel('radar_disciplina') ? $relatorioService->radarDisciplina($respostas, $gabaritos, $avaliacao) : null,
+            'desempenhoArea' => $visivel('desempenho_area') ? $relatorioService->desempenhoPorArea($respostas, $gabaritos, $avaliacao) : null,
+            'desempenhoAreaContagem' => $visivel('desempenho_area') ? $relatorioService->desempenhoPorAreaComContagem($respostas, $gabaritos, $avaliacao) : null,
+            'lacunasConsolidados' => $visivel('lacunas_conhecimentos') ? $relatorioService->lacunasEConsolidados($respostas, $gabaritos, $avaliacao) : null,
+            'desempenhoBloom' => $visivel('desempenho_bloom') ? $relatorioService->desempenhoPorBloom($respostas, $gabaritos, $avaliacao) : null,
+            'desempenhoMiller' => $visivel('desempenho_miller') ? $relatorioService->desempenhoPorMiller($respostas, $gabaritos, $avaliacao) : null,
+            'comparativoQuestao' => $visivel('comparativo_questao') ? $relatorioService->comparativoQuestao($avaliacao, $periodo, $respostas, $gabaritos) : null,
+            'evolucaoHistorica' => $visivel('evolucao_categoria')
+                ? $relatorioService->evolucaoHistorica($consultaService->buscarPorAluno($aluno), $avaliacao->categoria_id)
+                : null,
+        ]);
     }
 
     /** Encerra a sessão do boletim — útil em computador compartilhado (labs, secretaria). */
@@ -294,6 +323,7 @@ class PortalController extends Controller
             : collect($todos)->filter(fn ($r) => $r['periodo_letivo'] === $periodoSelecionado)->values()->all();
 
         $comPercentual = collect($resultados)->pluck('percentual')->filter(fn ($p) => $p !== null);
+        $arvore = $consultaService->montarArvore($resultados);
 
         return view('portal.resultados', [
             'aluno' => $aluno,
@@ -301,7 +331,9 @@ class PortalController extends Controller
             'mediaGeral' => $comPercentual->isNotEmpty() ? round($comPercentual->avg(), 1) : null,
             'periodosDisponiveis' => $periodosDisponiveis,
             'periodoSelecionado' => $periodoSelecionado,
-            ...$consultaService->montarArvore($resultados),
+            'evolucaoGeral' => $consultaService->evolucaoGeral($resultados),
+            'resumoPorCategoria' => $consultaService->resumoPorCategoria($arvore['arvore']),
+            ...$arvore,
         ]);
     }
 

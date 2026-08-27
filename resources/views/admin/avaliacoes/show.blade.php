@@ -68,6 +68,10 @@
                class="inline-block border border-slate-300 text-slate-700 hover:bg-slate-50 font-semibold rounded-lg px-4 py-2 text-sm">
                 Painel BI
             </a>
+            <a href="{{ route('avaliacoes.visualizacoes.edit', $avaliacao) }}"
+               class="inline-block border border-slate-300 text-slate-700 hover:bg-slate-50 font-semibold rounded-lg px-4 py-2 text-sm">
+                Configurar visualizações
+            </a>
         </div>
     </div>
 </div>
@@ -162,6 +166,14 @@
                 <label class="block text-sm font-medium mb-1" for="gabarito">Gabarito</label>
                 <input id="gabarito" name="gabarito" type="text" maxlength="10" required
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm uppercase">
+            </div>
+            <div class="lg:col-span-2">
+                <label class="block text-sm font-medium mb-1" for="anulada_modo">Anular questão</label>
+                <select id="anulada_modo" name="anulada_modo" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    <option value="">Não anulada</option>
+                    <option value="dar_ponto">Anular e dar o ponto (conta certa pra todos, mantém no total)</option>
+                    <option value="distribuir_pontuacao">Anular e distribuir a pontuação (sai da prova, reduz o total)</option>
+                </select>
             </div>
             <div class="lg:col-span-2">
                 <label class="block text-sm font-medium mb-1" for="area">Área</label>
@@ -274,6 +286,7 @@
                             $dadosQuestao = [
                                 'numero' => $questao->numero,
                                 'gabarito' => $questao->gabarito,
+                                'anulada_modo' => $questao->anulada_modo,
                                 'area' => $questao->area,
                                 'tema' => $questao->tema,
                                 'habilidade' => $questao->habilidade,
@@ -310,7 +323,15 @@
                             <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $referenciasPorTipo->get('portaria_inep') ? implode('; ', $referenciasPorTipo->get('portaria_inep')) : '—' }}</td>
                             <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $referenciasPorTipo->get('ppc') ? implode('; ', $referenciasPorTipo->get('ppc')) : '—' }}</td>
                             <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $matrizCurricular ?: '—' }}</td>
-                            <td class="px-3 py-2 text-slate-400 whitespace-nowrap">{{ $questao->trashed() ? 'Excluída' : '' }}</td>
+                            <td class="px-3 py-2 whitespace-nowrap">
+                                @if ($questao->trashed())
+                                    <span class="text-slate-400">Excluída</span>
+                                @elseif ($questao->anulada_modo === 'dar_ponto')
+                                    <span class="text-amber-600 font-medium">Anulada (ponto p/ todos)</span>
+                                @elseif ($questao->anulada_modo === 'distribuir_pontuacao')
+                                    <span class="text-amber-600 font-medium">Anulada (fora da prova)</span>
+                                @endif
+                            </td>
                             <td class="px-3 py-2 text-right whitespace-nowrap">
                                 @if ($questao->trashed())
                                     <form method="POST" action="{{ route('avaliacoes.questoes.restore', [$avaliacao, $questao->id]) }}" class="inline">
@@ -344,7 +365,7 @@
     var btnCancelar = document.getElementById('editor-questao-cancelar');
 
     var camposSimples = [
-        'numero', 'gabarito', 'area', 'tema', 'habilidade',
+        'numero', 'gabarito', 'anulada_modo', 'area', 'tema', 'habilidade',
         'bloom_nivel', 'bloom_verbo', 'miller_nivel',
         'dificuldade_pedagogica', 'dificuldade_tri',
     ];

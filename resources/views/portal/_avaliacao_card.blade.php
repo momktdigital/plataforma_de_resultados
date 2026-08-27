@@ -32,9 +32,9 @@
     </div>
     <div class="flex items-center gap-3 shrink-0">
         @if ($r['total'] > 0)
-            <div class="text-right">
-                <div class="text-xl font-black text-primary">{{ $r['percentual'] }}%</div>
-                <div class="text-[11px] text-slate-500 font-medium">{{ $r['acertos'] }}/{{ $r['total'] }}</div>
+            <div class="flex items-center gap-2.5">
+                @include('portal._anel_progresso', ['percentual' => $r['percentual'], 'tamanho' => 44, 'espessura' => 5, 'tamanhoTexto' => 'text-[11px]'])
+                <div class="text-[11px] text-slate-500 font-medium hidden sm:block">{{ $r['acertos'] }}/{{ $r['total'] }}<br>acertos</div>
             </div>
         @endif
         <i class="ph-bold ph-caret-right text-slate-300 text-lg"></i>

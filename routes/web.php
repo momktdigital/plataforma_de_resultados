@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AdministradorController;
 use App\Http\Controllers\Admin\AlunoController;
 use App\Http\Controllers\Admin\AvaliacaoController;
+use App\Http\Controllers\Admin\AvaliacaoVisualizacaoController;
 use App\Http\Controllers\Admin\BiController;
 use App\Http\Controllers\Admin\CategoriaController;
 use App\Http\Controllers\Admin\LixeiraController;
@@ -108,6 +109,9 @@ Route::middleware('instalado')->group(function () {
         Route::post('/avaliacoes/{avaliacao}/periodos/restaurar', [RespondenteController::class, 'restorePeriodo'])->name('avaliacoes.periodos.restore');
 
         Route::get('/avaliacoes/{avaliacao}/bi', [BiController::class, 'index'])->name('avaliacoes.bi');
+
+        Route::get('/avaliacoes/{avaliacao}/visualizacoes', [AvaliacaoVisualizacaoController::class, 'edit'])->name('avaliacoes.visualizacoes.edit');
+        Route::put('/avaliacoes/{avaliacao}/visualizacoes', [AvaliacaoVisualizacaoController::class, 'update'])->name('avaliacoes.visualizacoes.update');
 
         Route::get('/lixeira', [LixeiraController::class, 'index'])->name('lixeira.index');
         Route::post('/lixeira/avaliacoes/{avaliacao}/restaurar', [LixeiraController::class, 'restoreAvaliacao'])->name('lixeira.avaliacoes.restore');

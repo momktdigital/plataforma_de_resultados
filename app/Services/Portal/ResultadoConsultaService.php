@@ -8,6 +8,7 @@ use App\Models\Categoria;
 use App\Models\Resposta;
 use App\Models\ResultadoMetrica;
 use App\Models\ResultadoResumo;
+use App\Support\Anulacao;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -94,10 +95,23 @@ class ResultadoConsultaService
         return $this->montarResultado($aluno, $avaliacao, $periodo, $respostas);
     }
 
-    /** @return array{avaliacao: Avaliacao, periodo: string, respostas: Collection, gabaritos: Collection, acertos: int, total: int, percentual: ?float, metricas: Collection} */
+    /** @return array{avaliacao: Avaliacao, periodo: string, respostas: Collection, gabaritos: Collection, anuladas: Collection, questoesMeta: Collection, acertos: int, total: int, percentual: ?float, metricas: Collection} */
     private function montarResultado(Aluno $aluno, Avaliacao $avaliacao, string $periodo, Collection $respostas): array
     {
-        $gabaritos = $avaliacao->questoes()->whereNotNull('gabarito')->where('gabarito', '!=', '')->pluck('gabarito', 'numero');
+        // 'anuladas' guarda o anulada_modo de TODA questão anulada (mesmo as
+        // distribuir_pontuacao) — usado pela view só pra marcar o "*" no
+        // detalhamento das respostas. 'gabaritos' já sai sem as
+        // distribuir_pontuacao: elas não contam mais na prova, então o
+        // detalhamento trata a questão como sem gabarito (cinza), igual já
+        // acontece hoje quando a questão não tem gabarito cadastrado.
+        // 'questoesMeta' (área/tema por número) alimenta o popup de detalhe
+        // da questão no "Detalhamento das respostas".
+        $questoesComGabarito = $avaliacao->questoes()->whereNotNull('gabarito')->where('gabarito', '!=', '')->get(['numero', 'gabarito', 'area', 'tema', 'anulada_modo']);
+        $anuladas = $questoesComGabarito->pluck('anulada_modo', 'numero')->filter();
+        $questoesMeta = $questoesComGabarito->keyBy('numero')->map(fn ($q) => ['area' => $q->area, 'tema' => $q->tema]);
+        $gabaritos = $questoesComGabarito
+            ->filter(fn ($q) => ! Anulacao::distribuida($q->anulada_modo))
+            ->pluck('gabarito', 'numero');
 
         // Acertos/total vêm do resumo pré-calculado (mesma fonte usada no
         // boletim, pra nunca mostrar um número diferente na tela de detalhe).
@@ -114,7 +128,8 @@ class ResultadoConsultaService
             $percentual = $resumo->percentual !== null ? (float) $resumo->percentual : null;
         } else {
             $acertos = $respostas->filter(
-                fn ($r) => $gabaritos->has($r->questao_numero) && $r->resposta === $gabaritos[$r->questao_numero]
+                fn ($r) => $gabaritos->has($r->questao_numero)
+                    && Anulacao::acertou($r->resposta, $gabaritos[$r->questao_numero], $anuladas->get($r->questao_numero))
             )->count();
             $total = $gabaritos->count();
             $percentual = $total > 0 ? round($acertos / $total * 100, 1) : null;
@@ -130,6 +145,8 @@ class ResultadoConsultaService
             'periodo' => $periodo,
             'respostas' => $respostas,
             'gabaritos' => $gabaritos,
+            'anuladas' => $anuladas,
+            'questoesMeta' => $questoesMeta,
             'acertos' => $acertos,
             'total' => $total,
             'percentual' => $percentual,
@@ -195,6 +212,67 @@ class ResultadoConsultaService
         $data = $resultado['avaliacao']->data_avaliacao?->format('Y-m-d') ?? '0000-00-00';
 
         return sprintf('%s-%010d', $data, $resultado['avaliacao']->codigo);
+    }
+
+    /**
+     * Série cronológica (mais antiga primeiro) de percentuais, pro gráfico de
+     * evolução no topo do boletim — só entram avaliações com data e
+     * percentual cadastrados, senão a ordem/posição no eixo X não tem sentido.
+     *
+     * @param  array<int, array<string, mixed>>  $resultados
+     * @return array<int, array{nome: string, percentual: float, data: string}>
+     */
+    public function evolucaoGeral(array $resultados): array
+    {
+        return collect($resultados)
+            ->filter(fn ($r) => $r['percentual'] !== null && $r['avaliacao']->data_avaliacao !== null)
+            ->sortBy(fn ($r) => $r['avaliacao']->data_avaliacao->format('Y-m-d'))
+            ->map(fn ($r) => [
+                'nome' => $r['avaliacao']->nome ?? "Avaliação #{$r['avaliacao']->codigo}",
+                'percentual' => $r['percentual'],
+                'data' => $r['avaliacao']->data_avaliacao->format('d/m/Y'),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Média de desempenho por categoria de topo (raiz da árvore de
+     * montarArvore()), somando recursivamente os resultados de todas as
+     * subcategorias — usado no resumo visual do boletim.
+     *
+     * @param  array  $arvore  saída de montarArvore()['arvore']
+     * @return array<int, array{nome: string, media: float, quantidade: int}>
+     */
+    public function resumoPorCategoria(array $arvore): array
+    {
+        $coletarPercentuais = function (array $no) use (&$coletarPercentuais): array {
+            $percentuais = collect($no['resultados'])->pluck('percentual')->filter(fn ($p) => $p !== null)->all();
+
+            foreach ($no['subcategorias'] as $sub) {
+                $percentuais = [...$percentuais, ...$coletarPercentuais($sub)];
+            }
+
+            return $percentuais;
+        };
+
+        $resumo = [];
+        foreach ($arvore as $no) {
+            $percentuais = $coletarPercentuais($no);
+            if (empty($percentuais)) {
+                continue;
+            }
+
+            $resumo[] = [
+                'nome' => $no['categoria']->nome,
+                'media' => round(array_sum($percentuais) / count($percentuais), 1),
+                'quantidade' => count($percentuais),
+            ];
+        }
+
+        usort($resumo, fn ($a, $b) => $b['media'] <=> $a['media']);
+
+        return $resumo;
     }
 
     private function porAluno($query, Aluno $aluno): void

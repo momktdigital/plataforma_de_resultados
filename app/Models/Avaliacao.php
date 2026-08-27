@@ -59,4 +59,9 @@ class Avaliacao extends Model
     {
         return $this->belongsTo(Admin::class, 'criado_por');
     }
+
+    public function visualizacoes(): HasMany
+    {
+        return $this->hasMany(AvaliacaoVisualizacao::class, 'avaliacao_codigo', 'codigo');
+    }
 }

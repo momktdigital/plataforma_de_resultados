@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\Anulacao;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -20,6 +21,7 @@ class StoreQuestaoRequest extends FormRequest
             // já aplicada por QuestaoImportService — uma linha sem gabarito
             // é ignorada no import em vez de gravar uma questão "anulada").
             'gabarito' => ['required', 'string', 'max:10'],
+            'anulada_modo' => ['nullable', Rule::in(Anulacao::modos())],
 
             'area' => ['nullable', 'string', 'max:255'],
             'tema' => ['nullable', 'string', 'max:255'],

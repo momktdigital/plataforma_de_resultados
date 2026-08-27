@@ -39,6 +39,26 @@ class EstatisticaErroServiceTest extends TestCase
         $this->assertEqualsWithDelta(33.3, $stats[0]['taxa_erro'], 0.1);
     }
 
+    public function test_sentinelas_blank_e_hifen_contam_como_em_branco_nao_como_erro(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A']);
+
+        // "BLANK" (aluno deixou em branco) e "-" (aluno nem fez a prova) são
+        // sentinelas reais da planilha importada — não passam por NULL/''
+        // (ver App\Models\Resposta::SENTINELAS_SEM_RESPOSTA) e não podem
+        // contar como erro de verdade.
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'B']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2', 'questao_numero' => 1, 'resposta' => 'BLANK']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '3', 'questao_numero' => 1, 'resposta' => '-']);
+
+        $stats = (new EstatisticaErroService)->calcular($avaliacao);
+
+        $this->assertSame(0, $stats[0]['acertos']);
+        $this->assertSame(1, $stats[0]['erros']);
+        $this->assertSame(2, $stats[0]['em_branco']);
+    }
+
     public function test_ignora_respostas_de_outra_prova_e_questoes_sem_gabarito(): void
     {
         $avaliacao = Avaliacao::create([]);

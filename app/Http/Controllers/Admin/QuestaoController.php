@@ -21,7 +21,7 @@ class QuestaoController extends Controller
     /** Campos de valor único — os demais (numero/gabarito) são tratados à parte. */
     private const CAMPOS_SIMPLES = [
         'area', 'tema', 'habilidade', 'bloom_nivel', 'bloom_verbo',
-        'miller_nivel', 'dificuldade_pedagogica', 'dificuldade_tri',
+        'miller_nivel', 'dificuldade_pedagogica', 'dificuldade_tri', 'anulada_modo',
     ];
 
     /** Tipos de questao_referencias editáveis como "chips" no formulário. */
