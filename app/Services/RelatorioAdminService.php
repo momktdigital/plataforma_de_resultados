@@ -340,11 +340,17 @@ class RelatorioAdminService
             // "distrator" — ver Resposta::ehSemResposta().
             $semResposta = fn (string $alternativa) => $alternativa === '—' || Resposta::ehSemResposta($alternativa);
 
-            $distrator = collect($contagens)
-                ->reject(fn ($total, $alternativa) => $alternativa === $gabarito || $semResposta($alternativa) || $total === 0)
+            // "Distrator" só faz sentido quando a alternativa errada mais
+            // marcada supera até o próprio gabarito em popularidade — se o
+            // gabarito já é a mais marcada (a maioria acertou), não há uma
+            // alternativa "roubando" respostas de verdade, então nenhuma
+            // fica destacada.
+            $maisMarcada = collect($contagens)
+                ->reject(fn ($total, $alternativa) => $semResposta($alternativa) || $total === 0)
                 ->sortDesc()
                 ->keys()
                 ->first();
+            $distrator = ($maisMarcada !== null && $maisMarcada !== $gabarito) ? $maisMarcada : null;
 
             $alternativas = collect($contagens)
                 ->map(fn ($total, $alternativa) => [

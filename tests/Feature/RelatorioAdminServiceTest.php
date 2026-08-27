@@ -23,10 +23,13 @@ class RelatorioAdminServiceTest extends TestCase
         Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A', 'area' => 'Clínica Médica', 'tema' => 'Herpes Simples']);
         Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 2, 'gabarito' => 'C']);
 
-        // Questão 1: A (gabarito) tem 2 acertos, B é o distrator (mais marcada entre as erradas).
+        // Questão 1: A (gabarito) tem 2 votos, B tem 3 — bate o próprio
+        // gabarito em popularidade, então B é o distrator.
         Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A']);
         Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2', 'questao_numero' => 1, 'resposta' => 'A']);
         Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '3', 'questao_numero' => 1, 'resposta' => 'B']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '4', 'questao_numero' => 1, 'resposta' => 'B']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '5', 'questao_numero' => 1, 'resposta' => 'B']);
 
         // Questão 2: gabarito é C, mas ninguém acertou (B é a mais marcada, também distrator).
         Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 2, 'resposta' => 'B']);
@@ -43,7 +46,7 @@ class RelatorioAdminServiceTest extends TestCase
         $this->assertSame('A', $q1['gabarito']);
         $this->assertSame('Clínica Médica', $q1['area']);
         $this->assertSame('Herpes Simples', $q1['tema']);
-        $this->assertEquals(66.7, $q1['percentualAcerto']);
+        $this->assertEquals(40.0, $q1['percentualAcerto']);
         $alternativaB = collect($q1['alternativas'])->firstWhere('letra', 'B');
         $this->assertTrue($alternativaB['ehDistrator']);
         $alternativaA = collect($q1['alternativas'])->firstWhere('letra', 'A');
@@ -58,6 +61,27 @@ class RelatorioAdminServiceTest extends TestCase
         $this->assertTrue($alternativaB2['ehDistrator']);
     }
 
+    public function test_analise_alternativas_nao_marca_distrator_quando_gabarito_e_a_mais_marcada(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A']);
+
+        // A maioria acertou (A com 3 votos) — B tem 2, mas nunca chega a
+        // "roubar" a resposta certa de verdade, então não deve ser
+        // destacado como distrator.
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2', 'questao_numero' => 1, 'resposta' => 'A']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '3', 'questao_numero' => 1, 'resposta' => 'A']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '4', 'questao_numero' => 1, 'resposta' => 'B']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '5', 'questao_numero' => 1, 'resposta' => 'B']);
+
+        $resultado = (new RelatorioAdminService)->analiseAlternativas($avaliacao);
+
+        $alternativas = collect($resultado[0]['alternativas'])->keyBy('letra');
+        $this->assertFalse($alternativas['B']['ehDistrator']);
+        $this->assertTrue($alternativas['A']['ehGabarito']);
+    }
+
     public function test_analise_alternativas_nunca_marca_blank_ou_hifen_como_distrator(): void
     {
         $avaliacao = Avaliacao::create([]);
@@ -69,6 +93,7 @@ class RelatorioAdminServiceTest extends TestCase
         // o rótulo de distrator, só B pode (única alternativa errada real).
         Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A']);
         Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2', 'questao_numero' => 1, 'resposta' => 'B']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '8', 'questao_numero' => 1, 'resposta' => 'B']);
         Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '3', 'questao_numero' => 1, 'resposta' => 'BLANK']);
         Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '4', 'questao_numero' => 1, 'resposta' => 'BLANK']);
         Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '5', 'questao_numero' => 1, 'resposta' => '-']);
