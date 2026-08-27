@@ -109,6 +109,12 @@ class RelatorioAlunoService
     }
 
     /** @return array<string, float> */
+    public function desempenhoPorArea(Collection $respostas, Collection $gabaritos, Avaliacao $avaliacao): array
+    {
+        return $this->desempenhoPorCampoDireto($respostas, $gabaritos, $avaliacao, 'area');
+    }
+
+    /** @return array<string, float> */
     public function desempenhoPorBloom(Collection $respostas, Collection $gabaritos, Avaliacao $avaliacao): array
     {
         return $this->desempenhoPorCampoDireto($respostas, $gabaritos, $avaliacao, 'bloom_nivel');
@@ -184,6 +190,99 @@ class RelatorioAlunoService
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * Cartões explicativos por área: "lacunas" agrupa as questões que o
+     * aluno errou (por área, listando os temas envolvidos) e "consolidados"
+     * as que ele acertou — pensados pra dar um resumo em texto, não só em
+     * gráfico, de onde vale reforçar o estudo e onde a base já está sólida.
+     * Só entra questão com área E tema cadastrados (ver 'lacunas_conhecimentos'
+     * em VisualizacaoDisponibilidadeService). A frase usada por área roda
+     * entre 3 variações (ver self::TEMPLATES_LACUNA/CONSOLIDADO) só pra não
+     * repetir o mesmo texto quando a avaliação tem várias áreas.
+     *
+     * @return array{lacunas: array<int, array{area: string, total: int, texto: string}>, consolidados: array<int, array{area: string, total: int, texto: string}>}
+     */
+    public function lacunasEConsolidados(Collection $respostas, Collection $gabaritos, Avaliacao $avaliacao): array
+    {
+        $metaPorNumero = DB::table('questoes')
+            ->where('avaliacao_codigo', $avaliacao->codigo)
+            ->whereNull('deleted_at')
+            ->whereNotNull('area')->where('area', '!=', '')
+            ->whereNotNull('tema')->where('tema', '!=', '')
+            ->select('numero', 'area', 'tema')
+            ->get()
+            ->keyBy('numero');
+
+        $errosPorArea = [];
+        $acertosPorArea = [];
+
+        foreach ($respostas as $resposta) {
+            $meta = $metaPorNumero->get($resposta->questao_numero);
+            $gabarito = $gabaritos->get($resposta->questao_numero);
+            if ($meta === null || $gabarito === null || $gabarito === '') {
+                continue;
+            }
+
+            if ($resposta->resposta === $gabarito) {
+                $acertosPorArea[$meta->area]['total'] = ($acertosPorArea[$meta->area]['total'] ?? 0) + 1;
+                $acertosPorArea[$meta->area]['temas'][$meta->tema] = true;
+            } else {
+                $errosPorArea[$meta->area]['total'] = ($errosPorArea[$meta->area]['total'] ?? 0) + 1;
+                $errosPorArea[$meta->area]['temas'][$meta->tema] = true;
+            }
+        }
+
+        return [
+            'lacunas' => $this->montarCardsPorArea($errosPorArea, self::TEMPLATES_LACUNA),
+            'consolidados' => $this->montarCardsPorArea($acertosPorArea, self::TEMPLATES_CONSOLIDADO),
+        ];
+    }
+
+    private const TEMPLATES_LACUNA = [
+        'Foram %d questão(ões) sem acerto, envolvendo %s. Retomar esses conteúdos com revisão dirigida e questões comentadas tende a consolidar a compreensão.',
+        'Área com %d ponto(s) a recuperar — em especial %s. Vale priorizar a base conceitual antes dos exercícios de fixação.',
+        'Concentração de dificuldades em %d questão(ões) (%s). Um plano de estudo com metas semanais nesses temas ajuda a fechar a lacuna.',
+    ];
+
+    private const TEMPLATES_CONSOLIDADO = [
+        'Bom domínio em %d questão(ões), abrangendo %s. Esse resultado indica base sólida na área.',
+        'Desempenho firme em %d questão(ões) — incluindo %s. Um ponto de apoio para avançar em conteúdos mais complexos.',
+        '%d acerto(s) demonstram segurança em %s. Vale aprofundar com desafios de maior nível.',
+    ];
+
+    /**
+     * @param  array<string, array{total: int, temas: array<string, bool>}>  $porArea
+     * @param  array<int, string>  $templates
+     * @return array<int, array{area: string, total: int, texto: string}>
+     */
+    private function montarCardsPorArea(array $porArea, array $templates): array
+    {
+        $cards = [];
+        $indice = 0;
+        foreach ($porArea as $area => $dados) {
+            $texto = sprintf($templates[$indice % count($templates)], $dados['total'], $this->juntarTemas(array_keys($dados['temas'])));
+            $cards[] = ['area' => $area, 'total' => $dados['total'], 'texto' => $texto];
+            $indice++;
+        }
+
+        usort($cards, fn ($a, $b) => $b['total'] <=> $a['total']);
+
+        return $cards;
+    }
+
+    /** @param  array<int, string>  $temas */
+    private function juntarTemas(array $temas): string
+    {
+        $lista = array_slice($temas, 0, 4);
+        if (count($lista) === 1) {
+            return $lista[0];
+        }
+
+        $ultimo = array_pop($lista);
+
+        return implode(', ', $lista).' e '.$ultimo;
     }
 
     /** @return array<string, float> */

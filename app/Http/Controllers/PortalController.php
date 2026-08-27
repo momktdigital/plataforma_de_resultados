@@ -260,6 +260,8 @@ class PortalController extends Controller
             'comparativoTurma' => $visivel('comparativo_turma') ? $relatorioService->comparativoTurma($aluno, $avaliacao, $periodo) : null,
             'rankingPercentil' => $visivel('ranking_percentil') ? $relatorioService->rankingPercentil($aluno, $avaliacao, $periodo) : null,
             'radarDisciplina' => $visivel('radar_disciplina') ? $relatorioService->radarDisciplina($respostas, $gabaritos, $avaliacao) : null,
+            'desempenhoArea' => $visivel('desempenho_area') ? $relatorioService->desempenhoPorArea($respostas, $gabaritos, $avaliacao) : null,
+            'lacunasConsolidados' => $visivel('lacunas_conhecimentos') ? $relatorioService->lacunasEConsolidados($respostas, $gabaritos, $avaliacao) : null,
             'desempenhoBloom' => $visivel('desempenho_bloom') ? $relatorioService->desempenhoPorBloom($respostas, $gabaritos, $avaliacao) : null,
             'desempenhoMiller' => $visivel('desempenho_miller') ? $relatorioService->desempenhoPorMiller($respostas, $gabaritos, $avaliacao) : null,
             'comparativoQuestao' => $visivel('comparativo_questao') ? $relatorioService->comparativoQuestao($avaliacao, $periodo, $respostas, $gabaritos) : null,

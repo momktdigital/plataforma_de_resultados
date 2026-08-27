@@ -69,6 +69,32 @@ class VisualizacaoDisponibilidadeServiceTest extends TestCase
         $this->assertNull($estado['radar_disciplina']['pendencia']);
     }
 
+    public function test_desempenho_area_tema_e_lacunas_dependem_dos_campos_area_e_tema_da_questao(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        $questao = Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A']);
+
+        $semAreaTema = $this->service()->calcular($avaliacao);
+        $this->assertFalse($semAreaTema['desempenho_area']['disponivel']);
+        $this->assertFalse($semAreaTema['desempenho_tema']['disponivel']);
+        $this->assertFalse($semAreaTema['lacunas_conhecimentos']['disponivel']);
+
+        $questao->update(['area' => 'Pediatria']);
+
+        $soComArea = $this->service()->calcular($avaliacao);
+        $this->assertTrue($soComArea['desempenho_area']['disponivel']);
+        $this->assertFalse($soComArea['desempenho_tema']['disponivel']);
+        $this->assertFalse($soComArea['lacunas_conhecimentos']['disponivel']);
+
+        $questao->update(['tema' => 'COVID']);
+
+        $comAreaETema = $this->service()->calcular($avaliacao);
+        $this->assertTrue($comAreaETema['desempenho_area']['disponivel']);
+        $this->assertTrue($comAreaETema['desempenho_tema']['disponivel']);
+        $this->assertTrue($comAreaETema['lacunas_conhecimentos']['disponivel']);
+    }
+
     public function test_visuais_de_turma_dependem_de_aluno_vinculado_com_turma(): void
     {
         $avaliacao = Avaliacao::create([]);

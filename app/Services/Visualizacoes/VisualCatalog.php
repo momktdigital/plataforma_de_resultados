@@ -91,6 +91,18 @@ final class VisualCatalog
                 'admin' => true,
                 'aluno' => true,
             ],
+            'desempenho_area' => [
+                'label' => 'Desempenho por área',
+                'grupo' => self::GRUPO_ADMIN,
+                'admin' => true,
+                'aluno' => true,
+            ],
+            'desempenho_tema' => [
+                'label' => 'Desempenho por tema',
+                'grupo' => self::GRUPO_ADMIN,
+                'admin' => true,
+                'aluno' => false,
+            ],
             'desempenho_bloom' => [
                 'label' => 'Desempenho por nível de Bloom',
                 'grupo' => self::GRUPO_ADMIN,
@@ -141,6 +153,12 @@ final class VisualCatalog
             ],
             'comparativo_questao' => [
                 'label' => 'Sua resposta x gabarito x turma, por questão',
+                'grupo' => self::GRUPO_ALUNO,
+                'admin' => false,
+                'aluno' => true,
+            ],
+            'lacunas_conhecimentos' => [
+                'label' => 'Lacunas de aprendizagem e conhecimentos consolidados',
                 'grupo' => self::GRUPO_ALUNO,
                 'admin' => false,
                 'aluno' => true,

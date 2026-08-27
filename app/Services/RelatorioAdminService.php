@@ -272,19 +272,24 @@ class RelatorioAdminService
     }
 
     /**
-     * Matriz questão x alternativa: uma coluna por questão, pra comparar de
-     * relance qual foi a alternativa mais marcada em cada uma e se ela bate
-     * com o gabarito — a view usa 'gabarito' e 'maisMarcada' pra destacar a
-     * célula certa (borda) e a mais popular (cor de fundo) de cada coluna.
+     * Uma linha por questão (não mais uma coluna por questão): faz mais
+     * sentido quando a avaliação tem muito mais questões que alternativas
+     * possíveis. Ordenado por % de acerto ascendente — as questões mais
+     * problemáticas aparecem primeiro, é o que mais interessa pra quem está
+     * revisando a prova. Cada alternativa errada marca 'ehDistrator' quando é
+     * a mais escolhida entre as erradas — o "distrator" que mais confundiu
+     * os respondentes.
      *
-     * @return array{alternativas: array<int, string>, questoes: array<int, array{numero: int, gabarito: ?string, maisMarcada: ?string, contagens: array<string, int>}>}
+     * @return array<int, array{numero: int, area: ?string, tema: ?string, gabarito: ?string, totalRespostas: int, percentualAcerto: float, alternativas: array<int, array{letra: string, total: int, percentual: float, ehGabarito: bool, ehDistrator: bool}>}>
      */
     public function analiseAlternativas(Avaliacao $avaliacao, string $periodo = '', ?FiltroDemografico $filtro = null): array
     {
-        $gabaritos = DB::table('questoes')
+        $questoes = DB::table('questoes')
             ->where('avaliacao_codigo', $avaliacao->codigo)
             ->whereNull('deleted_at')
-            ->pluck('gabarito', 'numero');
+            ->select('numero', 'gabarito', 'area', 'tema')
+            ->get()
+            ->keyBy('numero');
 
         $chaves = $filtro !== null
             ? $this->alunoResolver->chavesFiltradas($avaliacao->codigo, $periodo, $filtro, $avaliacao->data_avaliacao)
@@ -300,36 +305,101 @@ class RelatorioAdminService
             ->get();
 
         if ($linhas->isEmpty()) {
-            return ['alternativas' => [], 'questoes' => []];
+            return [];
         }
 
-        // Linhas do grid em ordem fixa: letras simples (A, B, C...) primeiro,
-        // qualquer marcação composta (ex.: "B,D", vindas de gabarito múltiplo)
-        // depois, e "em branco" sempre por último — assim toda coluna usa a
-        // mesma ordem de linhas, o que é o que faz a matriz ser comparável.
-        $todas = $linhas->pluck('alternativa')->unique();
-        $simples = $todas->filter(fn ($a) => preg_match('/^[A-Z]$/', $a))->sort()->values();
-        $compostas = $todas->diff($simples)->diff(['—'])->sort()->values();
-        $ordemAlternativas = $simples->concat($compostas)
-            ->when($todas->contains('—'), fn ($c) => $c->push('—'))
-            ->values()->all();
-
-        $porQuestao = [];
+        $contagensPorQuestao = [];
         foreach ($linhas as $linha) {
-            $numero = (int) $linha->questao_numero;
-            $porQuestao[$numero]['numero'] ??= $numero;
-            $porQuestao[$numero]['gabarito'] ??= $gabaritos->get($numero);
-            $porQuestao[$numero]['contagens'][$linha->alternativa] = (int) $linha->total;
+            $contagensPorQuestao[(int) $linha->questao_numero][$linha->alternativa] = (int) $linha->total;
         }
 
-        foreach ($porQuestao as &$questao) {
-            $questao['maisMarcada'] = collect($questao['contagens'])->sortDesc()->keys()->first();
+        $resultado = [];
+        foreach ($contagensPorQuestao as $numero => $contagens) {
+            $questao = $questoes->get($numero);
+            $gabarito = $questao?->gabarito;
+            $totalRespostas = array_sum($contagens);
+            $acertos = ($gabarito !== null && $gabarito !== '') ? ($contagens[$gabarito] ?? 0) : 0;
+
+            $distrator = collect($contagens)
+                ->reject(fn ($total, $alternativa) => $alternativa === $gabarito || $alternativa === '—' || $total === 0)
+                ->sortDesc()
+                ->keys()
+                ->first();
+
+            $alternativas = collect($contagens)
+                ->map(fn ($total, $alternativa) => [
+                    'letra' => $alternativa,
+                    'total' => $total,
+                    'percentual' => $totalRespostas > 0 ? round($total / $totalRespostas * 100, 1) : 0.0,
+                    'ehGabarito' => $gabarito !== null && $gabarito !== '' && $alternativa === $gabarito,
+                    'ehDistrator' => $alternativa === $distrator,
+                ])
+                ->sortBy(fn ($a) => $a['letra'] === '—' ? 'zzzzzzzz' : $a['letra'])
+                ->values()
+                ->all();
+
+            $resultado[] = [
+                'numero' => $numero,
+                'area' => $questao?->area,
+                'tema' => $questao?->tema,
+                'gabarito' => $gabarito,
+                'totalRespostas' => $totalRespostas,
+                'percentualAcerto' => $totalRespostas > 0 ? round($acertos / $totalRespostas * 100, 1) : 0.0,
+                'alternativas' => $alternativas,
+            ];
         }
-        unset($questao);
 
-        ksort($porQuestao);
+        usort($resultado, fn ($a, $b) => $a['percentualAcerto'] <=> $b['percentualAcerto']);
 
-        return ['alternativas' => $ordemAlternativas, 'questoes' => array_values($porQuestao)];
+        return $resultado;
+    }
+
+    /** @return array<string, float> */
+    public function mediaPorArea(Avaliacao $avaliacao, string $periodo = ''): array
+    {
+        return $this->mediaPorCampoDireto($avaliacao, 'area', $periodo);
+    }
+
+    /**
+     * Diferente de mediaPorArea() (uma média só por área), aqui cada linha é
+     * um tema — a área aparece como legenda/subtítulo, já que um tema
+     * pertence a uma única área. Ordenado por % de acerto ascendente pro
+     * mesmo motivo de analiseAlternativas(): a view separa os primeiros
+     * (menor acerto) dos últimos (maior acerto) da lista.
+     *
+     * @return array<int, array{area: ?string, tema: string, totalQuestoes: int, percentual: float}>
+     */
+    public function desempenhoPorTema(Avaliacao $avaliacao, string $periodo = ''): array
+    {
+        $linhas = DB::table('respostas as r')
+            ->join('questoes as q', function ($join) use ($avaliacao) {
+                $join->on('q.numero', '=', 'r.questao_numero')
+                    ->where('q.avaliacao_codigo', $avaliacao->codigo)
+                    ->whereNull('q.deleted_at')
+                    ->whereNotNull('q.gabarito')
+                    ->where('q.gabarito', '!=', '')
+                    ->whereNotNull('q.tema')
+                    ->where('q.tema', '!=', '');
+            })
+            ->where('r.avaliacao_codigo', $avaliacao->codigo)
+            ->when($periodo !== '', fn ($q) => $q->where('r.periodo', $periodo))
+            ->groupBy('q.area', 'q.tema')
+            ->selectRaw('q.area as area, q.tema as tema')
+            ->selectRaw('COUNT(DISTINCT q.numero) as total_questoes')
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw('SUM(CASE WHEN r.resposta = q.gabarito THEN 1 ELSE 0 END) as acertos')
+            ->get();
+
+        $resultado = $linhas->map(fn ($l) => [
+            'area' => $l->area,
+            'tema' => $l->tema,
+            'totalQuestoes' => (int) $l->total_questoes,
+            'percentual' => (int) $l->total > 0 ? round((int) $l->acertos / (int) $l->total * 100, 1) : 0.0,
+        ])->all();
+
+        usort($resultado, fn ($a, $b) => $a['percentual'] <=> $b['percentual']);
+
+        return $resultado;
     }
 
     /** @return array<int, array{nome_metrica: string, n: int, correlacao: ?float}> */

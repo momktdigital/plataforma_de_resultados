@@ -17,46 +17,54 @@ class RelatorioAdminServiceTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_analise_alternativas_identifica_a_mais_marcada_e_mantem_ordem_fixa_de_linhas(): void
+    public function test_analise_alternativas_identifica_o_distrator_e_ordena_por_percentual_de_acerto(): void
     {
         $avaliacao = Avaliacao::create([]);
-        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A']);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A', 'area' => 'Clínica Médica', 'tema' => 'Herpes Simples']);
         Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 2, 'gabarito' => 'C']);
 
-        // Questão 1: A é a mais marcada e também é o gabarito.
+        // Questão 1: A (gabarito) tem 2 acertos, B é o distrator (mais marcada entre as erradas).
         Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A']);
         Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2', 'questao_numero' => 1, 'resposta' => 'A']);
         Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '3', 'questao_numero' => 1, 'resposta' => 'B']);
 
-        // Questão 2: B é a mais marcada, mas o gabarito é C (turma majoritariamente errou).
+        // Questão 2: gabarito é C, mas ninguém acertou (B é a mais marcada, também distrator).
         Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 2, 'resposta' => 'B']);
         Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2', 'questao_numero' => 2, 'resposta' => 'B']);
         Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '3', 'questao_numero' => 2, 'resposta' => '']);
 
         $resultado = (new RelatorioAdminService)->analiseAlternativas($avaliacao);
 
-        $this->assertSame(['A', 'B', '—'], $resultado['alternativas']);
+        // Ordenado por % de acerto ascendente: questão 2 (0%) antes da questão 1 (66.7%).
+        $this->assertSame(2, $resultado[0]['numero']);
+        $this->assertSame(1, $resultado[1]['numero']);
 
-        // Ordem das chaves em 'contagens' não importa (é um mapa alternativa => total,
-        // sempre lido por chave na view) — só a ordem de 'alternativas', testada acima.
-        $q1 = collect($resultado['questoes'])->firstWhere('numero', 1);
+        $q1 = $resultado[1];
         $this->assertSame('A', $q1['gabarito']);
-        $this->assertSame('A', $q1['maisMarcada']);
-        $this->assertEquals(['A' => 2, 'B' => 1], $q1['contagens']);
+        $this->assertSame('Clínica Médica', $q1['area']);
+        $this->assertSame('Herpes Simples', $q1['tema']);
+        $this->assertEquals(66.7, $q1['percentualAcerto']);
+        $alternativaB = collect($q1['alternativas'])->firstWhere('letra', 'B');
+        $this->assertTrue($alternativaB['ehDistrator']);
+        $alternativaA = collect($q1['alternativas'])->firstWhere('letra', 'A');
+        $this->assertTrue($alternativaA['ehGabarito']);
+        $this->assertFalse($alternativaA['ehDistrator']);
 
-        $q2 = collect($resultado['questoes'])->firstWhere('numero', 2);
+        $q2 = $resultado[0];
         $this->assertSame('C', $q2['gabarito']);
-        $this->assertSame('B', $q2['maisMarcada']);
-        $this->assertEquals(['B' => 2, '—' => 1], $q2['contagens']);
+        $this->assertNull($q2['area']);
+        $this->assertEquals(0.0, $q2['percentualAcerto']);
+        $alternativaB2 = collect($q2['alternativas'])->firstWhere('letra', 'B');
+        $this->assertTrue($alternativaB2['ehDistrator']);
     }
 
-    public function test_analise_alternativas_sem_respostas_retorna_estrutura_vazia(): void
+    public function test_analise_alternativas_sem_respostas_retorna_lista_vazia(): void
     {
         $avaliacao = Avaliacao::create([]);
 
         $resultado = (new RelatorioAdminService)->analiseAlternativas($avaliacao);
 
-        $this->assertSame(['alternativas' => [], 'questoes' => []], $resultado);
+        $this->assertSame([], $resultado);
     }
 
     public function test_analise_alternativas_respeita_filtro_de_turma(): void
@@ -73,12 +81,45 @@ class RelatorioAdminServiceTest extends TestCase
         $service = new RelatorioAdminService;
 
         $semFiltro = $service->analiseAlternativas($avaliacao);
-        $q1SemFiltro = collect($semFiltro['questoes'])->firstWhere('numero', 1);
-        $this->assertEquals(['A' => 1, 'B' => 1], $q1SemFiltro['contagens']);
+        $q1SemFiltro = collect($semFiltro)->firstWhere('numero', 1);
+        $this->assertSame(2, $q1SemFiltro['totalRespostas']);
 
         $comFiltro = $service->analiseAlternativas($avaliacao, '', new FiltroDemografico(turma: 'Turma A'));
-        $q1ComFiltro = collect($comFiltro['questoes'])->firstWhere('numero', 1);
-        $this->assertEquals(['A' => 1], $q1ComFiltro['contagens']);
+        $q1ComFiltro = collect($comFiltro)->firstWhere('numero', 1);
+        $this->assertSame(1, $q1ComFiltro['totalRespostas']);
+        $this->assertEquals(100.0, $q1ComFiltro['percentualAcerto']);
+    }
+
+    public function test_media_por_area_agrega_por_campo_area_da_questao(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A', 'area' => 'Pediatria']);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 2, 'gabarito' => 'B', 'area' => 'Pediatria']);
+
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 2, 'resposta' => 'X']);
+
+        $resultado = (new RelatorioAdminService)->mediaPorArea($avaliacao);
+
+        $this->assertEquals(['Pediatria' => 50.0], $resultado);
+    }
+
+    public function test_desempenho_por_tema_agrupa_area_e_tema_e_ordena_por_percentual(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A', 'area' => 'Pediatria', 'tema' => 'COVID']);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 2, 'gabarito' => 'B', 'area' => 'Pediatria', 'tema' => 'Bradicardia']);
+
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'X']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 2, 'resposta' => 'B']);
+
+        $resultado = (new RelatorioAdminService)->desempenhoPorTema($avaliacao);
+
+        $this->assertSame('COVID', $resultado[0]['tema']);
+        $this->assertEquals(0.0, $resultado[0]['percentual']);
+        $this->assertSame('Bradicardia', $resultado[1]['tema']);
+        $this->assertEquals(100.0, $resultado[1]['percentual']);
+        $this->assertSame('Pediatria', $resultado[1]['area']);
     }
 
     public function test_correlacao_metricas_casa_pela_aluno_chave_mesmo_sem_cpf_na_linha_importada(): void

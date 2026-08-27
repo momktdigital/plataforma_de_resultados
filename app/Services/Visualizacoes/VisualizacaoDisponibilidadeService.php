@@ -51,6 +51,8 @@ class VisualizacaoDisponibilidadeService
             ->where('m.disciplina', '!=', '')
             ->exists();
 
+        $temArea = $this->questoesComCampoPreenchido($codigo, 'area');
+        $temTema = $this->questoesComCampoPreenchido($codigo, 'tema');
         $temBloom = $this->questoesComCampoPreenchido($codigo, 'bloom_nivel');
         $temMiller = $this->questoesComCampoPreenchido($codigo, 'miller_nivel');
         $temDificuldadePedagogica = $this->questoesComCampoPreenchido($codigo, 'dificuldade_pedagogica');
@@ -115,6 +117,18 @@ class VisualizacaoDisponibilidadeService
 
             'radar_disciplina' => $baseComRespostas() ?? (
                 $temDisciplina ? null : 'Nenhuma questão tem disciplina cadastrada na matriz curricular.'
+            ),
+
+            'desempenho_area' => $baseComRespostas() ?? (
+                $temArea ? null : 'Nenhuma questão tem área cadastrada.'
+            ),
+
+            'desempenho_tema' => $baseComRespostas() ?? (
+                $temTema ? null : 'Nenhuma questão tem tema cadastrado.'
+            ),
+
+            'lacunas_conhecimentos' => $baseComRespostas() ?? (
+                ($temArea && $temTema) ? null : 'Nenhuma questão tem área e tema cadastrados.'
             ),
 
             'desempenho_bloom' => $baseComRespostas() ?? (

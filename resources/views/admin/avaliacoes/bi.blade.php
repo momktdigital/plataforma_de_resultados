@@ -282,6 +282,79 @@
     </div>
 @endif
 
+@if ($estado['desempenho_area']['visivelAdmin'] && $mediaPorArea !== null)
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
+        <h2 class="font-semibold mb-4">Desempenho por área</h2>
+        @if (empty($mediaPorArea))
+            <p class="text-sm text-slate-400">Sem dados suficientes.</p>
+        @else
+            @php $areasOrdenadas = collect($mediaPorArea)->sortDesc(); @endphp
+            <div class="grid lg:grid-cols-2 gap-6 items-center">
+                <div class="max-w-md mx-auto w-full">
+                    <canvas id="grafico-area" height="320"></canvas>
+                </div>
+                <ul class="space-y-2.5">
+                    @foreach ($areasOrdenadas as $area => $percentual)
+                        <li>
+                            <div class="flex items-center justify-between text-sm mb-1">
+                                <span class="font-medium text-slate-600">{{ $area }}</span>
+                                <span class="font-bold text-slate-800">{{ $percentual }}%</span>
+                            </div>
+                            <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+                                <div class="h-full bg-emerald-500 rounded-full" style="width: {{ $percentual }}%"></div>
+                            </div>
+                        </li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+    </div>
+@endif
+
+@if ($estado['desempenho_tema']['visivelAdmin'] && $desempenhoPorTema !== null)
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
+        <h2 class="font-semibold mb-4">Desempenho por tema</h2>
+        @if (empty($desempenhoPorTema))
+            <p class="text-sm text-slate-400">Sem dados suficientes.</p>
+        @else
+            @php
+                $temasMenorAcerto = collect($desempenhoPorTema)->sortBy('percentual')->take(10);
+                $temasMaiorAcerto = collect($desempenhoPorTema)->sortByDesc('percentual')->take(10);
+            @endphp
+            <div class="grid md:grid-cols-2 gap-6">
+                <div>
+                    <p class="text-xs font-bold text-red-600 uppercase tracking-wide mb-3">Temas com menor acerto</p>
+                    <ul class="divide-y divide-slate-100">
+                        @foreach ($temasMenorAcerto as $t)
+                            <li class="py-2 flex items-center justify-between gap-3">
+                                <div class="min-w-0">
+                                    <p class="text-sm font-medium text-slate-700 truncate">{{ $t['tema'] }}</p>
+                                    <p class="text-xs text-slate-400 truncate">{{ $t['area'] ?? '—' }}</p>
+                                </div>
+                                <span class="text-sm font-bold text-red-600 shrink-0">{{ $t['percentual'] }}%</span>
+                            </li>
+                        @endforeach
+                    </ul>
+                </div>
+                <div>
+                    <p class="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-3">Temas com maior acerto</p>
+                    <ul class="divide-y divide-slate-100">
+                        @foreach ($temasMaiorAcerto as $t)
+                            <li class="py-2 flex items-center justify-between gap-3">
+                                <div class="min-w-0">
+                                    <p class="text-sm font-medium text-slate-700 truncate">{{ $t['tema'] }}</p>
+                                    <p class="text-xs text-slate-400 truncate">{{ $t['area'] ?? '—' }}</p>
+                                </div>
+                                <span class="text-sm font-bold text-emerald-700 shrink-0">{{ $t['percentual'] }}%</span>
+                            </li>
+                        @endforeach
+                    </ul>
+                </div>
+            </div>
+        @endif
+    </div>
+@endif
+
 @if (($estado['desempenho_bloom']['visivelAdmin'] || $estado['desempenho_miller']['visivelAdmin']) && ($mediaPorBloom !== null || $mediaPorMiller !== null))
     <div class="grid lg:grid-cols-2 gap-6 mb-6">
         @if ($estado['desempenho_bloom']['visivelAdmin'] && $mediaPorBloom !== null)
@@ -309,40 +382,51 @@
 
 @if ($estado['analise_alternativas']['visivelAdmin'] && $analiseAlternativas !== null)
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-        <h2 class="font-semibold mb-1">Análise de alternativas por questão</h2>
-        @if (empty($analiseAlternativas['questoes']))
+        <h2 class="font-semibold mb-1">Análise de alternativas por questão <span class="font-normal text-slate-400 text-sm">(ordenado por % de acerto)</span></h2>
+        @if (empty($analiseAlternativas))
             <p class="text-sm text-slate-400">Sem dados suficientes.</p>
         @else
             <p class="text-xs text-slate-500 mb-4 flex flex-wrap items-center gap-4">
-                <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-emerald-100 border border-emerald-300 inline-block"></span> alternativa mais marcada</span>
-                <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm ring-2 ring-inset ring-amber-500 inline-block"></span> gabarito</span>
+                <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-emerald-100 border border-emerald-300 inline-block"></span> gabarito</span>
+                <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-amber-100 border border-amber-300 inline-block"></span> distrator (alternativa errada mais marcada)</span>
             </p>
-            <div class="overflow-x-auto max-h-[32rem] overflow-y-auto">
+            <div class="overflow-x-auto max-h-[40rem] overflow-y-auto">
                 <table class="text-sm border-collapse w-full">
                     <thead>
-                        <tr class="sticky top-0 bg-white z-10">
-                            <th class="px-2 py-2 text-left text-slate-500 sticky left-0 bg-white">Questão</th>
-                            @foreach ($analiseAlternativas['alternativas'] as $alternativa)
-                                <th class="px-2 py-2 text-center text-slate-500 font-mono whitespace-nowrap">{{ $alternativa }}</th>
-                            @endforeach
+                        <tr class="sticky top-0 bg-white z-10 text-left text-slate-500">
+                            <th class="px-3 py-2">Questão</th>
+                            <th class="px-3 py-2">Área</th>
+                            <th class="px-3 py-2">Tema</th>
+                            <th class="px-3 py-2">Gabarito</th>
+                            <th class="px-3 py-2">% acerto</th>
+                            <th class="px-3 py-2">Distribuição</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        @foreach ($analiseAlternativas['questoes'] as $q)
-                            <tr class="border-t border-slate-100">
-                                <td class="px-2 py-1.5 font-bold text-slate-600 font-mono sticky left-0 bg-white">Q{{ $q['numero'] }}</td>
-                                @foreach ($analiseAlternativas['alternativas'] as $alternativa)
-                                    @php
-                                        $total = $q['contagens'][$alternativa] ?? 0;
-                                        $ehMaisMarcada = $total > 0 && $alternativa === $q['maisMarcada'];
-                                        $ehGabarito = $q['gabarito'] !== null && $q['gabarito'] !== '' && $alternativa === $q['gabarito'];
-                                    @endphp
-                                    <td class="px-2 py-1.5 text-center w-11 whitespace-nowrap
-                                        {{ $ehMaisMarcada ? 'bg-emerald-100 text-emerald-800 font-bold' : ($total > 0 ? 'text-slate-600' : 'text-slate-300') }}
-                                        {{ $ehGabarito ? 'ring-2 ring-inset ring-amber-500' : '' }}">
-                                        {{ $total > 0 ? $total : '—' }}
-                                    </td>
-                                @endforeach
+                    <tbody class="divide-y divide-slate-100">
+                        @foreach ($analiseAlternativas as $q)
+                            <tr>
+                                <td class="px-3 py-2 font-bold text-slate-600 font-mono whitespace-nowrap">Q{{ $q['numero'] }}</td>
+                                <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $q['area'] ?? '—' }}</td>
+                                <td class="px-3 py-2 text-slate-500">{{ $q['tema'] ?? '—' }}</td>
+                                <td class="px-3 py-2">
+                                    <span class="inline-flex items-center justify-center w-6 h-6 rounded bg-emerald-600 text-white text-xs font-bold">{{ $q['gabarito'] ?: '—' }}</span>
+                                </td>
+                                <td class="px-3 py-2 font-bold {{ $q['percentualAcerto'] < 40 ? 'text-red-600' : ($q['percentualAcerto'] < 70 ? 'text-amber-600' : 'text-emerald-700') }}">
+                                    {{ $q['percentualAcerto'] }}%
+                                </td>
+                                <td class="px-3 py-2">
+                                    <div class="flex flex-wrap gap-x-3 gap-y-1">
+                                        @foreach ($q['alternativas'] as $alt)
+                                            <span class="text-xs whitespace-nowrap px-1.5 py-0.5 rounded
+                                                {{ $alt['ehGabarito'] ? 'bg-emerald-100 text-emerald-800 font-bold' : ($alt['ehDistrator'] ? 'bg-amber-100 text-amber-800 font-bold' : 'text-slate-500') }}">
+                                                {{ $alt['letra'] }}: {{ $alt['percentual'] }}%
+                                                @if ($alt['ehDistrator'])
+                                                    <span class="uppercase tracking-wide">distrator</span>
+                                                @endif
+                                            </span>
+                                        @endforeach
+                                    </div>
+                                </td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -417,6 +501,17 @@
         options: { scales: { r: { beginAtZero: true, max: 100 } } },
     });
     @endif
+@endif
+
+@if (! empty($mediaPorArea))
+new Chart(document.getElementById('grafico-area'), {
+    type: 'radar',
+    data: {
+        labels: {{ Js::from(array_keys($mediaPorArea)) }},
+        datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($mediaPorArea)) }}, backgroundColor: 'rgba(16,185,129,0.2)', borderColor: '#10b981' }],
+    },
+    options: { scales: { r: { beginAtZero: true, max: 100 } } },
+});
 @endif
 
 @if (! empty($distribuicaoTurma))

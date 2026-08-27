@@ -118,10 +118,14 @@
             $temComparativoTurma = $estado['comparativo_turma']['visivelAluno'] && $comparativoTurma;
             $temRankingPercentil = $estado['ranking_percentil']['visivelAluno'] && $rankingPercentil;
             $temRadar = $estado['radar_disciplina']['visivelAluno'] && ! empty($radarDisciplina);
+            $temArea = $estado['desempenho_area']['visivelAluno'] && ! empty($desempenhoArea);
             $temBloom = $estado['desempenho_bloom']['visivelAluno'] && ! empty($desempenhoBloom);
             $temMiller = $estado['desempenho_miller']['visivelAluno'] && ! empty($desempenhoMiller);
             $temEvolucao = $estado['evolucao_categoria']['visivelAluno'] && ! empty($evolucaoHistorica) && count($evolucaoHistorica) >= 2;
-            $temAlgumPainel = $temComparativoTurma || $temRankingPercentil || $temRadar || $temBloom || $temMiller || $temEvolucao;
+            $temAlgumPainel = $temComparativoTurma || $temRankingPercentil || $temRadar || $temArea || $temBloom || $temMiller || $temEvolucao;
+            $temLacunasConsolidados = $estado['lacunas_conhecimentos']['visivelAluno']
+                && ! empty($lacunasConsolidados)
+                && (! empty($lacunasConsolidados['lacunas']) || ! empty($lacunasConsolidados['consolidados']));
         @endphp
 
         @if ($temAlgumPainel)
@@ -160,6 +164,15 @@
                     </div>
                 @endif
 
+                @if ($temArea)
+                    <div class="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                            <i class="ph-bold ph-chart-polar text-primary"></i> Desempenho por área
+                        </p>
+                        <canvas id="grafico-area" height="200"></canvas>
+                    </div>
+                @endif
+
                 @if ($temBloom)
                     <div class="bg-slate-50 border border-slate-100 rounded-xl p-4">
                         <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
@@ -184,6 +197,42 @@
                             <i class="ph-bold ph-trend-up text-primary"></i> Evolução histórica na categoria
                         </p>
                         <canvas id="grafico-evolucao" height="180"></canvas>
+                    </div>
+                @endif
+            </div>
+        @endif
+
+        @if ($temLacunasConsolidados)
+            <div class="grid sm:grid-cols-2 gap-4 mb-6">
+                @if (! empty($lacunasConsolidados['lacunas']))
+                    <div class="bg-red-50 border border-red-100 rounded-xl p-4">
+                        <p class="text-xs font-bold text-red-600 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                            <i class="ph-bold ph-warning-circle"></i> Lacunas de aprendizagem
+                        </p>
+                        <ul class="space-y-3">
+                            @foreach ($lacunasConsolidados['lacunas'] as $card)
+                                <li>
+                                    <p class="text-sm font-bold text-slate-700">{{ $card['area'] }}</p>
+                                    <p class="text-xs text-slate-600 mt-0.5">{{ $card['texto'] }}</p>
+                                </li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+
+                @if (! empty($lacunasConsolidados['consolidados']))
+                    <div class="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
+                        <p class="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                            <i class="ph-bold ph-check-circle"></i> Conhecimentos consolidados
+                        </p>
+                        <ul class="space-y-3">
+                            @foreach ($lacunasConsolidados['consolidados'] as $card)
+                                <li>
+                                    <p class="text-sm font-bold text-slate-700">{{ $card['area'] }}</p>
+                                    <p class="text-xs text-slate-600 mt-0.5">{{ $card['texto'] }}</p>
+                                </li>
+                            @endforeach
+                        </ul>
                     </div>
                 @endif
             </div>
@@ -244,6 +293,17 @@ new Chart(document.getElementById('grafico-radar-disciplina'), {
     data: {
         labels: {{ Js::from(array_keys($radarDisciplina)) }},
         datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($radarDisciplina)) }}, backgroundColor: 'rgba(0,180,141,0.2)', borderColor: '#00b48d' }],
+    },
+    options: { scales: { r: { beginAtZero: true, max: 100 } } },
+});
+@endif
+
+@if ($estado['desempenho_area']['visivelAluno'] && ! empty($desempenhoArea))
+new Chart(document.getElementById('grafico-area'), {
+    type: 'radar',
+    data: {
+        labels: {{ Js::from(array_keys($desempenhoArea)) }},
+        datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($desempenhoArea)) }}, backgroundColor: 'rgba(0,180,141,0.2)', borderColor: '#00b48d' }],
     },
     options: { scales: { r: { beginAtZero: true, max: 100 } } },
 });

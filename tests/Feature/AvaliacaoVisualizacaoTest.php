@@ -106,6 +106,50 @@ class AvaliacaoVisualizacaoTest extends TestCase
         $detalhe->assertSee('grafico-radar-disciplina', false);
     }
 
+    public function test_admin_ve_desempenho_por_area_e_tema_e_distrator_na_analise_de_alternativas(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A', 'area' => 'Pediatria', 'tema' => 'COVID']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2', 'questao_numero' => 1, 'resposta' => 'B']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '3', 'questao_numero' => 1, 'resposta' => 'B']);
+
+        $bi = $this->actingAs($this->admin(), 'admin')->get("/avaliacoes/{$avaliacao->codigo}/bi");
+
+        $bi->assertOk();
+        $bi->assertSee('Desempenho por área');
+        $bi->assertSee('Desempenho por tema');
+        $bi->assertSee('Pediatria');
+        $bi->assertSee('COVID');
+        $bi->assertSee('distrator', false);
+    }
+
+    public function test_aluno_ve_desempenho_por_area_e_cartoes_de_lacuna_e_conhecimento_consolidado(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A', 'area' => 'Pediatria', 'tema' => 'COVID']);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 2, 'gabarito' => 'B', 'area' => 'Pediatria', 'tema' => 'Bradicardia']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2026001', 'questao_numero' => 1, 'resposta' => 'X']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2026001', 'questao_numero' => 2, 'resposta' => 'B']);
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+
+        $this->admin();
+        Aluno::create(['ra' => '2026001', 'cpf' => '12345678909', 'data_nascimento' => '2000-03-15', 'nome' => 'Fulano']);
+
+        $this->followingRedirects()->post('/portal/consultar', [
+            'cpf' => '123.456.789-09',
+            'data_nascimento' => '15/03/2000',
+        ]);
+
+        $detalhe = $this->get(route('portal.resultados.avaliacao', ['avaliacao' => $avaliacao->codigo, 'periodo' => '']));
+        $detalhe->assertOk();
+        $detalhe->assertSee('grafico-area', false);
+        $detalhe->assertSee('Lacunas de aprendizagem');
+        $detalhe->assertSee('Conhecimentos consolidados');
+        $detalhe->assertSee('COVID');
+        $detalhe->assertSee('Bradicardia');
+    }
+
     public function test_percentil_aparece_mesmo_quando_resposta_importada_so_tem_ra_mas_aluno_tem_cpf_cadastrado(): void
     {
         $avaliacao = Avaliacao::create([]);
