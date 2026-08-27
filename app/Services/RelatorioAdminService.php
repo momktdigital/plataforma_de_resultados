@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Models\Avaliacao;
-use App\Support\JuntaAlunoPorIdOuRa;
+use App\Support\AlunoVinculoResolver;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -15,56 +15,77 @@ use Illuminate\Support\Facades\DB;
  * App\Services\Visualizacoes\VisualizacaoConfigService), então nenhum deles
  * verifica de novo se há dados suficientes.
  *
- * Toda agregação é feita em SQL (join + GROUP BY), no mesmo espírito de
- * BiDashboardService, para não trazer a tabela de respostas inteira pra uma
- * Collection do PHP.
+ * Toda agregação sobre `respostas`/`resultado_resumos` é feita em SQL (join +
+ * GROUP BY), no mesmo espírito de BiDashboardService, para não trazer a
+ * tabela inteira pra uma Collection do PHP. O vínculo com `alunos` (turma,
+ * dados demográficos) nunca é um JOIN direto contra essas tabelas grandes —
+ * ver App\Support\AlunoVinculoResolver para o porquê.
  */
 class RelatorioAdminService
 {
-    use JuntaAlunoPorIdOuRa;
+    public function __construct(
+        private readonly AlunoVinculoResolver $alunoResolver = new AlunoVinculoResolver,
+    ) {}
 
     /** @return array<int, array{ra: ?string, cpf: ?string, periodo: string, acertos: int, total: int, percentual: ?float, aluno_nome: ?string, turma: ?string}> */
     public function rankingCompleto(Avaliacao $avaliacao, string $periodo = ''): array
     {
-        return DB::table('resultado_resumos as rr')
-            ->leftJoin('alunos as a', fn ($join) => $this->juntaAlunoPorIdOuRa($join, 'rr'))
-            ->where('rr.avaliacao_codigo', $avaliacao->codigo)
-            ->when($periodo !== '', fn ($q) => $q->where('rr.periodo', $periodo))
-            ->orderByDesc('rr.percentual')
-            ->select([
-                'rr.ra', 'rr.cpf', 'rr.periodo', 'rr.acertos', 'rr.total', 'rr.percentual',
-                'a.nome as aluno_nome', 'a.turma',
-            ])
-            ->get()
-            ->map(fn ($linha) => (array) $linha)
-            ->all();
+        $resumos = DB::table('resultado_resumos')
+            ->where('avaliacao_codigo', $avaliacao->codigo)
+            ->when($periodo !== '', fn ($q) => $q->where('periodo', $periodo))
+            ->orderByDesc('percentual')
+            ->select('aluno_chave', 'ra', 'cpf', 'periodo', 'acertos', 'total', 'percentual')
+            ->get();
+
+        $alunos = $this->alunoResolver->resolver($avaliacao->codigo, $periodo);
+
+        return $resumos->map(fn ($r) => [
+            'ra' => $r->ra,
+            'cpf' => $r->cpf,
+            'periodo' => $r->periodo,
+            'acertos' => (int) $r->acertos,
+            'total' => (int) $r->total,
+            'percentual' => $r->percentual !== null ? (float) $r->percentual : null,
+            'aluno_nome' => $alunos->get($r->aluno_chave)?->nome,
+            'turma' => $alunos->get($r->aluno_chave)?->turma,
+        ])->all();
     }
 
     /** @return array<int, array{turma: string, respondentes: int, media: float, minimo: float, maximo: float}> */
     public function distribuicaoPorTurma(Avaliacao $avaliacao, string $periodo = ''): array
     {
-        return DB::table('resultado_resumos as rr')
-            ->join('alunos as a', fn ($join) => $this->juntaAlunoPorIdOuRa($join, 'rr'))
-            ->where('rr.avaliacao_codigo', $avaliacao->codigo)
-            ->when($periodo !== '', fn ($q) => $q->where('rr.periodo', $periodo))
-            ->whereNotNull('a.turma')
-            ->where('a.turma', '!=', '')
-            ->groupBy('a.turma')
-            ->selectRaw('a.turma as turma')
-            ->selectRaw('COUNT(*) as respondentes')
-            ->selectRaw('AVG(rr.percentual) as media')
-            ->selectRaw('MIN(rr.percentual) as minimo')
-            ->selectRaw('MAX(rr.percentual) as maximo')
-            ->orderByDesc('media')
-            ->get()
-            ->map(fn ($l) => [
-                'turma' => $l->turma,
-                'respondentes' => (int) $l->respondentes,
-                'media' => round((float) $l->media, 1),
-                'minimo' => round((float) $l->minimo, 1),
-                'maximo' => round((float) $l->maximo, 1),
-            ])
-            ->all();
+        $resumos = DB::table('resultado_resumos')
+            ->where('avaliacao_codigo', $avaliacao->codigo)
+            ->when($periodo !== '', fn ($q) => $q->where('periodo', $periodo))
+            ->whereNotNull('percentual')
+            ->select('aluno_chave', 'percentual')
+            ->get();
+
+        $alunos = $this->alunoResolver->resolver($avaliacao->codigo, $periodo);
+
+        $porTurma = [];
+        foreach ($resumos as $r) {
+            $turma = $alunos->get($r->aluno_chave)?->turma;
+            if (empty($turma)) {
+                continue;
+            }
+            $porTurma[$turma][] = (float) $r->percentual;
+        }
+
+        $resultado = [];
+        foreach ($porTurma as $turma => $percentuais) {
+            $resultado[] = [
+                'turma' => $turma,
+                'respondentes' => count($percentuais),
+                'media' => round(array_sum($percentuais) / count($percentuais), 1),
+                'minimo' => round(min($percentuais), 1),
+                'maximo' => round(max($percentuais), 1),
+            ];
+        }
+
+        usort($resultado, fn ($a, $b) => $b['media'] <=> $a['media']);
+
+        return $resultado;
     }
 
     /** @return array<string, array{esperado: string, observado: float, questoes: int}> facil/medio/dificil */
@@ -151,10 +172,20 @@ class RelatorioAdminService
         return $resultado;
     }
 
-    /** @return array<string, array<string, float>> [habilidade => [turma => %acerto]] */
+    /**
+     * [habilidade => [turma => %acerto]]. A agregação por (aluno, habilidade) é
+     * feita inteira em SQL sobre `respostas` (sem JOIN com `alunos` — ver
+     * App\Support\AlunoVinculoResolver); a turma de cada aluno_chave é resolvida
+     * à parte (tabela pequena) e só então cruzada em PHP, porque o Nº de pares
+     * (aluno_chave, habilidade) de uma avaliação é sempre pequeno (nº de
+     * respondentes × nº de habilidades), mesmo quando `respostas` tem
+     * centenas de milhares de linhas.
+     *
+     * @return array<string, array<string, float>>
+     */
     public function heatmapHabilidadeTurma(Avaliacao $avaliacao): array
     {
-        $linhas = DB::table('respostas as r')
+        $porAlunoHabilidade = DB::table('respostas as r')
             ->join('questoes as q', function ($join) use ($avaliacao) {
                 $join->on('q.numero', '=', 'r.questao_numero')
                     ->where('q.avaliacao_codigo', $avaliacao->codigo)
@@ -164,21 +195,36 @@ class RelatorioAdminService
                     ->whereNotNull('q.habilidade')
                     ->where('q.habilidade', '!=', '');
             })
-            ->join('alunos as a', fn ($join) => $this->juntaAlunoPorIdOuRa($join, 'r'))
             ->where('r.avaliacao_codigo', $avaliacao->codigo)
-            ->whereNotNull('a.turma')
-            ->where('a.turma', '!=', '')
-            ->groupBy('q.habilidade', 'a.turma')
-            ->selectRaw('q.habilidade as habilidade, a.turma as turma')
+            ->groupBy('r.aluno_chave', 'q.habilidade')
+            ->selectRaw('r.aluno_chave as aluno_chave, q.habilidade as habilidade')
             ->selectRaw('COUNT(*) as total')
             ->selectRaw('SUM(CASE WHEN r.resposta = q.gabarito THEN 1 ELSE 0 END) as acertos')
             ->get();
 
+        if ($porAlunoHabilidade->isEmpty()) {
+            return [];
+        }
+
+        $alunos = $this->alunoResolver->resolver($avaliacao->codigo);
+
+        $acumulado = [];
+        foreach ($porAlunoHabilidade as $linha) {
+            $turma = $alunos->get($linha->aluno_chave)?->turma;
+            if (empty($turma)) {
+                continue;
+            }
+
+            $acumulado[$linha->habilidade][$turma] ??= ['acertos' => 0, 'total' => 0];
+            $acumulado[$linha->habilidade][$turma]['acertos'] += (int) $linha->acertos;
+            $acumulado[$linha->habilidade][$turma]['total'] += (int) $linha->total;
+        }
+
         $matriz = [];
-        foreach ($linhas as $linha) {
-            $matriz[$linha->habilidade][$linha->turma] = (int) $linha->total > 0
-                ? round((int) $linha->acertos / (int) $linha->total * 100, 1)
-                : 0.0;
+        foreach ($acumulado as $habilidade => $porTurma) {
+            foreach ($porTurma as $turma => $s) {
+                $matriz[$habilidade][$turma] = $s['total'] > 0 ? round($s['acertos'] / $s['total'] * 100, 1) : 0.0;
+            }
         }
 
         return $matriz;
@@ -187,16 +233,13 @@ class RelatorioAdminService
     /** @return array{sexo: array<string, int>, cor_raca: array<string, int>, uf: array<string, int>} */
     public function perfilDemografico(Avaliacao $avaliacao): array
     {
-        $contarPor = fn (string $campo) => DB::table('resultado_resumos as rr')
-            ->join('alunos as a', fn ($join) => $this->juntaAlunoPorIdOuRa($join, 'rr'))
-            ->where('rr.avaliacao_codigo', $avaliacao->codigo)
-            ->whereNotNull("a.{$campo}")
-            ->where("a.{$campo}", '!=', '')
-            ->groupBy("a.{$campo}")
-            ->selectRaw("a.{$campo} as valor, COUNT(DISTINCT rr.aluno_chave) as total")
-            ->orderByDesc('total')
-            ->pluck('total', 'valor')
-            ->map(fn ($v) => (int) $v)
+        $alunos = $this->alunoResolver->resolver($avaliacao->codigo);
+
+        $contarPor = fn (string $campo) => $alunos
+            ->map(fn ($a) => $a->{$campo})
+            ->filter(fn ($v) => ! empty($v))
+            ->countBy()
+            ->sortDesc()
             ->all();
 
         return [

@@ -3,7 +3,7 @@
 namespace App\Services\Visualizacoes;
 
 use App\Models\Avaliacao;
-use App\Support\JuntaAlunoPorIdOuRa;
+use App\Support\AlunoVinculoResolver;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -19,7 +19,9 @@ use Illuminate\Support\Facades\DB;
  */
 class VisualizacaoDisponibilidadeService
 {
-    use JuntaAlunoPorIdOuRa;
+    public function __construct(
+        private readonly AlunoVinculoResolver $alunoResolver = new AlunoVinculoResolver,
+    ) {}
 
     /** @return array<string, array{disponivel: bool, pendencia: ?string}> */
     public function calcular(Avaliacao $avaliacao): array
@@ -64,11 +66,11 @@ class VisualizacaoDisponibilidadeService
             ->whereNull('deleted_at')
             ->exists();
 
-        $temTurmaVinculada = $this->resumosComAlunoCampoPreenchido($codigo, 'turma');
-        $temDadosDemograficos = $this->resumosComAlunoCampoPreenchido($codigo, 'sexo')
-            || $this->resumosComAlunoCampoPreenchido($codigo, 'cor_raca')
-            || $this->resumosComAlunoCampoPreenchido($codigo, 'cidade')
-            || $this->resumosComAlunoCampoPreenchido($codigo, 'uf');
+        $alunosVinculados = $this->alunoResolver->resolver($codigo);
+        $temTurmaVinculada = $alunosVinculados->contains(fn ($a) => ! empty($a->turma));
+        $temDadosDemograficos = $alunosVinculados->contains(
+            fn ($a) => ! empty($a->sexo) || ! empty($a->cor_raca) || ! empty($a->cidade) || ! empty($a->uf)
+        );
 
         $temCategoria = $avaliacao->categoria_id !== null;
         $temEvolucaoCategoria = false;
@@ -184,16 +186,6 @@ class VisualizacaoDisponibilidadeService
             ->whereNull('deleted_at')
             ->whereNotNull($campo)
             ->where($campo, '!=', '')
-            ->exists();
-    }
-
-    private function resumosComAlunoCampoPreenchido(int $avaliacaoCodigo, string $campo): bool
-    {
-        return DB::table('resultado_resumos as rr')
-            ->join('alunos as a', fn ($join) => $this->juntaAlunoPorIdOuRa($join, 'rr'))
-            ->where('rr.avaliacao_codigo', $avaliacaoCodigo)
-            ->whereNotNull("a.{$campo}")
-            ->where("a.{$campo}", '!=', '')
             ->exists();
     }
 }

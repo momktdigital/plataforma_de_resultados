@@ -4,7 +4,7 @@ namespace App\Services\Portal;
 
 use App\Models\Aluno;
 use App\Models\Avaliacao;
-use App\Support\JuntaAlunoPorIdOuRa;
+use App\Support\AlunoVinculoResolver;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -20,7 +20,9 @@ use Illuminate\Support\Facades\DB;
  */
 class RelatorioAlunoService
 {
-    use JuntaAlunoPorIdOuRa;
+    public function __construct(
+        private readonly AlunoVinculoResolver $alunoResolver = new AlunoVinculoResolver,
+    ) {}
 
     /** @return array{turma: string, suaMedia: float, mediaTurma: float, respondentesTurma: int}|null */
     public function comparativoTurma(Aluno $aluno, Avaliacao $avaliacao, string $periodo): ?array
@@ -29,34 +31,32 @@ class RelatorioAlunoService
             return null;
         }
 
-        $suaMedia = DB::table('resultado_resumos')
+        $resumos = DB::table('resultado_resumos')
             ->where('avaliacao_codigo', $avaliacao->codigo)
             ->where('periodo', $periodo)
-            ->where(fn ($q) => $q->where('ra', $aluno->ra)->orWhere('cpf', $aluno->cpf))
-            ->value('percentual');
+            ->whereNotNull('percentual')
+            ->select('aluno_chave', 'ra', 'cpf', 'percentual')
+            ->get();
 
+        $suaMedia = $resumos->first(fn ($r) => $r->ra === $aluno->ra || ($aluno->cpf && $r->cpf === $aluno->cpf))?->percentual;
         if ($suaMedia === null) {
             return null;
         }
 
-        $turma = DB::table('resultado_resumos as rr')
-            ->join('alunos as a', fn ($join) => $this->juntaAlunoPorIdOuRa($join, 'rr'))
-            ->where('rr.avaliacao_codigo', $avaliacao->codigo)
-            ->where('rr.periodo', $periodo)
-            ->where('a.turma', $aluno->turma)
-            ->whereNotNull('rr.percentual')
-            ->selectRaw('AVG(rr.percentual) as media, COUNT(*) as total')
-            ->first();
+        $alunos = $this->alunoResolver->resolver($avaliacao->codigo, $periodo);
+        $percentuaisDaTurma = $resumos
+            ->filter(fn ($r) => $alunos->get($r->aluno_chave)?->turma === $aluno->turma)
+            ->pluck('percentual');
 
-        if ($turma === null || (int) $turma->total === 0) {
+        if ($percentuaisDaTurma->isEmpty()) {
             return null;
         }
 
         return [
             'turma' => $aluno->turma,
             'suaMedia' => (float) $suaMedia,
-            'mediaTurma' => round((float) $turma->media, 1),
-            'respondentesTurma' => (int) $turma->total,
+            'mediaTurma' => round((float) $percentuaisDaTurma->avg(), 1),
+            'respondentesTurma' => $percentuaisDaTurma->count(),
         ];
     }
 
