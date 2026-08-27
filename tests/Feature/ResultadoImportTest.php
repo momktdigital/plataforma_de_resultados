@@ -9,6 +9,8 @@ use App\Models\Avaliacao;
 use App\Models\ConfiguracaoSistema;
 use App\Models\Questao;
 use App\Models\Resposta;
+use App\Services\ResultadoImportService;
+use App\Services\ResumoResultadoService;
 use App\Support\ImportStatusTracker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -196,8 +198,8 @@ class ResultadoImportTest extends TestCase
         $caminho = $arquivo->store('imports');
 
         (new ImportarResultadosJob($avaliacao->codigo, $caminho, $arquivo->getClientOriginalName()))->handle(
-            app(\App\Services\ResultadoImportService::class),
-            app(\App\Services\ResumoResultadoService::class),
+            app(ResultadoImportService::class),
+            app(ResumoResultadoService::class),
         );
 
         $status = ImportStatusTracker::status('resultados', (string) $avaliacao->codigo);

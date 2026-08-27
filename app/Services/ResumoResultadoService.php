@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\AlunoVinculoResolver;
 use App\Support\Anulacao;
 use Illuminate\Support\Facades\DB;
 
@@ -54,6 +55,12 @@ class ResumoResultadoService
 
         DB::transaction(function () use ($avaliacaoCodigo, $total, $linhas) {
             DB::table('resultado_resumos')->where('avaliacao_codigo', $avaliacaoCodigo)->delete();
+
+            // resultado_resumos é justamente o que AlunoVinculoResolver::resolver()
+            // lê e memoiza — sem isso, um recalculo no meio da requisição
+            // (reimport, exclusão de período) deixaria o cache servindo os
+            // respondentes de antes da mudança.
+            AlunoVinculoResolver::limparCache();
 
             if ($linhas->isEmpty()) {
                 return;
