@@ -29,7 +29,7 @@ class BiDashboardTest extends TestCase
         $response->assertSee('ainda não tem gabarito');
     }
 
-    public function test_calcula_top5_e_histograma(): void
+    public function test_calcula_histograma_e_radar_por_disciplina(): void
     {
         $avaliacao = Avaliacao::create([]);
         $q1 = Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A']);
@@ -49,8 +49,6 @@ class BiDashboardTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('2 respondente');
-        $response->assertSee('100%');
-        $response->assertSee('50%');
 
         QuestaoMatriz::create(['questao_id' => $q1->id, 'disciplina' => 'Anatomia']);
 

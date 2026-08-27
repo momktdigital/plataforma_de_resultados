@@ -107,7 +107,6 @@ class VisualizacaoDisponibilidadeService
 
         $definicoes = [
             'histograma' => $baseComRespostas(),
-            'top5' => $baseComRespostas(),
             'questoes_criticas' => $baseComRespostas(),
             'analise_alternativas' => $baseComRespostas(),
             'comparativo_questao' => $baseComRespostas(),

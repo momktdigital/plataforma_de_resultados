@@ -4,13 +4,15 @@ namespace App\Services;
 
 use App\Models\Avaliacao;
 use App\Models\Resposta;
+use App\Support\AlunoVinculoResolver;
+use App\Support\FiltroDemografico;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Painel de BI por Avaliação — equivalente ao dashboard de admin/index.php
- * (histograma de distribuição de acertos, radar por matéria, Top 5),
- * recalculado a partir do schema novo (`respostas`/`questao_matrizes`) em
- * vez do JSON por aluno do sistema legado.
+ * (histograma de distribuição de acertos, radar por matéria), recalculado a
+ * partir do schema novo (`respostas`/`questao_matrizes`) em vez do JSON por
+ * aluno do sistema legado.
  *
  * Cada agregação (nota por respondente, desempenho por disciplina) é feita
  * em SQL (JOIN + SUM(CASE...)/COUNT agrupados) — a versão anterior trazia
@@ -22,7 +24,11 @@ use Illuminate\Support\Facades\DB;
  */
 class BiDashboardService
 {
-    public function gerar(Avaliacao $avaliacao, string $periodo = ''): array
+    public function __construct(
+        private readonly AlunoVinculoResolver $alunoResolver = new AlunoVinculoResolver,
+    ) {}
+
+    public function gerar(Avaliacao $avaliacao, string $periodo = '', ?FiltroDemografico $filtro = null): array
     {
         $gabaritos = $avaliacao->questoes()
             ->whereNotNull('gabarito')
@@ -36,6 +42,10 @@ class BiDashboardService
 
         $totalQuestoes = $gabaritos->count();
 
+        $chaves = $filtro !== null
+            ? $this->alunoResolver->chavesFiltradas($avaliacao->codigo, $periodo, $filtro, $avaliacao->data_avaliacao)
+            : null;
+
         $porRespondente = Resposta::query()
             ->join('questoes', function ($join) use ($avaliacao) {
                 $join->on('questoes.numero', '=', 'respostas.questao_numero')
@@ -46,6 +56,7 @@ class BiDashboardService
             })
             ->where('respostas.avaliacao_codigo', $avaliacao->codigo)
             ->when($periodo !== '', fn ($query) => $query->where('respostas.periodo', $periodo))
+            ->when($chaves !== null, fn ($query) => $query->whereIn('respostas.aluno_chave', $chaves))
             ->selectRaw('respostas.aluno_chave as aluno_chave, respostas.periodo as periodo')
             ->selectRaw('MAX(respostas.ra) as ra, MAX(respostas.cpf) as cpf')
             ->selectRaw('SUM(CASE WHEN respostas.resposta = questoes.gabarito THEN 1 ELSE 0 END) as acertos')
@@ -75,17 +86,20 @@ class BiDashboardService
             $histograma[$indice]++;
         }
 
-        $top5 = $porRespondente->sortByDesc('percentual')->take(5)->values()->all();
-
         return [
             'totalRespondentes' => $porRespondente->count(),
             'histograma' => $histograma,
-            'top5' => $top5,
             'radar' => $this->mediaPorDisciplina($avaliacao, $periodo),
         ];
     }
 
-    /** @return array<string, float> */
+    /**
+     * Nunca recebe o filtro de turma/demografia: "Desempenho médio por
+     * disciplina" não está na lista de visuais que o filtro afeta (ver texto
+     * na view bi.blade.php) — só "Distribuição de acertos" (o histograma).
+     *
+     * @return array<string, float>
+     */
     private function mediaPorDisciplina(Avaliacao $avaliacao, string $periodo): array
     {
         // Pares (questão, disciplina) distintos primeiro — uma questão com

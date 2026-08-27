@@ -31,12 +31,6 @@ final class VisualCatalog
                 'admin' => true,
                 'aluno' => false,
             ],
-            'top5' => [
-                'label' => 'Top 5 melhores desempenhos',
-                'grupo' => self::GRUPO_ADMIN,
-                'admin' => true,
-                'aluno' => false,
-            ],
             'questoes_criticas' => [
                 'label' => 'Questões críticas (maior taxa de erro)',
                 'grupo' => self::GRUPO_ADMIN,

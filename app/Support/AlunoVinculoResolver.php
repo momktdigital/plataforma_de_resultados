@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\Aluno;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -58,5 +59,45 @@ class AlunoVinculoResolver
         }
 
         return $resolvido;
+    }
+
+    /**
+     * aluno_chave dos respondentes que batem com o filtro demográfico, ou
+     * null quando o filtro está vazio (sinal de "não restringe nada" pros
+     * chamadores, em vez de devolver a lista completa de chaves à toa).
+     *
+     * @return ?Collection<int, string>
+     */
+    public function chavesFiltradas(int $avaliacaoCodigo, string $periodo, FiltroDemografico $filtro, ?Carbon $dataReferencia = null): ?Collection
+    {
+        if ($filtro->vazio()) {
+            return null;
+        }
+
+        $referencia = $dataReferencia ?? now();
+
+        return $this->resolver($avaliacaoCodigo, $periodo)
+            ->filter(fn (Aluno $aluno) => $filtro->combina($aluno, $referencia))
+            ->keys();
+    }
+
+    /** @return array{turmas: array<int,string>, sexos: array<int,string>, corRacas: array<int,string>} opções distintas entre os respondentes, pros <select> do filtro. */
+    public function opcoesDisponiveis(int $avaliacaoCodigo): array
+    {
+        $alunos = $this->resolver($avaliacaoCodigo, '');
+
+        $distintos = fn (string $campo) => $alunos
+            ->map(fn (Aluno $a) => $a->{$campo})
+            ->filter(fn ($v) => ! empty($v))
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        return [
+            'turmas' => $distintos('turma'),
+            'sexos' => $distintos('sexo'),
+            'corRacas' => $distintos('cor_raca'),
+        ];
     }
 }

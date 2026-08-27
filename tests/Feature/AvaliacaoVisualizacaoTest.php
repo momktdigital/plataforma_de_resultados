@@ -62,7 +62,7 @@ class AvaliacaoVisualizacaoTest extends TestCase
         $bi = $this->actingAs($admin, 'admin')->get("/avaliacoes/{$avaliacao->codigo}/bi");
         $bi->assertOk();
         $bi->assertSee('1 respondente'); // histograma continua
-        $bi->assertDontSee('Top 5'); // top5 foi desmarcado
+        $bi->assertDontSee('Análise de alternativas por questão'); // foi desmarcado
     }
 
     public function test_nao_e_possivel_forcar_habilitar_visual_indisponivel(): void

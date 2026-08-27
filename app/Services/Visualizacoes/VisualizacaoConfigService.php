@@ -24,7 +24,7 @@ class VisualizacaoConfigService
      * Um visual sem preferência salva ainda (nenhuma linha em
      * `avaliacao_visualizacoes`) fica visível por padrão sempre que os dados
      * existirem — reflete o comportamento histórico do sistema, onde
-     * histograma/radar/Top5/boletim sempre apareciam automaticamente, sem
+     * histograma/radar/boletim sempre apareciam automaticamente, sem
      * etapa de configuração. A tela de "Configurar visualizações" serve pra
      * quem quer CURAR (desligar um visual específico numa avaliação), não pra
      * exigir que cada avaliação seja configurada manualmente antes de mostrar

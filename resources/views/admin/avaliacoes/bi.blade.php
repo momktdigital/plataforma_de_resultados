@@ -9,17 +9,63 @@
 </div>
 <h1 class="text-2xl font-bold mt-2 mb-6">Painel BI</h1>
 
-<form method="GET" action="{{ route('avaliacoes.bi', $avaliacao) }}" class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-6 flex gap-3">
-    <select name="periodo" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-        <option value="">Todos os períodos</option>
-        @foreach ($periodosDisponiveis as $p)
-            <option value="{{ $p }}" {{ $periodo === $p ? 'selected' : '' }}>{{ $p === '' ? '(sem período)' : $p }}</option>
-        @endforeach
-    </select>
+<form method="GET" action="{{ route('avaliacoes.bi', $avaliacao) }}" class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-2 flex flex-wrap gap-3 items-end">
+    <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1" for="filtro-periodo">Período</label>
+        <select id="filtro-periodo" name="periodo" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option value="">Todos</option>
+            @foreach ($periodosDisponiveis as $p)
+                <option value="{{ $p }}" {{ $periodo === $p ? 'selected' : '' }}>{{ $p === '' ? '(sem período)' : $p }}</option>
+            @endforeach
+        </select>
+    </div>
+    <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1" for="filtro-turma">Turma</label>
+        <select id="filtro-turma" name="turma" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option value="">Todas</option>
+            @foreach ($opcoesFiltro['turmas'] as $t)
+                <option value="{{ $t }}" {{ $filtro->turma === $t ? 'selected' : '' }}>{{ $t }}</option>
+            @endforeach
+        </select>
+    </div>
+    <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1" for="filtro-sexo">Sexo</label>
+        <select id="filtro-sexo" name="sexo" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option value="">Todos</option>
+            @foreach ($opcoesFiltro['sexos'] as $s)
+                <option value="{{ $s }}" {{ $filtro->sexo === $s ? 'selected' : '' }}>{{ $s }}</option>
+            @endforeach
+        </select>
+    </div>
+    <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1" for="filtro-cor-raca">Cor/raça</label>
+        <select id="filtro-cor-raca" name="cor_raca" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option value="">Todas</option>
+            @foreach ($opcoesFiltro['corRacas'] as $c)
+                <option value="{{ $c }}" {{ $filtro->corRaca === $c ? 'selected' : '' }}>{{ $c }}</option>
+            @endforeach
+        </select>
+    </div>
+    <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1" for="filtro-faixa-etaria">Faixa etária</label>
+        <select id="filtro-faixa-etaria" name="faixa_etaria" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option value="">Todas</option>
+            @foreach ($opcoesFiltro['faixasEtarias'] as $f)
+                <option value="{{ $f }}" {{ $filtro->faixaEtaria === $f ? 'selected' : '' }}>{{ $f }}</option>
+            @endforeach
+        </select>
+    </div>
     <button type="submit" class="bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-lg px-4 py-2 text-sm">
         Filtrar
     </button>
+    @if (! $filtro->vazio() || $periodo !== '')
+        <a href="{{ route('avaliacoes.bi', $avaliacao) }}" class="text-sm text-slate-500 hover:underline px-1 py-2">Limpar filtros</a>
+    @endif
 </form>
+<p class="text-xs text-slate-400 mb-6">
+    Turma e demografia (sexo, cor/raça, faixa etária) se aplicam a: Distribuição de acertos, Distribuição por turma,
+    Mapa de calor, Análise de alternativas e Correlação com métricas. Os demais visuais respeitam apenas o período.
+</p>
 
 @if (! empty($dados['semGabarito']))
     <div class="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-6 text-sm mb-6">
@@ -42,55 +88,27 @@
     </div>
 @endif
 
-@if ($estado['histograma']['visivelAdmin'] || $estado['top5']['visivelAdmin'] || $estado['radar_disciplina']['visivelAdmin'])
+@if ($estado['histograma']['visivelAdmin'])
     @if (empty($dados['semGabarito']) && empty($dados['semRespostas']) && ! empty($dados))
-        <div class="grid lg:grid-cols-2 gap-6 mb-6">
-            @if ($estado['histograma']['visivelAdmin'])
-                <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-                    <h2 class="font-semibold mb-4">Distribuição de acertos ({{ $dados['totalRespondentes'] }} respondente(s))</h2>
-                    <canvas id="grafico-histograma" height="220"></canvas>
-                </div>
-            @endif
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
+            <h2 class="font-semibold mb-4">Distribuição de acertos ({{ $dados['totalRespondentes'] }} respondente(s))</h2>
+            <canvas id="grafico-histograma" height="100"></canvas>
+        </div>
+    @endif
+@endif
 
-            @if ($estado['radar_disciplina']['visivelAdmin'])
-                <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-                    <h2 class="font-semibold mb-4">Desempenho médio por disciplina</h2>
-                    @if (empty($dados['radar']))
-                        <p class="text-sm text-slate-400">Nenhuma questão desta avaliação tem disciplina cadastrada na matriz.</p>
-                    @else
-                        <canvas id="grafico-radar" height="220"></canvas>
-                    @endif
+@if ($estado['radar_disciplina']['visivelAdmin'])
+    @if (empty($dados['semGabarito']) && empty($dados['semRespostas']) && ! empty($dados))
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
+            <h2 class="font-semibold mb-4">Desempenho médio por disciplina</h2>
+            @if (empty($dados['radar']))
+                <p class="text-sm text-slate-400">Nenhuma questão desta avaliação tem disciplina cadastrada na matriz.</p>
+            @else
+                <div class="max-w-xl mx-auto">
+                    <canvas id="grafico-radar" height="220"></canvas>
                 </div>
             @endif
         </div>
-
-        @if ($estado['top5']['visivelAdmin'])
-            <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mb-6">
-                <div class="px-6 py-4 border-b border-slate-100 font-semibold">Top 5</div>
-                <table class="w-full text-sm">
-                    <thead class="bg-slate-50 text-slate-500 text-left">
-                        <tr>
-                            <th class="px-4 py-3">RA</th>
-                            <th class="px-4 py-3">CPF</th>
-                            <th class="px-4 py-3">Período</th>
-                            <th class="px-4 py-3">Acertos</th>
-                            <th class="px-4 py-3">%</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        @foreach ($dados['top5'] as $r)
-                            <tr>
-                                <td class="px-4 py-3 font-medium">{{ $r['ra'] ?: '—' }}</td>
-                                <td class="px-4 py-3">{{ $r['cpf'] ?: '—' }}</td>
-                                <td class="px-4 py-3">{{ $r['periodo'] !== '' ? $r['periodo'] : '—' }}</td>
-                                <td class="px-4 py-3">{{ $r['acertos'] }}/{{ $r['total'] }}</td>
-                                <td class="px-4 py-3 font-bold text-emerald-700">{{ $r['percentual'] }}%</td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-        @endif
     @endif
 @endif
 
@@ -299,21 +317,21 @@
                 <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-emerald-100 border border-emerald-300 inline-block"></span> alternativa mais marcada</span>
                 <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm ring-2 ring-inset ring-amber-500 inline-block"></span> gabarito</span>
             </p>
-            <div class="overflow-x-auto">
-                <table class="text-sm border-collapse">
+            <div class="overflow-x-auto max-h-[32rem] overflow-y-auto">
+                <table class="text-sm border-collapse w-full">
                     <thead>
-                        <tr>
-                            <th class="px-2 py-2 text-left text-slate-500 sticky left-0 bg-white">Alternativa</th>
-                            @foreach ($analiseAlternativas['questoes'] as $q)
-                                <th class="px-2 py-2 text-center text-slate-500 font-mono whitespace-nowrap">Q{{ $q['numero'] }}</th>
+                        <tr class="sticky top-0 bg-white z-10">
+                            <th class="px-2 py-2 text-left text-slate-500 sticky left-0 bg-white">Questão</th>
+                            @foreach ($analiseAlternativas['alternativas'] as $alternativa)
+                                <th class="px-2 py-2 text-center text-slate-500 font-mono whitespace-nowrap">{{ $alternativa }}</th>
                             @endforeach
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach ($analiseAlternativas['alternativas'] as $alternativa)
+                        @foreach ($analiseAlternativas['questoes'] as $q)
                             <tr class="border-t border-slate-100">
-                                <td class="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white">{{ $alternativa }}</td>
-                                @foreach ($analiseAlternativas['questoes'] as $q)
+                                <td class="px-2 py-1.5 font-bold text-slate-600 font-mono sticky left-0 bg-white">Q{{ $q['numero'] }}</td>
+                                @foreach ($analiseAlternativas['alternativas'] as $alternativa)
                                     @php
                                         $total = $q['contagens'][$alternativa] ?? 0;
                                         $ehMaisMarcada = $total > 0 && $alternativa === $q['maisMarcada'];

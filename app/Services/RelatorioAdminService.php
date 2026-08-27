@@ -4,12 +4,13 @@ namespace App\Services;
 
 use App\Models\Avaliacao;
 use App\Support\AlunoVinculoResolver;
+use App\Support\FiltroDemografico;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Análises administrativas adicionais por avaliação, complementares ao
- * histograma/radar/Top5 de BiDashboardService e às questões críticas de
+ * histograma/radar de BiDashboardService e às questões críticas de
  * EstatisticaErroService — cada método aqui só é chamado pelo controller
  * quando o visual correspondente está habilitado E disponível (ver
  * App\Services\Visualizacoes\VisualizacaoConfigService), então nenhum deles
@@ -51,8 +52,13 @@ class RelatorioAdminService
         ])->all();
     }
 
-    /** @return array<int, array{turma: string, respondentes: int, media: float, minimo: float, maximo: float}> */
-    public function distribuicaoPorTurma(Avaliacao $avaliacao, string $periodo = ''): array
+    /**
+     * $filtro nunca restringe por turma aqui — turma já É a dimensão de
+     * agrupamento deste visual (ver FiltroDemografico::semTurma()).
+     *
+     * @return array<int, array{turma: string, respondentes: int, media: float, minimo: float, maximo: float}>
+     */
+    public function distribuicaoPorTurma(Avaliacao $avaliacao, string $periodo = '', ?FiltroDemografico $filtro = null): array
     {
         $resumos = DB::table('resultado_resumos')
             ->where('avaliacao_codigo', $avaliacao->codigo)
@@ -62,9 +68,16 @@ class RelatorioAdminService
             ->get();
 
         $alunos = $this->alunoResolver->resolver($avaliacao->codigo, $periodo);
+        $chaves = $filtro !== null
+            ? $this->alunoResolver->chavesFiltradas($avaliacao->codigo, $periodo, $filtro->semTurma(), $avaliacao->data_avaliacao)
+            : null;
 
         $porTurma = [];
         foreach ($resumos as $r) {
+            if ($chaves !== null && ! $chaves->contains($r->aluno_chave)) {
+                continue;
+            }
+
             $turma = $alunos->get($r->aluno_chave)?->turma;
             if (empty($turma)) {
                 continue;
@@ -181,10 +194,17 @@ class RelatorioAdminService
      * respondentes × nº de habilidades), mesmo quando `respostas` tem
      * centenas de milhares de linhas.
      *
+     * $filtro nunca restringe por turma aqui — turma já É a dimensão de
+     * agrupamento deste visual (ver FiltroDemografico::semTurma()).
+     *
      * @return array<string, array<string, float>>
      */
-    public function heatmapHabilidadeTurma(Avaliacao $avaliacao): array
+    public function heatmapHabilidadeTurma(Avaliacao $avaliacao, string $periodo = '', ?FiltroDemografico $filtro = null): array
     {
+        $chaves = $filtro !== null
+            ? $this->alunoResolver->chavesFiltradas($avaliacao->codigo, $periodo, $filtro->semTurma(), $avaliacao->data_avaliacao)
+            : null;
+
         $porAlunoHabilidade = DB::table('respostas as r')
             ->join('questoes as q', function ($join) use ($avaliacao) {
                 $join->on('q.numero', '=', 'r.questao_numero')
@@ -196,6 +216,8 @@ class RelatorioAdminService
                     ->where('q.habilidade', '!=', '');
             })
             ->where('r.avaliacao_codigo', $avaliacao->codigo)
+            ->when($periodo !== '', fn ($q) => $q->where('r.periodo', $periodo))
+            ->when($chaves !== null, fn ($q) => $q->whereIn('r.aluno_chave', $chaves))
             ->groupBy('r.aluno_chave', 'q.habilidade')
             ->selectRaw('r.aluno_chave as aluno_chave, q.habilidade as habilidade')
             ->selectRaw('COUNT(*) as total')
@@ -206,7 +228,7 @@ class RelatorioAdminService
             return [];
         }
 
-        $alunos = $this->alunoResolver->resolver($avaliacao->codigo);
+        $alunos = $this->alunoResolver->resolver($avaliacao->codigo, $periodo);
 
         $acumulado = [];
         foreach ($porAlunoHabilidade as $linha) {
@@ -257,16 +279,22 @@ class RelatorioAdminService
      *
      * @return array{alternativas: array<int, string>, questoes: array<int, array{numero: int, gabarito: ?string, maisMarcada: ?string, contagens: array<string, int>}>}
      */
-    public function analiseAlternativas(Avaliacao $avaliacao): array
+    public function analiseAlternativas(Avaliacao $avaliacao, string $periodo = '', ?FiltroDemografico $filtro = null): array
     {
         $gabaritos = DB::table('questoes')
             ->where('avaliacao_codigo', $avaliacao->codigo)
             ->whereNull('deleted_at')
             ->pluck('gabarito', 'numero');
 
+        $chaves = $filtro !== null
+            ? $this->alunoResolver->chavesFiltradas($avaliacao->codigo, $periodo, $filtro, $avaliacao->data_avaliacao)
+            : null;
+
         $linhas = DB::table('respostas')
             ->where('avaliacao_codigo', $avaliacao->codigo)
             ->whereNull('deleted_at')
+            ->when($periodo !== '', fn ($q) => $q->where('periodo', $periodo))
+            ->when($chaves !== null, fn ($q) => $q->whereIn('aluno_chave', $chaves))
             ->groupBy('questao_numero', 'resposta')
             ->selectRaw("questao_numero, COALESCE(NULLIF(resposta, ''), '—') as alternativa, COUNT(*) as total")
             ->get();
@@ -305,11 +333,16 @@ class RelatorioAdminService
     }
 
     /** @return array<int, array{nome_metrica: string, n: int, correlacao: ?float}> */
-    public function correlacaoMetricas(Avaliacao $avaliacao, string $periodo = ''): array
+    public function correlacaoMetricas(Avaliacao $avaliacao, string $periodo = '', ?FiltroDemografico $filtro = null): array
     {
+        $chaves = $filtro !== null
+            ? $this->alunoResolver->chavesFiltradas($avaliacao->codigo, $periodo, $filtro, $avaliacao->data_avaliacao)
+            : null;
+
         $percentuais = DB::table('resultado_resumos')
             ->where('avaliacao_codigo', $avaliacao->codigo)
             ->when($periodo !== '', fn ($q) => $q->where('periodo', $periodo))
+            ->when($chaves !== null, fn ($q) => $q->whereIn('aluno_chave', $chaves))
             ->whereNotNull('percentual')
             ->pluck('percentual', 'aluno_chave');
 
@@ -321,7 +354,8 @@ class RelatorioAdminService
             ->where('avaliacao_codigo', $avaliacao->codigo)
             ->whereNull('deleted_at')
             ->when($periodo !== '', fn ($q) => $q->where('periodo', $periodo))
-            ->select('nome_metrica', 'ra', 'cpf', 'valor')
+            ->when($chaves !== null, fn ($q) => $q->whereIn('aluno_chave', $chaves))
+            ->select('nome_metrica', 'aluno_chave', 'valor')
             ->get()
             ->groupBy('nome_metrica');
 
@@ -329,8 +363,11 @@ class RelatorioAdminService
         foreach ($metricas as $nomeMetrica => $linhas) {
             $pares = [];
             foreach ($linhas as $linha) {
-                $chave = $linha->cpf ?: $linha->ra;
-                $percentual = $percentuais->get($chave);
+                // Casa por aluno_chave (coluna gerada COALESCE(cpf, ra) da
+                // LINHA importada) em vez de recalcular "cpf ?: ra" aqui —
+                // mesma armadilha já corrigida em
+                // RelatorioAlunoService::rankingPercentil().
+                $percentual = $percentuais->get($linha->aluno_chave);
                 if ($percentual === null || ! is_numeric($linha->valor)) {
                     continue;
                 }

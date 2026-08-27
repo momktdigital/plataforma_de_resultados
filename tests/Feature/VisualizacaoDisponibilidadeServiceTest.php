@@ -46,7 +46,6 @@ class VisualizacaoDisponibilidadeServiceTest extends TestCase
         $estado = $this->service()->calcular($avaliacao);
 
         $this->assertTrue($estado['histograma']['disponivel']);
-        $this->assertTrue($estado['top5']['disponivel']);
         $this->assertTrue($estado['questoes_criticas']['disponivel']);
         $this->assertTrue($estado['analise_alternativas']['disponivel']);
         $this->assertTrue($estado['nota_geral']['disponivel']);
