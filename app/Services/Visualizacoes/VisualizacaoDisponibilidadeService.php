@@ -3,6 +3,7 @@
 namespace App\Services\Visualizacoes;
 
 use App\Models\Avaliacao;
+use App\Support\JuntaAlunoPorIdOuRa;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -18,6 +19,8 @@ use Illuminate\Support\Facades\DB;
  */
 class VisualizacaoDisponibilidadeService
 {
+    use JuntaAlunoPorIdOuRa;
+
     /** @return array<string, array{disponivel: bool, pendencia: ?string}> */
     public function calcular(Avaliacao $avaliacao): array
     {
@@ -187,9 +190,7 @@ class VisualizacaoDisponibilidadeService
     private function resumosComAlunoCampoPreenchido(int $avaliacaoCodigo, string $campo): bool
     {
         return DB::table('resultado_resumos as rr')
-            ->join('alunos as a', function ($join) {
-                $join->on('a.id', '=', 'rr.aluno_id')->orOn('a.ra', '=', 'rr.ra');
-            })
+            ->join('alunos as a', fn ($join) => $this->juntaAlunoPorIdOuRa($join, 'rr'))
             ->where('rr.avaliacao_codigo', $avaliacaoCodigo)
             ->whereNotNull("a.{$campo}")
             ->where("a.{$campo}", '!=', '')

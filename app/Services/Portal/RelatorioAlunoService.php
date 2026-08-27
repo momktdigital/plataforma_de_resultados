@@ -4,6 +4,7 @@ namespace App\Services\Portal;
 
 use App\Models\Aluno;
 use App\Models\Avaliacao;
+use App\Support\JuntaAlunoPorIdOuRa;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -19,6 +20,8 @@ use Illuminate\Support\Facades\DB;
  */
 class RelatorioAlunoService
 {
+    use JuntaAlunoPorIdOuRa;
+
     /** @return array{turma: string, suaMedia: float, mediaTurma: float, respondentesTurma: int}|null */
     public function comparativoTurma(Aluno $aluno, Avaliacao $avaliacao, string $periodo): ?array
     {
@@ -37,9 +40,7 @@ class RelatorioAlunoService
         }
 
         $turma = DB::table('resultado_resumos as rr')
-            ->join('alunos as a', function ($join) {
-                $join->on('a.id', '=', 'rr.aluno_id')->orOn('a.ra', '=', 'rr.ra');
-            })
+            ->join('alunos as a', fn ($join) => $this->juntaAlunoPorIdOuRa($join, 'rr'))
             ->where('rr.avaliacao_codigo', $avaliacao->codigo)
             ->where('rr.periodo', $periodo)
             ->where('a.turma', $aluno->turma)

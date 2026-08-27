@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Avaliacao;
+use App\Support\JuntaAlunoPorIdOuRa;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -20,13 +21,13 @@ use Illuminate\Support\Facades\DB;
  */
 class RelatorioAdminService
 {
+    use JuntaAlunoPorIdOuRa;
+
     /** @return array<int, array{ra: ?string, cpf: ?string, periodo: string, acertos: int, total: int, percentual: ?float, aluno_nome: ?string, turma: ?string}> */
     public function rankingCompleto(Avaliacao $avaliacao, string $periodo = ''): array
     {
         return DB::table('resultado_resumos as rr')
-            ->leftJoin('alunos as a', function ($join) {
-                $join->on('a.id', '=', 'rr.aluno_id')->orOn('a.ra', '=', 'rr.ra');
-            })
+            ->leftJoin('alunos as a', fn ($join) => $this->juntaAlunoPorIdOuRa($join, 'rr'))
             ->where('rr.avaliacao_codigo', $avaliacao->codigo)
             ->when($periodo !== '', fn ($q) => $q->where('rr.periodo', $periodo))
             ->orderByDesc('rr.percentual')
@@ -43,9 +44,7 @@ class RelatorioAdminService
     public function distribuicaoPorTurma(Avaliacao $avaliacao, string $periodo = ''): array
     {
         return DB::table('resultado_resumos as rr')
-            ->join('alunos as a', function ($join) {
-                $join->on('a.id', '=', 'rr.aluno_id')->orOn('a.ra', '=', 'rr.ra');
-            })
+            ->join('alunos as a', fn ($join) => $this->juntaAlunoPorIdOuRa($join, 'rr'))
             ->where('rr.avaliacao_codigo', $avaliacao->codigo)
             ->when($periodo !== '', fn ($q) => $q->where('rr.periodo', $periodo))
             ->whereNotNull('a.turma')
@@ -165,9 +164,7 @@ class RelatorioAdminService
                     ->whereNotNull('q.habilidade')
                     ->where('q.habilidade', '!=', '');
             })
-            ->join('alunos as a', function ($join) {
-                $join->on('a.id', '=', 'r.aluno_id')->orOn('a.ra', '=', 'r.ra');
-            })
+            ->join('alunos as a', fn ($join) => $this->juntaAlunoPorIdOuRa($join, 'r'))
             ->where('r.avaliacao_codigo', $avaliacao->codigo)
             ->whereNotNull('a.turma')
             ->where('a.turma', '!=', '')
@@ -191,9 +188,7 @@ class RelatorioAdminService
     public function perfilDemografico(Avaliacao $avaliacao): array
     {
         $contarPor = fn (string $campo) => DB::table('resultado_resumos as rr')
-            ->join('alunos as a', function ($join) {
-                $join->on('a.id', '=', 'rr.aluno_id')->orOn('a.ra', '=', 'rr.ra');
-            })
+            ->join('alunos as a', fn ($join) => $this->juntaAlunoPorIdOuRa($join, 'rr'))
             ->where('rr.avaliacao_codigo', $avaliacao->codigo)
             ->whereNotNull("a.{$campo}")
             ->where("a.{$campo}", '!=', '')
