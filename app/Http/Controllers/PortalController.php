@@ -320,6 +320,7 @@ class PortalController extends Controller
             : collect($todos)->filter(fn ($r) => $r['periodo_letivo'] === $periodoSelecionado)->values()->all();
 
         $comPercentual = collect($resultados)->pluck('percentual')->filter(fn ($p) => $p !== null);
+        $arvore = $consultaService->montarArvore($resultados);
 
         return view('portal.resultados', [
             'aluno' => $aluno,
@@ -327,7 +328,9 @@ class PortalController extends Controller
             'mediaGeral' => $comPercentual->isNotEmpty() ? round($comPercentual->avg(), 1) : null,
             'periodosDisponiveis' => $periodosDisponiveis,
             'periodoSelecionado' => $periodoSelecionado,
-            ...$consultaService->montarArvore($resultados),
+            'evolucaoGeral' => $consultaService->evolucaoGeral($resultados),
+            'resumoPorCategoria' => $consultaService->resumoPorCategoria($arvore['arvore']),
+            ...$arvore,
         ]);
     }
 

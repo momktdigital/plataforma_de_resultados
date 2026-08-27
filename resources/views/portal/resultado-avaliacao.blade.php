@@ -12,7 +12,7 @@
 @endphp
 
 @section('title', "{$nomeAvaliacao} — {$aluno->ra}")
-@section('container-class', 'max-w-3xl')
+@section('container-class', 'max-w-5xl')
 
 @section('content')
 <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4 fade-in">
@@ -41,9 +41,12 @@
                 </p>
             </div>
             @if ($estado['nota_geral']['visivelAluno'] && $r['total'] > 0)
-                <div class="text-right shrink-0">
-                    <div class="text-3xl font-black text-primary">{{ $r['percentual'] }}%</div>
-                    <div class="text-xs text-slate-500 font-medium">{{ $r['acertos'] }}/{{ $r['total'] }} acertos</div>
+                <div class="flex items-center gap-3 shrink-0">
+                    <div class="text-right hidden sm:block">
+                        <div class="text-xs text-slate-500 font-medium">{{ $r['acertos'] }}/{{ $r['total'] }}</div>
+                        <div class="text-xs text-slate-500 font-medium">acertos</div>
+                    </div>
+                    @include('portal._anel_progresso', ['percentual' => $r['percentual'], 'tamanho' => 84, 'espessura' => 9, 'tamanhoTexto' => 'text-lg'])
                 </div>
             @endif
         </div>
@@ -88,7 +91,9 @@
         @endif
 
         @if ($estado['grade_questoes']['visivelAluno'])
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Detalhamento das respostas</p>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                <i class="ph-bold ph-squares-four text-primary"></i> Detalhamento das respostas
+            </p>
             <div class="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2 mb-6">
                 @foreach ($r['respostas'] as $resposta)
                     @php
@@ -109,61 +114,86 @@
             </div>
         @endif
 
-        @if ($estado['comparativo_turma']['visivelAluno'] && $comparativoTurma)
-            <div class="mb-6 bg-slate-50 border border-slate-100 rounded-xl p-4">
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Comparativo com a turma {{ $comparativoTurma['turma'] }}</p>
-                <div class="flex items-center gap-6 text-sm">
-                    <div><span class="text-slate-500">Você:</span> <span class="font-black text-primary">{{ $comparativoTurma['suaMedia'] }}%</span></div>
-                    <div><span class="text-slate-500">Média da turma:</span> <span class="font-black text-slate-700">{{ $comparativoTurma['mediaTurma'] }}%</span></div>
-                    <div class="text-xs text-slate-400">({{ $comparativoTurma['respondentesTurma'] }} respondente(s))</div>
-                </div>
-            </div>
-        @endif
+        @php
+            $temComparativoTurma = $estado['comparativo_turma']['visivelAluno'] && $comparativoTurma;
+            $temRankingPercentil = $estado['ranking_percentil']['visivelAluno'] && $rankingPercentil;
+            $temRadar = $estado['radar_disciplina']['visivelAluno'] && ! empty($radarDisciplina);
+            $temBloom = $estado['desempenho_bloom']['visivelAluno'] && ! empty($desempenhoBloom);
+            $temMiller = $estado['desempenho_miller']['visivelAluno'] && ! empty($desempenhoMiller);
+            $temEvolucao = $estado['evolucao_categoria']['visivelAluno'] && ! empty($evolucaoHistorica) && count($evolucaoHistorica) >= 2;
+            $temAlgumPainel = $temComparativoTurma || $temRankingPercentil || $temRadar || $temBloom || $temMiller || $temEvolucao;
+        @endphp
 
-        @if ($estado['ranking_percentil']['visivelAluno'] && $rankingPercentil)
-            <div class="mb-6 bg-slate-50 border border-slate-100 rounded-xl p-4">
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Posição relativa</p>
-                <p class="text-sm">
-                    Você está no percentil <span class="font-black text-primary">{{ $rankingPercentil['percentil'] }}</span> —
-                    posição {{ $rankingPercentil['posicao'] }} de {{ $rankingPercentil['totalRespondentes'] }} respondente(s).
-                </p>
-            </div>
-        @endif
-
-        @if ($estado['radar_disciplina']['visivelAluno'] && ! empty($radarDisciplina))
-            <div class="mb-6">
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Desempenho por disciplina</p>
-                <canvas id="grafico-radar-disciplina" height="220"></canvas>
-            </div>
-        @endif
-
-        @if (($estado['desempenho_bloom']['visivelAluno'] && ! empty($desempenhoBloom)) || ($estado['desempenho_miller']['visivelAluno'] && ! empty($desempenhoMiller)))
+        @if ($temAlgumPainel)
             <div class="grid sm:grid-cols-2 gap-4 mb-6">
-                @if ($estado['desempenho_bloom']['visivelAluno'] && ! empty($desempenhoBloom))
-                    <div>
-                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Desempenho por nível de Bloom</p>
-                        <canvas id="grafico-bloom" height="200"></canvas>
+                @if ($temComparativoTurma)
+                    <div class="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                            <i class="ph-bold ph-users-three text-primary"></i> Comparativo com a turma {{ $comparativoTurma['turma'] }}
+                        </p>
+                        <canvas id="grafico-comparativo-turma" height="110"></canvas>
+                        <p class="text-[11px] text-slate-400 mt-2">{{ $comparativoTurma['respondentesTurma'] }} respondente(s) na turma</p>
                     </div>
                 @endif
-                @if ($estado['desempenho_miller']['visivelAluno'] && ! empty($desempenhoMiller))
-                    <div>
-                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Desempenho por nível de Miller</p>
-                        <canvas id="grafico-miller" height="200"></canvas>
-                    </div>
-                @endif
-            </div>
-        @endif
 
-        @if ($estado['evolucao_categoria']['visivelAluno'] && ! empty($evolucaoHistorica) && count($evolucaoHistorica) >= 2)
-            <div class="mb-6">
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Evolução histórica na categoria</p>
-                <canvas id="grafico-evolucao" height="200"></canvas>
+                @if ($temRankingPercentil)
+                    <div class="bg-slate-50 border border-slate-100 rounded-xl p-4 flex items-center gap-4">
+                        <div class="w-14 h-14 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+                            <i class="ph-fill ph-medal text-primary text-2xl"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">Posição relativa</p>
+                            <p class="text-sm text-slate-600">
+                                Você está entre os <span class="font-black text-primary text-base">top {{ round(100 - $rankingPercentil['percentil']) }}%</span>
+                                — posição {{ $rankingPercentil['posicao'] }} de {{ $rankingPercentil['totalRespondentes'] }}.
+                            </p>
+                        </div>
+                    </div>
+                @endif
+
+                @if ($temRadar)
+                    <div class="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                            <i class="ph-bold ph-chart-polar text-primary"></i> Desempenho por disciplina
+                        </p>
+                        <canvas id="grafico-radar-disciplina" height="200"></canvas>
+                    </div>
+                @endif
+
+                @if ($temBloom)
+                    <div class="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                            <i class="ph-bold ph-brain text-primary"></i> Desempenho por nível de Bloom
+                        </p>
+                        <canvas id="grafico-bloom" height="180"></canvas>
+                    </div>
+                @endif
+
+                @if ($temMiller)
+                    <div class="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                            <i class="ph-bold ph-stethoscope text-primary"></i> Desempenho por nível de Miller
+                        </p>
+                        <canvas id="grafico-miller" height="180"></canvas>
+                    </div>
+                @endif
+
+                @if ($temEvolucao)
+                    <div class="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                            <i class="ph-bold ph-trend-up text-primary"></i> Evolução histórica na categoria
+                        </p>
+                        <canvas id="grafico-evolucao" height="180"></canvas>
+                    </div>
+                @endif
             </div>
         @endif
 
         @if ($estado['comparativo_questao']['visivelAluno'] && ! empty($comparativoQuestao))
             <div>
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Sua resposta x turma, por questão</p>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                    <i class="ph-bold ph-table text-primary"></i> Sua resposta x turma, por questão
+                </p>
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead class="bg-slate-50 text-slate-500 text-left">
@@ -188,6 +218,26 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script>
+@if ($estado['comparativo_turma']['visivelAluno'] && $comparativoTurma)
+new Chart(document.getElementById('grafico-comparativo-turma'), {
+    type: 'bar',
+    data: {
+        labels: ['Você', 'Média da turma'],
+        datasets: [{
+            data: [{{ $comparativoTurma['suaMedia'] }}, {{ $comparativoTurma['mediaTurma'] }}],
+            backgroundColor: ['#00b48d', '#94a3b8'],
+            borderRadius: 4,
+            maxBarThickness: 28,
+        }],
+    },
+    options: {
+        indexAxis: 'y',
+        scales: { x: { beginAtZero: true, max: 100, grid: { color: '#f1f5f9' } }, y: { grid: { display: false } } },
+        plugins: { legend: { display: false } },
+    },
+});
+@endif
+
 @if ($estado['radar_disciplina']['visivelAluno'] && ! empty($radarDisciplina))
 new Chart(document.getElementById('grafico-radar-disciplina'), {
     type: 'radar',
@@ -204,7 +254,7 @@ new Chart(document.getElementById('grafico-bloom'), {
     type: 'bar',
     data: {
         labels: {{ Js::from(array_keys($desempenhoBloom)) }},
-        datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($desempenhoBloom)) }}, backgroundColor: '#00b48d' }],
+        datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($desempenhoBloom)) }}, backgroundColor: '#00b48d', borderRadius: 4, maxBarThickness: 24 }],
     },
     options: { indexAxis: 'y', scales: { x: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
 });
@@ -215,7 +265,7 @@ new Chart(document.getElementById('grafico-miller'), {
     type: 'bar',
     data: {
         labels: {{ Js::from(array_keys($desempenhoMiller)) }},
-        datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($desempenhoMiller)) }}, backgroundColor: '#00b48d' }],
+        datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($desempenhoMiller)) }}, backgroundColor: '#00b48d', borderRadius: 4, maxBarThickness: 24 }],
     },
     options: { indexAxis: 'y', scales: { x: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
 });

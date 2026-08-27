@@ -197,6 +197,67 @@ class ResultadoConsultaService
         return sprintf('%s-%010d', $data, $resultado['avaliacao']->codigo);
     }
 
+    /**
+     * Série cronológica (mais antiga primeiro) de percentuais, pro gráfico de
+     * evolução no topo do boletim — só entram avaliações com data e
+     * percentual cadastrados, senão a ordem/posição no eixo X não tem sentido.
+     *
+     * @param  array<int, array<string, mixed>>  $resultados
+     * @return array<int, array{nome: string, percentual: float, data: string}>
+     */
+    public function evolucaoGeral(array $resultados): array
+    {
+        return collect($resultados)
+            ->filter(fn ($r) => $r['percentual'] !== null && $r['avaliacao']->data_avaliacao !== null)
+            ->sortBy(fn ($r) => $r['avaliacao']->data_avaliacao->format('Y-m-d'))
+            ->map(fn ($r) => [
+                'nome' => $r['avaliacao']->nome ?? "Avaliação #{$r['avaliacao']->codigo}",
+                'percentual' => $r['percentual'],
+                'data' => $r['avaliacao']->data_avaliacao->format('d/m/Y'),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Média de desempenho por categoria de topo (raiz da árvore de
+     * montarArvore()), somando recursivamente os resultados de todas as
+     * subcategorias — usado no resumo visual do boletim.
+     *
+     * @param  array  $arvore  saída de montarArvore()['arvore']
+     * @return array<int, array{nome: string, media: float, quantidade: int}>
+     */
+    public function resumoPorCategoria(array $arvore): array
+    {
+        $coletarPercentuais = function (array $no) use (&$coletarPercentuais): array {
+            $percentuais = collect($no['resultados'])->pluck('percentual')->filter(fn ($p) => $p !== null)->all();
+
+            foreach ($no['subcategorias'] as $sub) {
+                $percentuais = [...$percentuais, ...$coletarPercentuais($sub)];
+            }
+
+            return $percentuais;
+        };
+
+        $resumo = [];
+        foreach ($arvore as $no) {
+            $percentuais = $coletarPercentuais($no);
+            if (empty($percentuais)) {
+                continue;
+            }
+
+            $resumo[] = [
+                'nome' => $no['categoria']->nome,
+                'media' => round(array_sum($percentuais) / count($percentuais), 1),
+                'quantidade' => count($percentuais),
+            ];
+        }
+
+        usort($resumo, fn ($a, $b) => $b['media'] <=> $a['media']);
+
+        return $resumo;
+    }
+
     private function porAluno($query, Aluno $aluno): void
     {
         $query->where('ra', $aluno->ra);

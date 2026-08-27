@@ -63,21 +63,26 @@ class RelatorioAlunoService
     /** @return array{posicao: int, totalRespondentes: int, percentil: float}|null */
     public function rankingPercentil(Aluno $aluno, Avaliacao $avaliacao, string $periodo): ?array
     {
-        $percentuais = DB::table('resultado_resumos')
+        $resumos = DB::table('resultado_resumos')
             ->where('avaliacao_codigo', $avaliacao->codigo)
             ->where('periodo', $periodo)
             ->whereNotNull('percentual')
-            ->orderByDesc('percentual')
-            ->pluck('percentual', 'aluno_chave');
+            ->select('ra', 'cpf', 'percentual')
+            ->get();
 
-        $chave = $aluno->cpf ?: $aluno->ra;
-        if (! $percentuais->has($chave) || $percentuais->count() < 2) {
+        // Casa por ra OU cpf (nunca uma chave só) pelo mesmo motivo de
+        // comparativoTurma() logo acima: `aluno_chave` é COALESCE(cpf, ra) da
+        // LINHA importada, que pode não ter cpf preenchido mesmo quando o
+        // cadastro do Aluno tem — presumir "$aluno->cpf ?: $aluno->ra" aqui
+        // deixava de encontrar a própria linha do aluno nesse caso.
+        $suaLinha = $resumos->first(fn ($r) => $r->ra === $aluno->ra || ($aluno->cpf && $r->cpf === $aluno->cpf));
+        if ($suaLinha === null || $resumos->count() < 2) {
             return null;
         }
 
-        $suaNota = (float) $percentuais->get($chave);
-        $total = $percentuais->count();
-        $posicao = $percentuais->filter(fn ($p) => (float) $p > $suaNota)->count() + 1;
+        $suaNota = (float) $suaLinha->percentual;
+        $total = $resumos->count();
+        $posicao = $resumos->filter(fn ($r) => (float) $r->percentual > $suaNota)->count() + 1;
 
         return [
             'posicao' => $posicao,

@@ -105,4 +105,30 @@ class AvaliacaoVisualizacaoTest extends TestCase
         $detalhe->assertOk();
         $detalhe->assertSee('grafico-radar-disciplina', false);
     }
+
+    public function test_percentil_aparece_mesmo_quando_resposta_importada_so_tem_ra_mas_aluno_tem_cpf_cadastrado(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A']);
+
+        // As respostas importadas só trazem RA (sem CPF na planilha) — cenário comum —
+        // mas o cadastro do Aluno tem CPF preenchido (usado pro login do portal).
+        // aluno_chave = COALESCE(cpf, ra) da LINHA importada vira o RA, não o CPF.
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2026001', 'questao_numero' => 1, 'resposta' => 'A']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2026002', 'questao_numero' => 1, 'resposta' => 'C']);
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+
+        $this->admin();
+        Aluno::create(['ra' => '2026001', 'cpf' => '12345678909', 'data_nascimento' => '2000-03-15', 'nome' => 'Fulano']);
+
+        $this->followingRedirects()->post('/portal/consultar', [
+            'cpf' => '123.456.789-09',
+            'data_nascimento' => '15/03/2000',
+        ]);
+
+        $detalhe = $this->get(route('portal.resultados.avaliacao', ['avaliacao' => $avaliacao->codigo, 'periodo' => '']));
+        $detalhe->assertOk();
+        $detalhe->assertSee('Posição relativa');
+        $detalhe->assertSee('posição 1 de 2', false);
+    }
 }

@@ -1,7 +1,7 @@
 @extends('layouts.portal')
 
 @section('title', "Resultados — {$aluno->ra}")
-@section('container-class', 'max-w-5xl')
+@section('container-class', 'max-w-6xl')
 
 @php
     $nomeCompleto = $aluno->nome ? mb_convert_case(mb_strtolower(trim($aluno->nome), 'UTF-8'), MB_CASE_TITLE, 'UTF-8') : $aluno->ra;
@@ -60,6 +60,67 @@
     if (el) el.textContent = saudacao + ',';
 })();
 </script>
+
+@if (count($evolucaoGeral) >= 2 || ! empty($resumoPorCategoria))
+    <div class="grid lg:grid-cols-2 gap-4 mb-6 fade-in">
+        @if (count($evolucaoGeral) >= 2)
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                    <i class="ph-bold ph-trend-up text-primary"></i> Evolução do desempenho
+                </p>
+                <canvas id="grafico-evolucao-geral" height="110"></canvas>
+            </div>
+        @endif
+
+        @if (! empty($resumoPorCategoria))
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                    <i class="ph-bold ph-chart-bar-horizontal text-primary"></i> Desempenho por categoria
+                </p>
+                <div class="space-y-3">
+                    @foreach ($resumoPorCategoria as $c)
+                        <div>
+                            <div class="flex items-center justify-between text-xs mb-1">
+                                <span class="font-medium text-slate-600 truncate">{{ $c['nome'] }}</span>
+                                <span class="font-bold text-slate-700 shrink-0 ml-2">{{ $c['media'] }}%</span>
+                            </div>
+                            <div class="h-2 rounded-full bg-slate-100 overflow-hidden">
+                                <div class="h-full rounded-full bg-primary" style="width: {{ max(3, $c['media']) }}%"></div>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        @endif
+    </div>
+
+    @if (count($evolucaoGeral) >= 2)
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+        <script>
+        new Chart(document.getElementById('grafico-evolucao-geral'), {
+            type: 'line',
+            data: {
+                labels: {{ Js::from(array_column($evolucaoGeral, 'nome')) }},
+                datasets: [{
+                    label: '% de acerto',
+                    data: {{ Js::from(array_column($evolucaoGeral, 'percentual')) }},
+                    borderColor: '#00b48d',
+                    backgroundColor: 'rgba(0,180,141,0.12)',
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointBackgroundColor: '#00b48d',
+                    fill: true,
+                    tension: 0.3,
+                }],
+            },
+            options: {
+                scales: { y: { beginAtZero: true, max: 100, grid: { color: '#f1f5f9' } }, x: { grid: { display: false } } },
+                plugins: { legend: { display: false } },
+            },
+        });
+        </script>
+    @endif
+@endif
 
 @if (! empty($periodosDisponiveis) || ! empty($arvore) || ! empty($semCategoria))
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-6 flex flex-wrap items-end gap-3">

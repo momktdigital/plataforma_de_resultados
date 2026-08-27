@@ -30,7 +30,7 @@
 <body class="bg-secondary text-dark min-h-screen flex flex-col">
 
 <div class="bg-white shadow-sm sticky top-0 z-40">
-    <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
         <a href="{{ route('portal.consulta') }}" class="flex items-center gap-2">
             @if ($siteLogo || $siteLogoDark)
                 @if ($siteLogo)
