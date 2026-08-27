@@ -118,7 +118,7 @@
                 @if ($areasDetalhe->isNotEmpty() || $temasDetalhe->isNotEmpty())
                     <div class="flex flex-wrap gap-2">
                         @if ($areasDetalhe->isNotEmpty())
-                            <select id="filtro-detalhe-area" onchange="portalFiltrarDetalheQuestoes()" class="text-xs rounded-lg border border-slate-300 px-2 py-1.5">
+                            <select id="filtro-detalhe-area" onchange="portalAreaFiltroMudou()" class="text-xs rounded-lg border border-slate-300 px-2 py-1.5">
                                 <option value="">Todas as áreas</option>
                                 @foreach ($areasDetalhe as $area)
                                     <option value="{{ $area }}">{{ $area }}</option>
@@ -479,6 +479,44 @@ function portalFecharDetalheQuestao() {
 document.addEventListener('keydown', function (event) {
     if (event.key === 'Escape') portalFecharDetalheQuestao();
 });
+
+function portalTemasDaArea(area) {
+    const temas = new Set();
+    Object.values(PORTAL_QUESTOES).forEach(function (q) {
+        if (q.tema && (!area || q.area === area)) temas.add(q.tema);
+    });
+    return Array.from(temas).sort();
+}
+
+// Ao trocar a área, os temas do outro <select> são restritos aos que
+// realmente existem naquela área — senão dá pra escolher uma combinação
+// impossível (área X + tema de outra área) que nunca bate com nada no grid.
+function portalAreaFiltroMudou() {
+    const areaSel = document.getElementById('filtro-detalhe-area');
+    const temaSel = document.getElementById('filtro-detalhe-tema');
+
+    if (temaSel) {
+        const temaAtual = temaSel.value;
+        const temas = portalTemasDaArea(areaSel ? areaSel.value : '');
+
+        temaSel.innerHTML = '';
+        const optionTodos = document.createElement('option');
+        optionTodos.value = '';
+        optionTodos.textContent = 'Todos os temas';
+        temaSel.appendChild(optionTodos);
+
+        temas.forEach(function (tema) {
+            const option = document.createElement('option');
+            option.value = tema;
+            option.textContent = tema;
+            temaSel.appendChild(option);
+        });
+
+        temaSel.value = temas.includes(temaAtual) ? temaAtual : '';
+    }
+
+    portalFiltrarDetalheQuestoes();
+}
 
 function portalFiltrarDetalheQuestoes() {
     const areaSel = document.getElementById('filtro-detalhe-area');
