@@ -117,7 +117,12 @@
                             <td class="px-4 py-3">{{ $r['ra'] ?: '—' }}</td>
                             <td class="px-4 py-3">{{ $r['turma'] ?: '—' }}</td>
                             <td class="px-4 py-3">{{ $r['acertos'] }}/{{ $r['total'] }}</td>
-                            <td class="px-4 py-3 font-bold text-emerald-700">{{ $r['percentual'] }}%</td>
+                            <td class="px-4 py-3">
+                                <div class="relative w-24">
+                                    <div class="absolute inset-y-0 left-0 bg-emerald-100 rounded" style="width: {{ $r['percentual'] }}%"></div>
+                                    <span class="relative font-bold text-emerald-800 px-1">{{ $r['percentual'] }}%</span>
+                                </div>
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>
@@ -210,21 +215,52 @@
 @endif
 
 @if ($estado['perfil_demografico']['visivelAdmin'] && $perfilDemografico !== null)
-    <div class="grid sm:grid-cols-3 gap-6 mb-6">
-        @foreach ([['sexo', 'Sexo'], ['cor_raca', 'Cor/raça'], ['uf', 'UF']] as [$campo, $titulo])
-            <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-                <h2 class="font-semibold mb-3">{{ $titulo }}</h2>
-                @if (empty($perfilDemografico[$campo]))
-                    <p class="text-sm text-slate-400">Sem dados.</p>
-                @else
-                    <ul class="text-sm space-y-1">
-                        @foreach ($perfilDemografico[$campo] as $valor => $total)
-                            <li class="flex justify-between"><span class="text-slate-600">{{ $valor }}</span><span class="font-bold">{{ $total }}</span></li>
-                        @endforeach
-                    </ul>
-                @endif
-            </div>
-        @endforeach
+    <div class="grid lg:grid-cols-3 gap-6 mb-6">
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+            <h2 class="font-semibold mb-3">Sexo</h2>
+            @if (empty($perfilDemografico['sexo']))
+                <p class="text-sm text-slate-400">Sem dados.</p>
+            @else
+                <canvas id="grafico-sexo" height="200"></canvas>
+            @endif
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+            <h2 class="font-semibold mb-3">Cor/raça</h2>
+            @if (empty($perfilDemografico['cor_raca']))
+                <p class="text-sm text-slate-400">Sem dados.</p>
+            @else
+                <canvas id="grafico-cor-raca" height="200"></canvas>
+            @endif
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+            <h2 class="font-semibold mb-3">UF</h2>
+            @if (empty($perfilDemografico['uf']))
+                <p class="text-sm text-slate-400">Sem dados.</p>
+            @else
+                @php
+                    $maximoUf = max($perfilDemografico['uf']);
+                    $topUf = array_slice($perfilDemografico['uf'], 0, 8, true);
+                @endphp
+                <svg viewBox="{{ \App\Support\MapaBrasilSvg::viewBox() }}" class="w-full h-auto mb-3">
+                    @foreach (\App\Support\MapaBrasilSvg::caminhos() as $uf => $d)
+                        @php $valorUf = $perfilDemografico['uf'][$uf] ?? null; @endphp
+                        <path d="{{ $d }}" fill="{{ \App\Support\MapaBrasilSvg::corPorValor($valorUf, $maximoUf) }}"
+                              stroke="#fff" stroke-width="1"><title>{{ $uf }}: {{ $valorUf ?? 0 }}</title></path>
+                    @endforeach
+                </svg>
+                <ul class="text-xs space-y-1">
+                    @foreach ($topUf as $uf => $total)
+                        <li class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-sm shrink-0" style="background-color: {{ \App\Support\MapaBrasilSvg::corPorValor($total, $maximoUf) }}"></span>
+                            <span class="text-slate-600 flex-1">{{ $uf }}</span>
+                            <span class="font-bold">{{ $total }}</span>
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+        </div>
     </div>
 @endif
 
@@ -254,26 +290,46 @@
 @endif
 
 @if ($estado['analise_alternativas']['visivelAdmin'] && $analiseAlternativas !== null)
-    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6 overflow-x-auto">
-        <h2 class="font-semibold mb-4">Análise de alternativas por questão</h2>
-        @if (empty($analiseAlternativas))
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
+        <h2 class="font-semibold mb-1">Análise de alternativas por questão</h2>
+        @if (empty($analiseAlternativas['questoes']))
             <p class="text-sm text-slate-400">Sem dados suficientes.</p>
         @else
-            <table class="text-sm w-full">
-                <thead class="bg-slate-50 text-slate-500 text-left"><tr><th class="px-3 py-2">Questão</th><th class="px-3 py-2">Alternativas marcadas</th></tr></thead>
-                <tbody class="divide-y divide-slate-100">
-                    @foreach ($analiseAlternativas as $q)
+            <p class="text-xs text-slate-500 mb-4 flex flex-wrap items-center gap-4">
+                <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-emerald-100 border border-emerald-300 inline-block"></span> alternativa mais marcada</span>
+                <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm ring-2 ring-inset ring-amber-500 inline-block"></span> gabarito</span>
+            </p>
+            <div class="overflow-x-auto">
+                <table class="text-sm border-collapse">
+                    <thead>
                         <tr>
-                            <td class="px-3 py-2 font-mono align-top">Q{{ $q['numero'] }}</td>
-                            <td class="px-3 py-2">
-                                @foreach ($q['alternativas'] as $alternativa => $total)
-                                    <span class="inline-block mr-3 mb-1"><span class="font-bold">{{ $alternativa }}</span>: {{ $total }}</span>
-                                @endforeach
-                            </td>
+                            <th class="px-2 py-2 text-left text-slate-500 sticky left-0 bg-white">Alternativa</th>
+                            @foreach ($analiseAlternativas['questoes'] as $q)
+                                <th class="px-2 py-2 text-center text-slate-500 font-mono whitespace-nowrap">Q{{ $q['numero'] }}</th>
+                            @endforeach
                         </tr>
-                    @endforeach
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach ($analiseAlternativas['alternativas'] as $alternativa)
+                            <tr class="border-t border-slate-100">
+                                <td class="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white">{{ $alternativa }}</td>
+                                @foreach ($analiseAlternativas['questoes'] as $q)
+                                    @php
+                                        $total = $q['contagens'][$alternativa] ?? 0;
+                                        $ehMaisMarcada = $total > 0 && $alternativa === $q['maisMarcada'];
+                                        $ehGabarito = $q['gabarito'] !== null && $q['gabarito'] !== '' && $alternativa === $q['gabarito'];
+                                    @endphp
+                                    <td class="px-2 py-1.5 text-center w-11 whitespace-nowrap
+                                        {{ $ehMaisMarcada ? 'bg-emerald-100 text-emerald-800 font-bold' : ($total > 0 ? 'text-slate-600' : 'text-slate-300') }}
+                                        {{ $ehGabarito ? 'ring-2 ring-inset ring-amber-500' : '' }}">
+                                        {{ $total > 0 ? $total : '—' }}
+                                    </td>
+                                @endforeach
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
         @endif
     </div>
 @endif
@@ -289,10 +345,17 @@
                 <thead class="bg-slate-50 text-slate-500 text-left"><tr><th class="px-4 py-2">Métrica</th><th class="px-4 py-2">N</th><th class="px-4 py-2">Correlação</th></tr></thead>
                 <tbody class="divide-y divide-slate-100">
                     @foreach ($correlacaoMetricas as $m)
+                        @php
+                            $r = $m['correlacao'];
+                            $intensidade = $r !== null ? min(1, max(0, (abs($r) - 0.3) / 0.7)) : 0;
+                            $corFundo = $r === null || abs($r) < 0.3
+                                ? null
+                                : ($r > 0 ? 'rgba(16,185,129,'.round(0.1 + 0.35 * $intensidade, 2).')' : 'rgba(239,68,68,'.round(0.1 + 0.35 * $intensidade, 2).')');
+                        @endphp
                         <tr>
                             <td class="px-4 py-2">{{ $m['nome_metrica'] }}</td>
                             <td class="px-4 py-2">{{ $m['n'] }}</td>
-                            <td class="px-4 py-2 font-bold">{{ $m['correlacao'] ?? '—' }}</td>
+                            <td class="px-4 py-2 font-bold" style="{{ $corFundo ? 'background-color: '.$corFundo : '' }}">{{ $r ?? '—' }}</td>
                         </tr>
                     @endforeach
                 </tbody>
@@ -387,6 +450,28 @@ new Chart(document.getElementById('grafico-miller'), {
         datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($mediaPorMiller)) }}, backgroundColor: '#10b981' }],
     },
     options: { indexAxis: 'y', scales: { x: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
+});
+@endif
+
+@if (! empty($perfilDemografico['sexo']))
+new Chart(document.getElementById('grafico-sexo'), {
+    type: 'doughnut',
+    data: {
+        labels: {{ Js::from(array_keys($perfilDemografico['sexo'])) }},
+        datasets: [{ data: {{ Js::from(array_values($perfilDemografico['sexo'])) }}, backgroundColor: ['#10b981', '#94a3b8', '#f59e0b', '#6366f1'] }],
+    },
+    options: { plugins: { legend: { position: 'bottom' } } },
+});
+@endif
+
+@if (! empty($perfilDemografico['cor_raca']))
+new Chart(document.getElementById('grafico-cor-raca'), {
+    type: 'bar',
+    data: {
+        labels: {{ Js::from(array_keys($perfilDemografico['cor_raca'])) }},
+        datasets: [{ data: {{ Js::from(array_values($perfilDemografico['cor_raca'])) }}, backgroundColor: '#10b981', borderRadius: 4, maxBarThickness: 22 }],
+    },
+    options: { indexAxis: 'y', scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }, plugins: { legend: { display: false } } },
 });
 @endif
 

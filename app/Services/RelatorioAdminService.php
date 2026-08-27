@@ -249,24 +249,59 @@ class RelatorioAdminService
         ];
     }
 
-    /** @return array<int, array{numero: int, alternativas: array<string, int>}> */
+    /**
+     * Matriz questão x alternativa: uma coluna por questão, pra comparar de
+     * relance qual foi a alternativa mais marcada em cada uma e se ela bate
+     * com o gabarito — a view usa 'gabarito' e 'maisMarcada' pra destacar a
+     * célula certa (borda) e a mais popular (cor de fundo) de cada coluna.
+     *
+     * @return array{alternativas: array<int, string>, questoes: array<int, array{numero: int, gabarito: ?string, maisMarcada: ?string, contagens: array<string, int>}>}
+     */
     public function analiseAlternativas(Avaliacao $avaliacao): array
     {
+        $gabaritos = DB::table('questoes')
+            ->where('avaliacao_codigo', $avaliacao->codigo)
+            ->whereNull('deleted_at')
+            ->pluck('gabarito', 'numero');
+
         $linhas = DB::table('respostas')
             ->where('avaliacao_codigo', $avaliacao->codigo)
             ->whereNull('deleted_at')
             ->groupBy('questao_numero', 'resposta')
-            ->selectRaw("questao_numero, COALESCE(NULLIF(resposta, ''), '(em branco)') as alternativa, COUNT(*) as total")
-            ->orderBy('questao_numero')
+            ->selectRaw("questao_numero, COALESCE(NULLIF(resposta, ''), '—') as alternativa, COUNT(*) as total")
             ->get();
+
+        if ($linhas->isEmpty()) {
+            return ['alternativas' => [], 'questoes' => []];
+        }
+
+        // Linhas do grid em ordem fixa: letras simples (A, B, C...) primeiro,
+        // qualquer marcação composta (ex.: "B,D", vindas de gabarito múltiplo)
+        // depois, e "em branco" sempre por último — assim toda coluna usa a
+        // mesma ordem de linhas, o que é o que faz a matriz ser comparável.
+        $todas = $linhas->pluck('alternativa')->unique();
+        $simples = $todas->filter(fn ($a) => preg_match('/^[A-Z]$/', $a))->sort()->values();
+        $compostas = $todas->diff($simples)->diff(['—'])->sort()->values();
+        $ordemAlternativas = $simples->concat($compostas)
+            ->when($todas->contains('—'), fn ($c) => $c->push('—'))
+            ->values()->all();
 
         $porQuestao = [];
         foreach ($linhas as $linha) {
-            $porQuestao[$linha->questao_numero]['numero'] = (int) $linha->questao_numero;
-            $porQuestao[$linha->questao_numero]['alternativas'][$linha->alternativa] = (int) $linha->total;
+            $numero = (int) $linha->questao_numero;
+            $porQuestao[$numero]['numero'] ??= $numero;
+            $porQuestao[$numero]['gabarito'] ??= $gabaritos->get($numero);
+            $porQuestao[$numero]['contagens'][$linha->alternativa] = (int) $linha->total;
         }
 
-        return array_values($porQuestao);
+        foreach ($porQuestao as &$questao) {
+            $questao['maisMarcada'] = collect($questao['contagens'])->sortDesc()->keys()->first();
+        }
+        unset($questao);
+
+        ksort($porQuestao);
+
+        return ['alternativas' => $ordemAlternativas, 'questoes' => array_values($porQuestao)];
     }
 
     /** @return array<int, array{nome_metrica: string, n: int, correlacao: ?float}> */
