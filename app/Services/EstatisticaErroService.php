@@ -30,7 +30,11 @@ class EstatisticaErroService
                     ->where('questoes.avaliacao_codigo', $avaliacao->codigo)
                     ->whereNull('questoes.deleted_at')
                     ->whereNotNull('questoes.gabarito')
-                    ->where('questoes.gabarito', '!=', '');
+                    ->where('questoes.gabarito', '!=', '')
+                    // Questão anulada (qualquer modo) já recebeu atenção do
+                    // admin — não faz sentido continuar sinalizando ela como
+                    // "crítica" depois disso.
+                    ->whereNull('questoes.anulada_modo');
             })
             ->where('respostas.avaliacao_codigo', $avaliacao->codigo)
             ->selectRaw('respostas.questao_numero as numero')

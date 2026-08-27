@@ -17,6 +17,7 @@ class Questao extends Model
         'avaliacao_codigo',
         'numero',
         'gabarito',
+        'anulada_modo',
         'area',
         'tema',
         'habilidade',

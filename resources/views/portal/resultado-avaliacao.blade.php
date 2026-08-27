@@ -97,21 +97,26 @@
             <div class="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2 mb-6">
                 @foreach ($r['respostas'] as $resposta)
                     @php
+                        $anuladaModo = $r['anuladas'][$resposta->questao_numero] ?? null;
                         $correta = $r['gabaritos'][$resposta->questao_numero] ?? null;
                         $marcada = $resposta->resposta ?: '';
                         $cor = 'bg-slate-400';
                         if ($correta !== null && $correta !== '') {
-                            $cor = $marcada === $correta ? 'bg-green-500' : ($marcada === '' ? 'bg-slate-400' : 'bg-red-500');
+                            $acertou = \App\Support\Anulacao::acertou($marcada, $correta, $anuladaModo);
+                            $cor = $acertou ? 'bg-green-500' : ($marcada === '' ? 'bg-slate-400' : 'bg-red-500');
                         }
                     @endphp
-                    <div class="rounded-lg overflow-hidden border border-slate-200 shadow-sm">
-                        <div class="{{ $cor }} text-white text-[10px] text-center font-bold py-1">Q{{ $resposta->questao_numero }}</div>
+                    <div class="rounded-lg overflow-hidden border border-slate-200 shadow-sm" @if ($anuladaModo) title="Questão anulada — não conta na nota" @endif>
+                        <div class="{{ $cor }} text-white text-[10px] text-center font-bold py-1">Q{{ $resposta->questao_numero }}{{ $anuladaModo ? '*' : '' }}</div>
                         <div class="bg-white text-center font-bold text-sm py-1.5 {{ $marcada === '' ? 'text-slate-300' : 'text-slate-700' }}">
                             {{ $marcada !== '' ? $marcada : '-' }}
                         </div>
                     </div>
                 @endforeach
             </div>
+            @if ($r['anuladas']->isNotEmpty())
+                <p class="text-xs text-slate-400 -mt-4 mb-6">* Questão anulada — não conta na nota.</p>
+            @endif
         @endif
 
         @php
@@ -250,8 +255,8 @@
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             @foreach ($comparativoQuestao as $q)
-                                <tr>
-                                    <td class="px-3 py-2 font-mono">Q{{ $q['numero'] }}</td>
+                                <tr @if ($q['anulada']) title="Questão anulada — não conta na nota" @endif>
+                                    <td class="px-3 py-2 font-mono">Q{{ $q['numero'] }}{{ $q['anulada'] ? '*' : '' }}</td>
                                     <td class="px-3 py-2 {{ $q['acertou'] ? 'text-green-600 font-bold' : 'text-red-600 font-bold' }}">{{ $q['sua_resposta'] ?: '—' }}</td>
                                     <td class="px-3 py-2">{{ $q['gabarito'] }}</td>
                                     <td class="px-3 py-2">{{ $q['taxa_acerto_turma'] }}%</td>

@@ -5,6 +5,7 @@ namespace App\Services\Portal;
 use App\Models\Aluno;
 use App\Models\Avaliacao;
 use App\Support\AlunoVinculoResolver;
+use App\Support\Anulacao;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -94,18 +95,19 @@ class RelatorioAlunoService
     /** @return array<string, float> */
     public function radarDisciplina(Collection $respostas, Collection $gabaritos, Avaliacao $avaliacao): array
     {
-        $disciplinasPorNumero = DB::table('questao_matrizes as m')
+        $linhas = DB::table('questao_matrizes as m')
             ->join('questoes as q', 'q.id', '=', 'm.questao_id')
             ->where('q.avaliacao_codigo', $avaliacao->codigo)
             ->whereNull('q.deleted_at')
             ->whereNotNull('m.disciplina')
             ->where('m.disciplina', '!=', '')
-            ->select('q.numero', 'm.disciplina')
-            ->get()
-            ->groupBy('numero')
-            ->map(fn ($grupo) => $grupo->pluck('disciplina')->unique()->all());
+            ->select('q.numero', 'm.disciplina', 'q.anulada_modo')
+            ->get();
 
-        return $this->mediaPorAgrupamentoMultiplo($respostas, $gabaritos, $disciplinasPorNumero);
+        $disciplinasPorNumero = $linhas->groupBy('numero')->map(fn ($grupo) => $grupo->pluck('disciplina')->unique()->all());
+        $anuladasPorNumero = $linhas->pluck('anulada_modo', 'numero');
+
+        return $this->mediaPorAgrupamentoMultiplo($respostas, $gabaritos, $disciplinasPorNumero, $anuladasPorNumero);
     }
 
     /** @return array<string, float> */
@@ -126,25 +128,33 @@ class RelatorioAlunoService
         return $this->desempenhoPorCampoDireto($respostas, $gabaritos, $avaliacao, 'miller_nivel');
     }
 
-    /** @return array<int, array{numero: int, sua_resposta: string, gabarito: string, acertou: bool, taxa_acerto_turma: float}> */
+    /** @return array<int, array{numero: int, sua_resposta: string, gabarito: string, anulada: bool, acertou: bool, taxa_acerto_turma: float}> */
     public function comparativoQuestao(Avaliacao $avaliacao, string $periodo, Collection $respostas, Collection $gabaritos): array
     {
         $taxasPorQuestao = DB::table('respostas as r')
             ->join('questoes as q', function ($join) use ($avaliacao) {
-                $join->on('q.numero', '=', 'r.questao_numero')
-                    ->where('q.avaliacao_codigo', $avaliacao->codigo)
-                    ->whereNull('q.deleted_at')
-                    ->whereNotNull('q.gabarito')
-                    ->where('q.gabarito', '!=', '');
+                Anulacao::excluirDistribuidas(
+                    $join->on('q.numero', '=', 'r.questao_numero')
+                        ->where('q.avaliacao_codigo', $avaliacao->codigo)
+                        ->whereNull('q.deleted_at')
+                        ->whereNotNull('q.gabarito')
+                        ->where('q.gabarito', '!=', ''),
+                    'q.anulada_modo',
+                );
             })
             ->where('r.avaliacao_codigo', $avaliacao->codigo)
             ->where('r.periodo', $periodo)
             ->groupBy('r.questao_numero')
             ->selectRaw('r.questao_numero as numero')
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw('SUM(CASE WHEN r.resposta = q.gabarito THEN 1 ELSE 0 END) as acertos')
+            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
             ->get()
             ->keyBy('numero');
+
+        $anuladasPorNumero = DB::table('questoes')
+            ->where('avaliacao_codigo', $avaliacao->codigo)
+            ->whereNull('deleted_at')
+            ->pluck('anulada_modo', 'numero');
 
         $resultado = [];
         foreach ($respostas as $resposta) {
@@ -153,13 +163,15 @@ class RelatorioAlunoService
                 continue;
             }
 
+            $anuladaModo = $anuladasPorNumero->get($resposta->questao_numero);
             $taxa = $taxasPorQuestao->get($resposta->questao_numero);
 
             $resultado[] = [
                 'numero' => (int) $resposta->questao_numero,
                 'sua_resposta' => (string) ($resposta->resposta ?: ''),
                 'gabarito' => $gabarito,
-                'acertou' => $resposta->resposta === $gabarito,
+                'anulada' => $anuladaModo !== null,
+                'acertou' => Anulacao::acertou($resposta->resposta, $gabarito, $anuladaModo),
                 'taxa_acerto_turma' => $taxa !== null && (int) $taxa->total > 0
                     ? round((int) $taxa->acertos / (int) $taxa->total * 100, 1)
                     : 0.0,
@@ -211,7 +223,7 @@ class RelatorioAlunoService
             ->whereNull('deleted_at')
             ->whereNotNull('area')->where('area', '!=', '')
             ->whereNotNull('tema')->where('tema', '!=', '')
-            ->select('numero', 'area', 'tema')
+            ->select('numero', 'area', 'tema', 'anulada_modo')
             ->get()
             ->keyBy('numero');
 
@@ -225,7 +237,14 @@ class RelatorioAlunoService
                 continue;
             }
 
-            if ($resposta->resposta === $gabarito) {
+            // Questão distribuir_pontuacao saiu da prova — não deve aparecer
+            // nem como lacuna nem como conhecimento consolidado, pois não
+            // reflete mais o conteúdo oficialmente avaliado.
+            if (Anulacao::distribuida($meta->anulada_modo)) {
+                continue;
+            }
+
+            if (Anulacao::acertou($resposta->resposta, $gabarito, $meta->anulada_modo)) {
                 $acertosPorArea[$meta->area]['total'] = ($acertosPorArea[$meta->area]['total'] ?? 0) + 1;
                 $acertosPorArea[$meta->area]['temas'][$meta->tema] = true;
             } else {
@@ -288,15 +307,19 @@ class RelatorioAlunoService
     /** @return array<string, float> */
     private function desempenhoPorCampoDireto(Collection $respostas, Collection $gabaritos, Avaliacao $avaliacao, string $campo): array
     {
-        $valoresPorNumero = DB::table('questoes')
+        $linhas = DB::table('questoes')
             ->where('avaliacao_codigo', $avaliacao->codigo)
             ->whereNull('deleted_at')
             ->whereNotNull($campo)
             ->where($campo, '!=', '')
-            ->pluck($campo, 'numero')
-            ->map(fn ($v) => [$v]);
+            ->select('numero', "{$campo} as valor", 'anulada_modo')
+            ->get()
+            ->keyBy('numero');
 
-        return $this->mediaPorAgrupamentoMultiplo($respostas, $gabaritos, $valoresPorNumero);
+        $valoresPorNumero = $linhas->map(fn ($l) => [$l->valor]);
+        $anuladasPorNumero = $linhas->pluck('anulada_modo', 'numero');
+
+        return $this->mediaPorAgrupamentoMultiplo($respostas, $gabaritos, $valoresPorNumero, $anuladasPorNumero);
     }
 
     /**
@@ -305,9 +328,10 @@ class RelatorioAlunoService
      * numero => lista de grupos, não numero => grupo único.
      *
      * @param  Collection<int, array<int, string>>  $gruposPorNumero
+     * @param  ?Collection<int, ?string>  $anuladasPorNumero  numero => anulada_modo
      * @return array<string, float>
      */
-    private function mediaPorAgrupamentoMultiplo(Collection $respostas, Collection $gabaritos, Collection $gruposPorNumero): array
+    private function mediaPorAgrupamentoMultiplo(Collection $respostas, Collection $gabaritos, Collection $gruposPorNumero, ?Collection $anuladasPorNumero = null): array
     {
         $acumulado = [];
 
@@ -319,7 +343,12 @@ class RelatorioAlunoService
                 continue;
             }
 
-            $acertou = $resposta->resposta === $gabarito;
+            $anuladaModo = $anuladasPorNumero?->get($resposta->questao_numero);
+            if (Anulacao::distribuida($anuladaModo)) {
+                continue;
+            }
+
+            $acertou = Anulacao::acertou($resposta->resposta, $gabarito, $anuladaModo);
 
             foreach ($grupos as $grupo) {
                 $acumulado[$grupo] ??= ['acertos' => 0, 'total' => 0];

@@ -389,6 +389,7 @@
             <p class="text-xs text-slate-500 mb-4 flex flex-wrap items-center gap-4">
                 <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-emerald-100 border border-emerald-300 inline-block"></span> gabarito</span>
                 <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-amber-100 border border-amber-300 inline-block"></span> distrator (alternativa errada mais marcada)</span>
+                <span class="inline-flex items-center gap-1.5"><span class="font-bold">*</span> questão anulada — não conta na nota</span>
             </p>
             <div class="overflow-x-auto max-h-[40rem] overflow-y-auto">
                 <table class="text-sm border-collapse w-full">
@@ -404,8 +405,8 @@
                     </thead>
                     <tbody class="divide-y divide-slate-100">
                         @foreach ($analiseAlternativas as $q)
-                            <tr>
-                                <td class="px-3 py-2 font-bold text-slate-600 font-mono whitespace-nowrap">Q{{ $q['numero'] }}</td>
+                            <tr @if ($q['anulada']) title="Questão anulada — não conta na nota" @endif>
+                                <td class="px-3 py-2 font-bold text-slate-600 font-mono whitespace-nowrap">Q{{ $q['numero'] }}{{ $q['anulada'] ? '*' : '' }}</td>
                                 <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $q['area'] ?? '—' }}</td>
                                 <td class="px-3 py-2 text-slate-500">{{ $q['tema'] ?? '—' }}</td>
                                 <td class="px-3 py-2">

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Avaliacao;
 use App\Support\AlunoVinculoResolver;
+use App\Support\Anulacao;
 use App\Support\FiltroDemografico;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -139,13 +140,14 @@ class RelatorioAdminService
     /** @return array<int, array{numero: int, dificuldade_tri: float, taxa_acerto: float}> */
     public function dispersaoTri(Avaliacao $avaliacao): array
     {
-        $porQuestao = DB::table('questoes')
-            ->where('avaliacao_codigo', $avaliacao->codigo)
-            ->whereNull('deleted_at')
-            ->whereNotNull('gabarito')
-            ->where('gabarito', '!=', '')
-            ->whereNotNull('dificuldade_tri')
-            ->select('numero', 'dificuldade_tri')
+        $porQuestao = Anulacao::excluirDistribuidas(
+            DB::table('questoes')
+                ->where('avaliacao_codigo', $avaliacao->codigo)
+                ->whereNull('deleted_at')
+                ->whereNotNull('gabarito')
+                ->where('gabarito', '!=', '')
+                ->whereNotNull('dificuldade_tri')
+        )->select('numero', 'dificuldade_tri')
             ->get()
             ->keyBy('numero');
 
@@ -164,7 +166,7 @@ class RelatorioAdminService
             ->groupBy('r.questao_numero')
             ->selectRaw('r.questao_numero as numero')
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw('SUM(CASE WHEN r.resposta = q.gabarito THEN 1 ELSE 0 END) as acertos')
+            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
             ->get()
             ->keyBy('numero');
 
@@ -207,13 +209,16 @@ class RelatorioAdminService
 
         $porAlunoHabilidade = DB::table('respostas as r')
             ->join('questoes as q', function ($join) use ($avaliacao) {
-                $join->on('q.numero', '=', 'r.questao_numero')
-                    ->where('q.avaliacao_codigo', $avaliacao->codigo)
-                    ->whereNull('q.deleted_at')
-                    ->whereNotNull('q.gabarito')
-                    ->where('q.gabarito', '!=', '')
-                    ->whereNotNull('q.habilidade')
-                    ->where('q.habilidade', '!=', '');
+                Anulacao::excluirDistribuidas(
+                    $join->on('q.numero', '=', 'r.questao_numero')
+                        ->where('q.avaliacao_codigo', $avaliacao->codigo)
+                        ->whereNull('q.deleted_at')
+                        ->whereNotNull('q.gabarito')
+                        ->where('q.gabarito', '!=', '')
+                        ->whereNotNull('q.habilidade')
+                        ->where('q.habilidade', '!=', ''),
+                    'q.anulada_modo',
+                );
             })
             ->where('r.avaliacao_codigo', $avaliacao->codigo)
             ->when($periodo !== '', fn ($q) => $q->where('r.periodo', $periodo))
@@ -221,7 +226,7 @@ class RelatorioAdminService
             ->groupBy('r.aluno_chave', 'q.habilidade')
             ->selectRaw('r.aluno_chave as aluno_chave, q.habilidade as habilidade')
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw('SUM(CASE WHEN r.resposta = q.gabarito THEN 1 ELSE 0 END) as acertos')
+            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
             ->get();
 
         if ($porAlunoHabilidade->isEmpty()) {
@@ -280,14 +285,20 @@ class RelatorioAdminService
      * a mais escolhida entre as erradas — o "distrator" que mais confundiu
      * os respondentes.
      *
-     * @return array<int, array{numero: int, area: ?string, tema: ?string, gabarito: ?string, totalRespostas: int, percentualAcerto: float, alternativas: array<int, array{letra: string, total: int, percentual: float, ehGabarito: bool, ehDistrator: bool}>}>
+     * O % de acerto e a distribuição aqui são sempre os valores BRUTOS (sem
+     * aplicar a regra de anulação) — o propósito deste visual é diagnóstico
+     * (o que os respondentes realmente marcaram), então anular a questão não
+     * deve maquiar esse número; só marca 'anulada' pra avisar que ela não
+     * conta mais na nota (ver App\Support\Anulacao).
+     *
+     * @return array<int, array{numero: int, area: ?string, tema: ?string, gabarito: ?string, anulada: bool, totalRespostas: int, percentualAcerto: float, alternativas: array<int, array{letra: string, total: int, percentual: float, ehGabarito: bool, ehDistrator: bool}>}>
      */
     public function analiseAlternativas(Avaliacao $avaliacao, string $periodo = '', ?FiltroDemografico $filtro = null): array
     {
         $questoes = DB::table('questoes')
             ->where('avaliacao_codigo', $avaliacao->codigo)
             ->whereNull('deleted_at')
-            ->select('numero', 'gabarito', 'area', 'tema')
+            ->select('numero', 'gabarito', 'area', 'tema', 'anulada_modo')
             ->get()
             ->keyBy('numero');
 
@@ -343,6 +354,7 @@ class RelatorioAdminService
                 'area' => $questao?->area,
                 'tema' => $questao?->tema,
                 'gabarito' => $gabarito,
+                'anulada' => $questao?->anulada_modo !== null,
                 'totalRespostas' => $totalRespostas,
                 'percentualAcerto' => $totalRespostas > 0 ? round($acertos / $totalRespostas * 100, 1) : 0.0,
                 'alternativas' => $alternativas,
@@ -373,13 +385,16 @@ class RelatorioAdminService
     {
         $linhas = DB::table('respostas as r')
             ->join('questoes as q', function ($join) use ($avaliacao) {
-                $join->on('q.numero', '=', 'r.questao_numero')
-                    ->where('q.avaliacao_codigo', $avaliacao->codigo)
-                    ->whereNull('q.deleted_at')
-                    ->whereNotNull('q.gabarito')
-                    ->where('q.gabarito', '!=', '')
-                    ->whereNotNull('q.tema')
-                    ->where('q.tema', '!=', '');
+                Anulacao::excluirDistribuidas(
+                    $join->on('q.numero', '=', 'r.questao_numero')
+                        ->where('q.avaliacao_codigo', $avaliacao->codigo)
+                        ->whereNull('q.deleted_at')
+                        ->whereNotNull('q.gabarito')
+                        ->where('q.gabarito', '!=', '')
+                        ->whereNotNull('q.tema')
+                        ->where('q.tema', '!=', ''),
+                    'q.anulada_modo',
+                );
             })
             ->where('r.avaliacao_codigo', $avaliacao->codigo)
             ->when($periodo !== '', fn ($q) => $q->where('r.periodo', $periodo))
@@ -387,7 +402,7 @@ class RelatorioAdminService
             ->selectRaw('q.area as area, q.tema as tema')
             ->selectRaw('COUNT(DISTINCT q.numero) as total_questoes')
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw('SUM(CASE WHEN r.resposta = q.gabarito THEN 1 ELSE 0 END) as acertos')
+            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
             ->get();
 
         $resultado = $linhas->map(fn ($l) => [
@@ -516,20 +531,23 @@ class RelatorioAdminService
     {
         return DB::table('respostas as r')
             ->join('questoes as q', function ($join) use ($avaliacao, $campo) {
-                $join->on('q.numero', '=', 'r.questao_numero')
-                    ->where('q.avaliacao_codigo', $avaliacao->codigo)
-                    ->whereNull('q.deleted_at')
-                    ->whereNotNull('q.gabarito')
-                    ->where('q.gabarito', '!=', '')
-                    ->whereNotNull("q.{$campo}")
-                    ->where("q.{$campo}", '!=', '');
+                Anulacao::excluirDistribuidas(
+                    $join->on('q.numero', '=', 'r.questao_numero')
+                        ->where('q.avaliacao_codigo', $avaliacao->codigo)
+                        ->whereNull('q.deleted_at')
+                        ->whereNotNull('q.gabarito')
+                        ->where('q.gabarito', '!=', '')
+                        ->whereNotNull("q.{$campo}")
+                        ->where("q.{$campo}", '!=', ''),
+                    'q.anulada_modo',
+                );
             })
             ->where('r.avaliacao_codigo', $avaliacao->codigo)
             ->when($periodo !== '', fn ($q) => $q->where('r.periodo', $periodo))
             ->groupBy("q.{$campo}")
             ->selectRaw("q.{$campo} as campo")
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw('SUM(CASE WHEN r.resposta = q.gabarito THEN 1 ELSE 0 END) as acertos')
+            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
             ->get();
     }
 

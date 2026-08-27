@@ -8,6 +8,7 @@ use App\Models\Categoria;
 use App\Models\Resposta;
 use App\Models\ResultadoMetrica;
 use App\Models\ResultadoResumo;
+use App\Support\Anulacao;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -94,10 +95,20 @@ class ResultadoConsultaService
         return $this->montarResultado($aluno, $avaliacao, $periodo, $respostas);
     }
 
-    /** @return array{avaliacao: Avaliacao, periodo: string, respostas: Collection, gabaritos: Collection, acertos: int, total: int, percentual: ?float, metricas: Collection} */
+    /** @return array{avaliacao: Avaliacao, periodo: string, respostas: Collection, gabaritos: Collection, anuladas: Collection, acertos: int, total: int, percentual: ?float, metricas: Collection} */
     private function montarResultado(Aluno $aluno, Avaliacao $avaliacao, string $periodo, Collection $respostas): array
     {
-        $gabaritos = $avaliacao->questoes()->whereNotNull('gabarito')->where('gabarito', '!=', '')->pluck('gabarito', 'numero');
+        // 'anuladas' guarda o anulada_modo de TODA questão anulada (mesmo as
+        // distribuir_pontuacao) — usado pela view só pra marcar o "*" no
+        // detalhamento das respostas. 'gabaritos' já sai sem as
+        // distribuir_pontuacao: elas não contam mais na prova, então o
+        // detalhamento trata a questão como sem gabarito (cinza), igual já
+        // acontece hoje quando a questão não tem gabarito cadastrado.
+        $questoesComGabarito = $avaliacao->questoes()->whereNotNull('gabarito')->where('gabarito', '!=', '')->get(['numero', 'gabarito', 'anulada_modo']);
+        $anuladas = $questoesComGabarito->pluck('anulada_modo', 'numero')->filter();
+        $gabaritos = $questoesComGabarito
+            ->filter(fn ($q) => ! Anulacao::distribuida($q->anulada_modo))
+            ->pluck('gabarito', 'numero');
 
         // Acertos/total vêm do resumo pré-calculado (mesma fonte usada no
         // boletim, pra nunca mostrar um número diferente na tela de detalhe).
@@ -114,7 +125,8 @@ class ResultadoConsultaService
             $percentual = $resumo->percentual !== null ? (float) $resumo->percentual : null;
         } else {
             $acertos = $respostas->filter(
-                fn ($r) => $gabaritos->has($r->questao_numero) && $r->resposta === $gabaritos[$r->questao_numero]
+                fn ($r) => $gabaritos->has($r->questao_numero)
+                    && Anulacao::acertou($r->resposta, $gabaritos[$r->questao_numero], $anuladas->get($r->questao_numero))
             )->count();
             $total = $gabaritos->count();
             $percentual = $total > 0 ? round($acertos / $total * 100, 1) : null;
@@ -130,6 +142,7 @@ class ResultadoConsultaService
             'periodo' => $periodo,
             'respostas' => $respostas,
             'gabaritos' => $gabaritos,
+            'anuladas' => $anuladas,
             'acertos' => $acertos,
             'total' => $total,
             'percentual' => $percentual,
