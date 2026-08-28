@@ -63,6 +63,11 @@
                 @endforelse
             </tbody>
         </table>
+        @if ($avaliacoes->hasPages())
+            <div class="px-4 py-3 border-t border-slate-100">
+                {{ $avaliacoes->links() }}
+            </div>
+        @endif
     </div>
 </form>
 
@@ -126,6 +131,11 @@
                 @endforelse
             </tbody>
         </table>
+        @if ($questoes->hasPages())
+            <div class="px-4 py-3 border-t border-slate-100">
+                {{ $questoes->links() }}
+            </div>
+        @endif
     </div>
 </form>
 

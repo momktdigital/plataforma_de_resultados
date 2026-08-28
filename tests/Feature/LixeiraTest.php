@@ -156,4 +156,28 @@ class LixeiraTest extends TestCase
 
         $this->get('/lixeira')->assertRedirect(route('login'));
     }
+
+    public function test_avaliacoes_e_questoes_excluidas_sao_paginadas_independentemente(): void
+    {
+        for ($i = 0; $i < 22; $i++) {
+            Avaliacao::create(['nome' => "Excluida {$i}"])->delete();
+        }
+
+        $avaliacaoComQuestoes = Avaliacao::create(['nome' => 'Com questões']);
+        for ($i = 1; $i <= 22; $i++) {
+            Questao::create(['avaliacao_codigo' => $avaliacaoComQuestoes->codigo, 'numero' => $i, 'gabarito' => 'A'])->delete();
+        }
+
+        $admin = $this->admin();
+        $response = $this->actingAs($admin, 'admin')->get('/lixeira');
+
+        $response->assertOk();
+        $response->assertViewHas('avaliacoes', fn ($avaliacoes) => $avaliacoes->count() === 20 && $avaliacoes->hasMorePages());
+        $response->assertViewHas('questoes', fn ($questoes) => $questoes->count() === 20 && $questoes->hasMorePages());
+
+        // Nomes de página distintos — pedir a segunda página de um não afeta o outro.
+        $segundaPaginaAvaliacoes = $this->actingAs($admin, 'admin')->get('/lixeira?avaliacoes_page=2');
+        $segundaPaginaAvaliacoes->assertViewHas('avaliacoes', fn ($avaliacoes) => $avaliacoes->count() === 2);
+        $segundaPaginaAvaliacoes->assertViewHas('questoes', fn ($questoes) => $questoes->count() === 20);
+    }
 }

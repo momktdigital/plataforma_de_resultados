@@ -35,12 +35,12 @@
     <table class="w-full text-sm">
         <thead class="bg-slate-50 text-slate-500 text-left">
             <tr>
-                <th class="px-4 py-3">RA</th>
-                <th class="px-4 py-3">Nome</th>
-                <th class="px-4 py-3">CPF</th>
-                <th class="px-4 py-3">Nascimento</th>
-                <th class="px-4 py-3">Curso</th>
-                <th class="px-4 py-3">Período</th>
+                @include('partials.th-ordenavel', ['campo' => 'ra', 'label' => 'RA'])
+                @include('partials.th-ordenavel', ['campo' => 'nome', 'label' => 'Nome'])
+                @include('partials.th-ordenavel', ['campo' => 'cpf', 'label' => 'CPF'])
+                @include('partials.th-ordenavel', ['campo' => 'data_nascimento', 'label' => 'Nascimento'])
+                @include('partials.th-ordenavel', ['campo' => 'curso', 'label' => 'Curso'])
+                @include('partials.th-ordenavel', ['campo' => 'periodo', 'label' => 'Período'])
                 <th class="px-4 py-3"></th>
             </tr>
         </thead>

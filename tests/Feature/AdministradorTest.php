@@ -132,4 +132,17 @@ class AdministradorTest extends TestCase
 
         $this->get('/administradores')->assertRedirect(route('login'));
     }
+
+    public function test_lista_administradores_e_paginada(): void
+    {
+        $admin = $this->admin();
+        for ($i = 0; $i < 55; $i++) {
+            Admin::create(['username' => "professor{$i}", 'password_hash' => bcrypt('x')]);
+        }
+
+        $response = $this->actingAs($admin, 'admin')->get('/administradores');
+
+        $response->assertOk();
+        $response->assertViewHas('admins', fn ($admins) => $admins->count() === 50 && $admins->hasMorePages());
+    }
 }

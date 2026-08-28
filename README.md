@@ -98,10 +98,50 @@ nas outras, quase qualquer desenho funciona igual de bem.
 ## Alunos (`/alunos`)
 
 CRUD completo de alunos — porta `admin/alunos.php`/`aluno_form.php` da
-aplicação legada para cá. Listagem com busca por RA/CPF/Nome e paginação,
-criação e edição exigem RA, CPF (11 dígitos, usado como login no portal
-público) e Data de Nascimento; Curso, Câmpus e E-mail são opcionais.
-Excluir um aluno remove só o cadastro de acesso, não seus resultados.
+aplicação legada para cá. Listagem com busca por RA/CPF/Nome (ordenável por
+cabeçalho de coluna) e paginação, criação e edição exigem RA, CPF (11
+dígitos, usado como login no portal público) e Data de Nascimento; Curso,
+Câmpus e E-mail são opcionais. **Excluir um aluno (botão "Excluir") remove só
+o cadastro de acesso** — RA/CPF/nome continuam em `respostas`/
+`resultado_metricas`/`resultado_resumos` (é assim de propósito: a estatística
+agregada da avaliação não pode sumir só porque um cadastro foi apagado). Para
+apagar de vez a identidade de alguém desses dados também, ver "LGPD" abaixo.
+
+### LGPD: anonimizar um aluno
+
+```bash
+php artisan aluno:anonimizar --ra=2026001
+php artisan aluno:anonimizar --cpf=12345678909
+```
+
+Atende um pedido de exclusão/anonimização: em uma transação,
+`App\Services\AnonimizacaoAlunoService`
+
+1. Troca RA e CPF por um token anônimo (`ANON-XXXXXXXXXX`) em toda linha de
+   `respostas`/`resultado_metricas` que bater com o RA e/ou CPF informado —
+   sempre gravando o token no campo `ra` e zerando `cpf`, mesmo que a linha
+   original só tivesse `cpf` preenchido, pra unificar as duas formas de
+   identificar a mesma pessoa num token só (`aluno_chave`, coluna gerada
+   pelo banco como `COALESCE(cpf, ra)`, se recalcula sozinha).
+2. Reconstrói `resultado_resumos` das avaliações afetadas chamando
+   `ResumoResultadoService::recalcular()` de novo — é puro cache de leitura,
+   então não precisa (nem deve) ser editado na mão.
+3. Apaga qualquer `verificacoes_email` pendente com aquele CPF.
+4. Apaga o cadastro em `alunos`, se ainda existir (não precisa existir — dá
+   pra anonimizar o histórico de alguém cujo cadastro já foi excluído antes
+   pela tela).
+
+**O que fica preservado de propósito:** o número de respostas por questão,
+a nota/percentual de cada linha anonimizada e qualquer outro aluno da mesma
+avaliação — só a identidade daquela pessoa deixa de ser rastreável. **O que
+isto não cobre:** backups já gerados anteriormente (ver "Backups" abaixo,
+que também carregam o `.env` e o dump completo do banco) e qualquer log de
+aplicação fora do banco — expurgar esses é um processo manual, fora do
+escopo deste comando.
+
+Só existe via CLI (exige acesso ao servidor) de propósito — um pedido LGPD é
+raro e formal o bastante pra não precisar de botão na tela, e destrutivo o
+bastante pra não ganhar um.
 
 ### Importação de matrícula (`/alunos/importar`)
 
@@ -394,6 +434,11 @@ php artisan test
 
 Os testes rodam contra SQLite em memória (configurado em `phpunit.xml`) —
 não é preciso um MySQL rodando nem tocar no banco de produção para testar.
+SQLite não pega certos erros que só aparecem num MySQL de verdade (ver "FK
+pra admins/alunos" no `CLAUDE.md`) — por isso o CI (`.github/workflows/tests.yml`)
+também tem um job separado (`migrate-mysql`) que roda `php artisan migrate
+--force` contra um MySQL real, sem os testes: existe só pra pegar migration
+incompatível antes que o autoatualizador rode a mesma migration em produção.
 
 ## Formatos de import
 

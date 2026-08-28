@@ -110,12 +110,12 @@
     <table class="w-full text-sm">
         <thead class="bg-slate-50 text-slate-500 text-left">
             <tr>
-                <th class="px-4 py-3">Código</th>
-                <th class="px-4 py-3">Nome</th>
+                @include('partials.th-ordenavel', ['campo' => 'codigo', 'label' => 'Código'])
+                @include('partials.th-ordenavel', ['campo' => 'nome', 'label' => 'Nome'])
                 <th class="px-4 py-3">Categoria</th>
-                <th class="px-4 py-3">Data da avaliação</th>
-                <th class="px-4 py-3">Questões</th>
-                <th class="px-4 py-3">Alunos</th>
+                @include('partials.th-ordenavel', ['campo' => 'data_avaliacao', 'label' => 'Data da avaliação'])
+                @include('partials.th-ordenavel', ['campo' => 'questoes_count', 'label' => 'Questões'])
+                @include('partials.th-ordenavel', ['campo' => 'alunos_count', 'label' => 'Alunos'])
                 <th class="px-4 py-3"></th>
             </tr>
         </thead>

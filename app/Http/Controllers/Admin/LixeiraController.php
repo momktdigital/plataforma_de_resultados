@@ -21,13 +21,20 @@ class LixeiraController extends Controller
 {
     public function index(): View
     {
-        $avaliacoes = Avaliacao::onlyTrashed()->orderByDesc('deleted_at')->get();
+        // Duas listas independentes na mesma tela — cada paginate() usa um
+        // nome de página próprio (senão as duas competeriam pelo mesmo
+        // parâmetro `page` na query string).
+        $avaliacoes = Avaliacao::onlyTrashed()
+            ->orderByDesc('deleted_at')
+            ->paginate(20, ['*'], 'avaliacoes_page')
+            ->withQueryString();
 
         $questoes = Questao::onlyTrashed()
             ->whereHas('avaliacao')
             ->with('avaliacao')
             ->orderByDesc('deleted_at')
-            ->get();
+            ->paginate(20, ['*'], 'questoes_page')
+            ->withQueryString();
 
         return view('admin.lixeira.index', ['avaliacoes' => $avaliacoes, 'questoes' => $questoes]);
     }

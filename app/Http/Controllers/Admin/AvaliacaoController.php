@@ -11,6 +11,7 @@ use App\Services\EstatisticaErroService;
 use App\Services\Visualizacoes\VisualizacaoConfigService;
 use App\Support\AtividadeLogger;
 use App\Support\GabaritoComentadoUploader;
+use App\Support\Ordenacao;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -21,12 +22,18 @@ use RuntimeException;
 
 class AvaliacaoController extends Controller
 {
+    // alunos_count/questoes_count são aliases de subquery/withCount, não
+    // colunas de verdade — ordenar por eles funciona igual no MySQL e no
+    // SQLite (ambos aceitam ORDER BY pelo alias do SELECT).
+    private const COLUNAS_ORDENAVEIS = ['codigo', 'nome', 'data_avaliacao', 'questoes_count', 'alunos_count'];
+
     public function index(Request $request): View
     {
         $search = trim((string) $request->query('search', ''));
         $categoriaId = $request->query('categoria_id') !== null && $request->query('categoria_id') !== ''
             ? (int) $request->query('categoria_id')
             : null;
+        [$sort, $direction] = Ordenacao::resolver($request, self::COLUNAS_ORDENAVEIS, 'codigo', 'desc');
 
         $avaliacoes = Avaliacao::with('categoria')
             ->withCount('questoes')
@@ -44,7 +51,7 @@ class AvaliacaoController extends Controller
                 });
             })
             ->when($categoriaId !== null, fn ($query) => $query->where('categoria_id', $categoriaId))
-            ->latest('codigo')
+            ->orderBy($sort, $direction)
             ->paginate(20)
             ->withQueryString();
 
@@ -53,6 +60,8 @@ class AvaliacaoController extends Controller
             'search' => $search,
             'categoriaId' => $categoriaId,
             'opcoesCategoria' => Categoria::opcoesSelect(),
+            'sort' => $sort,
+            'direction' => $direction,
         ]);
     }
 
@@ -157,6 +166,14 @@ class AvaliacaoController extends Controller
         $avaliacao->questoes()->delete();
         $avaliacao->resultados()->delete();
         $avaliacao->metricas()->delete();
+
+        // resultado_resumos não tem soft-delete (é puro cache de leitura) e o
+        // cascadeOnDelete() da FK só dispara em exclusão definitiva — sem
+        // isto, os resumos desta avaliação ficam órfãos indefinidamente.
+        // Seguro apagar de vez: restoreAvaliacao() já chama recalcular() pra
+        // reconstruí-los a partir de respostas/questões restauradas.
+        DB::table('resultado_resumos')->where('avaliacao_codigo', $avaliacao->codigo)->delete();
+
         $avaliacao->delete();
 
         return redirect()

@@ -151,6 +151,30 @@ class AvaliacaoTest extends TestCase
         $response->assertDontSee('Simulado 1');
     }
 
+    public function test_ordena_lista_por_nome_quando_pedido_na_query_string(): void
+    {
+        Avaliacao::create(['nome' => 'Zebra']);
+        Avaliacao::create(['nome' => 'Abacaxi']);
+
+        $response = $this->actingAs($this->admin(), 'admin')->get('/avaliacoes?sort=nome&direction=asc');
+
+        $response->assertOk();
+        $response->assertSeeInOrder(['Abacaxi', 'Zebra']);
+    }
+
+    public function test_ignora_coluna_de_ordenacao_nao_permitida(): void
+    {
+        Avaliacao::create(['nome' => 'Legítima']);
+
+        // "id" não está na lista de colunas ordenáveis — cai pro padrão
+        // (codigo desc) em vez de estourar erro de SQL com uma coluna
+        // arbitrária vinda da query string.
+        $response = $this->actingAs($this->admin(), 'admin')->get('/avaliacoes?sort=id&direction=asc');
+
+        $response->assertOk();
+        $response->assertSee('Legítima');
+    }
+
     public function test_lista_mostra_numero_de_alunos_distintos_em_vez_de_linhas_de_resposta(): void
     {
         $avaliacao = Avaliacao::create(['nome' => 'ENADE 2026']);

@@ -46,6 +46,9 @@
                 @endforeach
             </tbody>
         </table>
+        <div class="px-4 py-3 border-t border-slate-100">
+            {{ $admins->links() }}
+        </div>
     </div>
 
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">

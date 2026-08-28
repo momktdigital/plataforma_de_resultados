@@ -8,7 +8,6 @@
     "require": {
         "php": "^8.3",
         "laravel/framework": "^13.8",
-        "laravel/tinker": "^3.0",
         "league/csv": "^9.28",
         "phpoffice/phpspreadsheet": "^5.9"
     },
@@ -17,6 +16,7 @@
         "laravel/pail": "^1.2.5",
         "laravel/pao": "^1.0.6",
         "laravel/pint": "^1.27",
+        "laravel/tinker": "^3.0",
         "mockery/mockery": "^1.6",
         "nunomaduro/collision": "^8.6",
         "phpunit/phpunit": "^12.5.12"

@@ -16,7 +16,7 @@ class AdministradorController extends Controller
 {
     public function index(): View
     {
-        $admins = Admin::orderBy('id')->get();
+        $admins = Admin::orderBy('id')->paginate(50)->withQueryString();
 
         return view('admin.administradores.index', ['admins' => $admins]);
     }
