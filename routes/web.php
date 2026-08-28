@@ -110,6 +110,9 @@ Route::middleware('instalado')->group(function () {
             ->name('avaliacoes.questoes.import.store');
 
         Route::post('/avaliacoes/{avaliacao}/questoes', [QuestaoController::class, 'store'])->name('avaliacoes.questoes.store');
+        // Segmento literal ANTES do coringa {questao} — mesmo motivo da
+        // lixeira em lote (ver routes/web.php mais abaixo).
+        Route::delete('/avaliacoes/{avaliacao}/questoes/excluir-em-lote', [QuestaoController::class, 'destroyBulk'])->name('avaliacoes.questoes.destroyBulk');
         Route::delete('/avaliacoes/{avaliacao}/questoes/{questao}', [QuestaoController::class, 'destroy'])->name('avaliacoes.questoes.destroy');
         Route::post('/avaliacoes/{avaliacao}/questoes/{questao}/restaurar', [QuestaoController::class, 'restore'])->name('avaliacoes.questoes.restore');
 

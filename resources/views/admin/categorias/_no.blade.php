@@ -7,22 +7,22 @@
         </span>
         <div class="flex items-center gap-3 shrink-0">
             <a href="{{ route('categorias.edit', $categoria) }}" class="text-xs text-emerald-700 hover:underline">Editar</a>
-            <form method="POST" action="{{ route('categorias.destroy', $categoria) }}" class="inline flex items-center gap-1"
-                  onsubmit="return confirm('Excluir a categoria {{ $categoria->nome }}?{{ $categoria->avaliacoes_count > 0 ? ' As avaliações vinculadas serão movidas para o destino escolhido ao lado.' : '' }}');">
+            <form method="POST" action="{{ route('categorias.destroy', $categoria) }}" class="inline">
                 @csrf
                 @method('DELETE')
                 @if ($categoria->avaliacoes_count > 0)
-                    <select name="mover_avaliacoes_para" class="text-xs border border-slate-300 rounded px-1 py-0.5"
-                            title="Pra onde mover as {{ $categoria->avaliacoes_count }} avaliação(ões) vinculada(s)">
-                        <option value="">— Sem categoria —</option>
-                        @foreach ($opcoesSelect as $opcao)
-                            @if ($opcao['id'] !== $categoria->id)
-                                <option value="{{ $opcao['id'] }}">{{ $opcao['label'] }}</option>
-                            @endif
-                        @endforeach
-                    </select>
+                    <button type="button" class="categoria-excluir-btn text-xs text-red-500 hover:text-red-700"
+                            data-categoria-id="{{ $categoria->id }}"
+                            data-categoria-nome="{{ $categoria->nome }}"
+                            data-avaliacoes-count="{{ $categoria->avaliacoes_count }}">
+                        Excluir
+                    </button>
+                @else
+                    <button type="submit" class="text-xs text-red-500 hover:text-red-700"
+                            onclick="return confirm('Excluir a categoria {{ $categoria->nome }}?');">
+                        Excluir
+                    </button>
                 @endif
-                <button type="submit" class="text-xs text-red-500 hover:text-red-700">Excluir</button>
             </form>
         </div>
     </div>

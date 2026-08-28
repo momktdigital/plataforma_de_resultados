@@ -12,7 +12,7 @@
     <p class="text-sm text-slate-500 mb-4">
         O código é gerado automaticamente. Nome e tipo são apenas para facilitar a identificação — nenhum campo aqui é obrigatório.
     </p>
-    <form method="POST" action="{{ route('avaliacoes.store') }}" class="flex flex-wrap gap-3 items-end">
+    <form method="POST" action="{{ route('avaliacoes.store') }}" enctype="multipart/form-data" class="flex flex-wrap gap-3 items-end">
         @csrf
         <div class="flex-1 min-w-[200px]">
             <label class="block text-sm font-medium mb-1" for="nome">Nome (opcional)</label>
@@ -28,6 +28,14 @@
             <label class="block text-sm font-medium mb-1" for="link_comentado">Link do gabarito comentado (opcional)</label>
             <input id="link_comentado" name="link_comentado" type="url" value="{{ old('link_comentado') }}"
                    class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+        </div>
+        <div class="flex-1 min-w-[200px]">
+            <label class="block text-sm font-medium mb-1" for="gabarito_comentado_arquivo">Ou envie o arquivo (opcional)</label>
+            <input id="gabarito_comentado_arquivo" name="gabarito_comentado_arquivo" type="file" accept=".pdf,.doc,.docx"
+                   class="w-full text-sm">
+            @error('gabarito_comentado_arquivo')
+                <p class="text-sm text-red-600 mt-1">{{ $message }}</p>
+            @enderror
         </div>
         <div class="flex-1 min-w-[160px]">
             <label class="block text-sm font-medium mb-1" for="categoria_id">Categoria (opcional)</label>
@@ -74,13 +82,23 @@
 </script>
 
 <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-6">
-    <form method="GET" action="{{ route('avaliacoes.index') }}" class="flex gap-3">
-        <input type="text" name="search" value="{{ $search }}" placeholder="Buscar por código, nome ou tipo..."
-               class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+    <form method="GET" action="{{ route('avaliacoes.index') }}" class="flex flex-wrap gap-3">
+        <label for="busca-avaliacoes" class="sr-only">Buscar avaliação por código, nome ou tipo</label>
+        <input id="busca-avaliacoes" type="text" name="search" value="{{ $search }}" placeholder="Buscar por código, nome ou tipo..."
+               class="flex-1 min-w-[200px] rounded-lg border border-slate-300 px-3 py-2 text-sm">
+        <label for="filtro-categoria" class="sr-only">Filtrar por categoria</label>
+        <select id="filtro-categoria" name="categoria_id" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option value="">Todas as categorias</option>
+            @foreach ($opcoesCategoria as $opcao)
+                <option value="{{ $opcao['id'] }}" {{ $categoriaId === $opcao['id'] ? 'selected' : '' }}>
+                    {{ $opcao['label'] }}
+                </option>
+            @endforeach
+        </select>
         <button type="submit" class="bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-lg px-4 py-2 text-sm">
             Buscar
         </button>
-        @if ($search !== '')
+        @if ($search !== '' || $categoriaId !== null)
             <a href="{{ route('avaliacoes.index') }}" class="border border-slate-300 bg-white text-slate-700 rounded-lg px-4 py-2 text-sm hover:bg-slate-50">
                 Limpar
             </a>
@@ -97,7 +115,7 @@
                 <th class="px-4 py-3">Categoria</th>
                 <th class="px-4 py-3">Data da avaliação</th>
                 <th class="px-4 py-3">Questões</th>
-                <th class="px-4 py-3">Resultados</th>
+                <th class="px-4 py-3">Alunos</th>
                 <th class="px-4 py-3"></th>
             </tr>
         </thead>
@@ -109,7 +127,7 @@
                     <td class="px-4 py-3">{{ $avaliacao->categoria?->nome ?? '—' }}</td>
                     <td class="px-4 py-3 text-slate-500">{{ $avaliacao->data_avaliacao?->format('d/m/Y') ?? '—' }}</td>
                     <td class="px-4 py-3">{{ $avaliacao->questoes_count }}</td>
-                    <td class="px-4 py-3">{{ $avaliacao->resultados_count }}</td>
+                    <td class="px-4 py-3">{{ $avaliacao->alunos_count }}</td>
                     <td class="px-4 py-3 text-right">
                         <a href="{{ route('avaliacoes.show', $avaliacao) }}" class="text-emerald-700 font-semibold hover:underline">
                             Gerenciar

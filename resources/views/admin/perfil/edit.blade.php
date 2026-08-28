@@ -24,12 +24,12 @@
         <div class="grid sm:grid-cols-2 gap-4">
             <div>
                 <label class="block text-sm font-medium mb-1" for="new_password">Nova senha</label>
-                <input id="new_password" name="new_password" type="password" required minlength="4"
+                <input id="new_password" name="new_password" type="password" required minlength="10"
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
             </div>
             <div>
                 <label class="block text-sm font-medium mb-1" for="new_password_confirmation">Confirmar nova senha</label>
-                <input id="new_password_confirmation" name="new_password_confirmation" type="password" required minlength="4"
+                <input id="new_password_confirmation" name="new_password_confirmation" type="password" required minlength="10"
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
             </div>
         </div>

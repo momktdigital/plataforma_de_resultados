@@ -27,13 +27,13 @@
             @csrf
             <div>
                 <label for="password" class="block text-sm font-medium text-slate-300 mb-1 ml-1">Nova senha</label>
-                <input type="password" id="password" name="password" required minlength="4" autofocus
+                <input type="password" id="password" name="password" required minlength="10" autofocus
                        class="block w-full px-3 py-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                        placeholder="••••••••">
             </div>
             <div>
                 <label for="password_confirmation" class="block text-sm font-medium text-slate-300 mb-1 ml-1">Confirme a nova senha</label>
-                <input type="password" id="password_confirmation" name="password_confirmation" required minlength="4"
+                <input type="password" id="password_confirmation" name="password_confirmation" required minlength="10"
                        class="block w-full px-3 py-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                        placeholder="••••••••">
             </div>

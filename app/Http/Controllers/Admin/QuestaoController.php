@@ -10,6 +10,7 @@ use App\Services\QuestaoReferenciaService;
 use App\Services\ResumoResultadoService;
 use App\Support\AtividadeLogger;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 
 /**
  * Editor manual de uma questão por vez — equivalente ao "Editor de Gabarito
@@ -100,6 +101,34 @@ class QuestaoController extends Controller
         return redirect()
             ->route('avaliacoes.show', $avaliacao)
             ->with('status', "Questão {$questao->numero} excluída.");
+    }
+
+    public function destroyBulk(Request $request, Avaliacao $avaliacao, ResumoResultadoService $resumos): RedirectResponse
+    {
+        $ids = array_values(array_unique(array_map('intval', $request->input('ids', []))));
+
+        if ($ids === []) {
+            return back()->withErrors(['ids' => 'Selecione ao menos uma questão.']);
+        }
+
+        // Escopado à avaliação da URL — um id de outra avaliação (manipulado
+        // à mão) simplesmente não é encontrado, nunca excluído.
+        $questoes = Questao::where('avaliacao_codigo', $avaliacao->codigo)->whereIn('id', $ids)->get();
+
+        foreach ($questoes as $questao) {
+            $questao->delete();
+
+            AtividadeLogger::registrar('questao.excluida', 'Questao', $questao->id, [
+                'avaliacao_codigo' => $avaliacao->codigo,
+                'numero' => $questao->numero,
+            ]);
+        }
+
+        $resumos->recalcular($avaliacao->codigo);
+
+        return redirect()
+            ->route('avaliacoes.show', $avaliacao)
+            ->with('status', $questoes->count().' questão(ões) excluída(s).');
     }
 
     public function restore(Avaliacao $avaliacao, int $questao, ResumoResultadoService $resumos): RedirectResponse

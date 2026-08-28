@@ -6,7 +6,14 @@
 <div class="mb-6 flex items-start justify-between gap-4">
     <div>
         <a href="{{ route('avaliacoes.index') }}" class="text-sm text-slate-500 hover:underline">&larr; Todas as avaliações</a>
-        <h1 class="text-2xl font-bold mt-2">Avaliação #{{ $avaliacao->codigo }} @if($avaliacao->nome) — {{ $avaliacao->nome }} @endif</h1>
+        <h1 class="text-2xl font-bold mt-2 flex items-center gap-2">
+            Avaliação #{{ $avaliacao->codigo }} @if($avaliacao->nome) — {{ $avaliacao->nome }} @endif
+            @if ($avaliacao->status === 'anulada')
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700">Anulada</span>
+            @else
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-700">Ativa</span>
+            @endif
+        </h1>
         @if ($avaliacao->tipo)
             <p class="text-slate-500">{{ $avaliacao->tipo }}</p>
         @endif
@@ -68,7 +75,7 @@
 {{-- Editar configurações básicas --}}
 <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
     <h2 class="font-semibold mb-4">Editar configurações</h2>
-    <form method="POST" action="{{ route('avaliacoes.update', $avaliacao) }}" class="flex flex-wrap gap-3 items-end">
+    <form method="POST" action="{{ route('avaliacoes.update', $avaliacao) }}" enctype="multipart/form-data" class="flex flex-wrap gap-3 items-end">
         @csrf
         @method('PUT')
         <div class="flex-1 min-w-[200px]">
@@ -86,6 +93,15 @@
             <input id="link_comentado" name="link_comentado" type="url" value="{{ old('link_comentado', $avaliacao->link_comentado) }}"
                    class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
         </div>
+        <div class="flex-1 min-w-[200px]">
+            <label class="block text-sm font-medium mb-1" for="gabarito_comentado_arquivo">Ou envie o arquivo (pdf, doc, docx)</label>
+            <input id="gabarito_comentado_arquivo" name="gabarito_comentado_arquivo" type="file" accept=".pdf,.doc,.docx"
+                   class="w-full text-sm">
+            <p class="text-xs text-slate-500 mt-1">Enviar um arquivo substitui o link acima.</p>
+            @error('gabarito_comentado_arquivo')
+                <p class="text-sm text-red-600 mt-1">{{ $message }}</p>
+            @enderror
+        </div>
         <div class="flex-1 min-w-[160px]">
             <label class="block text-sm font-medium mb-1" for="categoria_id">Categoria</label>
             <select id="categoria_id" name="categoria_id" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
@@ -102,6 +118,13 @@
             <input id="data_avaliacao" name="data_avaliacao" type="text" placeholder="DD/MM/AAAA"
                    value="{{ old('data_avaliacao', $avaliacao->data_avaliacao?->format('d/m/Y')) }}"
                    class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+        </div>
+        <div class="min-w-[140px]">
+            <label class="block text-sm font-medium mb-1" for="status">Status</label>
+            <select id="status" name="status" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                <option value="ativa" {{ old('status', $avaliacao->status) === 'ativa' ? 'selected' : '' }}>Ativa</option>
+                <option value="anulada" {{ old('status', $avaliacao->status) === 'anulada' ? 'selected' : '' }}>Anulada</option>
+            </select>
         </div>
         <button type="submit" class="bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-lg px-5 py-2 text-sm">
             Salvar
@@ -237,6 +260,10 @@
         <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
             <p class="text-xs text-slate-400">Role a tabela para o lado para ver todas as colunas.</p>
             <div class="flex gap-2 text-xs font-medium">
+                <button type="button" id="btn-bulk-questoes-excluir"
+                        class="inline-flex items-center gap-1 border border-red-300 text-red-600 hover:bg-red-50 rounded-lg px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed" disabled>
+                    Excluir selecionadas
+                </button>
                 <a href="{{ route('avaliacoes.questoes.export.xlsx', $avaliacao) }}" class="inline-flex items-center gap-1 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg px-3 py-1.5">
                     <i class="ph ph-file-xls"></i> Exportar .xlsx
                 </a>
@@ -248,10 +275,16 @@
                 </a>
             </div>
         </div>
+        <form method="POST" id="form-bulk-questoes" action="{{ route('avaliacoes.questoes.destroyBulk', $avaliacao) }}">
+            @csrf
+            <input type="hidden" name="_method" id="bulk-questoes-method" value="DELETE">
         <div class="overflow-x-auto border border-slate-200 rounded-xl">
             <table class="w-full text-sm">
                 <thead class="bg-slate-50 text-slate-500 text-left">
                     <tr>
+                        <th class="px-3 py-2 w-8">
+                            <input type="checkbox" id="selecionar-todas-questoes" aria-label="Selecionar todas as questões">
+                        </th>
                         <th class="px-3 py-2 whitespace-nowrap">Nº</th>
                         <th class="px-3 py-2 whitespace-nowrap">Gabarito</th>
                         <th class="px-3 py-2 whitespace-nowrap">Área</th>
@@ -301,6 +334,12 @@
                                 ->implode('; ');
                         @endphp
                         <tr class="{{ $questao->trashed() ? 'opacity-50' : '' }}">
+                            <td class="px-3 py-2">
+                                @unless ($questao->trashed())
+                                    <input type="checkbox" class="questao-checkbox" value="{{ $questao->id }}"
+                                           aria-label="Selecionar questão {{ $questao->numero }}">
+                                @endunless
+                            </td>
                             <td class="px-3 py-2 font-mono whitespace-nowrap">{{ $questao->numero }}</td>
                             <td class="px-3 py-2 font-bold whitespace-nowrap">{{ $questao->gabarito ?: '—' }}</td>
                             <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $questao->area ?: '—' }}</td>
@@ -327,18 +366,14 @@
                             </td>
                             <td class="px-3 py-2 text-right whitespace-nowrap">
                                 @if ($questao->trashed())
-                                    <form method="POST" action="{{ route('avaliacoes.questoes.restore', [$avaliacao, $questao->id]) }}" class="inline">
-                                        @csrf
-                                        <button type="submit" class="text-blue-600 hover:underline">Restaurar</button>
-                                    </form>
+                                    <button type="submit" formaction="{{ route('avaliacoes.questoes.restore', [$avaliacao, $questao->id]) }}"
+                                            onclick="return submeterAcaoQuestaoIndividual(this, 'POST');"
+                                            class="text-blue-600 hover:underline">Restaurar</button>
                                 @else
                                     <button type="button" class="questao-editar-btn text-emerald-700 hover:underline mr-3" data-questao='@json($dadosQuestao)'>Editar</button>
-                                    <form method="POST" action="{{ route('avaliacoes.questoes.destroy', [$avaliacao, $questao]) }}" class="inline"
-                                          onsubmit="return confirm('Excluir a questão {{ $questao->numero }}?');">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="text-red-500 hover:text-red-700">Excluir</button>
-                                    </form>
+                                    <button type="submit" formaction="{{ route('avaliacoes.questoes.destroy', [$avaliacao, $questao]) }}"
+                                            onclick="return submeterAcaoQuestaoIndividual(this, 'DELETE', 'Excluir a questão {{ $questao->numero }}?');"
+                                            class="text-red-500 hover:text-red-700">Excluir</button>
                                 @endif
                             </td>
                         </tr>
@@ -346,10 +381,74 @@
                 </tbody>
             </table>
         </div>
+        </form>
     @endif
 </div>
 
 <script src="{{ asset('assets/js/tag-input.js') }}"></script>
+<script>
+// As ações individuais (Restaurar/Excluir) compartilham o MESMO <form> das
+// caixinhas de seleção em lote (não dá pra aninhar <form> dentro de <form>)
+// — cada botão seta o _method certo pra própria submissão antes de
+// disparar, senão herdaria o valor deixado por uma ação em lote anterior na
+// mesma página (ver LixeiraController/lixeira/index.blade.php, mesmo padrão).
+function submeterAcaoQuestaoIndividual(botao, metodo, confirmacao) {
+    if (confirmacao && ! confirm(confirmacao)) return false;
+
+    var form = botao.closest('form');
+    form.querySelectorAll('input[name="ids[]"]').forEach(function (el) { el.remove(); });
+    form.querySelector('input[name="_method"]').value = metodo;
+
+    return true;
+}
+
+(function () {
+    var formBulkQuestoes = document.getElementById('form-bulk-questoes');
+    var bulkMethod = document.getElementById('bulk-questoes-method');
+    var selecionarTodasQuestoes = document.getElementById('selecionar-todas-questoes');
+    var btnBulkExcluirQuestoes = document.getElementById('btn-bulk-questoes-excluir');
+
+    function questaoCheckboxes() {
+        return Array.prototype.slice.call(document.querySelectorAll('.questao-checkbox'));
+    }
+
+    function atualizarBotaoBulkQuestoes() {
+        var marcados = questaoCheckboxes().filter(function (cb) { return cb.checked; }).length;
+        if (btnBulkExcluirQuestoes) btnBulkExcluirQuestoes.disabled = marcados === 0;
+    }
+
+    if (selecionarTodasQuestoes) {
+        selecionarTodasQuestoes.addEventListener('change', function () {
+            questaoCheckboxes().forEach(function (cb) { cb.checked = selecionarTodasQuestoes.checked; });
+            atualizarBotaoBulkQuestoes();
+        });
+    }
+
+    questaoCheckboxes().forEach(function (cb) {
+        cb.addEventListener('change', atualizarBotaoBulkQuestoes);
+    });
+
+    if (btnBulkExcluirQuestoes) {
+        btnBulkExcluirQuestoes.addEventListener('click', function () {
+            var marcados = questaoCheckboxes().filter(function (cb) { return cb.checked; });
+            if (marcados.length === 0) return;
+            if (! confirm('Excluir ' + marcados.length + ' questão(ões) selecionada(s)? Isso recalcula o boletim de todo mundo que já respondeu.')) return;
+
+            formBulkQuestoes.querySelectorAll('input[name="ids[]"]').forEach(function (el) { el.remove(); });
+            marcados.forEach(function (cb) {
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'ids[]';
+                input.value = cb.value;
+                formBulkQuestoes.appendChild(input);
+            });
+
+            bulkMethod.value = 'DELETE';
+            formBulkQuestoes.submit();
+        });
+    }
+})();
+</script>
 <script>
 (function () {
     var form = document.getElementById('form-editor-questao');

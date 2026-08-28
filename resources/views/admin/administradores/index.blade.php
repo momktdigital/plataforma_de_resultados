@@ -65,9 +65,9 @@
             </div>
             <div>
                 <label class="block text-sm font-medium mb-1" for="password">Senha</label>
-                <input id="password" name="password" type="password" required minlength="4"
+                <input id="password" name="password" type="password" required minlength="10"
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                <p class="text-xs text-slate-500 mt-1">Mínimo de 4 caracteres.</p>
+                <p class="text-xs text-slate-500 mt-1">Mínimo de 10 caracteres.</p>
             </div>
             <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-4 py-2 text-sm">
                 Criar conta

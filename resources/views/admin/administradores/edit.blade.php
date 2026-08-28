@@ -23,9 +23,9 @@
         </div>
         <div>
             <label class="block text-sm font-medium mb-1" for="password">Nova senha (opcional)</label>
-            <input id="password" name="password" type="password" minlength="4"
+            <input id="password" name="password" type="password" minlength="10"
                    class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <p class="text-xs text-slate-500 mt-1">Deixe em branco para manter a senha atual.</p>
+            <p class="text-xs text-slate-500 mt-1">Deixe em branco para manter a senha atual. Se preencher, mínimo de 10 caracteres.</p>
         </div>
         <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-4 py-2 text-sm">
             Salvar alterações

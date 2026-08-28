@@ -48,7 +48,23 @@
             @forelse ($alunos as $aluno)
                 <tr>
                     <td class="px-4 py-3 font-medium">{{ $aluno->ra }}</td>
-                    <td class="px-4 py-3">{{ $aluno->nome ?: '—' }}</td>
+                    <td class="px-4 py-3">
+                        <div class="flex items-center gap-2">
+                            @if ($aluno->fotoUrl())
+                                <img src="{{ $aluno->fotoUrl(60) }}" alt="" aria-hidden="true"
+                                     class="w-7 h-7 rounded-full object-cover border border-slate-200 shrink-0"
+                                     onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='flex';">
+                                <span style="display:none" class="w-7 h-7 rounded-full bg-primary/10 text-primary items-center justify-center text-xs font-bold shrink-0">
+                                    {{ mb_strtoupper(mb_substr($aluno->nome ?: $aluno->ra, 0, 1)) }}
+                                </span>
+                            @else
+                                <span class="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
+                                    {{ mb_strtoupper(mb_substr($aluno->nome ?: $aluno->ra, 0, 1)) }}
+                                </span>
+                            @endif
+                            <span>{{ $aluno->nome ?: '—' }}</span>
+                        </div>
+                    </td>
                     <td class="px-4 py-3">
                         @php($cpf = $aluno->cpf)
                         {{ $cpf && strlen($cpf) === 11 ? substr($cpf, 0, 3).'.'.substr($cpf, 3, 3).'.'.substr($cpf, 6, 3).'-'.substr($cpf, 9, 2) : ($cpf ?: '—') }}
