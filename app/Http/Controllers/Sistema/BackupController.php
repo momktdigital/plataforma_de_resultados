@@ -14,6 +14,11 @@ use Throwable;
 
 class BackupController extends Controller
 {
+    // Nenhum backup mais recente que isso é considerado desatualizado —
+    // um alerta na tela, já que não há agendador rodando sistema:backup
+    // sozinho (ver bootstrap/app.php).
+    private const DIAS_PARA_DESATUALIZADO = 7;
+
     public function index(): View
     {
         $pasta = storage_path('app/backups');
@@ -28,11 +33,15 @@ class BackupController extends Controller
             ])
             ->values();
 
+        $ultimoBackupEm = $backups->first()['data'] ?? null;
+        $limite = now()->subDays(self::DIAS_PARA_DESATUALIZADO)->timestamp;
+
         return view('admin.sistema.backups', [
             'backups' => $backups,
             'backupStatus' => ConfiguracaoSistema::valor('backup_status', 'concluido'),
             'backupErro' => ConfiguracaoSistema::valor('backup_erro'),
             'backupIniciadoEm' => ConfiguracaoSistema::valor('backup_iniciado_em'),
+            'backupDesatualizado' => $ultimoBackupEm === null || $ultimoBackupEm < $limite,
         ]);
     }
 

@@ -1,0 +1,14 @@
+# Defesa em profundidade pro logo SVG enviado em Configurações → Portal
+# público (ver App\Support\LogoUploader): mesmo com o conteúdo sanitizado no
+# upload, trava o Content-Type (nunca deixa o navegador "farejar" o arquivo
+# como HTML) e desliga script via CSP na própria resposta — pra um SVG
+# malicioso continuar inofensivo mesmo se algum bypass escapar da
+# sanitização.
+<IfModule mod_headers.c>
+    <FilesMatch "\.svg$">
+        Header set Content-Type "image/svg+xml"
+        Header set Content-Disposition "inline"
+        Header set Content-Security-Policy "script-src 'none'; sandbox"
+        Header set X-Content-Type-Options "nosniff"
+    </FilesMatch>
+</IfModule>

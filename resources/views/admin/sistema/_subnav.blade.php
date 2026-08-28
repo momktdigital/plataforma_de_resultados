@@ -5,6 +5,7 @@
         ['label' => 'Backups', 'route' => 'sistema.backups.index', 'padrao' => 'sistema.backups.*'],
         ['label' => 'Dados legados', 'route' => 'sistema.legado.index', 'padrao' => 'sistema.legado.*'],
         ['label' => 'Atualizações', 'route' => 'sistema.atualizacao.index', 'padrao' => 'sistema.atualizacao.*'],
+        ['label' => 'Auditoria', 'route' => 'sistema.atividades.index', 'padrao' => 'sistema.atividades.*'],
     ];
 @endphp
 

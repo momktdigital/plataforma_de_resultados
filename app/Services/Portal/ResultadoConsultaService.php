@@ -277,7 +277,18 @@ class ResultadoConsultaService
 
     private function porAluno($query, Aluno $aluno): void
     {
-        $query->where('ra', $aluno->ra);
+        if (! $aluno->ra && ! $aluno->cpf) {
+            // Sem RA nem CPF pra identificar o aluno — a consulta não deve
+            // casar com nada (respostas.ra é texto livre e nulável; sem essa
+            // guarda, dois alunos com RA vazio veriam resultado um do outro).
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
+        if ($aluno->ra) {
+            $query->where('ra', $aluno->ra);
+        }
 
         if ($aluno->cpf) {
             $query->orWhere('cpf', $aluno->cpf);

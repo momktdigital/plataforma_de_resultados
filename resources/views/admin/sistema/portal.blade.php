@@ -75,7 +75,8 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1" for="recaptcha_secret_key">Secret key (reCAPTCHA)</label>
-                    <input id="recaptcha_secret_key" name="recaptcha_secret_key" type="password" value="{{ old('recaptcha_secret_key', $recaptchaSecretKey) }}"
+                    <input id="recaptcha_secret_key" name="recaptcha_secret_key" type="password" value="{{ old('recaptcha_secret_key') }}"
+                           placeholder="{{ $recaptchaSecretExists ? '******** (deixe em branco para não alterar)' : '' }}"
                            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono">
                 </div>
             </div>
@@ -88,7 +89,8 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1" for="hcaptcha_secret_key">Secret key (hCaptcha)</label>
-                    <input id="hcaptcha_secret_key" name="hcaptcha_secret_key" type="password" value="{{ old('hcaptcha_secret_key', $hcaptchaSecretKey) }}"
+                    <input id="hcaptcha_secret_key" name="hcaptcha_secret_key" type="password" value="{{ old('hcaptcha_secret_key') }}"
+                           placeholder="{{ $hcaptchaSecretExists ? '******** (deixe em branco para não alterar)' : '' }}"
                            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono">
                 </div>
             </div>

@@ -15,13 +15,13 @@
                    class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
         </div>
         <div>
-            <label class="block text-sm font-medium mb-1" for="password">Senha (mínimo 8 caracteres)</label>
-            <input id="password" name="password" type="password" required minlength="8"
+            <label class="block text-sm font-medium mb-1" for="password">Senha (mínimo 10 caracteres)</label>
+            <input id="password" name="password" type="password" required minlength="10"
                    class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
         </div>
         <div>
             <label class="block text-sm font-medium mb-1" for="password_confirmation">Confirme a senha</label>
-            <input id="password_confirmation" name="password_confirmation" type="password" required minlength="8"
+            <input id="password_confirmation" name="password_confirmation" type="password" required minlength="10"
                    class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
         </div>
         <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg py-2.5 text-sm">

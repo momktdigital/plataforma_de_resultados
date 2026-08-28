@@ -6,6 +6,8 @@
 <a href="{{ route('alunos.index') }}" class="text-sm text-slate-500 hover:underline">&larr; Alunos</a>
 <h1 class="text-2xl font-bold mt-2 mb-6">Importar matrícula de alunos</h1>
 
+@include('admin.imports._status', ['status' => $importStatus, 'voltar' => route('alunos.index')])
+
 <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 max-w-2xl">
     <form method="POST" action="{{ route('alunos.importar.store') }}" enctype="multipart/form-data" class="space-y-4">
         @csrf
@@ -14,7 +16,12 @@
             <input id="arquivo" name="arquivo" type="file" accept=".csv,.txt,.xlsx,.xls" required
                    class="w-full text-sm">
         </div>
-        <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-5 py-2 text-sm">
+        <label class="flex items-center gap-2 text-sm text-slate-600">
+            <input type="checkbox" name="dry_run" value="1">
+            Simular (mostra os números sem gravar nada)
+        </label>
+        <button type="submit" @disabled($importStatus['status'] === 'processando')
+                class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-5 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed">
             Importar
         </button>
     </form>

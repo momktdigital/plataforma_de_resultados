@@ -6,6 +6,7 @@ use App\Http\Middleware\EnsureNotInstalled;
 use App\Models\Admin;
 use App\Support\InstallStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class InstallWizardTest extends TestCase
@@ -55,5 +56,49 @@ class InstallWizardTest extends TestCase
 
         $response->assertSessionHasErrors('username');
         $this->assertDatabaseCount('admins', 1);
+    }
+
+    public function test_formulario_de_banco_e_acessivel(): void
+    {
+        $this->get('/instalar/banco')->assertOk();
+    }
+
+    public function test_conexao_de_banco_invalida_retorna_erro_sem_gravar_env(): void
+    {
+        // Sem servidor MySQL disponível no ambiente de teste — cobre o
+        // caminho de erro (a parte não coberta antes: testarEGravarBanco()
+        // grava .env sem nenhum teste, mesmo sendo o passo mais destrutivo
+        // do instalador). host 127.0.0.1 numa porta que ninguém escuta falha
+        // rápido, sem depender do timeout de 5s do PDO.
+        $envAntes = file_get_contents(base_path('.env'));
+
+        $response = $this->post('/instalar/banco', [
+            'host' => '127.0.0.1',
+            'porta' => 1,
+            'banco' => 'inexistente',
+            'usuario' => 'root',
+            'senha' => '',
+        ]);
+
+        $response->assertSessionHasErrors('banco');
+        $this->assertSame($envAntes, file_get_contents(base_path('.env')));
+    }
+
+    public function test_etapa_de_migracao_pede_confirmacao_antes_de_rodar(): void
+    {
+        // GET só mostra a confirmação — não roda migrate (rota com efeito
+        // colateral em GET seria alcançável por crawler/bot de preview).
+        $response = $this->get('/instalar/migrar');
+
+        $response->assertOk();
+        $response->assertSee(route('instalar.migrar.store'), false);
+    }
+
+    public function test_confirmar_migracao_roda_as_migrations(): void
+    {
+        $response = $this->post('/instalar/migrar');
+
+        $response->assertOk();
+        $this->assertTrue(Schema::hasTable('admins'));
     }
 }

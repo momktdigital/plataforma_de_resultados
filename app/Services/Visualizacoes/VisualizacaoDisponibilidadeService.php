@@ -4,6 +4,7 @@ namespace App\Services\Visualizacoes;
 
 use App\Models\Avaliacao;
 use App\Support\AlunoVinculoResolver;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -19,9 +20,44 @@ use Illuminate\Support\Facades\DB;
  */
 class VisualizacaoDisponibilidadeService
 {
+    // TTL curto como rede de segurança — a invalidação explícita em
+    // ResumoResultadoService::recalcular() (o ponto por onde passa toda
+    // mudança relevante: import, edição de gabarito, exclusão de período)
+    // já cobre o caso comum; o TTL só limita o estrago de uma mudança que
+    // não passe por ali (ex.: edição direta de campo demográfico do aluno).
+    private const CACHE_TTL_MINUTOS = 5;
+
     public function __construct(
         private readonly AlunoVinculoResolver $alunoResolver = new AlunoVinculoResolver,
     ) {}
+
+    /**
+     * Igual calcular(), mas cacheado por avaliação — pensado pras telas de
+     * leitura (BI, boletim do aluno, tela de configuração de visualizações),
+     * que senão recalculam do zero (~17 consultas) toda vez que alguém abre
+     * a mesma avaliação, mesmo os dados só mudando quando algo é (re)importado.
+     *
+     * @return array<string, array{disponivel: bool, pendencia: ?string}>
+     */
+    public function calcularComCache(Avaliacao $avaliacao): array
+    {
+        return Cache::remember(
+            self::chaveCache($avaliacao->codigo),
+            now()->addMinutes(self::CACHE_TTL_MINUTOS),
+            fn () => $this->calcular($avaliacao),
+        );
+    }
+
+    /** Chamado por ResumoResultadoService::recalcular() sempre que os dados de uma avaliação mudam. */
+    public static function invalidar(int $avaliacaoCodigo): void
+    {
+        Cache::forget(self::chaveCache($avaliacaoCodigo));
+    }
+
+    private static function chaveCache(int $avaliacaoCodigo): string
+    {
+        return "visualizacoes.disponibilidade.{$avaliacaoCodigo}";
+    }
 
     /** @return array<string, array{disponivel: bool, pendencia: ?string}> */
     public function calcular(Avaliacao $avaliacao): array

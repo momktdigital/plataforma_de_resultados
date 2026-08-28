@@ -26,6 +26,14 @@ class Avaliacao extends Model
         'criado_por',
         'categoria_id',
         'data_avaliacao',
+        'status',
+    ];
+
+    // Espelha o default da coluna no banco — sem isso, uma instância recém-
+    // criada em memória (Avaliacao::create([])) fica com status null até um
+    // refresh(), já que Eloquent não lê de volta o DEFAULT do SQL sozinho.
+    protected $attributes = [
+        'status' => 'ativa',
     ];
 
     protected function casts(): array

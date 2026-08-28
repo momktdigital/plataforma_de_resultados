@@ -20,9 +20,13 @@
                 <span class="text-amber-700 font-semibold">As tabelas <code>gabaritos</code>/<code>resultados</code> não foram encontradas neste banco.</span>
             @endif
         </p>
-        <form method="POST" action="{{ route('sistema.legado.banco') }}"
-              onsubmit="return confirm('Importar todos os gabaritos e resultados encontrados no banco compartilhado?');">
+        <form method="POST" action="{{ route('sistema.legado.banco') }}" class="space-y-3"
+              onsubmit="return this.dry_run.checked || confirm('Importar todos os gabaritos e resultados encontrados no banco compartilhado?');">
             @csrf
+            <label class="flex items-center gap-2 text-sm text-slate-600">
+                <input type="checkbox" name="dry_run" value="1">
+                Simular (mostra os números sem gravar nada)
+            </label>
             <button type="submit" @disabled(! $bancoCompartilhadoDisponivel)
                     class="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold rounded-lg px-5 py-2 text-sm">
                 Importar do banco

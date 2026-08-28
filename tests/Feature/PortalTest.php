@@ -60,6 +60,44 @@ class PortalTest extends TestCase
         $response->assertSee('100%');
     }
 
+    public function test_login_bem_sucedido_regenera_o_id_de_sessao(): void
+    {
+        $this->aluno();
+
+        // Sessão "fixada" antes do login — simula alguém que abriu o portal
+        // num computador compartilhado antes do aluno se autenticar.
+        $this->get('/portal');
+        $idAntesDoLogin = $this->app['session']->getId();
+
+        $this->post('/portal/consultar', [
+            'cpf' => '123.456.789-09',
+            'data_nascimento' => '15/03/2000',
+        ]);
+
+        $this->assertNotSame($idAntesDoLogin, $this->app['session']->getId());
+    }
+
+    public function test_sair_invalida_a_sessao_em_vez_de_so_esquecer_o_aluno(): void
+    {
+        $this->aluno();
+
+        $this->post('/portal/consultar', [
+            'cpf' => '123.456.789-09',
+            'data_nascimento' => '15/03/2000',
+        ]);
+
+        $this->get('/portal/resultados')->assertOk();
+
+        $idAntesDeSair = $this->app['session']->getId();
+
+        $this->get('/portal/sair')->assertRedirect(route('portal.consulta'));
+
+        // O boletim não fica mais acessível...
+        $this->get('/portal/resultados')->assertRedirect(route('portal.consulta'));
+        // ...e o ID de sessão anterior foi descartado (não só o vínculo com o aluno).
+        $this->assertNotSame($idAntesDeSair, $this->app['session']->getId());
+    }
+
     public function test_cpf_ou_nascimento_incorretos_retorna_erro(): void
     {
         $this->aluno();
@@ -262,5 +300,29 @@ class PortalTest extends TestCase
         $response->assertOk();
         $response->assertSee('Código reenviado com sucesso.');
         $this->assertDatabaseHas('verificacoes_email', ['cpf' => $aluno->cpf, 'vezes_reenviado' => 1]);
+    }
+
+    public function test_consultar_tem_throttle_apertado(): void
+    {
+        for ($i = 0; $i < 10; $i++) {
+            $this->post('/portal/consultar', []);
+        }
+
+        $this->post('/portal/consultar', [])->assertStatus(429);
+    }
+
+    public function test_navegar_pelos_resultados_nao_compartilha_o_throttle_de_consultar(): void
+    {
+        $aluno = $this->aluno();
+        $this->post('/portal/consultar', [
+            'cpf' => '123.456.789-09',
+            'data_nascimento' => '15/03/2000',
+        ]);
+
+        // Mais chamadas do que o limite de /portal/consultar (10) — como são
+        // rotas sem throttle compartilhado, nenhuma delas deveria travar.
+        for ($i = 0; $i < 15; $i++) {
+            $this->get('/portal/resultados')->assertOk();
+        }
     }
 }

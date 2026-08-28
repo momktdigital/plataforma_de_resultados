@@ -41,9 +41,9 @@ class PortalConfiguracaoController extends Controller
                 default => 'none',
             },
             'recaptchaSiteKey' => $config['recaptcha_site_key'] ?? '',
-            'recaptchaSecretKey' => $config['recaptcha_secret_key'] ?? '',
+            'recaptchaSecretExists' => ! empty($config['recaptcha_secret_key']),
             'hcaptchaSiteKey' => $config['hcaptcha_site_key'] ?? '',
-            'hcaptchaSecretKey' => $config['hcaptcha_secret_key'] ?? '',
+            'hcaptchaSecretExists' => ! empty($config['hcaptcha_secret_key']),
             'smtpAtivo' => ($config['smtp_ativo'] ?? '0') === '1',
             'smtpHost' => $config['smtp_host'] ?? '',
             'smtpPort' => $config['smtp_port'] ?? '',
@@ -80,10 +80,18 @@ class PortalConfiguracaoController extends Controller
 
         Configuracao::definir('recaptcha_ativo', $tipo === 'recaptcha' ? '1' : '0');
         Configuracao::definir('recaptcha_site_key', $request->validated('recaptcha_site_key'));
-        Configuracao::definir('recaptcha_secret_key', $request->validated('recaptcha_secret_key'));
         Configuracao::definir('hcaptcha_ativo', $tipo === 'hcaptcha' ? '1' : '0');
         Configuracao::definir('hcaptcha_site_key', $request->validated('hcaptcha_site_key'));
-        Configuracao::definir('hcaptcha_secret_key', $request->validated('hcaptcha_secret_key'));
+
+        // Igual smtp_pass: em branco mantém a secret key atual — o formulário
+        // nunca mostra o valor salvo de volta (só um "já configurado"), então
+        // reenviar em branco não pode apagar o que já estava configurado.
+        if ($request->filled('recaptcha_secret_key')) {
+            Configuracao::definir('recaptcha_secret_key', $request->validated('recaptcha_secret_key'));
+        }
+        if ($request->filled('hcaptcha_secret_key')) {
+            Configuracao::definir('hcaptcha_secret_key', $request->validated('hcaptcha_secret_key'));
+        }
 
         return redirect()->route('sistema.portal.index')->with('status', 'Configurações de CAPTCHA salvas com sucesso.');
     }
@@ -137,7 +145,7 @@ class PortalConfiguracaoController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Nenhum teste pendente. Feche e tente novamente.'], 400);
         }
 
-        if ($esperado !== mb_strtoupper(trim($dados['codigo']))) {
+        if (! hash_equals($esperado, mb_strtoupper(trim($dados['codigo'])))) {
             return response()->json(['status' => 'error', 'message' => 'Código incorreto.'], 400);
         }
 

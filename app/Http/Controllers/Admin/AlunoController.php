@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AlunoRequest;
 use App\Models\Aluno;
+use App\Support\Ordenacao;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -12,9 +13,12 @@ use Illuminate\View\View;
 
 class AlunoController extends Controller
 {
+    private const COLUNAS_ORDENAVEIS = ['ra', 'nome', 'cpf', 'data_nascimento', 'curso', 'periodo'];
+
     public function index(Request $request): View
     {
         $search = trim((string) $request->query('search', ''));
+        [$sort, $direction] = Ordenacao::resolver($request, self::COLUNAS_ORDENAVEIS, 'nome');
 
         $alunos = Aluno::query()
             ->when($search !== '', function ($query) use ($search) {
@@ -24,12 +28,12 @@ class AlunoController extends Controller
                         ->orWhere('nome', 'like', "%{$search}%");
                 });
             })
-            ->orderBy('nome')
-            ->orderBy('ra')
+            ->orderBy($sort, $direction)
+            ->when($sort !== 'ra', fn ($query) => $query->orderBy('ra'))
             ->paginate(50)
             ->withQueryString();
 
-        return view('admin.alunos.index', ['alunos' => $alunos, 'search' => $search]);
+        return view('admin.alunos.index', ['alunos' => $alunos, 'search' => $search, 'sort' => $sort, 'direction' => $direction]);
     }
 
     public function create(): View

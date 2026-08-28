@@ -9,7 +9,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@yield('title', 'Avaliações') — {{ $siteTitle }}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -44,6 +44,16 @@
                     <i class="ph-fill ph-exam text-primary text-2xl mr-2"></i>
                     <span class="text-lg font-bold text-white tracking-wide">{{ $siteTitle }}</span>
                 @endif
+            </div>
+
+            <div class="px-3 pt-4">
+                <form method="GET" action="{{ route('busca.index') }}">
+                    <div class="relative">
+                        <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"></i>
+                        <input type="text" name="q" placeholder="Buscar aluno ou avaliação..."
+                               class="w-full pl-9 pr-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                </form>
             </div>
 
             <nav class="flex-1 overflow-y-auto py-4">

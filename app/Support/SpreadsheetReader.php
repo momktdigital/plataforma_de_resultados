@@ -14,6 +14,13 @@ use RuntimeException;
  */
 class SpreadsheetReader
 {
+    // Freio além do limite de 10 MB no upload: um .xlsx (formato com bastante
+    // overhead por célula no modelo de objetos do PhpSpreadsheet) cabe em
+    // poucos MB no disco e ainda assim materializar dezenas de milhares de
+    // linhas — o único jeito de saber é olhar a planilha, então limitamos
+    // aqui em vez de confiar só no tamanho do arquivo.
+    private const MAX_LINHAS_XLSX = 50_000;
+
     /**
      * @return array<int, array<string, mixed>>
      */
@@ -86,8 +93,24 @@ class SpreadsheetReader
 
     private static function readSpreadsheet(string $path): array
     {
+        // NÃO usar setReadDataOnly(true) aqui: o reader do Xlsx tem uma
+        // pegadinha conhecida onde esse modo pula o parse de qual aba estava
+        // ativa quando o arquivo foi salvo (workbookView/activeTab) e
+        // getActiveSheet() cai pra aba 0 — errado justamente pro caso comum
+        // daqui, uma planilha de exemplo com aba de instruções antes da aba
+        // de dados. Sem essa flag, getActiveSheet() honra a aba certa.
         $spreadsheet = IOFactory::load($path);
         $sheet = $spreadsheet->getActiveSheet();
+
+        // -1 pelo cabeçalho: o limite é sobre linhas de DADOS.
+        $totalLinhasDeDados = $sheet->getHighestDataRow() - 1;
+        if ($totalLinhasDeDados > self::MAX_LINHAS_XLSX) {
+            throw new RuntimeException(
+                "Planilha com {$totalLinhasDeDados} linhas de dados — o máximo suportado é ".
+                number_format(self::MAX_LINHAS_XLSX, 0, ',', '.').' linhas. Divida o arquivo em partes menores.'
+            );
+        }
+
         $data = $sheet->toArray(null, true, true, false);
 
         if (empty($data)) {

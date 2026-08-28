@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Services\Visualizacoes\VisualizacaoDisponibilidadeService;
+use App\Support\AlunoVinculoResolver;
 use App\Support\Anulacao;
 use Illuminate\Support\Facades\DB;
 
@@ -55,25 +57,42 @@ class ResumoResultadoService
         DB::transaction(function () use ($avaliacaoCodigo, $total, $linhas) {
             DB::table('resultado_resumos')->where('avaliacao_codigo', $avaliacaoCodigo)->delete();
 
+            // resultado_resumos é justamente o que AlunoVinculoResolver::resolver()
+            // lê e memoiza — sem isso, um recalculo no meio da requisição
+            // (reimport, exclusão de período) deixaria o cache servindo os
+            // respondentes de antes da mudança.
+            AlunoVinculoResolver::limparCache();
+
+            // Idem pro cache (cross-requisição) de disponibilidade dos
+            // visuais — recalcular() é chamado por todo caminho que muda o
+            // que calcular() enxerga (import, edição de gabarito, exclusão
+            // de período), então é o ponto certo pra invalidar.
+            VisualizacaoDisponibilidadeService::invalidar($avaliacaoCodigo);
+
             if ($linhas->isEmpty()) {
                 return;
             }
 
             $agora = now();
 
-            DB::table('resultado_resumos')->insert($linhas->map(fn ($linha) => [
-                'avaliacao_codigo' => $avaliacaoCodigo,
-                'aluno_chave' => $linha->aluno_chave,
-                'periodo' => $linha->periodo,
-                'ra' => $linha->ra,
-                'cpf' => $linha->cpf,
-                'aluno_id' => $linha->aluno_id,
-                'acertos' => (int) $linha->acertos,
-                'total' => $total,
-                'percentual' => $total > 0 ? round($linha->acertos / $total * 100, 1) : null,
-                'created_at' => $agora,
-                'updated_at' => $agora,
-            ])->all());
+            // Em blocos, não tudo de uma vez: uma avaliação com muitos
+            // milhares de respondentes num único INSERT arrisca estourar o
+            // max_allowed_packet do MySQL.
+            $linhas->chunk(500)->each(function ($lote) use ($avaliacaoCodigo, $total, $agora) {
+                DB::table('resultado_resumos')->insert($lote->map(fn ($linha) => [
+                    'avaliacao_codigo' => $avaliacaoCodigo,
+                    'aluno_chave' => $linha->aluno_chave,
+                    'periodo' => $linha->periodo,
+                    'ra' => $linha->ra,
+                    'cpf' => $linha->cpf,
+                    'aluno_id' => $linha->aluno_id,
+                    'acertos' => (int) $linha->acertos,
+                    'total' => $total,
+                    'percentual' => $total > 0 ? round($linha->acertos / $total * 100, 1) : null,
+                    'created_at' => $agora,
+                    'updated_at' => $agora,
+                ])->all());
+            });
         });
     }
 }

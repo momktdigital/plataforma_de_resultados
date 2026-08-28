@@ -3,6 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Services\Legado\LegadoImportador;
+use App\Services\ResumoResultadoService;
+use App\Support\AtividadeLogger;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -26,7 +28,7 @@ class ImportarDadosLegados extends Command
 
     protected $description = 'Migra gabaritos e resultados da aplicação legada para o schema de Avaliações';
 
-    public function handle(LegadoImportador $importador): int
+    public function handle(LegadoImportador $importador, ResumoResultadoService $resumos): int
     {
         foreach (['gabaritos', 'resultados'] as $tabela) {
             if (! Schema::hasTable($tabela)) {
@@ -53,6 +55,19 @@ class ImportarDadosLegados extends Command
         }
 
         $dryRun ? DB::rollBack() : DB::commit();
+
+        // Sem isso, avaliações migradas por este comando (o caminho
+        // documentado no README para migração no mesmo servidor) ficam com
+        // o boletim zerado em todo lugar até alguma ação não relacionada
+        // disparar o recálculo — mesmo passo que LegadoController já faz na
+        // tela web. Não roda em --dry-run: nada foi de fato gravado.
+        if (! $dryRun) {
+            foreach ($importador->avaliacoesTocadas() as $avaliacaoCodigo) {
+                $resumos->recalcular($avaliacaoCodigo);
+            }
+
+            AtividadeLogger::registrar('import.legado_cli', null, null, $importador->resumo(), origemSemAuth: 'CLI: legado:importar');
+        }
 
         $resumo = $importador->resumo();
 

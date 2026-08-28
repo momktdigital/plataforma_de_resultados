@@ -43,6 +43,45 @@ class PortalConfiguracaoTest extends TestCase
         $this->assertSame('site-key', Configuracao::valor('recaptcha_site_key'));
     }
 
+    public function test_recaptcha_secret_key_em_branco_nao_apaga_a_ja_salva(): void
+    {
+        Configuracao::definir('recaptcha_secret_key', 'secret-antiga');
+
+        $response = $this->actingAs($this->admin(), 'admin')->put('/sistema/portal/captcha', [
+            'captcha_type' => 'recaptcha',
+            'recaptcha_site_key' => 'site-key-novo',
+        ]);
+
+        $response->assertRedirect(route('sistema.portal.index'));
+        $this->assertSame('secret-antiga', Configuracao::valor('recaptcha_secret_key'));
+        $this->assertSame('site-key-novo', Configuracao::valor('recaptcha_site_key'));
+    }
+
+    public function test_hcaptcha_secret_key_em_branco_nao_apaga_a_ja_salva(): void
+    {
+        Configuracao::definir('hcaptcha_secret_key', 'secret-antiga');
+
+        $response = $this->actingAs($this->admin(), 'admin')->put('/sistema/portal/captcha', [
+            'captcha_type' => 'hcaptcha',
+            'hcaptcha_site_key' => 'site-key-novo',
+        ]);
+
+        $response->assertRedirect(route('sistema.portal.index'));
+        $this->assertSame('secret-antiga', Configuracao::valor('hcaptcha_secret_key'));
+    }
+
+    public function test_secret_keys_do_captcha_nao_voltam_no_html_da_tela(): void
+    {
+        Configuracao::definir('recaptcha_secret_key', 'segredo-recaptcha-nao-deve-vazar');
+        Configuracao::definir('hcaptcha_secret_key', 'segredo-hcaptcha-nao-deve-vazar');
+
+        $response = $this->actingAs($this->admin(), 'admin')->get('/sistema/portal');
+
+        $response->assertOk();
+        $response->assertDontSee('segredo-recaptcha-nao-deve-vazar');
+        $response->assertDontSee('segredo-hcaptcha-nao-deve-vazar');
+    }
+
     public function test_smtp_pass_em_branco_nao_apaga_senha_ja_salva(): void
     {
         Configuracao::definir('smtp_pass', 'senha-secreta');

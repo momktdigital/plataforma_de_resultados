@@ -3,17 +3,6 @@
 @section('title', 'Alunos — Avaliações')
 
 @section('content')
-@if (session('importIgnoradas') && count(session('importIgnoradas')))
-    <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 text-amber-900 px-4 py-3 text-sm">
-        <p class="font-semibold mb-2">{{ count(session('importIgnoradas')) }} linha(s) ignorada(s):</p>
-        <ul class="list-disc pl-5 space-y-0.5 max-h-48 overflow-y-auto">
-            @foreach (session('importIgnoradas') as $ignorada)
-                <li>Linha {{ $ignorada['linha'] }}: {{ $ignorada['motivo'] }}</li>
-            @endforeach
-        </ul>
-    </div>
-@endif
-
 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
     <h1 class="text-2xl font-bold">Alunos</h1>
     <div class="flex gap-2">
@@ -28,7 +17,8 @@
 
 <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-6">
     <form method="GET" action="{{ route('alunos.index') }}" class="flex gap-3">
-        <input type="text" name="search" value="{{ $search }}" placeholder="Buscar por Nome, RA ou CPF..."
+        <label for="busca-alunos" class="sr-only">Buscar aluno por nome, RA ou CPF</label>
+        <input id="busca-alunos" type="text" name="search" value="{{ $search }}" placeholder="Buscar por Nome, RA ou CPF..."
                class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm">
         <button type="submit" class="bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-lg px-4 py-2 text-sm">
             Buscar
@@ -41,16 +31,16 @@
     </form>
 </div>
 
-<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="bg-slate-50 text-slate-500 text-left">
             <tr>
-                <th class="px-4 py-3">RA</th>
-                <th class="px-4 py-3">Nome</th>
-                <th class="px-4 py-3">CPF</th>
-                <th class="px-4 py-3">Nascimento</th>
-                <th class="px-4 py-3">Curso</th>
-                <th class="px-4 py-3">Período</th>
+                @include('partials.th-ordenavel', ['campo' => 'ra', 'label' => 'RA'])
+                @include('partials.th-ordenavel', ['campo' => 'nome', 'label' => 'Nome'])
+                @include('partials.th-ordenavel', ['campo' => 'cpf', 'label' => 'CPF'])
+                @include('partials.th-ordenavel', ['campo' => 'data_nascimento', 'label' => 'Nascimento'])
+                @include('partials.th-ordenavel', ['campo' => 'curso', 'label' => 'Curso'])
+                @include('partials.th-ordenavel', ['campo' => 'periodo', 'label' => 'Período'])
                 <th class="px-4 py-3"></th>
             </tr>
         </thead>
@@ -58,7 +48,23 @@
             @forelse ($alunos as $aluno)
                 <tr>
                     <td class="px-4 py-3 font-medium">{{ $aluno->ra }}</td>
-                    <td class="px-4 py-3">{{ $aluno->nome ?: '—' }}</td>
+                    <td class="px-4 py-3">
+                        <div class="flex items-center gap-2">
+                            @if ($aluno->fotoUrl())
+                                <img src="{{ $aluno->fotoUrl(60) }}" alt="" aria-hidden="true"
+                                     class="w-7 h-7 rounded-full object-cover border border-slate-200 shrink-0"
+                                     onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='flex';">
+                                <span style="display:none" class="w-7 h-7 rounded-full bg-primary/10 text-primary items-center justify-center text-xs font-bold shrink-0">
+                                    {{ mb_strtoupper(mb_substr($aluno->nome ?: $aluno->ra, 0, 1)) }}
+                                </span>
+                            @else
+                                <span class="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
+                                    {{ mb_strtoupper(mb_substr($aluno->nome ?: $aluno->ra, 0, 1)) }}
+                                </span>
+                            @endif
+                            <span>{{ $aluno->nome ?: '—' }}</span>
+                        </div>
+                    </td>
                     <td class="px-4 py-3">
                         @php($cpf = $aluno->cpf)
                         {{ $cpf && strlen($cpf) === 11 ? substr($cpf, 0, 3).'.'.substr($cpf, 3, 3).'.'.substr($cpf, 6, 3).'-'.substr($cpf, 9, 2) : ($cpf ?: '—') }}

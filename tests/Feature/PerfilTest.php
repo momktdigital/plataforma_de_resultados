@@ -58,6 +58,20 @@ class PerfilTest extends TestCase
         $this->assertTrue(Hash::check('senhaAtual', $admin->fresh()->password_hash));
     }
 
+    public function test_rejeita_senha_nova_curta_demais(): void
+    {
+        $admin = $this->admin();
+
+        $response = $this->actingAs($admin, 'admin')->put('/perfil/senha', [
+            'current_password' => 'senhaAtual',
+            'new_password' => 'curta123',
+            'new_password_confirmation' => 'curta123',
+        ]);
+
+        $response->assertSessionHasErrors('new_password');
+        $this->assertTrue(Hash::check('senhaAtual', $admin->fresh()->password_hash));
+    }
+
     public function test_guest_nao_acessa_perfil(): void
     {
         $this->admin();

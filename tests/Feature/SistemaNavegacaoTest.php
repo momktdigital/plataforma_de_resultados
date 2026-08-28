@@ -24,7 +24,7 @@ class SistemaNavegacaoTest extends TestCase
     }
 
     #[DataProvider('paginasSistema')]
-    public function test_cada_pagina_de_sistema_mostra_as_quatro_abas(string $rota): void
+    public function test_cada_pagina_de_sistema_mostra_todas_as_abas(string $rota): void
     {
         $response = $this->actingAs($this->admin(), 'admin')->get($rota);
 
@@ -33,6 +33,7 @@ class SistemaNavegacaoTest extends TestCase
         $response->assertSee('Backups');
         $response->assertSee('Dados legados');
         $response->assertSee('Atualizações');
+        $response->assertSee('Auditoria');
     }
 
     public static function paginasSistema(): array
@@ -42,6 +43,7 @@ class SistemaNavegacaoTest extends TestCase
             'backups' => ['/sistema/backups'],
             'dados legados' => ['/sistema/legado'],
             'atualizações' => ['/sistema/atualizacao'],
+            'auditoria' => ['/sistema/atividades'],
         ];
     }
 }

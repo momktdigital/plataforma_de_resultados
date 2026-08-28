@@ -13,6 +13,10 @@ use Illuminate\View\View;
 
 class LoginController extends Controller
 {
+    // Este limitador soma-se ao throttle:10,1 já aplicado à rota (ver
+    // routes/web.php) — não é redundância, é defesa em profundidade: aquele
+    // é por IP (contém flood na rota como um todo), este é por usuário+IP
+    // (contém tentativas contra uma conta específica, mais apertado).
     private const MAX_ATTEMPTS = 5;
 
     private const DECAY_SECONDS = 60;

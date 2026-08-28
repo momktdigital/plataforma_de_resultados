@@ -30,12 +30,23 @@ class AdministradorTest extends TestCase
     {
         $response = $this->actingAs($this->admin(), 'admin')->post('/administradores', [
             'username' => 'professor',
-            'password' => 'senha123',
+            'password' => 'senha123456',
         ]);
 
         $response->assertRedirect(route('administradores.index'));
         $novo = Admin::where('username', 'professor')->firstOrFail();
-        $this->assertTrue(Hash::check('senha123', $novo->password_hash));
+        $this->assertTrue(Hash::check('senha123456', $novo->password_hash));
+    }
+
+    public function test_rejeita_senha_curta_demais_ao_criar_administrador(): void
+    {
+        $response = $this->actingAs($this->admin(), 'admin')->post('/administradores', [
+            'username' => 'professor',
+            'password' => 'curta123',
+        ]);
+
+        $response->assertSessionHasErrors('password');
+        $this->assertDatabaseMissing('admins', ['username' => 'professor']);
     }
 
     public function test_nome_de_usuario_duplicado_e_rejeitado(): void
@@ -44,11 +55,54 @@ class AdministradorTest extends TestCase
 
         $response = $this->actingAs($admin, 'admin')->post('/administradores', [
             'username' => 'coordenador',
-            'password' => 'senha123',
+            'password' => 'senha123456',
         ]);
 
         $response->assertSessionHasErrors('username');
         $this->assertDatabaseCount('admins', 1);
+    }
+
+    public function test_edita_nome_de_usuario_e_email_sem_mexer_na_senha(): void
+    {
+        $admin = $this->admin();
+        $hashAntes = $admin->password_hash;
+
+        $response = $this->actingAs($admin, 'admin')->put("/administradores/{$admin->id}", [
+            'username' => 'novo-nome',
+            'email' => 'novo@example.com',
+        ]);
+
+        $response->assertRedirect(route('administradores.index'));
+        $admin->refresh();
+        $this->assertSame('novo-nome', $admin->username);
+        $this->assertSame('novo@example.com', $admin->email);
+        $this->assertSame($hashAntes, $admin->password_hash);
+    }
+
+    public function test_redefine_a_senha_de_outro_administrador(): void
+    {
+        $admin = $this->admin();
+        $outro = Admin::create(['username' => 'professor', 'password_hash' => bcrypt('senha-antiga')]);
+
+        $this->actingAs($admin, 'admin')->put("/administradores/{$outro->id}", [
+            'username' => 'professor',
+            'password' => 'senha-nova-123',
+        ])->assertRedirect(route('administradores.index'));
+
+        $this->assertTrue(Hash::check('senha-nova-123', $outro->fresh()->password_hash));
+    }
+
+    public function test_nao_permite_renomear_para_usuario_ja_existente(): void
+    {
+        $admin = $this->admin();
+        $outro = Admin::create(['username' => 'professor', 'password_hash' => bcrypt('x')]);
+
+        $response = $this->actingAs($admin, 'admin')->put("/administradores/{$outro->id}", [
+            'username' => 'coordenador',
+        ]);
+
+        $response->assertSessionHasErrors('username');
+        $this->assertSame('professor', $outro->fresh()->username);
     }
 
     public function test_exclui_outro_administrador(): void
@@ -77,5 +131,18 @@ class AdministradorTest extends TestCase
         $this->admin();
 
         $this->get('/administradores')->assertRedirect(route('login'));
+    }
+
+    public function test_lista_administradores_e_paginada(): void
+    {
+        $admin = $this->admin();
+        for ($i = 0; $i < 55; $i++) {
+            Admin::create(['username' => "professor{$i}", 'password_hash' => bcrypt('x')]);
+        }
+
+        $response = $this->actingAs($admin, 'admin')->get('/administradores');
+
+        $response->assertOk();
+        $response->assertViewHas('admins', fn ($admins) => $admins->count() === 50 && $admins->hasMorePages());
     }
 }

@@ -8,7 +8,9 @@ use App\Models\Avaliacao;
 use App\Models\Questao;
 use App\Services\QuestaoReferenciaService;
 use App\Services\ResumoResultadoService;
+use App\Support\AtividadeLogger;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 
 /**
  * Editor manual de uma questão por vez — equivalente ao "Editor de Gabarito
@@ -46,11 +48,27 @@ class QuestaoController extends Controller
             $questao->restore();
         }
 
+        $gabaritoAntes = $questao->gabarito;
+        $anuladaAntes = $questao->anulada_modo;
+
         $questao->gabarito = mb_strtoupper($dados['gabarito'], 'UTF-8');
         foreach (self::CAMPOS_SIMPLES as $campo) {
             $questao->{$campo} = $dados[$campo] ?? null;
         }
         $questao->save();
+
+        // Só isso muda a nota de quem já respondeu — os demais metadados
+        // (área/tema/bloom/matriz...) são só classificação, não afetam acerto.
+        if ($gabaritoAntes !== $questao->gabarito || $anuladaAntes !== $questao->anulada_modo) {
+            AtividadeLogger::registrar('questao.gabarito_alterado', 'Questao', $questao->id, [
+                'avaliacao_codigo' => $avaliacao->codigo,
+                'numero' => $questao->numero,
+                'gabarito_antes' => $gabaritoAntes,
+                'gabarito_depois' => $questao->gabarito,
+                'anulada_modo_antes' => $anuladaAntes,
+                'anulada_modo_depois' => $questao->anulada_modo,
+            ]);
+        }
 
         foreach (self::TIPOS_REFERENCIA as $tipo) {
             $referencias->sincronizarReferencias($questao, $tipo, $dados[$tipo] ?? []);
@@ -75,9 +93,42 @@ class QuestaoController extends Controller
 
         $resumos->recalcular($avaliacao->codigo);
 
+        AtividadeLogger::registrar('questao.excluida', 'Questao', $questao->id, [
+            'avaliacao_codigo' => $avaliacao->codigo,
+            'numero' => $questao->numero,
+        ]);
+
         return redirect()
             ->route('avaliacoes.show', $avaliacao)
             ->with('status', "Questão {$questao->numero} excluída.");
+    }
+
+    public function destroyBulk(Request $request, Avaliacao $avaliacao, ResumoResultadoService $resumos): RedirectResponse
+    {
+        $ids = array_values(array_unique(array_map('intval', $request->input('ids', []))));
+
+        if ($ids === []) {
+            return back()->withErrors(['ids' => 'Selecione ao menos uma questão.']);
+        }
+
+        // Escopado à avaliação da URL — um id de outra avaliação (manipulado
+        // à mão) simplesmente não é encontrado, nunca excluído.
+        $questoes = Questao::where('avaliacao_codigo', $avaliacao->codigo)->whereIn('id', $ids)->get();
+
+        foreach ($questoes as $questao) {
+            $questao->delete();
+
+            AtividadeLogger::registrar('questao.excluida', 'Questao', $questao->id, [
+                'avaliacao_codigo' => $avaliacao->codigo,
+                'numero' => $questao->numero,
+            ]);
+        }
+
+        $resumos->recalcular($avaliacao->codigo);
+
+        return redirect()
+            ->route('avaliacoes.show', $avaliacao)
+            ->with('status', $questoes->count().' questão(ões) excluída(s).');
     }
 
     public function restore(Avaliacao $avaliacao, int $questao, ResumoResultadoService $resumos): RedirectResponse
@@ -88,6 +139,11 @@ class QuestaoController extends Controller
         $questaoModel->restore();
 
         $resumos->recalcular($avaliacao->codigo);
+
+        AtividadeLogger::registrar('questao.restaurada', 'Questao', $questaoModel->id, [
+            'avaliacao_codigo' => $avaliacao->codigo,
+            'numero' => $questaoModel->numero,
+        ]);
 
         return redirect()
             ->route('avaliacoes.show', $avaliacao)

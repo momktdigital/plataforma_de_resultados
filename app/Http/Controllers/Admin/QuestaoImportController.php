@@ -4,39 +4,48 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ImportArquivoRequest;
+use App\Jobs\ImportarQuestoesJob;
 use App\Models\Avaliacao;
-use App\Services\QuestaoImportService;
-use App\Services\ResumoResultadoService;
+use App\Support\ImportStatusTracker;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
-use RuntimeException;
+use Throwable;
 
 class QuestaoImportController extends Controller
 {
     public function create(Avaliacao $avaliacao): View
     {
-        return view('admin.questoes.import', ['avaliacao' => $avaliacao]);
+        return view('admin.questoes.import', [
+            'avaliacao' => $avaliacao,
+            'importStatus' => ImportStatusTracker::status('questoes', (string) $avaliacao->codigo),
+        ]);
     }
 
-    public function store(
-        ImportArquivoRequest $request,
-        Avaliacao $avaliacao,
-        QuestaoImportService $service,
-        ResumoResultadoService $resumos,
-    ): RedirectResponse {
+    public function store(ImportArquivoRequest $request, Avaliacao $avaliacao): RedirectResponse
+    {
+        $arquivo = $request->file('arquivo');
+        $caminho = $arquivo->store('imports');
+
+        $admin = Auth::guard('admin')->user();
+        $dryRun = $request->boolean('dry_run');
+
+        // Ver ResultadoImportController::store() — mesmo raciocínio do try/catch.
         try {
-            $resultado = $service->importar($avaliacao, $request->file('arquivo'));
-        } catch (RuntimeException $e) {
-            return back()->withErrors(['arquivo' => $e->getMessage()]);
+            ImportarQuestoesJob::dispatch($avaliacao->codigo, $caminho, $arquivo->getClientOriginalName(), $admin?->id, $admin?->username, $dryRun);
+        } catch (Throwable $e) {
+            Storage::delete($caminho);
+            Log::error('Falha ao solicitar import de questões.', ['exception' => $e]);
+
+            return redirect()->route('avaliacoes.questoes.import', $avaliacao)
+                ->withErrors(['arquivo' => 'Não foi possível iniciar o import: '.$e->getMessage()]);
         }
 
-        // Gabarito mudou: o "total" e os acertos de todo mundo que já
-        // respondeu esta avaliação (em qualquer período) podem ter mudado junto.
-        $resumos->recalcular($avaliacao->codigo);
-
-        return redirect()
-            ->route('avaliacoes.show', $avaliacao)
-            ->with('status', "Import de questões: {$resultado->resumo()}")
-            ->with('importIgnoradas', $resultado->ignoradas());
+        return redirect()->route('avaliacoes.questoes.import', $avaliacao)
+            ->with('status', $dryRun
+                ? 'Simulação de import de questões solicitada — nada será gravado.'
+                : 'Import de questões solicitado — está sendo processado em segundo plano.');
     }
 }

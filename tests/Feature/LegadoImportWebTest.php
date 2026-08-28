@@ -39,16 +39,42 @@ class LegadoImportWebTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
 
-        $response = $this->actingAs($this->admin(), 'admin')->post('/sistema/legado/banco');
+        $admin = $this->admin();
+        $response = $this->actingAs($admin, 'admin')->post('/sistema/legado/banco');
 
         $response->assertRedirect(route('sistema.legado.index'));
         $response->assertSessionHas('status');
+        $this->assertDatabaseHas('atividades', ['admin_id' => $admin->id, 'acao' => 'import.legado_banco']);
         $this->assertDatabaseHas('avaliacoes', ['nome' => 'ENADE 2026']);
         $this->assertDatabaseHas('questoes', ['numero' => 1, 'gabarito' => 'B']);
         $this->assertDatabaseHas('respostas', ['ra' => '12345', 'questao_numero' => 1, 'resposta' => 'B']);
         // O resumo do boletim já é gerado nesta mesma importação, sem esperar
         // um novo import de resultados.
         $this->assertDatabaseHas('resultado_resumos', ['ra' => '12345', 'periodo' => '2026/1', 'acertos' => 1, 'total' => 1]);
+    }
+
+    public function test_dry_run_no_banco_compartilhado_nao_grava_nada(): void
+    {
+        DB::table('gabaritos')->insert([
+            'nome_avaliacao' => 'ENADE 2026',
+            'respostas' => json_encode(['Q1' => 'B']),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('resultados')->insert([
+            'ra' => '12345', 'periodo' => '2026/1', 'nome_avaliacao' => 'ENADE 2026',
+            'respostas' => json_encode(['Q1' => 'B']),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $admin = $this->admin();
+        $response = $this->actingAs($admin, 'admin')->post('/sistema/legado/banco', ['dry_run' => '1']);
+
+        $response->assertRedirect(route('sistema.legado.index'));
+        $response->assertSessionHas('status');
+        $this->assertStringContainsString('Simulação', session('status'));
+        $this->assertDatabaseCount('avaliacoes', 0);
+        $this->assertDatabaseCount('questoes', 0);
+        $this->assertDatabaseMissing('atividades', ['acao' => 'import.legado_banco']);
     }
 
     public function test_importar_do_banco_avisa_quando_tabelas_legadas_nao_existem(): void
@@ -71,10 +97,12 @@ class LegadoImportWebTest extends TestCase
 
         $arquivo = UploadedFile::fake()->createWithContent('backup.sql', $sql);
 
-        $response = $this->actingAs($this->admin(), 'admin')
+        $admin = $this->admin();
+        $response = $this->actingAs($admin, 'admin')
             ->post('/sistema/legado/arquivo', ['arquivo' => $arquivo]);
 
         $response->assertRedirect(route('sistema.legado.index'));
+        $this->assertDatabaseHas('atividades', ['admin_id' => $admin->id, 'acao' => 'import.legado_arquivo']);
         $this->assertDatabaseHas('avaliacoes', ['nome' => 'Simulado']);
         $this->assertDatabaseHas('questoes', ['numero' => 1, 'gabarito' => 'A']);
         $this->assertDatabaseHas('respostas', ['ra' => '999', 'resposta' => 'A']);

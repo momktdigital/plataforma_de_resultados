@@ -151,6 +151,30 @@ class AlunoTest extends TestCase
         $this->assertDatabaseMissing('alunos', ['id' => $aluno->id]);
     }
 
+    public function test_ordena_lista_por_ra_quando_pedido_na_query_string(): void
+    {
+        Aluno::create(['ra' => '2026002', 'nome' => 'Bruno']);
+        Aluno::create(['ra' => '2026001', 'nome' => 'Ana']);
+
+        $response = $this->actingAs($this->admin(), 'admin')->get('/alunos?sort=ra&direction=desc');
+
+        $response->assertOk();
+        $response->assertSeeInOrder(['2026002', '2026001']);
+    }
+
+    public function test_ignora_coluna_de_ordenacao_nao_permitida(): void
+    {
+        Aluno::create(['ra' => '2026001', 'nome' => 'Ana']);
+
+        // "id" não está na lista de colunas ordenáveis — cai pro padrão
+        // (nome) em vez de estourar erro de SQL com uma coluna arbitrária
+        // vinda da query string.
+        $response = $this->actingAs($this->admin(), 'admin')->get('/alunos?sort=id&direction=asc');
+
+        $response->assertOk();
+        $response->assertSee('Ana');
+    }
+
     public function test_busca_filtra_por_ra_cpf_ou_nome(): void
     {
         Aluno::create(['ra' => '2026001', 'cpf' => '12345678909', 'data_nascimento' => '2000-01-01', 'nome' => 'Ana Silva']);
@@ -167,5 +191,31 @@ class AlunoTest extends TestCase
         $this->admin();
 
         $this->get('/alunos')->assertRedirect(route('login'));
+    }
+
+    public function test_tela_de_novo_aluno_renderiza_formulario_vazio(): void
+    {
+        $response = $this->actingAs($this->admin(), 'admin')->get('/alunos/novo');
+
+        $response->assertOk();
+        $response->assertViewIs('admin.alunos.form');
+        $response->assertSee('action="'.route('alunos.store').'"', false);
+    }
+
+    public function test_tela_de_editar_aluno_renderiza_formulario_preenchido(): void
+    {
+        $aluno = Aluno::create([
+            'ra' => '2026001',
+            'cpf' => '12345678909',
+            'data_nascimento' => '2000-01-01',
+            'nome' => 'Fulano de Tal',
+        ]);
+
+        $response = $this->actingAs($this->admin(), 'admin')->get("/alunos/{$aluno->id}/editar");
+
+        $response->assertOk();
+        $response->assertViewIs('admin.alunos.form');
+        $response->assertSee('Fulano de Tal');
+        $response->assertSee('action="'.route('alunos.update', $aluno).'"', false);
     }
 }

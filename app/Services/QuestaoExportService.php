@@ -59,24 +59,43 @@ class QuestaoExportService
         $portariaInep = $porTipo->get('portaria_inep', []);
         $ppc = $porTipo->get('ppc', []);
 
-        return [
-            $questao->numero,
-            $questao->gabarito,
-            $questao->area,
-            $questao->tema,
-            $questao->habilidade,
-            $questao->bloom_nivel,
-            $questao->bloom_verbo,
-            $questao->miller_nivel,
-            $questao->dificuldade_pedagogica,
-            $questao->dificuldade_tri,
-            $questao->matrizes->pluck('periodo')->filter()->implode(';'),
-            $questao->matrizes->pluck('disciplina')->filter()->implode(';'),
-            $questao->matrizes->pluck('codigo')->filter()->implode(';'),
-            $matrizProva[0] ?? null, $matrizProva[1] ?? null, $matrizProva[2] ?? null,
-            $dcn[0] ?? null, $dcn[1] ?? null,
-            $portariaInep[0] ?? null, $portariaInep[1] ?? null, $portariaInep[2] ?? null,
-            $ppc[0] ?? null, $ppc[1] ?? null, $ppc[2] ?? null, $ppc[3] ?? null,
-        ];
+        return array_map(
+            $this->protegerContraFormula(...),
+            [
+                $questao->numero,
+                $questao->gabarito,
+                $questao->area,
+                $questao->tema,
+                $questao->habilidade,
+                $questao->bloom_nivel,
+                $questao->bloom_verbo,
+                $questao->miller_nivel,
+                $questao->dificuldade_pedagogica,
+                $questao->dificuldade_tri,
+                $questao->matrizes->pluck('periodo')->filter()->implode(';'),
+                $questao->matrizes->pluck('disciplina')->filter()->implode(';'),
+                $questao->matrizes->pluck('codigo')->filter()->implode(';'),
+                $matrizProva[0] ?? null, $matrizProva[1] ?? null, $matrizProva[2] ?? null,
+                $dcn[0] ?? null, $dcn[1] ?? null,
+                $portariaInep[0] ?? null, $portariaInep[1] ?? null, $portariaInep[2] ?? null,
+                $ppc[0] ?? null, $ppc[1] ?? null, $ppc[2] ?? null, $ppc[3] ?? null,
+            ],
+        );
+    }
+
+    /**
+     * Neutraliza injeção de fórmula: os campos de texto livre vêm de
+     * planilhas importadas sem filtro de conteúdo, e o PhpSpreadsheet trata
+     * qualquer valor começando com =/+/-/@ como fórmula — tanto no .xlsx
+     * quanto (ao reabrir depois no Excel) no .csv gerado a partir da mesma
+     * planilha. Um apóstrofo na frente faz o Excel tratar como texto.
+     */
+    private function protegerContraFormula(mixed $valor): mixed
+    {
+        if (! is_string($valor) || $valor === '') {
+            return $valor;
+        }
+
+        return in_array($valor[0], ['=', '+', '-', '@'], true) ? "'".$valor : $valor;
     }
 }

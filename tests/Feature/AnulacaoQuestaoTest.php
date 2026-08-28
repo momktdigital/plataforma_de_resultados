@@ -80,6 +80,40 @@ class AnulacaoQuestaoTest extends TestCase
         $this->assertDatabaseHas('resultado_resumos', ['ra' => '1', 'acertos' => 1, 'total' => 1]);
     }
 
+    public function test_alterar_gabarito_registra_na_trilha_de_auditoria(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        $questao = Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A']);
+        $admin = $this->admin();
+
+        $this->actingAs($admin, 'admin')->post(route('avaliacoes.questoes.store', $avaliacao), [
+            'numero' => 1,
+            'gabarito' => 'B',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('atividades', [
+            'admin_username' => $admin->username,
+            'acao' => 'questao.gabarito_alterado',
+            'alvo_tipo' => 'Questao',
+            'alvo_id' => (string) $questao->id,
+        ]);
+    }
+
+    public function test_salvar_questao_sem_mudar_gabarito_ou_anulacao_nao_registra_na_trilha(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A', 'area' => 'Antiga']);
+        $admin = $this->admin();
+
+        $this->actingAs($admin, 'admin')->post(route('avaliacoes.questoes.store', $avaliacao), [
+            'numero' => 1,
+            'gabarito' => 'A',
+            'area' => 'Nova',
+        ])->assertRedirect();
+
+        $this->assertDatabaseCount('atividades', 0);
+    }
+
     public function test_estatistica_erro_nao_lista_questao_anulada(): void
     {
         $avaliacao = Avaliacao::create([]);

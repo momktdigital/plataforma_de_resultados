@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rules\Password;
 
 class UpdateSenhaRequest extends FormRequest
 {
@@ -17,8 +18,9 @@ class UpdateSenhaRequest extends FormRequest
     {
         return [
             'current_password' => ['required', 'string'],
-            // min:4 mirrors the legacy limit (admin/perfil.php).
-            'new_password' => ['required', 'string', 'min:4', 'confirmed'],
+            // O sistema legado (admin/perfil.php) aceitava min:4 — não
+            // seguimos essa política aqui, ver StoreAdministradorRequest.
+            'new_password' => ['required', 'string', Password::min(10), 'confirmed'],
         ];
     }
 
@@ -27,7 +29,7 @@ class UpdateSenhaRequest extends FormRequest
         return [
             'current_password.required' => 'Informe a senha atual.',
             'new_password.required' => 'Informe a nova senha.',
-            'new_password.min' => 'A nova senha precisa ter ao menos 4 caracteres.',
+            'new_password.min' => 'A nova senha precisa ter ao menos 10 caracteres.',
             'new_password.confirmed' => 'A confirmação da nova senha não confere.',
         ];
     }

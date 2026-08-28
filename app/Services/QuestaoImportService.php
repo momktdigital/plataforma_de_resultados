@@ -9,6 +9,7 @@ use App\Support\ImportResult;
 use App\Support\SpreadsheetReader;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * Import de questões/gabarito (+ metadados pedagógicos opcionais) para uma
@@ -39,71 +40,209 @@ class QuestaoImportService
         'ppc' => ['ppc'],
     ];
 
-    public function importar(Avaliacao $avaliacao, UploadedFile $file): ImportResult
+    /** Colunas de `questoes` sobrescritas pelo upsert() a cada reimport (fora as chaves avaliacao_codigo/numero). */
+    private const CAMPOS_ATUALIZAVEIS = [
+        'gabarito', 'area', 'tema', 'habilidade', 'bloom_nivel', 'bloom_verbo',
+        'miller_nivel', 'dificuldade_pedagogica', 'dificuldade_tri', 'deleted_at', 'updated_at',
+    ];
+
+    /** Tamanho dos lotes do upsert() — ver ResultadoImportService::TAMANHO_LOTE. */
+    private const TAMANHO_LOTE = 500;
+
+    public function importar(Avaliacao $avaliacao, UploadedFile $file, bool $dryRun = false): ImportResult
     {
         $rows = SpreadsheetReader::readRows($file);
         $resultado = new ImportResult;
 
-        DB::transaction(function () use ($avaliacao, $rows, $resultado) {
-            foreach ($rows as $index => $row) {
-                $resultado->registrarLinha();
-                $linha = $index + 2; // +1 pelo cabeçalho, +1 por índice base 0
+        $linhas = $this->normalizarLinhas($rows, $resultado);
 
-                $numeroBruto = HeaderResolver::findValue($row, self::NUMERO_PATTERNS);
-                $gabarito = HeaderResolver::findValue($row, self::GABARITO_PATTERNS);
+        if ($linhas === []) {
+            return $resultado;
+        }
 
-                if ($numeroBruto === null || ! preg_match('/\d+/', $numeroBruto, $matches)) {
-                    $resultado->ignorarLinha($linha, 'Coluna de Questão ausente ou sem número.');
+        $numeros = array_values(array_unique(array_column($linhas, 'numero')));
 
-                    continue;
-                }
+        // withTrashed(): uma questão soft-deletada ainda ocupa o índice único
+        // (avaliacao_codigo, numero) — reimportá-la conta como "atualizada"
+        // (restaurada), não "criada".
+        $existentes = Questao::withTrashed()
+            ->where('avaliacao_codigo', $avaliacao->codigo)
+            ->whereIn('numero', $numeros)
+            ->pluck('numero')
+            ->flip()
+            ->all();
 
-                if ($gabarito === null) {
-                    $resultado->ignorarLinha($linha, 'Coluna de Gabarito ausente ou vazia.');
+        DB::beginTransaction();
 
-                    continue;
-                }
+        try {
+            $registros = $this->montarRegistros($avaliacao, $linhas);
+            $vistos = [];
+            $falharam = [];
 
-                $numero = (int) $matches[0];
-                $gabarito = mb_strtoupper($gabarito, 'UTF-8');
-
-                $atributos = $this->extrairMetadados($row);
-
-                $questao = $this->salvarQuestao($avaliacao, $numero, $gabarito, $atributos);
-
-                $questao->wasRecentlyCreated ? $resultado->registrarCriada() : $resultado->registrarAtualizada();
-
-                $this->sincronizarMatrizes($questao, $row);
-                $this->sincronizarReferencias($questao, $row);
+            foreach (array_chunk($registros, self::TAMANHO_LOTE, true) as $lote) {
+                $this->salvarLote($lote, $existentes, $vistos, $falharam, $resultado);
             }
-        });
+
+            $questoes = Questao::where('avaliacao_codigo', $avaliacao->codigo)
+                ->whereIn('numero', $numeros)
+                ->get()
+                ->keyBy('numero');
+
+            foreach ($linhas as $linha) {
+                if (isset($falharam[$linha['numero']])) {
+                    continue;
+                }
+
+                $questao = $questoes->get($linha['numero']);
+                if ($questao === null) {
+                    continue;
+                }
+
+                $this->sincronizarMatrizes($questao, $linha['row']);
+                $this->sincronizarReferencias($questao, $linha['row']);
+            }
+        } catch (Throwable $e) {
+            DB::rollBack();
+
+            throw $e;
+        }
+
+        // dry-run: os contadores/linhas-ignoradas em $resultado refletem
+        // exatamente o que teria acontecido — só que nada fica gravado.
+        $dryRun ? DB::rollBack() : DB::commit();
 
         return $resultado;
     }
 
     /**
-     * updateOrCreate "manual" que também restaura uma questão excluída
-     * (soft-delete) em vez de colidir com o índice único (avaliação, número).
+     * Valida e normaliza cada linha da planilha, sem tocar o banco.
      *
-     * @param  array<string, mixed>  $atributos
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array{linha: int, numero: int, gabarito: string, atributos: array<string, string|null>, row: array<string, mixed>}>
      */
-    private function salvarQuestao(Avaliacao $avaliacao, int $numero, string $gabarito, array $atributos): Questao
+    private function normalizarLinhas(array $rows, ImportResult $resultado): array
     {
-        $questao = Questao::withTrashed()
-            ->where('avaliacao_codigo', $avaliacao->codigo)
-            ->where('numero', $numero)
-            ->first();
+        $linhas = [];
 
-        if ($questao === null) {
-            $questao = new Questao(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => $numero]);
-        } elseif ($questao->trashed()) {
-            $questao->restore();
+        foreach ($rows as $index => $row) {
+            $resultado->registrarLinha();
+            $linha = $index + 2; // +1 pelo cabeçalho, +1 por índice base 0
+
+            $numeroBruto = HeaderResolver::findValue($row, self::NUMERO_PATTERNS);
+            $gabarito = HeaderResolver::findValue($row, self::GABARITO_PATTERNS);
+
+            if ($numeroBruto === null || ! preg_match('/\d+/', $numeroBruto, $matches)) {
+                $resultado->ignorarLinha($linha, 'Coluna de Questão ausente ou sem número.');
+
+                continue;
+            }
+
+            if ($gabarito === null) {
+                $resultado->ignorarLinha($linha, 'Coluna de Gabarito ausente ou vazia.');
+
+                continue;
+            }
+
+            $linhas[] = [
+                'linha' => $linha,
+                'numero' => (int) $matches[0],
+                'gabarito' => mb_strtoupper($gabarito, 'UTF-8'),
+                'atributos' => $this->extrairMetadados($row),
+                'row' => $row,
+            ];
         }
 
-        $questao->fill(array_merge($atributos, ['gabarito' => $gabarito]));
-        $questao->save();
+        return $linhas;
+    }
 
-        return $questao;
+    /**
+     * Monta os registros a upsertar — uma chave (numero) repetida dentro do
+     * próprio arquivo mantém só a última ocorrência. Cada registro carrega
+     * 'linha' (número da linha original), pra atribuir o erro corretamente
+     * se esse numero falhar ao salvar — removido antes de virar a linha do
+     * upsert.
+     *
+     * @param  array<int, array{linha: int, numero: int, gabarito: string, atributos: array<string, string|null>}>  $linhas
+     * @return array<int, array{linha: int, dados: array<string, mixed>}>
+     */
+    private function montarRegistros(Avaliacao $avaliacao, array $linhas): array
+    {
+        $registros = [];
+
+        foreach ($linhas as $linha) {
+            $registros[$linha['numero']] = [
+                'linha' => $linha['linha'],
+                'dados' => array_merge($linha['atributos'], [
+                    'avaliacao_codigo' => $avaliacao->codigo,
+                    'numero' => $linha['numero'],
+                    'gabarito' => $linha['gabarito'],
+                    'deleted_at' => null,
+                ]),
+            ];
+        }
+
+        return $registros;
+    }
+
+    /**
+     * Salva um lote inteiro num único upsert() (caminho rápido — o normal).
+     * Se o lote falhar (ex.: MySQL em modo estrito rejeitando um valor que
+     * não cabe numa coluna), reprocessa o MESMO lote linha a linha, isolando
+     * só o(s) número(s) problemático(s) via ImportResult::ignorarLinha() em
+     * vez de derrubar o import inteiro — mesma ideia que
+     * MatriculaImportService já aplica.
+     *
+     * @param  array<int, array{linha: int, dados: array<string, mixed>}>  $lote
+     * @param  array<int, true>  $existentes
+     * @param  array<int, true>  $vistos
+     * @param  array<int, true>  $falharam
+     */
+    private function salvarLote(array $lote, array $existentes, array &$vistos, array &$falharam, ImportResult $resultado): void
+    {
+        $agora = now();
+
+        try {
+            DB::table('questoes')->upsert(
+                array_map(fn (array $r) => $r['dados'] + ['created_at' => $agora, 'updated_at' => $agora], array_values($lote)),
+                ['avaliacao_codigo', 'numero'],
+                self::CAMPOS_ATUALIZAVEIS
+            );
+
+            foreach ($lote as $numero => $registro) {
+                $this->registrarSucesso($numero, $existentes, $vistos, $resultado);
+            }
+
+            return;
+        } catch (Throwable) {
+            // Segue pro fallback linha a linha abaixo.
+        }
+
+        foreach ($lote as $numero => $registro) {
+            try {
+                DB::table('questoes')->upsert(
+                    [$registro['dados'] + ['created_at' => $agora, 'updated_at' => $agora]],
+                    ['avaliacao_codigo', 'numero'],
+                    self::CAMPOS_ATUALIZAVEIS
+                );
+
+                $this->registrarSucesso($numero, $existentes, $vistos, $resultado);
+            } catch (Throwable $e) {
+                $falharam[$numero] = true;
+                $resultado->ignorarLinha($registro['linha'], 'Falha ao salvar: '.$e->getMessage());
+            }
+        }
+    }
+
+    /** @param  array<int, true>  $existentes @param  array<int, true>  $vistos */
+    private function registrarSucesso(int $numero, array $existentes, array &$vistos, ImportResult $resultado): void
+    {
+        if (isset($existentes[$numero]) || isset($vistos[$numero])) {
+            $resultado->registrarAtualizada();
+        } else {
+            $resultado->registrarCriada();
+        }
+
+        $vistos[$numero] = true;
     }
 
     /** @return array<string, string|null> */

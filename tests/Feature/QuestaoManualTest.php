@@ -68,6 +68,46 @@ class QuestaoManualTest extends TestCase
         $this->assertNotSoftDeleted('questoes', ['id' => $questao->id]);
     }
 
+    public function test_exclui_questoes_em_lote(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        $questao1 = Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A']);
+        $questao2 = Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 2, 'gabarito' => 'B']);
+        $naoSelecionada = Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 3, 'gabarito' => 'C']);
+        $admin = $this->admin();
+
+        $response = $this->actingAs($admin, 'admin')
+            ->delete("/avaliacoes/{$avaliacao->codigo}/questoes/excluir-em-lote", ['ids' => [$questao1->id, $questao2->id]]);
+
+        $response->assertRedirect(route('avaliacoes.show', $avaliacao));
+        $this->assertSoftDeleted('questoes', ['id' => $questao1->id]);
+        $this->assertSoftDeleted('questoes', ['id' => $questao2->id]);
+        $this->assertNotSoftDeleted('questoes', ['id' => $naoSelecionada->id]);
+        $this->assertDatabaseHas('atividades', ['acao' => 'questao.excluida', 'alvo_id' => (string) $questao1->id]);
+    }
+
+    public function test_exclusao_em_lote_de_questoes_e_escopada_a_avaliacao_da_url(): void
+    {
+        $avaliacao1 = Avaliacao::create([]);
+        $avaliacao2 = Avaliacao::create([]);
+        $questaoDeOutraAvaliacao = Questao::create(['avaliacao_codigo' => $avaliacao2->codigo, 'numero' => 1, 'gabarito' => 'A']);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->delete("/avaliacoes/{$avaliacao1->codigo}/questoes/excluir-em-lote", ['ids' => [$questaoDeOutraAvaliacao->id]]);
+
+        $this->assertNotSoftDeleted('questoes', ['id' => $questaoDeOutraAvaliacao->id]);
+    }
+
+    public function test_exclusao_em_lote_de_questoes_exige_pelo_menos_um_id(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->delete("/avaliacoes/{$avaliacao->codigo}/questoes/excluir-em-lote", ['ids' => []]);
+
+        $response->assertSessionHasErrors('ids');
+    }
+
     public function test_reenviar_numero_de_questao_excluida_restaura(): void
     {
         $avaliacao = Avaliacao::create([]);

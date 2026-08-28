@@ -13,6 +13,12 @@ use Throwable;
  * (30s em muitas instalações, ex.: XAMPP/hospedagem compartilhada) derruba a
  * requisição no meio de uma transação aberta, com um 500 sem nenhuma
  * mensagem útil (e a transação presa segurando locks).
+ *
+ * Usada também pelos Jobs de import (Questão/Resultado/Matrícula): mesmo
+ * rodando fora do ciclo de vida de uma requisição HTTP, o worker da fila
+ * ainda herda o `memory_limit` padrão do php.ini — uma planilha XLSX grande
+ * (PhpSpreadsheet carrega tudo na memória, ver SpreadsheetReader) pode
+ * estourar isso e deixar a MESMA transação aberta órfã.
  */
 trait PermiteImportacaoLonga
 {

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Arquivo muito grande — Avaliações</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex items-center justify-center p-6">
     <div class="max-w-lg w-full bg-white border border-slate-200 rounded-xl shadow-sm p-8">

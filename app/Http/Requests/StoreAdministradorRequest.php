@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rules\Password;
 
 class StoreAdministradorRequest extends FormRequest
 {
@@ -15,10 +16,11 @@ class StoreAdministradorRequest extends FormRequest
     {
         return [
             'username' => ['required', 'string', 'max:50', 'unique:admins,username'],
-            // min:4 mirrors the legacy limit (admin/usuarios.php) — not
-            // strengthened here to avoid changing existing account policy
-            // as a side effect of this port.
-            'password' => ['required', 'string', 'min:4'],
+            'email' => ['nullable', 'email', 'max:255', 'unique:admins,email'],
+            // O sistema legado aceitava min:4 — não seguimos essa política
+            // aqui: uma conta de admin tem acesso total aos dados de todos
+            // os alunos, então o mínimo é elevado independente do legado.
+            'password' => ['required', 'string', Password::min(10)],
         ];
     }
 
@@ -27,8 +29,10 @@ class StoreAdministradorRequest extends FormRequest
         return [
             'username.required' => 'Informe o nome de usuário.',
             'username.unique' => 'Já existe um administrador com este nome de usuário.',
+            'email.email' => 'Informe um e-mail válido.',
+            'email.unique' => 'Já existe um administrador com este e-mail.',
             'password.required' => 'Informe a senha.',
-            'password.min' => 'A senha precisa ter ao menos 4 caracteres.',
+            'password.min' => 'A senha precisa ter ao menos 10 caracteres.',
         ];
     }
 }

@@ -9,6 +9,14 @@ use Illuminate\Support\Facades\Schema;
 // coluna `data_prova` (própria dela) e a coluna `prova_codigo` nas quatro
 // tabelas que referenciam a avaliação por FK. Nenhuma linha é reescrita,
 // apenas nomes — os dados existentes são preservados como estão.
+//
+// Cuidado ao rodar isto (de novo, do zero) num MySQL/MariaDB antigo: em
+// MySQL 8+/MariaDB 10.5+ um RENAME COLUMN é só metadado (instantâneo, sem
+// travar a tabela). Numa versão mais velha o MySQL/MariaDB pode não suportar
+// o ALGORITHM=INSTANT pra essa operação e cair pra reconstruir a tabela
+// inteira — o que trava escrita nela (aqui, `respostas`, que é a maior)
+// pelo tempo da reconstrução. Confirme a versão do servidor de destino antes
+// de aplicar isto num ambiente novo/de recuperação de desastre.
 return new class extends Migration
 {
     public function up(): void
