@@ -124,7 +124,9 @@ class PortalController extends Controller
                 ->withErrors(['cpf' => 'Muitas tentativas falhas. Bloqueado por 1 hora.']);
         }
 
-        if ($verificacao->codigo !== trim($dados['codigo'])) {
+        // hash_equals (não !==): compara em tempo constante — evita que a
+        // duração da resposta vaze quantos caracteres do código já acertou.
+        if (! hash_equals($verificacao->codigo, trim($dados['codigo']))) {
             $verificacao->increment('tentativas_falhas');
             $rateLimiter->registrarFalha($ip);
 

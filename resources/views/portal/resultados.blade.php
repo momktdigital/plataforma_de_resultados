@@ -95,7 +95,7 @@
     </div>
 
     @if (count($evolucaoGeral) >= 2)
-        <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"></script>
         <script>
         new Chart(document.getElementById('grafico-evolucao-geral'), {
             type: 'line',

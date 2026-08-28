@@ -168,4 +168,30 @@ class AlunoTest extends TestCase
 
         $this->get('/alunos')->assertRedirect(route('login'));
     }
+
+    public function test_tela_de_novo_aluno_renderiza_formulario_vazio(): void
+    {
+        $response = $this->actingAs($this->admin(), 'admin')->get('/alunos/novo');
+
+        $response->assertOk();
+        $response->assertViewIs('admin.alunos.form');
+        $response->assertSee('action="'.route('alunos.store').'"', false);
+    }
+
+    public function test_tela_de_editar_aluno_renderiza_formulario_preenchido(): void
+    {
+        $aluno = Aluno::create([
+            'ra' => '2026001',
+            'cpf' => '12345678909',
+            'data_nascimento' => '2000-01-01',
+            'nome' => 'Fulano de Tal',
+        ]);
+
+        $response = $this->actingAs($this->admin(), 'admin')->get("/alunos/{$aluno->id}/editar");
+
+        $response->assertOk();
+        $response->assertViewIs('admin.alunos.form');
+        $response->assertSee('Fulano de Tal');
+        $response->assertSee('action="'.route('alunos.update', $aluno).'"', false);
+    }
 }

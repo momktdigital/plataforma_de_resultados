@@ -145,7 +145,7 @@ class PortalConfiguracaoController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Nenhum teste pendente. Feche e tente novamente.'], 400);
         }
 
-        if ($esperado !== mb_strtoupper(trim($dados['codigo']))) {
+        if (! hash_equals($esperado, mb_strtoupper(trim($dados['codigo'])))) {
             return response()->json(['status' => 'error', 'message' => 'Código incorreto.'], 400);
         }
 

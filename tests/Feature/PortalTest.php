@@ -301,4 +301,28 @@ class PortalTest extends TestCase
         $response->assertSee('Código reenviado com sucesso.');
         $this->assertDatabaseHas('verificacoes_email', ['cpf' => $aluno->cpf, 'vezes_reenviado' => 1]);
     }
+
+    public function test_consultar_tem_throttle_apertado(): void
+    {
+        for ($i = 0; $i < 10; $i++) {
+            $this->post('/portal/consultar', []);
+        }
+
+        $this->post('/portal/consultar', [])->assertStatus(429);
+    }
+
+    public function test_navegar_pelos_resultados_nao_compartilha_o_throttle_de_consultar(): void
+    {
+        $aluno = $this->aluno();
+        $this->post('/portal/consultar', [
+            'cpf' => '123.456.789-09',
+            'data_nascimento' => '15/03/2000',
+        ]);
+
+        // Mais chamadas do que o limite de /portal/consultar (10) — como são
+        // rotas sem throttle compartilhado, nenhuma delas deveria travar.
+        for ($i = 0; $i < 15; $i++) {
+            $this->get('/portal/resultados')->assertOk();
+        }
+    }
 }

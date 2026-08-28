@@ -43,11 +43,25 @@ Route::middleware('instalado')->group(function () {
         return redirect()->route(Auth::guard('admin')->check() ? 'avaliacoes.index' : 'portal.consulta');
     });
 
-    Route::prefix('portal')->name('portal.')->middleware('throttle:30,1')->group(function () {
+    Route::prefix('portal')->name('portal.')->group(function () {
         Route::get('/', [PortalController::class, 'mostrarConsulta'])->name('consulta');
-        Route::post('/consultar', [PortalController::class, 'consultar'])->name('consultar');
-        Route::post('/verificar', [PortalController::class, 'verificar'])->name('verificar');
-        Route::post('/reenviar', [PortalController::class, 'reenviar'])->name('reenviar');
+
+        // Só aqui tem algo pra adivinhar (CPF+nascimento, código de 2FA) —
+        // throttle apertado, na mesma ordem de grandeza do login. As rotas
+        // de navegação abaixo (GET) não compartilham esse orçamento: um
+        // laboratório inteiro abrindo o próprio boletim ao mesmo tempo não
+        // deveria consumir o mesmo limite que tentar adivinhar CPF de outro
+        // aluno — nem travar essa navegação legítima nem, ao contrário,
+        // afrouxar o limite de quem está de fato tentando adivinhar.
+        Route::middleware('throttle:10,1')->group(function () {
+            Route::post('/consultar', [PortalController::class, 'consultar'])->name('consultar');
+            Route::post('/verificar', [PortalController::class, 'verificar'])->name('verificar');
+            Route::post('/reenviar', [PortalController::class, 'reenviar'])->name('reenviar');
+        });
+
+        // Sem throttle: exigem sessão de aluno já autenticado (redirecionam
+        // pra consulta.index sem tocar o banco quando não há), então não há
+        // nada de "adivinhável" pra limitar aqui.
         Route::get('/resultados', [PortalController::class, 'resultados'])->name('resultados');
         Route::get('/resultados/avaliacoes/{avaliacao}', [PortalController::class, 'resultadoAvaliacao'])->name('resultados.avaliacao');
         Route::get('/sair', [PortalController::class, 'sair'])->name('sair');
@@ -55,6 +69,11 @@ Route::middleware('instalado')->group(function () {
 
     Route::middleware('guest:admin')->group(function () {
         Route::get('/login', [LoginController::class, 'create'])->name('login');
+        // Defesa em profundidade, não redundância: este throttle:10,1 é por
+        // IP (bloqueia flood na rota inteira); o LoginController também tem
+        // o seu próprio RateLimiter, de 5 tentativas/60s por usuário+IP
+        // (bloqueia tentativas contra uma conta específica sem exigir que o
+        // atacante sature a rota toda). Ver LoginController::throttleKey().
         Route::post('/login', [LoginController::class, 'store'])
             ->middleware('throttle:10,1')
             ->name('login.attempt');

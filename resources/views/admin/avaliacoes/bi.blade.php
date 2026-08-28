@@ -482,7 +482,7 @@
     </div>
 @endif
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"></script>
 <script>
 @if (! empty($dados) && empty($dados['semGabarito']) && empty($dados['semRespostas']))
     @if ($estado['histograma']['visivelAdmin'])
