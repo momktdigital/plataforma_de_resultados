@@ -7,6 +7,7 @@ use App\Models\Avaliacao;
 use App\Models\Questao;
 use App\Models\QuestaoMatriz;
 use App\Models\Resposta;
+use App\Services\ResumoResultadoService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -51,6 +52,11 @@ class BiDashboardTest extends TestCase
         $response->assertSee('2 respondente');
 
         QuestaoMatriz::create(['questao_id' => $q1->id, 'disciplina' => 'Anatomia']);
+
+        // Igual o admin editando a questão pela tela (QuestaoController) ou
+        // reimportando o gabarito faria — invalida o cache de disponibilidade
+        // dos visuais (ver ResumoResultadoService::recalcular).
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
 
         $comMatriz = $this->actingAs($admin, 'admin')->get("/avaliacoes/{$avaliacao->codigo}/bi");
         $comMatriz->assertSee('Anatomia');

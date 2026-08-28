@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Services\Visualizacoes\VisualizacaoDisponibilidadeService;
 use App\Support\AlunoVinculoResolver;
 use App\Support\Anulacao;
 use Illuminate\Support\Facades\DB;
@@ -61,6 +62,12 @@ class ResumoResultadoService
             // (reimport, exclusão de período) deixaria o cache servindo os
             // respondentes de antes da mudança.
             AlunoVinculoResolver::limparCache();
+
+            // Idem pro cache (cross-requisição) de disponibilidade dos
+            // visuais — recalcular() é chamado por todo caminho que muda o
+            // que calcular() enxerga (import, edição de gabarito, exclusão
+            // de período), então é o ponto certo pra invalidar.
+            VisualizacaoDisponibilidadeService::invalidar($avaliacaoCodigo);
 
             if ($linhas->isEmpty()) {
                 return;

@@ -35,7 +35,7 @@ class VisualizacaoConfigService
      */
     public function estadoCompleto(Avaliacao $avaliacao): array
     {
-        $disponibilidade = $this->disponibilidadeService->calcular($avaliacao);
+        $disponibilidade = $this->disponibilidadeService->calcularComCache($avaliacao);
         $salvos = $avaliacao->visualizacoes()->get()->keyBy('visual');
 
         $estado = [];

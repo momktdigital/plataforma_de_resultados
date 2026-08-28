@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 
 class UpdateAdministradorRequest extends FormRequest
 {
@@ -22,7 +23,7 @@ class UpdateAdministradorRequest extends FormRequest
             // Só reseta a senha se o admin realmente preencher este campo —
             // deixar em branco mantém a senha atual (evita ter que redigitar
             // pra só corrigir o nome de usuário ou o e-mail).
-            'password' => ['nullable', 'string', 'min:4'],
+            'password' => ['nullable', 'string', Password::min(10)],
         ];
     }
 
@@ -33,7 +34,7 @@ class UpdateAdministradorRequest extends FormRequest
             'username.unique' => 'Já existe um administrador com este nome de usuário.',
             'email.email' => 'Informe um e-mail válido.',
             'email.unique' => 'Já existe um administrador com este e-mail.',
-            'password.min' => 'A senha precisa ter ao menos 4 caracteres.',
+            'password.min' => 'A senha precisa ter ao menos 10 caracteres.',
         ];
     }
 }

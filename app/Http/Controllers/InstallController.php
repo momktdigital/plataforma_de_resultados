@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
 use PDO;
 use PDOException;
@@ -108,7 +109,7 @@ class InstallController extends Controller
     {
         $dados = $request->validate([
             'username' => ['required', 'string', 'max:50', 'unique:admins,username'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'password' => ['required', 'string', Password::min(10), 'confirmed'],
         ]);
 
         Admin::create([

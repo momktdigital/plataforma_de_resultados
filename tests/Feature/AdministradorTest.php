@@ -30,12 +30,23 @@ class AdministradorTest extends TestCase
     {
         $response = $this->actingAs($this->admin(), 'admin')->post('/administradores', [
             'username' => 'professor',
-            'password' => 'senha123',
+            'password' => 'senha123456',
         ]);
 
         $response->assertRedirect(route('administradores.index'));
         $novo = Admin::where('username', 'professor')->firstOrFail();
-        $this->assertTrue(Hash::check('senha123', $novo->password_hash));
+        $this->assertTrue(Hash::check('senha123456', $novo->password_hash));
+    }
+
+    public function test_rejeita_senha_curta_demais_ao_criar_administrador(): void
+    {
+        $response = $this->actingAs($this->admin(), 'admin')->post('/administradores', [
+            'username' => 'professor',
+            'password' => 'curta123',
+        ]);
+
+        $response->assertSessionHasErrors('password');
+        $this->assertDatabaseMissing('admins', ['username' => 'professor']);
     }
 
     public function test_nome_de_usuario_duplicado_e_rejeitado(): void
@@ -44,7 +55,7 @@ class AdministradorTest extends TestCase
 
         $response = $this->actingAs($admin, 'admin')->post('/administradores', [
             'username' => 'coordenador',
-            'password' => 'senha123',
+            'password' => 'senha123456',
         ]);
 
         $response->assertSessionHasErrors('username');

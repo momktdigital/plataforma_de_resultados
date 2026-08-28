@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\Auth\PasswordResetService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
 
 class ForgotPasswordController extends Controller
@@ -48,7 +49,7 @@ class ForgotPasswordController extends Controller
                 ->withErrors(['token' => 'Link inválido ou expirado — solicite um novo.']);
         }
 
-        $dados = $request->validate(['password' => ['required', 'string', 'min:4', 'confirmed']]);
+        $dados = $request->validate(['password' => ['required', 'string', Password::min(10), 'confirmed']]);
 
         $service->redefinir($redefinicao, $dados['password']);
 

@@ -29,7 +29,7 @@ class RedefinirSenhaAdmin extends Command
             return self::FAILURE;
         }
 
-        $senha = $this->secret('Nova senha (mínimo 4 caracteres)');
+        $senha = $this->secret('Nova senha (mínimo 10 caracteres)');
         $confirmacao = $this->secret('Confirme a nova senha');
 
         if ($senha !== $confirmacao) {
@@ -38,8 +38,8 @@ class RedefinirSenhaAdmin extends Command
             return self::FAILURE;
         }
 
-        if (strlen((string) $senha) < 4) {
-            $this->error('A senha precisa ter ao menos 4 caracteres.');
+        if (strlen((string) $senha) < 10) {
+            $this->error('A senha precisa ter ao menos 10 caracteres.');
 
             return self::FAILURE;
         }

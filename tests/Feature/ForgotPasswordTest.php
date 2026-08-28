@@ -112,6 +112,25 @@ class ForgotPasswordTest extends TestCase
         ]);
     }
 
+    public function test_rejeita_senha_curta_demais_ao_redefinir(): void
+    {
+        $admin = Admin::create(['username' => 'coordenador', 'password_hash' => bcrypt('senha-antiga')]);
+        $token = 'token-de-teste-1234567890';
+        RedefinicaoSenha::create([
+            'admin_id' => $admin->id,
+            'token_hash' => hash('sha256', $token),
+            'expira_em' => now()->addHour(),
+        ]);
+
+        $response = $this->post("/redefinir-senha/{$token}", [
+            'password' => 'curta123',
+            'password_confirmation' => 'curta123',
+        ]);
+
+        $response->assertSessionHasErrors('password');
+        $this->assertTrue(Hash::check('senha-antiga', $admin->fresh()->password_hash));
+    }
+
     public function test_token_expirado_e_rejeitado(): void
     {
         $admin = Admin::create(['username' => 'coordenador', 'password_hash' => bcrypt('senha-antiga')]);

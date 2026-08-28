@@ -16,7 +16,7 @@ class RedefinirSenhaAdminTest extends TestCase
         $admin = Admin::create(['username' => 'coordenador', 'password_hash' => bcrypt('senha-antiga')]);
 
         $this->artisan('admin:redefinir-senha coordenador')
-            ->expectsQuestion('Nova senha (mínimo 4 caracteres)', 'senha-nova-123')
+            ->expectsQuestion('Nova senha (mínimo 10 caracteres)', 'senha-nova-123')
             ->expectsQuestion('Confirme a nova senha', 'senha-nova-123')
             ->assertExitCode(0);
 
@@ -32,8 +32,20 @@ class RedefinirSenhaAdminTest extends TestCase
         $admin = Admin::create(['username' => 'coordenador', 'password_hash' => bcrypt('senha-antiga')]);
 
         $this->artisan('admin:redefinir-senha coordenador')
-            ->expectsQuestion('Nova senha (mínimo 4 caracteres)', 'senha-a')
+            ->expectsQuestion('Nova senha (mínimo 10 caracteres)', 'senha-a')
             ->expectsQuestion('Confirme a nova senha', 'senha-b')
+            ->assertExitCode(1);
+
+        $this->assertTrue(Hash::check('senha-antiga', $admin->fresh()->password_hash));
+    }
+
+    public function test_rejeita_senha_curta_demais(): void
+    {
+        $admin = Admin::create(['username' => 'coordenador', 'password_hash' => bcrypt('senha-antiga')]);
+
+        $this->artisan('admin:redefinir-senha coordenador')
+            ->expectsQuestion('Nova senha (mínimo 10 caracteres)', 'curta123')
+            ->expectsQuestion('Confirme a nova senha', 'curta123')
             ->assertExitCode(1);
 
         $this->assertTrue(Hash::check('senha-antiga', $admin->fresh()->password_hash));
