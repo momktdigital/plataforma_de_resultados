@@ -95,6 +95,51 @@ class RespondenteTest extends TestCase
         $response->assertSee('Total');
     }
 
+    public function test_admin_corrige_a_resposta_de_um_respondente(): void
+    {
+        $avaliacao = $this->provaComRespostas();
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+        $this->assertDatabaseHas('resultado_resumos', ['ra' => '111', 'periodo' => '2026/1', 'acertos' => 1]);
+
+        $resposta = Resposta::where('ra', '111')->where('questao_numero', 2)->firstOrFail();
+        $this->assertSame('C', $resposta->resposta);
+
+        $admin = $this->admin();
+        $response = $this->actingAs($admin, 'admin')
+            ->put(route('avaliacoes.respondentes.respostas.update', ['avaliacao' => $avaliacao, 'resposta' => $resposta]), [
+                'resposta' => 'b',
+            ]);
+
+        $response->assertRedirect(route('avaliacoes.respondentes.show', ['avaliacao' => $avaliacao, 'chave' => '111', 'periodo' => '2026/1']));
+        $response->assertSessionHas('status');
+        $this->assertSame('B', $resposta->fresh()->resposta);
+
+        // Corrigir a bolha muda o acerto — o resumo do boletim reflete na hora.
+        $this->assertDatabaseHas('resultado_resumos', ['ra' => '111', 'periodo' => '2026/1', 'acertos' => 2]);
+
+        $this->assertDatabaseHas('atividades', [
+            'admin_username' => $admin->username,
+            'acao' => 'resposta.editada',
+            'alvo_tipo' => 'Resposta',
+            'alvo_id' => (string) $resposta->id,
+        ]);
+    }
+
+    public function test_nao_corrige_resposta_de_outra_avaliacao(): void
+    {
+        $avaliacao1 = $this->provaComRespostas();
+        $avaliacao2 = Avaliacao::create([]);
+        $resposta = Resposta::where('avaliacao_codigo', $avaliacao1->codigo)->where('ra', '111')->first();
+
+        $this->actingAs($this->admin(), 'admin')
+            ->put(route('avaliacoes.respondentes.respostas.update', ['avaliacao' => $avaliacao2, 'resposta' => $resposta]), [
+                'resposta' => 'Z',
+            ])
+            ->assertNotFound();
+
+        $this->assertNotSame('Z', $resposta->fresh()->resposta);
+    }
+
     public function test_exclui_e_restaura_resultados_de_um_periodo(): void
     {
         $avaliacao = $this->provaComRespostas();
@@ -131,6 +176,18 @@ class RespondenteTest extends TestCase
             'alvo_tipo' => 'Avaliacao',
             'alvo_id' => (string) $avaliacao->codigo,
         ]);
+    }
+
+    public function test_estado_vazio_sugere_importar_resultados(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->get(route('avaliacoes.respondentes.index', $avaliacao));
+
+        $response->assertOk();
+        $response->assertSee('Nenhum resultado encontrado.');
+        $response->assertSee(route('avaliacoes.resultados.import', $avaliacao), false);
     }
 
     public function test_guest_nao_acessa_respondentes(): void

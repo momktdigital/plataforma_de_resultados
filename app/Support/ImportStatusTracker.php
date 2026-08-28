@@ -16,7 +16,7 @@ use Throwable;
  */
 class ImportStatusTracker
 {
-    public static function iniciar(string $tipo, string $escopo = ''): void
+    public static function iniciar(string $tipo, string $escopo = '', bool $dryRun = false): void
     {
         $prefixo = self::prefixo($tipo, $escopo);
 
@@ -25,6 +25,7 @@ class ImportStatusTracker
         ConfiguracaoSistema::definir("{$prefixo}_resumo", null);
         ConfiguracaoSistema::definir("{$prefixo}_ignoradas", null);
         ConfiguracaoSistema::definir("{$prefixo}_iniciado_em", now()->toIso8601String());
+        ConfiguracaoSistema::definir("{$prefixo}_dry_run", $dryRun ? '1' : '0');
     }
 
     public static function concluir(string $tipo, string $escopo, ImportResult $resultado): void
@@ -44,7 +45,7 @@ class ImportStatusTracker
         ConfiguracaoSistema::definir("{$prefixo}_erro", $e->getMessage());
     }
 
-    /** @return array{status: string, erro: ?string, resumo: ?string, ignoradas: array<int, array{linha: int, motivo: string}>, iniciadoEm: ?string} */
+    /** @return array{status: string, erro: ?string, resumo: ?string, ignoradas: array<int, array{linha: int, motivo: string}>, iniciadoEm: ?string, dryRun: bool} */
     public static function status(string $tipo, string $escopo = ''): array
     {
         $prefixo = self::prefixo($tipo, $escopo);
@@ -55,6 +56,7 @@ class ImportStatusTracker
             'resumo' => ConfiguracaoSistema::valor("{$prefixo}_resumo"),
             'ignoradas' => json_decode(ConfiguracaoSistema::valor("{$prefixo}_ignoradas", '[]') ?? '[]', true) ?: [],
             'iniciadoEm' => ConfiguracaoSistema::valor("{$prefixo}_iniciado_em"),
+            'dryRun' => ConfiguracaoSistema::valor("{$prefixo}_dry_run", '0') === '1',
         ];
     }
 

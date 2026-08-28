@@ -153,6 +153,7 @@ class UpdateService
     private function aplicarZip(string $zipTemp, string $versao, array $mensagens): array
     {
         $arquivosSubstituidos = false;
+        $migracoesExecutadas = false;
         $caminhoBackup = null;
         $pastaExtraida = null;
 
@@ -177,6 +178,7 @@ class UpdateService
             }
 
             Artisan::call('migrate', ['--force' => true]);
+            $migracoesExecutadas = true;
             $mensagens[] = 'Migrations executadas.';
 
             File::put($this->destino.'/VERSION', $versao."\n");
@@ -194,7 +196,7 @@ class UpdateService
             return ['status' => 'atualizado', 'versao' => $versao, 'mensagens' => $mensagens];
         } catch (Throwable $e) {
             $mensagens[] = 'ERRO: '.$e->getMessage();
-            $mensagens = array_merge($mensagens, $this->tentarRecuperar($arquivosSubstituidos, $caminhoBackup));
+            $mensagens = array_merge($mensagens, $this->tentarRecuperar($arquivosSubstituidos, $migracoesExecutadas, $caminhoBackup));
 
             return ['status' => 'erro', 'mensagens' => $mensagens];
         } finally {
@@ -205,8 +207,10 @@ class UpdateService
         }
     }
 
-    /** @return array<int, string> */
-    private function tentarRecuperar(bool $arquivosSubstituidos, ?string $caminhoBackup): array
+    /**
+     * @return array<int, string>
+     */
+    private function tentarRecuperar(bool $arquivosSubstituidos, bool $migracoesExecutadas, ?string $caminhoBackup): array
     {
         if (! $arquivosSubstituidos || ! $caminhoBackup) {
             Artisan::call('up');
@@ -214,19 +218,38 @@ class UpdateService
             return ['Modo de manutenção desativado (nenhum arquivo da aplicação chegou a ser alterado).'];
         }
 
+        $mensagens = [];
+
+        // Precisa rodar ANTES de restaurar os arquivos: migrate:rollback lê
+        // o método down() das migrations desta versão nova — se os arquivos
+        // já tiverem voltado pra versão antiga, essas classes de migration
+        // não existem mais no disco pro Artisan encontrar. Sempre que o
+        // migrate deste update rodou, ele é o único a compor o "último
+        // batch" (nenhuma outra migration roda entre down() e este migrate),
+        // então rollback aqui desfaz exatamente — e só — o que este update aplicou.
+        if ($migracoesExecutadas) {
+            try {
+                Artisan::call('migrate:rollback', ['--force' => true]);
+                $mensagens[] = 'Migrations desta atualização revertidas (migrate:rollback).';
+            } catch (Throwable $e) {
+                $mensagens[] = 'FALHA ao reverter as migrations: '.$e->getMessage();
+                $mensagens[] = 'O banco pode ter ficado no schema da versão nova — restaure manualmente a partir do database.sql dentro do backup, ou rode as migrations de rollback assim que o código antigo voltar.';
+            }
+        }
+
         try {
             $this->restaurarArquivosDoBackup($caminhoBackup);
             Artisan::call('up');
 
-            return [
-                'Rollback automático aplicado a partir do backup gerado no início desta atualização.',
-                'Modo de manutenção desativado.',
-            ];
+            $mensagens[] = 'Rollback automático de arquivos aplicado a partir do backup gerado no início desta atualização.';
+            $mensagens[] = 'Modo de manutenção desativado.';
+
+            return $mensagens;
         } catch (Throwable $e) {
-            return [
-                'Rollback automático FALHOU: '.$e->getMessage(),
-                "O sistema pode ter ficado em modo de manutenção. Restaure manualmente a partir de: {$caminhoBackup}",
-            ];
+            $mensagens[] = 'Rollback automático de arquivos FALHOU: '.$e->getMessage();
+            $mensagens[] = "O sistema pode ter ficado em modo de manutenção. Restaure manualmente a partir de: {$caminhoBackup}";
+
+            return $mensagens;
         }
     }
 

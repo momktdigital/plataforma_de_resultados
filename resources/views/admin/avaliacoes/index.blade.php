@@ -88,7 +88,7 @@
     </form>
 </div>
 
-<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="bg-slate-50 text-slate-500 text-left">
             <tr>

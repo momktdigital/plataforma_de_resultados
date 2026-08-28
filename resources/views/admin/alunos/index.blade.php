@@ -17,7 +17,8 @@
 
 <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-6">
     <form method="GET" action="{{ route('alunos.index') }}" class="flex gap-3">
-        <input type="text" name="search" value="{{ $search }}" placeholder="Buscar por Nome, RA ou CPF..."
+        <label for="busca-alunos" class="sr-only">Buscar aluno por nome, RA ou CPF</label>
+        <input id="busca-alunos" type="text" name="search" value="{{ $search }}" placeholder="Buscar por Nome, RA ou CPF..."
                class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm">
         <button type="submit" class="bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-lg px-4 py-2 text-sm">
             Buscar
@@ -30,7 +31,7 @@
     </form>
 </div>
 
-<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="bg-slate-50 text-slate-500 text-left">
             <tr>

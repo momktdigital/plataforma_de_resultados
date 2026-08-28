@@ -123,8 +123,44 @@ class UpdateServiceTest extends TestCase
 
         $this->assertSame('erro', $resultado['status']);
         $this->assertStringContainsString('composer quebrou', implode(' ', $resultado['mensagens']));
-        $this->assertTrue(collect($resultado['mensagens'])->contains(fn ($m) => str_contains($m, 'Rollback automático aplicado')));
+        $this->assertTrue(collect($resultado['mensagens'])->contains(fn ($m) => str_contains($m, 'Rollback automático de arquivos aplicado')));
+        // composer falha ANTES do migrate rodar — nada a dizer sobre migrations.
+        $this->assertFalse(collect($resultado['mensagens'])->contains(fn ($m) => str_contains($m, 'migration')));
         $this->assertFalse(app()->isDownForMaintenance());
+    }
+
+    public function test_falha_apos_migrar_reverte_as_migrations_antes_de_restaurar_os_arquivos(): void
+    {
+        // Não dá pra forçar uma falha real depois do migrate sem depender de
+        // uma migration de verdade nova (fora do escopo deste teste) — testa
+        // a lógica de recuperação diretamente: com migracoesExecutadas=true,
+        // o rollback de banco (migrate:rollback) precisa ser tentado ANTES do
+        // rollback de arquivos, e o resultado precisa dizer isso — ao
+        // contrário do cenário acima (falha antes do migrate), onde nada
+        // sobre migrations aparece.
+        $destino = $this->criarDestinoFalso('1.0.0');
+        File::ensureDirectoryExists(storage_path('app/backups'));
+        $caminhoBackup = storage_path('app/backups/backup_teste.zip');
+        $zip = new ZipArchive;
+        $zip->open($caminhoBackup, ZipArchive::CREATE);
+        $zip->addFromString('app/VERSION', "1.0.0\n");
+        $zip->close();
+
+        $service = $this->service($destino);
+        $metodo = new \ReflectionMethod($service, 'tentarRecuperar');
+        $metodo->setAccessible(true);
+
+        $mensagens = $metodo->invoke($service, true, true, $caminhoBackup);
+
+        $this->assertTrue(
+            collect($mensagens)->contains(fn ($m) => str_contains($m, 'Migrations desta atualização revertidas') || str_contains($m, 'FALHA ao reverter as migrations')),
+            'Esperava alguma mensagem sobre a tentativa de reverter as migrations.'
+        );
+        $indiceMigrations = collect($mensagens)->search(fn ($m) => str_contains($m, 'migration') || str_contains($m, 'Migrations'));
+        $indiceArquivos = collect($mensagens)->search(fn ($m) => str_contains($m, 'arquivos'));
+        $this->assertLessThan($indiceArquivos, $indiceMigrations, 'O rollback de banco precisa ser tentado antes do de arquivos.');
+
+        @unlink($caminhoBackup);
     }
 
     public function test_comando_check_nao_aplica_a_atualizacao(): void

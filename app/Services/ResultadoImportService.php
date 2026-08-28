@@ -38,7 +38,7 @@ class ResultadoImportService
      */
     private const TAMANHO_LOTE = 1000;
 
-    public function importar(Avaliacao $avaliacao, UploadedFile $file): ImportResult
+    public function importar(Avaliacao $avaliacao, UploadedFile $file, bool $dryRun = false): ImportResult
     {
         $rows = SpreadsheetReader::readRows($file);
         $resultado = new ImportResult;
@@ -59,14 +59,24 @@ class ResultadoImportService
         $alunoIds = $this->resolverAlunoIds($linhas);
         $chavesExistentes = $this->buscarChavesExistentes($avaliacao->codigo);
 
-        DB::transaction(function () use ($avaliacao, $linhas, $alunoIds, $chavesExistentes, $resultado) {
+        DB::beginTransaction();
+
+        try {
             $registros = $this->montarRegistros($avaliacao, $linhas, $alunoIds);
             $vistas = [];
 
             foreach (array_chunk($registros, self::TAMANHO_LOTE, true) as $lote) {
                 $this->salvarLote($lote, $chavesExistentes, $vistas, $resultado);
             }
-        });
+        } catch (Throwable $e) {
+            DB::rollBack();
+
+            throw $e;
+        }
+
+        // dry-run: os contadores/linhas-ignoradas em $resultado refletem
+        // exatamente o que teria acontecido — só que nada fica gravado.
+        $dryRun ? DB::rollBack() : DB::commit();
 
         return $resultado;
     }
@@ -119,6 +129,19 @@ class ResultadoImportService
                 continue;
             }
 
+            $cpfLimpo = $cpf !== null ? preg_replace('/\D/', '', $cpf) : null;
+
+            // Igual AlunoRequest/ConsultaResultadoRequest (digits:11) — um CPF
+            // malformado aqui não é só descartado com fallback pro RA: como
+            // respostas.aluno_chave prioriza CPF (COALESCE(cpf, ra)), gravá-lo
+            // do jeito que veio criaria um agrupamento que nunca casa com
+            // nenhum aluno real, mesmo com um RA válido na mesma linha.
+            if ($cpf !== null && strlen($cpfLimpo) !== 11) {
+                $resultado->ignorarLinha($linha, "CPF inválido: '{$cpf}' — precisa ter 11 dígitos.");
+
+                continue;
+            }
+
             if ($numeroBruto === null || ! preg_match('/\d+/', $numeroBruto, $matches)) {
                 $resultado->ignorarLinha($linha, 'Coluna de Questão ausente ou sem número.');
 
@@ -128,7 +151,7 @@ class ResultadoImportService
             $linhas[] = [
                 'linha' => $linha,
                 'ra' => $ra !== null ? trim($ra) : null,
-                'cpf' => $cpf !== null ? preg_replace('/\D/', '', $cpf) : null,
+                'cpf' => $cpfLimpo,
                 'numero' => (int) $matches[0],
                 'resposta' => $resposta !== null ? mb_strtoupper($resposta, 'UTF-8') : null,
                 'periodo' => $periodo,

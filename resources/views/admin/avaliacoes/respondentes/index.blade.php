@@ -8,7 +8,8 @@
 
 <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-6">
     <form method="GET" action="{{ route('avaliacoes.respondentes.index', $avaliacao) }}" class="flex flex-wrap gap-3">
-        <input type="text" name="search" value="{{ $search }}" placeholder="Buscar por RA ou CPF..."
+        <label for="busca-respondentes" class="sr-only">Buscar respondente por RA ou CPF</label>
+        <input id="busca-respondentes" type="text" name="search" value="{{ $search }}" placeholder="Buscar por RA ou CPF..."
                class="flex-1 min-w-[200px] rounded-lg border border-slate-300 px-3 py-2 text-sm">
         <select name="periodo" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
             <option value="">Todos os períodos</option>
@@ -51,7 +52,7 @@
     </div>
 @endif
 
-<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="bg-slate-50 text-slate-500 text-left">
             <tr>
@@ -84,7 +85,14 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="8" class="px-4 py-12 text-center text-slate-400">Nenhum resultado encontrado.</td>
+                    <td colspan="8" class="px-4 py-12 text-center text-slate-400">
+                        @if ($search !== '' || $periodo !== '')
+                            Nenhum resultado encontrado para este filtro.
+                        @else
+                            Nenhum resultado encontrado.
+                            <a href="{{ route('avaliacoes.resultados.import', $avaliacao) }}" class="text-emerald-700 font-semibold hover:underline">Importar resultados</a>.
+                        @endif
+                    </td>
                 </tr>
             @endforelse
         </tbody>

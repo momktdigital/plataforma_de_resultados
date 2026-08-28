@@ -124,6 +124,7 @@ Route::middleware('instalado')->group(function () {
 
         Route::get('/avaliacoes/{avaliacao}/respondentes', [RespondenteController::class, 'index'])->name('avaliacoes.respondentes.index');
         Route::get('/avaliacoes/{avaliacao}/respondentes/show', [RespondenteController::class, 'show'])->name('avaliacoes.respondentes.show');
+        Route::put('/avaliacoes/{avaliacao}/respondentes/respostas/{resposta}', [RespondenteController::class, 'updateResposta'])->name('avaliacoes.respondentes.respostas.update');
         Route::delete('/avaliacoes/{avaliacao}/periodos', [RespondenteController::class, 'destroyPeriodo'])->name('avaliacoes.periodos.destroy');
         Route::post('/avaliacoes/{avaliacao}/periodos/restaurar', [RespondenteController::class, 'restorePeriodo'])->name('avaliacoes.periodos.restore');
 
@@ -133,8 +134,16 @@ Route::middleware('instalado')->group(function () {
         Route::put('/avaliacoes/{avaliacao}/visualizacoes', [AvaliacaoVisualizacaoController::class, 'update'])->name('avaliacoes.visualizacoes.update');
 
         Route::get('/lixeira', [LixeiraController::class, 'index'])->name('lixeira.index');
+        // As rotas em lote (segmento literal) precisam vir ANTES das rotas
+        // com {avaliacao}/{questao} (coringa) — senão o coringa "casa" com
+        // "restaurar-em-lote"/"excluir-em-lote" primeiro, por ordem de
+        // registro, e passa a string pro parâmetro tipado int do controller.
+        Route::post('/lixeira/avaliacoes/restaurar-em-lote', [LixeiraController::class, 'restoreAvaliacoesBulk'])->name('lixeira.avaliacoes.restoreBulk');
+        Route::delete('/lixeira/avaliacoes/excluir-em-lote', [LixeiraController::class, 'forceDeleteAvaliacoesBulk'])->name('lixeira.avaliacoes.forceDeleteBulk');
         Route::post('/lixeira/avaliacoes/{avaliacao}/restaurar', [LixeiraController::class, 'restoreAvaliacao'])->name('lixeira.avaliacoes.restore');
         Route::delete('/lixeira/avaliacoes/{avaliacao}', [LixeiraController::class, 'forceDeleteAvaliacao'])->name('lixeira.avaliacoes.forceDelete');
+        Route::post('/lixeira/questoes/restaurar-em-lote', [LixeiraController::class, 'restoreQuestoesBulk'])->name('lixeira.questoes.restoreBulk');
+        Route::delete('/lixeira/questoes/excluir-em-lote', [LixeiraController::class, 'forceDeleteQuestoesBulk'])->name('lixeira.questoes.forceDeleteBulk');
         Route::post('/lixeira/questoes/{questao}/restaurar', [LixeiraController::class, 'restoreQuestao'])->name('lixeira.questoes.restore');
         Route::delete('/lixeira/questoes/{questao}', [LixeiraController::class, 'forceDeleteQuestao'])->name('lixeira.questoes.forceDelete');
 

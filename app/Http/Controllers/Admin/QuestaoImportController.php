@@ -30,10 +30,11 @@ class QuestaoImportController extends Controller
         $caminho = $arquivo->store('imports');
 
         $admin = Auth::guard('admin')->user();
+        $dryRun = $request->boolean('dry_run');
 
         // Ver ResultadoImportController::store() — mesmo raciocínio do try/catch.
         try {
-            ImportarQuestoesJob::dispatch($avaliacao->codigo, $caminho, $arquivo->getClientOriginalName(), $admin?->id, $admin?->username);
+            ImportarQuestoesJob::dispatch($avaliacao->codigo, $caminho, $arquivo->getClientOriginalName(), $admin?->id, $admin?->username, $dryRun);
         } catch (Throwable $e) {
             Storage::delete($caminho);
             Log::error('Falha ao solicitar import de questões.', ['exception' => $e]);
@@ -43,6 +44,8 @@ class QuestaoImportController extends Controller
         }
 
         return redirect()->route('avaliacoes.questoes.import', $avaliacao)
-            ->with('status', 'Import de questões solicitado — está sendo processado em segundo plano.');
+            ->with('status', $dryRun
+                ? 'Simulação de import de questões solicitada — nada será gravado.'
+                : 'Import de questões solicitado — está sendo processado em segundo plano.');
     }
 }

@@ -53,6 +53,30 @@ class LegadoImportWebTest extends TestCase
         $this->assertDatabaseHas('resultado_resumos', ['ra' => '12345', 'periodo' => '2026/1', 'acertos' => 1, 'total' => 1]);
     }
 
+    public function test_dry_run_no_banco_compartilhado_nao_grava_nada(): void
+    {
+        DB::table('gabaritos')->insert([
+            'nome_avaliacao' => 'ENADE 2026',
+            'respostas' => json_encode(['Q1' => 'B']),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('resultados')->insert([
+            'ra' => '12345', 'periodo' => '2026/1', 'nome_avaliacao' => 'ENADE 2026',
+            'respostas' => json_encode(['Q1' => 'B']),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $admin = $this->admin();
+        $response = $this->actingAs($admin, 'admin')->post('/sistema/legado/banco', ['dry_run' => '1']);
+
+        $response->assertRedirect(route('sistema.legado.index'));
+        $response->assertSessionHas('status');
+        $this->assertStringContainsString('Simulação', session('status'));
+        $this->assertDatabaseCount('avaliacoes', 0);
+        $this->assertDatabaseCount('questoes', 0);
+        $this->assertDatabaseMissing('atividades', ['acao' => 'import.legado_banco']);
+    }
+
     public function test_importar_do_banco_avisa_quando_tabelas_legadas_nao_existem(): void
     {
         Schema::dropIfExists('gabaritos');

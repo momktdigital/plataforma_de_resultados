@@ -6,6 +6,7 @@ use App\Models\Avaliacao;
 use App\Services\ResultadoImportService;
 use App\Services\ResumoResultadoService;
 use App\Support\AtividadeLogger;
+use App\Support\Concerns\PermiteImportacaoLonga;
 use App\Support\ImportStatusTracker;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -26,7 +27,7 @@ use Throwable;
  */
 class ImportarResultadosJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, PermiteImportacaoLonga, Queueable, SerializesModels;
 
     /** Tentativa única — reprocessar automaticamente um import que falhou não faz sentido; o admin decide se tenta de novo. */
     public int $tries = 1;
@@ -42,27 +43,35 @@ class ImportarResultadosJob implements ShouldQueue
         // nenhuma, então não daria pra descobrir isso de dentro do handle().
         private readonly ?int $adminId = null,
         private readonly ?string $adminUsername = null,
+        private readonly bool $dryRun = false,
     ) {}
 
     public function handle(ResultadoImportService $service, ResumoResultadoService $resumos): void
     {
+        $this->permitirExecucaoLonga();
+
         $avaliacao = Avaliacao::findOrFail($this->avaliacaoCodigo);
 
-        ImportStatusTracker::iniciar('resultados', (string) $avaliacao->codigo);
+        ImportStatusTracker::iniciar('resultados', (string) $avaliacao->codigo, $this->dryRun);
+
+        $this->protegerContraTransacaoOrfa();
 
         try {
-            $resultado = $service->importar($avaliacao, $this->arquivo());
-            $resumos->recalcular($avaliacao->codigo);
+            $resultado = $service->importar($avaliacao, $this->arquivo(), $this->dryRun);
+
+            if (! $this->dryRun) {
+                $resumos->recalcular($avaliacao->codigo);
+
+                AtividadeLogger::registrarComoAdmin($this->adminId, $this->adminUsername, 'import.resultados', 'Avaliacao', $avaliacao->codigo, [
+                    'arquivo' => $this->nomeOriginal,
+                    'linhas' => $resultado->totalLinhas(),
+                    'criadas' => $resultado->criadas(),
+                    'atualizadas' => $resultado->atualizadas(),
+                    'ignoradas' => $resultado->totalIgnoradas(),
+                ]);
+            }
 
             ImportStatusTracker::concluir('resultados', (string) $avaliacao->codigo, $resultado);
-
-            AtividadeLogger::registrarComoAdmin($this->adminId, $this->adminUsername, 'import.resultados', 'Avaliacao', $avaliacao->codigo, [
-                'arquivo' => $this->nomeOriginal,
-                'linhas' => $resultado->totalLinhas(),
-                'criadas' => $resultado->criadas(),
-                'atualizadas' => $resultado->atualizadas(),
-                'ignoradas' => $resultado->totalIgnoradas(),
-            ]);
         } finally {
             Storage::delete($this->caminhoArmazenado);
         }

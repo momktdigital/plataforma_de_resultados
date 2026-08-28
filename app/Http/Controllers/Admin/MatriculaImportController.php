@@ -28,10 +28,11 @@ class MatriculaImportController extends Controller
         $caminho = $arquivo->store('imports');
 
         $admin = Auth::guard('admin')->user();
+        $dryRun = $request->boolean('dry_run');
 
         // Ver ResultadoImportController::store() — mesmo raciocínio do try/catch.
         try {
-            ImportarMatriculaJob::dispatch($caminho, $arquivo->getClientOriginalName(), $admin?->id, $admin?->username);
+            ImportarMatriculaJob::dispatch($caminho, $arquivo->getClientOriginalName(), $admin?->id, $admin?->username, $dryRun);
         } catch (Throwable $e) {
             Storage::delete($caminho);
             Log::error('Falha ao solicitar import de matrícula.', ['exception' => $e]);
@@ -41,6 +42,8 @@ class MatriculaImportController extends Controller
         }
 
         return redirect()->route('alunos.importar')
-            ->with('status', 'Import de matrícula solicitado — está sendo processado em segundo plano.');
+            ->with('status', $dryRun
+                ? 'Simulação de import de matrícula solicitada — nada será gravado.'
+                : 'Import de matrícula solicitado — está sendo processado em segundo plano.');
     }
 }

@@ -49,7 +49,7 @@ class QuestaoImportService
     /** Tamanho dos lotes do upsert() — ver ResultadoImportService::TAMANHO_LOTE. */
     private const TAMANHO_LOTE = 500;
 
-    public function importar(Avaliacao $avaliacao, UploadedFile $file): ImportResult
+    public function importar(Avaliacao $avaliacao, UploadedFile $file, bool $dryRun = false): ImportResult
     {
         $rows = SpreadsheetReader::readRows($file);
         $resultado = new ImportResult;
@@ -72,7 +72,9 @@ class QuestaoImportService
             ->flip()
             ->all();
 
-        DB::transaction(function () use ($avaliacao, $linhas, $numeros, $existentes, $resultado) {
+        DB::beginTransaction();
+
+        try {
             $registros = $this->montarRegistros($avaliacao, $linhas);
             $vistos = [];
             $falharam = [];
@@ -99,7 +101,15 @@ class QuestaoImportService
                 $this->sincronizarMatrizes($questao, $linha['row']);
                 $this->sincronizarReferencias($questao, $linha['row']);
             }
-        });
+        } catch (Throwable $e) {
+            DB::rollBack();
+
+            throw $e;
+        }
+
+        // dry-run: os contadores/linhas-ignoradas em $resultado refletem
+        // exatamente o que teria acontecido — só que nada fica gravado.
+        $dryRun ? DB::rollBack() : DB::commit();
 
         return $resultado;
     }

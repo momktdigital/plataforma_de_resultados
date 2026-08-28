@@ -51,6 +51,7 @@
             @isset($aluno)
                 <div class="relative">
                     <button type="button" onclick="portalToggleContaMenu()" id="portal-conta-botao"
+                            aria-haspopup="true" aria-expanded="false" aria-controls="portal-conta-menu"
                             class="flex items-center gap-1.5 rounded-full hover:bg-slate-100 p-1 pr-2 transition-colors"
                             title="{{ $aluno->nome ?: $aluno->ra }}">
                         @if ($aluno->fotoUrl())
@@ -82,14 +83,26 @@
 
                 <script>
                 function portalToggleContaMenu() {
-                    document.getElementById('portal-conta-menu').hidden = ! document.getElementById('portal-conta-menu').hidden;
+                    const menu = document.getElementById('portal-conta-menu');
+                    const botao = document.getElementById('portal-conta-botao');
+                    menu.hidden = ! menu.hidden;
+                    botao.setAttribute('aria-expanded', menu.hidden ? 'false' : 'true');
+                }
+                function portalFecharContaMenu() {
+                    const menu = document.getElementById('portal-conta-menu');
+                    if (menu.hidden) return;
+                    menu.hidden = true;
+                    document.getElementById('portal-conta-botao').setAttribute('aria-expanded', 'false');
                 }
                 document.addEventListener('click', function (evento) {
                     const botao = document.getElementById('portal-conta-botao');
                     const menu = document.getElementById('portal-conta-menu');
                     if (botao && menu && !menu.hidden && !botao.contains(evento.target) && !menu.contains(evento.target)) {
-                        menu.hidden = true;
+                        portalFecharContaMenu();
                     }
+                });
+                document.addEventListener('keydown', function (evento) {
+                    if (evento.key === 'Escape') portalFecharContaMenu();
                 });
                 </script>
             @endisset

@@ -72,7 +72,7 @@ class LegadoController extends Controller
     }
 
     /** Lê `gabaritos`/`resultados` direto da conexão configurada (mesmo banco compartilhado). */
-    public function importarDoBanco(LegadoImportador $importador, ResumoResultadoService $resumos): RedirectResponse
+    public function importarDoBanco(Request $request, LegadoImportador $importador, ResumoResultadoService $resumos): RedirectResponse
     {
         $this->permitirExecucaoLonga();
 
@@ -82,25 +82,38 @@ class LegadoController extends Controller
             ]);
         }
 
-        $this->protegerContraTransacaoOrfa();
+        $dryRun = $request->boolean('dry_run');
 
-        DB::transaction(function () use ($importador) {
+        $this->protegerContraTransacaoOrfa();
+        DB::beginTransaction();
+
+        try {
             DB::table('gabaritos')->orderBy('id')->cursor()->each(
                 fn ($linha) => $importador->importarGabarito($linha)
             );
             DB::table('resultados')->orderBy('id')->cursor()->each(
                 fn ($linha) => $importador->importarResultado($linha)
             );
-        });
+        } catch (Throwable $e) {
+            DB::rollBack();
 
-        foreach ($importador->avaliacoesTocadas() as $avaliacaoCodigo) {
-            $resumos->recalcular($avaliacaoCodigo);
+            return back()->withErrors(['banco' => 'Falha ao importar do banco: '.$e->getMessage()]);
         }
 
-        AtividadeLogger::registrar('import.legado_banco', null, null, $importador->resumo());
+        $dryRun ? DB::rollBack() : DB::commit();
+
+        if (! $dryRun) {
+            foreach ($importador->avaliacoesTocadas() as $avaliacaoCodigo) {
+                $resumos->recalcular($avaliacaoCodigo);
+            }
+
+            AtividadeLogger::registrar('import.legado_banco', null, null, $importador->resumo());
+        }
+
+        $mensagem = $this->resumoTexto($importador->resumo());
 
         return redirect()->route('sistema.legado.index')
-            ->with('status', $this->resumoTexto($importador->resumo()));
+            ->with('status', $dryRun ? "[Simulação — nada foi gravado] {$mensagem}" : $mensagem);
     }
 
     /** Lê um arquivo de backup .sql (gerado pelo backup manual do sistema legado) enviado pelo admin. */

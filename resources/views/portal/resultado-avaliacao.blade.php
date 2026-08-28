@@ -144,16 +144,28 @@
                         $marcada = $resposta->resposta ?: '';
                         $meta = $r['questoesMeta'][$resposta->questao_numero] ?? null;
                         $cor = 'bg-slate-400';
+                        $statusIcone = null; // sinal além da cor, pra quem tem daltonismo
                         if ($correta !== null && $correta !== '') {
                             $acertou = \App\Support\Anulacao::acertou($marcada, $correta, $anuladaModo);
-                            $cor = $acertou ? 'bg-green-500' : ($marcada === '' ? 'bg-slate-400' : 'bg-red-500');
+                            if ($acertou) {
+                                $cor = 'bg-green-500';
+                                $statusIcone = 'ph-check';
+                            } elseif ($marcada !== '') {
+                                $cor = 'bg-red-500';
+                                $statusIcone = 'ph-x';
+                            }
                         }
                     @endphp
                     <button type="button" onclick="portalAbrirDetalheQuestao({{ $resposta->questao_numero }})"
                             data-area="{{ $meta['area'] ?? '' }}" data-tema="{{ $meta['tema'] ?? '' }}"
                             class="detalhe-questao-item rounded-lg overflow-hidden border border-slate-200 shadow-sm text-left cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all"
                             @if ($anuladaModo) title="Questão anulada — não conta na nota" @endif>
-                        <div class="{{ $cor }} text-white text-[10px] text-center font-bold py-1">Q{{ $resposta->questao_numero }}{{ $anuladaModo ? '*' : '' }}</div>
+                        <div class="{{ $cor }} text-white text-[10px] text-center font-bold py-1 flex items-center justify-center gap-0.5">
+                            <span>Q{{ $resposta->questao_numero }}{{ $anuladaModo ? '*' : '' }}</span>
+                            @if ($statusIcone)
+                                <i class="ph-bold {{ $statusIcone }}" aria-hidden="true"></i>
+                            @endif
+                        </div>
                         <div class="bg-white text-center font-bold text-sm py-1.5 {{ $marcada === '' ? 'text-slate-300' : 'text-slate-700' }}">
                             {{ $marcada !== '' ? $marcada : '-' }}
                         </div>
@@ -316,11 +328,13 @@
     </div>
 </div>
 
-<div id="modal-detalhe-questao" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 p-4" onclick="if (event.target === this) portalFecharDetalheQuestao()">
+<div id="modal-detalhe-questao" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 p-4"
+     role="dialog" aria-modal="true" aria-labelledby="modal-detalhe-titulo"
+     onclick="if (event.target === this) portalFecharDetalheQuestao()">
     <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5">
         <div class="flex items-center justify-between mb-4">
             <h3 id="modal-detalhe-titulo" class="font-bold text-slate-800"></h3>
-            <button type="button" onclick="portalFecharDetalheQuestao()" class="text-slate-400 hover:text-slate-600">
+            <button type="button" id="modal-detalhe-fechar" onclick="portalFecharDetalheQuestao()" aria-label="Fechar" class="text-slate-400 hover:text-slate-600">
                 <i class="ph-bold ph-x text-lg"></i>
             </button>
         </div>
@@ -444,6 +458,8 @@ const PORTAL_QUESTOES = {{ Js::from(
     })
 ) }};
 
+let portalUltimoFocoAntesDoModal = null;
+
 function portalAbrirDetalheQuestao(numero) {
     const q = PORTAL_QUESTOES[numero];
     if (!q) return;
@@ -468,16 +484,42 @@ function portalAbrirDetalheQuestao(numero) {
     const modal = document.getElementById('modal-detalhe-questao');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
+
+    // Guarda o elemento com foco (o card clicado) pra devolver o foco a ele
+    // ao fechar, e move o foco pra dentro do diálogo — sem isso um leitor de
+    // tela nunca anuncia que um diálogo abriu.
+    portalUltimoFocoAntesDoModal = document.activeElement;
+    document.getElementById('modal-detalhe-fechar').focus();
 }
 
 function portalFecharDetalheQuestao() {
     const modal = document.getElementById('modal-detalhe-questao');
     modal.classList.add('hidden');
     modal.classList.remove('flex');
+
+    if (portalUltimoFocoAntesDoModal) {
+        portalUltimoFocoAntesDoModal.focus();
+        portalUltimoFocoAntesDoModal = null;
+    }
 }
 
 document.addEventListener('keydown', function (event) {
-    if (event.key === 'Escape') portalFecharDetalheQuestao();
+    const modal = document.getElementById('modal-detalhe-questao');
+    if (modal.classList.contains('hidden')) return;
+
+    if (event.key === 'Escape') {
+        portalFecharDetalheQuestao();
+
+        return;
+    }
+
+    // Trava o foco dentro do diálogo — o único controle focável hoje é o
+    // botão de fechar, então Tab/Shift+Tab só mantêm o foco nele em vez de
+    // escapar pro conteúdo atrás do overlay.
+    if (event.key === 'Tab') {
+        event.preventDefault();
+        document.getElementById('modal-detalhe-fechar').focus();
+    }
 });
 
 function portalTemasDaArea(area) {

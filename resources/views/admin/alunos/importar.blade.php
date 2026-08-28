@@ -16,6 +16,10 @@
             <input id="arquivo" name="arquivo" type="file" accept=".csv,.txt,.xlsx,.xls" required
                    class="w-full text-sm">
         </div>
+        <label class="flex items-center gap-2 text-sm text-slate-600">
+            <input type="checkbox" name="dry_run" value="1">
+            Simular (mostra os números sem gravar nada)
+        </label>
         <button type="submit" @disabled($importStatus['status'] === 'processando')
                 class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-5 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed">
             Importar

@@ -77,6 +77,52 @@ class ResultadoImportTest extends TestCase
         $this->assertDatabaseCount('respostas', 1);
     }
 
+    public function test_dry_run_mostra_o_resumo_mas_nao_grava_nada(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+
+        $csv = "RA,Questão,Resposta\n123,1,B\n456,1,A\n";
+        $arquivo = UploadedFile::fake()->createWithContent('resultados.csv', $csv);
+
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", ['arquivo' => $arquivo, 'dry_run' => '1']);
+
+        $response->assertRedirect(route('avaliacoes.resultados.import', $avaliacao));
+        $response->assertSessionHas('status');
+        $this->assertStringContainsString('Simulação', session('status'));
+
+        $this->assertDatabaseCount('respostas', 0);
+        $this->assertDatabaseCount('resultado_resumos', 0);
+
+        $status = ImportStatusTracker::status('resultados', (string) $avaliacao->codigo);
+        $this->assertTrue($status['dryRun']);
+        $this->assertSame('concluido', $status['status']);
+
+        $this->assertDatabaseMissing('atividades', ['acao' => 'import.resultados']);
+    }
+
+    public function test_linha_com_cpf_malformado_e_ignorada_mesmo_com_ra_valido(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+
+        // CPF com só 8 dígitos — inválido mesmo com um RA presente na mesma
+        // linha, já que aluno_chave (COALESCE(cpf, ra)) priorizaria o CPF
+        // malformado e nunca casaria com o aluno real.
+        $csv = "RA,CPF,Questão,Resposta\n123,12345678,1,B\n456,11122233344,1,A\n";
+        $arquivo = UploadedFile::fake()->createWithContent('resultados.csv', $csv);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", ['arquivo' => $arquivo]);
+
+        $this->assertDatabaseCount('respostas', 1);
+        $this->assertDatabaseMissing('respostas', ['ra' => '123']);
+        $this->assertDatabaseHas('respostas', ['ra' => '456', 'cpf' => '11122233344']);
+
+        $status = ImportStatusTracker::status('resultados', (string) $avaliacao->codigo);
+        $this->assertNotEmpty($status['ignoradas']);
+        $this->assertStringContainsString('CPF inválido', $status['ignoradas'][0]['motivo']);
+    }
+
     public function test_arquivo_sem_coluna_de_questao_e_rejeitado(): void
     {
         $avaliacao = Avaliacao::create([]);

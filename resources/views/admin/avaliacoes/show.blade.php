@@ -150,6 +150,9 @@
                 <label class="block text-sm font-medium mb-1" for="numero">Número</label>
                 <input id="numero" name="numero" type="number" min="1" required
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                <p id="numero-aviso-existente" class="hidden text-xs text-amber-600 mt-1">
+                    Já existe a questão <span id="numero-aviso-existente-num"></span> — salvar aqui vai <strong>sobrescrever</strong> ela, não criar uma nova.
+                </p>
             </div>
             <div>
                 <label class="block text-sm font-medium mb-1" for="gabarito">Gabarito</label>
@@ -367,6 +370,33 @@
     // desfazer, então merece confirmação extra além do salvar comum.
     var questaoCarregada = null;
 
+    // numero -> dados, montado a partir dos mesmos data-questao já embutidos
+    // nos botões "Editar" — usado só pra avisar de duplicidade enquanto o
+    // formulário ainda diz "Adicionar questão" (ver campoNumero abaixo).
+    var questoesExistentes = {};
+    document.querySelectorAll('.questao-editar-btn').forEach(function (botao) {
+        var dados = JSON.parse(botao.dataset.questao);
+        questoesExistentes[String(dados.numero)] = dados;
+    });
+
+    var campoNumero = document.getElementById('numero');
+    var avisoExistente = document.getElementById('numero-aviso-existente');
+    var avisoExistenteNum = document.getElementById('numero-aviso-existente-num');
+
+    function atualizarAvisoDuplicidade() {
+        // Só faz sentido no modo "Adicionar" — no modo "Editar" o número já
+        // é o da própria questão sendo editada, não uma sobrescrita.
+        var numero = campoNumero.value.trim();
+        var duplicada = ! questaoCarregada && numero !== '' && questoesExistentes.hasOwnProperty(numero);
+
+        avisoExistente.classList.toggle('hidden', ! duplicada);
+        if (duplicada) {
+            avisoExistenteNum.textContent = numero;
+        }
+    }
+
+    campoNumero.addEventListener('input', atualizarAvisoDuplicidade);
+
     function resetarFormulario() {
         form.reset();
         TagInput.clearAll();
@@ -374,6 +404,7 @@
         btnSubmit.textContent = 'Salvar questão';
         btnCancelar.classList.add('hidden');
         questaoCarregada = null;
+        atualizarAvisoDuplicidade();
     }
 
     document.querySelectorAll('.questao-editar-btn').forEach(function (botao) {
@@ -395,6 +426,7 @@
             titulo.textContent = 'Editando a questão ' + dados.numero;
             btnSubmit.textContent = 'Salvar alterações';
             btnCancelar.classList.remove('hidden');
+            atualizarAvisoDuplicidade();
 
             form.scrollIntoView({behavior: 'smooth', block: 'start'});
         });
@@ -403,7 +435,21 @@
     btnCancelar.addEventListener('click', resetarFormulario);
 
     form.addEventListener('submit', function (event) {
-        if (! questaoCarregada || ! questaoCarregada.respostas_count) {
+        // Modo "Adicionar" (questaoCarregada nulo) com um número que já
+        // existe: sem essa checagem, o form nunca disse "isso é uma edição"
+        // e o gabarito atual seria sobrescrito silenciosamente.
+        if (! questaoCarregada) {
+            var numero = campoNumero.value.trim();
+            if (numero !== '' && questoesExistentes.hasOwnProperty(numero)) {
+                if (! confirm('Já existe a questão ' + numero + '. Salvar aqui vai SOBRESCREVER o gabarito e os dados dela. Continuar?')) {
+                    event.preventDefault();
+                }
+            }
+
+            return;
+        }
+
+        if (! questaoCarregada.respostas_count) {
             return;
         }
 

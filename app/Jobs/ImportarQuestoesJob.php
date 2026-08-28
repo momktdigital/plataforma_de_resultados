@@ -6,6 +6,7 @@ use App\Models\Avaliacao;
 use App\Services\QuestaoImportService;
 use App\Services\ResumoResultadoService;
 use App\Support\AtividadeLogger;
+use App\Support\Concerns\PermiteImportacaoLonga;
 use App\Support\ImportStatusTracker;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -22,7 +23,7 @@ use Throwable;
  */
 class ImportarQuestoesJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, PermiteImportacaoLonga, Queueable, SerializesModels;
 
     /** Tentativa única — reprocessar automaticamente um import que falhou não faz sentido; o admin decide se tenta de novo. */
     public int $tries = 1;
@@ -36,30 +37,37 @@ class ImportarQuestoesJob implements ShouldQueue
         // Capturado no controller — ver ImportarResultadosJob para o motivo.
         private readonly ?int $adminId = null,
         private readonly ?string $adminUsername = null,
+        private readonly bool $dryRun = false,
     ) {}
 
     public function handle(QuestaoImportService $service, ResumoResultadoService $resumos): void
     {
+        $this->permitirExecucaoLonga();
+
         $avaliacao = Avaliacao::findOrFail($this->avaliacaoCodigo);
 
-        ImportStatusTracker::iniciar('questoes', (string) $avaliacao->codigo);
+        ImportStatusTracker::iniciar('questoes', (string) $avaliacao->codigo, $this->dryRun);
+
+        $this->protegerContraTransacaoOrfa();
 
         try {
-            $resultado = $service->importar($avaliacao, $this->arquivo());
+            $resultado = $service->importar($avaliacao, $this->arquivo(), $this->dryRun);
 
-            // Gabarito mudou: o "total" e os acertos de todo mundo que já
-            // respondeu esta avaliação (em qualquer período) podem ter mudado junto.
-            $resumos->recalcular($avaliacao->codigo);
+            if (! $this->dryRun) {
+                // Gabarito mudou: o "total" e os acertos de todo mundo que já
+                // respondeu esta avaliação (em qualquer período) podem ter mudado junto.
+                $resumos->recalcular($avaliacao->codigo);
+
+                AtividadeLogger::registrarComoAdmin($this->adminId, $this->adminUsername, 'import.questoes', 'Avaliacao', $avaliacao->codigo, [
+                    'arquivo' => $this->nomeOriginal,
+                    'linhas' => $resultado->totalLinhas(),
+                    'criadas' => $resultado->criadas(),
+                    'atualizadas' => $resultado->atualizadas(),
+                    'ignoradas' => $resultado->totalIgnoradas(),
+                ]);
+            }
 
             ImportStatusTracker::concluir('questoes', (string) $avaliacao->codigo, $resultado);
-
-            AtividadeLogger::registrarComoAdmin($this->adminId, $this->adminUsername, 'import.questoes', 'Avaliacao', $avaliacao->codigo, [
-                'arquivo' => $this->nomeOriginal,
-                'linhas' => $resultado->totalLinhas(),
-                'criadas' => $resultado->criadas(),
-                'atualizadas' => $resultado->atualizadas(),
-                'ignoradas' => $resultado->totalIgnoradas(),
-            ]);
         } finally {
             Storage::delete($this->caminhoArmazenado);
         }

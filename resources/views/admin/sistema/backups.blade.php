@@ -64,7 +64,7 @@
     O arquivo gerado contém o banco de dados completo e o `.env` da aplicação — inclui credenciais sensíveis. Guarde-o com cuidado.
 </div>
 
-<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="bg-slate-50 text-slate-500 text-left">
             <tr>

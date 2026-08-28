@@ -59,7 +59,7 @@ class MatriculaImportService
 
     private const CELULAR_PATTERNS = ['/^celular$/'];
 
-    public function importar(UploadedFile $file): ImportResult
+    public function importar(UploadedFile $file, bool $dryRun = false): ImportResult
     {
         $rows = SpreadsheetReader::readRows($file);
         $resultado = new ImportResult;
@@ -80,7 +80,9 @@ class MatriculaImportService
             ->values();
         $alunosPorRa = $ras->isEmpty() ? [] : Aluno::whereIn('ra', $ras)->get()->keyBy('ra')->all();
 
-        DB::transaction(function () use ($rows, $resultado, &$cursosConhecidos, &$alunosPorRa) {
+        DB::beginTransaction();
+
+        try {
             foreach ($rows as $index => $row) {
                 $resultado->registrarLinha();
                 $linha = $index + 2; // +1 pelo cabeçalho, +1 por índice base 0
@@ -122,7 +124,15 @@ class MatriculaImportService
                     $resultado->ignorarLinha($linha, 'Falha ao salvar: '.$e->getMessage());
                 }
             }
-        });
+        } catch (Throwable $e) {
+            DB::rollBack();
+
+            throw $e;
+        }
+
+        // dry-run: os contadores/linhas-ignoradas em $resultado refletem
+        // exatamente o que teria acontecido — só que nada fica gravado.
+        $dryRun ? DB::rollBack() : DB::commit();
 
         return $resultado;
     }

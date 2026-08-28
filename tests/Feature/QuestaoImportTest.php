@@ -286,6 +286,31 @@ class QuestaoImportTest extends TestCase
         DB::unprepared('DROP TRIGGER limitar_gabarito');
     }
 
+    public function test_dry_run_mostra_o_resumo_mas_nao_grava_nada(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+
+        $csv = "Questão,Gabarito\n1,B\n2,C\n";
+        $arquivo = UploadedFile::fake()->createWithContent('gabarito.csv', $csv);
+
+        $admin = $this->admin();
+        $response = $this->actingAs($admin, 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/questoes/import", ['arquivo' => $arquivo, 'dry_run' => '1']);
+
+        $response->assertRedirect(route('avaliacoes.questoes.import', $avaliacao));
+        $response->assertSessionHas('status');
+        $this->assertStringContainsString('Simulação', session('status'));
+
+        $this->assertDatabaseCount('questoes', 0);
+
+        $status = ImportStatusTracker::status('questoes', (string) $avaliacao->codigo);
+        $this->assertTrue($status['dryRun']);
+        $this->assertSame('concluido', $status['status']);
+        $this->assertStringContainsString('2', $status['resumo']);
+
+        $this->assertDatabaseMissing('atividades', ['acao' => 'import.questoes']);
+    }
+
     public function test_job_de_import_de_questoes_registra_status_erro_quando_falha(): void
     {
         $avaliacao = Avaliacao::create([]);

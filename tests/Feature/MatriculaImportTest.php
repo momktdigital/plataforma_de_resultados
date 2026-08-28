@@ -193,6 +193,27 @@ class MatriculaImportTest extends TestCase
         ]);
     }
 
+    public function test_dry_run_mostra_o_resumo_mas_nao_grava_nada(): void
+    {
+        $arquivo = UploadedFile::fake()->createWithContent('matricula.csv', "RA,Per. Letivo,Curso,Período\n2026001,2026/1,Medicina,5\n");
+
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->post('/alunos/importar', ['arquivo' => $arquivo, 'dry_run' => '1']);
+
+        $response->assertRedirect(route('alunos.importar'));
+        $response->assertSessionHas('status');
+        $this->assertStringContainsString('Simulação', session('status'));
+
+        $this->assertDatabaseCount('alunos', 0);
+        $this->assertDatabaseCount('cursos', 0);
+
+        $status = ImportStatusTracker::status('matricula');
+        $this->assertTrue($status['dryRun']);
+        $this->assertSame('concluido', $status['status']);
+
+        $this->assertDatabaseMissing('atividades', ['acao' => 'import.matricula']);
+    }
+
     public function test_job_de_import_de_matricula_registra_status_processando_e_concluido(): void
     {
         $arquivo = UploadedFile::fake()->createWithContent('matricula.csv', "RA,Per. Letivo,Curso,Período\n2026001,2026/1,Medicina,5\n");

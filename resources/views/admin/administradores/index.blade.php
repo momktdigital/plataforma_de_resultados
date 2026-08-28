@@ -6,7 +6,7 @@
 <h1 class="text-2xl font-bold mb-6">Administradores</h1>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-    <div class="lg:col-span-2 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+    <div class="lg:col-span-2 bg-white border border-slate-200 rounded-xl shadow-sm overflow-x-auto">
         <table class="w-full text-sm">
             <thead class="bg-slate-50 text-slate-500 text-left">
                 <tr>

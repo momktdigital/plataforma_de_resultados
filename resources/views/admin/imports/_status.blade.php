@@ -5,7 +5,8 @@
 @if ($status['status'] === 'processando')
     <div class="mb-6 rounded-lg border border-blue-200 bg-blue-50 text-blue-900 px-4 py-3 text-sm">
         <p class="font-semibold mb-1 flex items-center gap-2">
-            <i class="ph ph-spinner animate-spin"></i> Import em andamento&hellip;
+            <i class="ph ph-spinner animate-spin"></i>
+            {{ $status['dryRun'] ? 'Simulação em andamento' : 'Import em andamento' }}&hellip;
         </p>
         <p>Essa tela atualiza sozinha a cada alguns segundos. Uma planilha grande pode levar alguns minutos.</p>
         @if ($status['iniciadoEm'])
@@ -34,21 +35,33 @@
         <p>{{ $status['erro'] }}</p>
     </div>
 @elseif ($status['status'] === 'concluido' && $status['resumo'])
-    <div class="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-900 px-4 py-3 text-sm">
-        <p class="font-semibold mb-1">Último import concluído.</p>
+    @php
+        $corBorda = $status['dryRun'] ? 'border-amber-200' : 'border-emerald-200';
+        $corFundo = $status['dryRun'] ? 'bg-amber-50' : 'bg-emerald-50';
+        $corTexto = $status['dryRun'] ? 'text-amber-900' : 'text-emerald-900';
+        $corDetalhes = $status['dryRun'] ? 'text-amber-800' : 'text-emerald-800';
+    @endphp
+    <div class="mb-6 rounded-lg border {{ $corBorda }} {{ $corFundo }} {{ $corTexto }} px-4 py-3 text-sm">
+        @if ($status['dryRun'])
+            <p class="font-semibold mb-1">Simulação concluída — nada foi gravado.</p>
+        @else
+            <p class="font-semibold mb-1">Último import concluído.</p>
+        @endif
         <p>{{ $status['resumo'] }}</p>
         @if (! empty($status['ignoradas']))
             <details class="mt-2">
                 <summary class="cursor-pointer font-medium">Ver linhas ignoradas ({{ count($status['ignoradas']) }})</summary>
-                <ul class="mt-1.5 space-y-0.5 text-emerald-800">
+                <ul class="mt-1.5 space-y-0.5 {{ $corDetalhes }}">
                     @foreach ($status['ignoradas'] as $ignorada)
                         <li>Linha {{ $ignorada['linha'] }}: {{ $ignorada['motivo'] }}</li>
                     @endforeach
                 </ul>
             </details>
         @endif
-        @isset($voltar)
-            <p class="mt-2"><a href="{{ $voltar }}" class="font-semibold hover:underline">Ver avaliação &rarr;</a></p>
-        @endisset
+        @if (! $status['dryRun'])
+            @isset($voltar)
+                <p class="mt-2"><a href="{{ $voltar }}" class="font-semibold hover:underline">Ver avaliação &rarr;</a></p>
+            @endisset
+        @endif
     </div>
 @endif

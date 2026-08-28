@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Aluno;
 use App\Models\Avaliacao;
+use App\Models\Resposta;
 use App\Models\ResultadoResumo;
 use App\Services\ResumoResultadoService;
 use App\Support\AtividadeLogger;
@@ -135,6 +136,43 @@ class RespondenteController extends Controller
             $linha->acertos = $resumo?->acertos;
             $linha->total = $resumo?->total;
         }
+    }
+
+    /**
+     * Corrige a resposta de UM respondente a UMA questão — sem isso, a única
+     * forma de consertar uma bolha mal escaneada era excluir e reimportar o
+     * período inteiro. Recalcula o boletim na hora, igual editar um gabarito.
+     */
+    public function updateResposta(Request $request, Avaliacao $avaliacao, Resposta $resposta, ResumoResultadoService $resumos): RedirectResponse
+    {
+        abort_if($resposta->avaliacao_codigo !== $avaliacao->codigo, 404);
+
+        $dados = $request->validate([
+            'resposta' => ['nullable', 'string', 'max:10'],
+        ]);
+
+        $antes = $resposta->resposta;
+        $depois = $dados['resposta'] !== null && trim($dados['resposta']) !== ''
+            ? mb_strtoupper(trim($dados['resposta']), 'UTF-8')
+            : null;
+
+        $resposta->resposta = $depois;
+        $resposta->save();
+
+        $resumos->recalcular($avaliacao->codigo);
+
+        AtividadeLogger::registrar('resposta.editada', 'Resposta', $resposta->id, [
+            'avaliacao_codigo' => $avaliacao->codigo,
+            'aluno_chave' => $resposta->aluno_chave,
+            'periodo' => $resposta->periodo,
+            'questao_numero' => $resposta->questao_numero,
+            'resposta_antes' => $antes,
+            'resposta_depois' => $depois,
+        ]);
+
+        return redirect()
+            ->route('avaliacoes.respondentes.show', ['avaliacao' => $avaliacao, 'chave' => $resposta->aluno_chave, 'periodo' => $resposta->periodo])
+            ->with('status', "Resposta da questão {$resposta->questao_numero} atualizada — boletim recalculado.");
     }
 
     public function destroyPeriodo(Request $request, Avaliacao $avaliacao, ResumoResultadoService $resumos): RedirectResponse

@@ -34,9 +34,10 @@ class ResultadoImportController extends Controller
         // Este try/catch cobre o caso de QUEUE_CONNECTION=sync (ex.: testes)
         // ou de uma falha ao simplesmente enfileirar o job.
         $admin = Auth::guard('admin')->user();
+        $dryRun = $request->boolean('dry_run');
 
         try {
-            ImportarResultadosJob::dispatch($avaliacao->codigo, $caminho, $arquivo->getClientOriginalName(), $admin?->id, $admin?->username);
+            ImportarResultadosJob::dispatch($avaliacao->codigo, $caminho, $arquivo->getClientOriginalName(), $admin?->id, $admin?->username, $dryRun);
         } catch (Throwable $e) {
             Storage::delete($caminho);
             Log::error('Falha ao solicitar import de resultados.', ['exception' => $e]);
@@ -46,6 +47,8 @@ class ResultadoImportController extends Controller
         }
 
         return redirect()->route('avaliacoes.resultados.import', $avaliacao)
-            ->with('status', 'Import de resultados solicitado — está sendo processado em segundo plano.');
+            ->with('status', $dryRun
+                ? 'Simulação de import de resultados solicitada — nada será gravado.'
+                : 'Import de resultados solicitado — está sendo processado em segundo plano.');
     }
 }
