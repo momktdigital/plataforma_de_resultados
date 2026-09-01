@@ -119,6 +119,33 @@ class RelatorioAlunoService
     }
 
     /**
+     * Versão consolidada de rankingPercentil() — média simples do percentil
+     * do aluno em cada avaliação do período informado (mesmo critério de
+     * "média das médias" de comparativoTurmaConsolidado()), pra alimentar um
+     * insight tipo "você está entre os X% melhores da turma neste período"
+     * sem precisar de uma query nova (reaproveita rankingPercentil() por
+     * avaliação, já testado).
+     *
+     * @param  array<int, array<string, mixed>>  $resultados  já filtrados pelo período letivo selecionado
+     * @return array{percentil: float, avaliacoesComparadas: int}|null
+     */
+    public function percentilConsolidado(Aluno $aluno, array $resultados): ?array
+    {
+        $percentis = collect($resultados)
+            ->map(fn ($r) => $this->rankingPercentil($aluno, $r['avaliacao'], $r['periodo']))
+            ->filter();
+
+        if ($percentis->isEmpty()) {
+            return null;
+        }
+
+        return [
+            'percentil' => round((float) $percentis->avg('percentil'), 1),
+            'avaliacoesComparadas' => $percentis->count(),
+        ];
+    }
+
+    /**
      * Versão consolidada de comparativoTurma() — em vez de "você x turma"
      * numa avaliação só, faz a média simples do aluno e da turma ao longo de
      * TODAS as avaliações do período informado (mesmo critério de média

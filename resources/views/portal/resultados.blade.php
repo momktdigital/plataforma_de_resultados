@@ -61,6 +61,24 @@
 })();
 </script>
 
+@if (! empty($insights))
+    <div class="grid sm:grid-cols-2 gap-3 mb-6 fade-in">
+        @foreach ($insights as $insight)
+            @php
+                $estiloInsight = match ($insight['tom']) {
+                    'positivo' => ['bg' => 'bg-emerald-50', 'borda' => 'border-emerald-100', 'icone' => 'text-emerald-600'],
+                    'atencao' => ['bg' => 'bg-amber-50', 'borda' => 'border-amber-100', 'icone' => 'text-amber-600'],
+                    default => ['bg' => 'bg-slate-50', 'borda' => 'border-slate-100', 'icone' => 'text-slate-600'],
+                };
+            @endphp
+            <div class="{{ $estiloInsight['bg'] }} border {{ $estiloInsight['borda'] }} rounded-xl p-4 flex items-start gap-3">
+                <i class="ph-bold {{ $insight['icone'] }} {{ $estiloInsight['icone'] }} text-xl shrink-0 mt-0.5"></i>
+                <p class="text-sm text-slate-700">{{ $insight['texto'] }}</p>
+            </div>
+        @endforeach
+    </div>
+@endif
+
 @php
     $temAnaliseConsolidada = ! empty($comparativoTurmaConsolidado) || ! empty($curvaDificuldadePedagogica)
         || ! empty($dispersaoTri) || ! empty($coberturaHabilidade)

@@ -9,6 +9,7 @@ use App\Models\Configuracao;
 use App\Models\VerificacaoEmail;
 use App\Services\Portal\AnaliseConsolidadaService;
 use App\Services\Portal\CaptchaVerifier;
+use App\Services\Portal\InsightService;
 use App\Services\Portal\RateLimit2faService;
 use App\Services\Portal\RelatorioAlunoService;
 use App\Services\Portal\ResultadoConsultaService;
@@ -223,6 +224,7 @@ class PortalController extends Controller
         ResultadoConsultaService $consultaService,
         RelatorioAlunoService $relatorioService,
         AnaliseConsolidadaService $analiseService,
+        InsightService $insightService,
     ): View|RedirectResponse {
         $aluno = $this->alunoAutenticado();
 
@@ -230,7 +232,7 @@ class PortalController extends Controller
             return redirect()->route('portal.consulta');
         }
 
-        return $this->renderizarResultados($aluno, $consultaService, $relatorioService, $analiseService, $request);
+        return $this->renderizarResultados($aluno, $consultaService, $relatorioService, $analiseService, $insightService, $request);
     }
 
     /** Detalhe de uma única avaliacao, aberto a partir da tela de Resultados. */
@@ -320,7 +322,7 @@ class PortalController extends Controller
      * mostra só o período letivo mais recente (`''` na query string =
      * "Todos", igual ao filtro equivalente no admin).
      */
-    private function renderizarResultados(Aluno $aluno, ResultadoConsultaService $consultaService, RelatorioAlunoService $relatorioService, AnaliseConsolidadaService $analiseService, Request $request): View
+    private function renderizarResultados(Aluno $aluno, ResultadoConsultaService $consultaService, RelatorioAlunoService $relatorioService, AnaliseConsolidadaService $analiseService, InsightService $insightService, Request $request): View
     {
         $todos = $consultaService->buscarPorAluno($aluno);
 
@@ -344,18 +346,23 @@ class PortalController extends Controller
         $arvore = $consultaService->montarArvore($resultados);
         $avaliacaoCodigos = collect($resultados)->pluck('avaliacao.codigo')->unique()->values()->all();
 
+        $evolucaoPorCategoria = $relatorioService->evolucaoPorCategoria($resultados);
+        $comparativoTurmaConsolidado = $relatorioService->comparativoTurmaConsolidado($aluno, $resultados);
+        $coberturaHabilidade = $analiseService->coberturaHabilidade($aluno, $avaliacaoCodigos);
+
         return view('portal.resultados', [
             'aluno' => $aluno,
             'totalAvaliacoes' => count($resultados),
             'mediaGeral' => $comPercentual->isNotEmpty() ? round($comPercentual->avg(), 1) : null,
             'periodosDisponiveis' => $periodosDisponiveis,
             'periodoSelecionado' => $periodoSelecionado,
-            'evolucaoPorCategoria' => $relatorioService->evolucaoPorCategoria($resultados),
+            'insights' => $insightService->gerar($aluno, $resultados, $evolucaoPorCategoria, $comparativoTurmaConsolidado, $coberturaHabilidade),
+            'evolucaoPorCategoria' => $evolucaoPorCategoria,
             'resumoPorCategoria' => $consultaService->resumoPorCategoria($arvore['arvore']),
-            'comparativoTurmaConsolidado' => $relatorioService->comparativoTurmaConsolidado($aluno, $resultados),
+            'comparativoTurmaConsolidado' => $comparativoTurmaConsolidado,
             'curvaDificuldadePedagogica' => $analiseService->curvaDificuldadePedagogica($aluno, $avaliacaoCodigos),
             'dispersaoTri' => $analiseService->dispersaoTri($aluno, $avaliacaoCodigos),
-            'coberturaHabilidade' => $analiseService->coberturaHabilidade($aluno, $avaliacaoCodigos),
+            'coberturaHabilidade' => $coberturaHabilidade,
             'desempenhoBloomConsolidado' => $analiseService->desempenhoBloomConsolidado($aluno, $avaliacaoCodigos),
             'desempenhoMillerConsolidado' => $analiseService->desempenhoMillerConsolidado($aluno, $avaliacaoCodigos),
             'questoesDivergentesDaTurma' => $analiseService->questoesDivergentesDaTurma($aluno, $avaliacaoCodigos),
