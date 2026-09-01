@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use Illuminate\Http\UploadedFile;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use RuntimeException;
 
@@ -19,7 +20,28 @@ class SpreadsheetReader
     // poucos MB no disco e ainda assim materializar dezenas de milhares de
     // linhas — o único jeito de saber é olhar a planilha, então limitamos
     // aqui em vez de confiar só no tamanho do arquivo.
-    private const MAX_LINHAS_XLSX = 50_000;
+    //
+    // Em CÉLULAS (linhas x colunas), não só linhas: o custo de memória do
+    // PhpSpreadsheet escala com o total de células — uma planilha de import
+    // de questões (~20 colunas: área/tema/habilidade/bloom/matriz/DCN/
+    // portaria/PPC) pesa proporcionalmente mais por linha que uma planilha
+    // de resultados no formato "longo" (3-5 colunas: CPF/RA, Questão,
+    // Resposta, Período). Medido neste projeto: 150.000 linhas x 3 colunas
+    // (450.000 células) ~= 720MB de pico pra rodar o import inteiro
+    // (PermiteImportacaoLonga eleva o memory_limit do worker pra 1G — dá
+    // margem confortável nesse teto).
+    //
+    // Isso ainda não cobre o pior caso citado no CLAUDE.md (uma avaliação de
+    // 100 questões x 10.000 respondentes = 1 milhão de linhas): carregar uma
+    // planilha assim inteira em memória via PhpSpreadsheet precisaria de
+    // vários GB. Pra esse volume, a solução de verdade é ler o arquivo em
+    // pedaços (IReadFilter) em vez de materializar tudo de uma vez — ainda
+    // não implementado; enquanto isso, planilhas desse tamanho precisam ser
+    // divididas antes do import.
+    // protected (não private): SpreadsheetReaderTest sobrescreve isso numa
+    // subclasse pra testar a lógica de limite sem precisar gerar centenas de
+    // milhares de células de verdade a cada rodada da suíte.
+    protected const MAX_CELULAS_XLSX = 450_000;
 
     /**
      * @return array<int, array<string, mixed>>
@@ -104,10 +126,14 @@ class SpreadsheetReader
 
         // -1 pelo cabeçalho: o limite é sobre linhas de DADOS.
         $totalLinhasDeDados = $sheet->getHighestDataRow() - 1;
-        if ($totalLinhasDeDados > self::MAX_LINHAS_XLSX) {
+        $totalColunas = Coordinate::columnIndexFromString($sheet->getHighestDataColumn());
+        $totalCelulas = $totalLinhasDeDados * $totalColunas;
+
+        if ($totalCelulas > static::MAX_CELULAS_XLSX) {
             throw new RuntimeException(
-                "Planilha com {$totalLinhasDeDados} linhas de dados — o máximo suportado é ".
-                number_format(self::MAX_LINHAS_XLSX, 0, ',', '.').' linhas. Divida o arquivo em partes menores.'
+                "Planilha com {$totalLinhasDeDados} linhas de dados x {$totalColunas} colunas (".
+                number_format($totalCelulas, 0, ',', '.').' células) — o máximo suportado é '.
+                number_format(static::MAX_CELULAS_XLSX, 0, ',', '.').' células. Divida o arquivo em partes menores.'
             );
         }
 

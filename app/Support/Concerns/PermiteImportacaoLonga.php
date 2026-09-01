@@ -26,8 +26,14 @@ trait PermiteImportacaoLonga
     {
         set_time_limit(0);
 
-        if (LimitesUpload::paraBytes(ini_get('memory_limit') ?: '128M') < LimitesUpload::paraBytes('512M')) {
-            ini_set('memory_limit', '512M');
+        // 1G, não 512M: medido neste projeto, o teto de
+        // SpreadsheetReader::MAX_CELULAS_XLSX (450.000 células) no pior caso
+        // realista — 150.000 linhas x 3 colunas, formato "longo" de
+        // resultados — chega a ~720MB de pico rodando o import inteiro
+        // (leitura + resolução de aluno + upsert em lote). 512M não dava
+        // margem nenhuma pra isso.
+        if (LimitesUpload::paraBytes(ini_get('memory_limit') ?: '128M') < LimitesUpload::paraBytes('1G')) {
+            ini_set('memory_limit', '1G');
         }
     }
 
