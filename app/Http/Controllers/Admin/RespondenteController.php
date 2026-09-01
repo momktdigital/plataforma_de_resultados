@@ -27,14 +27,28 @@ class RespondenteController extends Controller
         $search = trim((string) $request->query('search', ''));
         $periodo = trim((string) $request->query('periodo', ''));
 
+        // Busca por nome não dá pra filtrar direto na query de `respostas`
+        // (que pode ter milhões de linhas — CLAUDE.md): resolve RA/CPF pelo
+        // nome primeiro, numa tabela pequena (`alunos`), e usa esses valores
+        // pra filtrar a query grande — mesmo princípio de
+        // RelatorioAlunoService::comparativoTurma() (resolver identidade fora
+        // da tabela grande, nunca dentro dela).
+        $rasECpfsPorNome = $search !== ''
+            ? Aluno::where('nome', 'like', "%{$search}%")->get(['ra', 'cpf'])
+            : collect();
+        $rasPorNome = $rasECpfsPorNome->pluck('ra')->filter()->values();
+        $cpfsPorNome = $rasECpfsPorNome->pluck('cpf')->filter()->values();
+
         $respondentes = $avaliacao->resultados()
             ->select('aluno_chave', 'periodo')
             ->selectRaw('MAX(ra) as ra, MAX(cpf) as cpf, COUNT(*) as total_respostas, MAX(updated_at) as updated_at')
-            ->when($search !== '', function ($query) use ($search) {
-                $query->where(function ($query) use ($search) {
+            ->when($search !== '', function ($query) use ($search, $rasPorNome, $cpfsPorNome) {
+                $query->where(function ($query) use ($search, $rasPorNome, $cpfsPorNome) {
                     $query->where('ra', 'like', "%{$search}%")
                         ->orWhere('cpf', 'like', "%{$search}%")
-                        ->orWhere('aluno_chave', 'like', "%{$search}%");
+                        ->orWhere('aluno_chave', 'like', "%{$search}%")
+                        ->when($rasPorNome->isNotEmpty(), fn ($query) => $query->orWhereIn('ra', $rasPorNome))
+                        ->when($cpfsPorNome->isNotEmpty(), fn ($query) => $query->orWhereIn('cpf', $cpfsPorNome));
                 });
             })
             ->when($periodo !== '', fn ($query) => $query->where('periodo', $periodo))

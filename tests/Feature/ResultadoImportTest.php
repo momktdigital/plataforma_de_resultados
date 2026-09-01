@@ -178,6 +178,60 @@ class ResultadoImportTest extends TestCase
         $this->assertDatabaseHas('respostas', ['ra' => '123', 'periodo' => '2025/2', 'resposta' => 'C']);
     }
 
+    public function test_periodo_ausente_na_planilha_cai_pro_periodo_cadastrado_no_aluno(): void
+    {
+        // Bug relatado: planilha de resultados sem coluna de Período gravava
+        // periodo='' pra todo mundo, mesmo quando o aluno já tem período
+        // cadastrado no próprio perfil (ex.: "5º", vindo da matrícula).
+        $aluno = Aluno::create([
+            'ra' => '2026001',
+            'cpf' => null,
+            'data_nascimento' => '2000-01-01',
+            'periodo' => '5º',
+        ]);
+        $avaliacao = Avaliacao::create([]);
+
+        $csv = "RA,Questão,Resposta\n2026001,1,B\n";
+        $arquivo = UploadedFile::fake()->createWithContent('resultados.csv', $csv);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", ['arquivo' => $arquivo]);
+
+        $this->assertDatabaseHas('respostas', ['ra' => '2026001', 'periodo' => '5º', 'resposta' => 'B']);
+    }
+
+    public function test_periodo_da_planilha_tem_prioridade_sobre_o_cadastrado_no_aluno(): void
+    {
+        $aluno = Aluno::create([
+            'ra' => '2026001',
+            'cpf' => null,
+            'data_nascimento' => '2000-01-01',
+            'periodo' => '5º',
+        ]);
+        $avaliacao = Avaliacao::create([]);
+
+        $csv = "RA,Período,Questão,Resposta\n2026001,2026/1,1,B\n";
+        $arquivo = UploadedFile::fake()->createWithContent('resultados.csv', $csv);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", ['arquivo' => $arquivo]);
+
+        $this->assertDatabaseHas('respostas', ['ra' => '2026001', 'periodo' => '2026/1', 'resposta' => 'B']);
+    }
+
+    public function test_aluno_sem_cadastro_ou_sem_periodo_no_perfil_continua_ficando_vazio(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+
+        $csv = "RA,Questão,Resposta\n999999,1,B\n";
+        $arquivo = UploadedFile::fake()->createWithContent('resultados.csv', $csv);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", ['arquivo' => $arquivo]);
+
+        $this->assertDatabaseHas('respostas', ['ra' => '999999', 'periodo' => '', 'resposta' => 'B']);
+    }
+
     public function test_reimportar_apos_exclusao_restaura_em_vez_de_falhar(): void
     {
         $avaliacao = Avaliacao::create([]);

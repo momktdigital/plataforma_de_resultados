@@ -57,6 +57,22 @@ class RespondenteTest extends TestCase
         $response->assertDontSee('222');
     }
 
+    public function test_filtra_por_busca_de_nome_do_aluno(): void
+    {
+        // Bug relatado: a busca só olhava RA/CPF/aluno_chave em `respostas` —
+        // buscar pelo nome (o que aparece na tela pra cada linha) não achava
+        // ninguém, mesmo com o respondente listado quando o filtro é limpo.
+        Aluno::create(['ra' => '111', 'cpf' => '11122233344', 'data_nascimento' => '2000-01-01', 'nome' => 'Alexandre André Dalesse']);
+        Aluno::create(['ra' => '222', 'cpf' => '22233344455', 'data_nascimento' => '2000-01-01', 'nome' => 'Beatriz Souza']);
+        $avaliacao = $this->provaComRespostas();
+
+        $response = $this->actingAs($this->admin(), 'admin')->get("/avaliacoes/{$avaliacao->codigo}/respondentes?search=alexandre");
+
+        $response->assertOk();
+        $response->assertSee('111');
+        $response->assertDontSee('222');
+    }
+
     public function test_lista_mostra_nome_do_aluno_e_acertos(): void
     {
         Aluno::create(['ra' => '111', 'cpf' => '11122233344', 'data_nascimento' => '2000-01-01', 'nome' => 'Ana Respondente']);

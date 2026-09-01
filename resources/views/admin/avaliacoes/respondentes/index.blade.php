@@ -8,8 +8,8 @@
 
 <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-6">
     <form method="GET" action="{{ route('avaliacoes.respondentes.index', $avaliacao) }}" class="flex flex-wrap gap-3">
-        <label for="busca-respondentes" class="sr-only">Buscar respondente por RA ou CPF</label>
-        <input id="busca-respondentes" type="text" name="search" value="{{ $search }}" placeholder="Buscar por RA ou CPF..."
+        <label for="busca-respondentes" class="sr-only">Buscar respondente por nome, RA ou CPF</label>
+        <input id="busca-respondentes" type="text" name="search" value="{{ $search }}" placeholder="Buscar por nome, RA ou CPF..."
                class="flex-1 min-w-[200px] rounded-lg border border-slate-300 px-3 py-2 text-sm">
         <select name="periodo" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
             <option value="">Todos os períodos</option>
