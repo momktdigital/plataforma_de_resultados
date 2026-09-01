@@ -215,28 +215,6 @@ class ResultadoConsultaService
     }
 
     /**
-     * Série cronológica (mais antiga primeiro) de percentuais, pro gráfico de
-     * evolução no topo do boletim — só entram avaliações com data e
-     * percentual cadastrados, senão a ordem/posição no eixo X não tem sentido.
-     *
-     * @param  array<int, array<string, mixed>>  $resultados
-     * @return array<int, array{nome: string, percentual: float, data: string}>
-     */
-    public function evolucaoGeral(array $resultados): array
-    {
-        return collect($resultados)
-            ->filter(fn ($r) => $r['percentual'] !== null && $r['avaliacao']->data_avaliacao !== null)
-            ->sortBy(fn ($r) => $r['avaliacao']->data_avaliacao->format('Y-m-d'))
-            ->map(fn ($r) => [
-                'nome' => $r['avaliacao']->nome ?? "Avaliação #{$r['avaliacao']->codigo}",
-                'percentual' => $r['percentual'],
-                'data' => $r['avaliacao']->data_avaliacao->format('d/m/Y'),
-            ])
-            ->values()
-            ->all();
-    }
-
-    /**
      * Média de desempenho por categoria de topo (raiz da árvore de
      * montarArvore()), somando recursivamente os resultados de todas as
      * subcategorias — usado no resumo visual do boletim.

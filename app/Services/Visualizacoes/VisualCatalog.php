@@ -116,10 +116,14 @@ final class VisualCatalog
                 'aluno' => true,
             ],
             'evolucao_categoria' => [
+                // Só admin: no boletim do aluno essa evolução aparece sempre
+                // que houver dado (não é mais um visual configurável por
+                // avaliação) — ver ResultadoConsultaService::resultados() /
+                // RelatorioAlunoService::evolucaoPorCategoria().
                 'label' => 'Evolução histórica na categoria',
                 'grupo' => self::GRUPO_ADMIN,
                 'admin' => true,
-                'aluno' => true,
+                'aluno' => false,
             ],
             'nota_geral' => [
                 'label' => 'Nota geral / percentual de acertos',

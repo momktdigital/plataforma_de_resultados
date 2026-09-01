@@ -7,6 +7,7 @@ use App\Models\Aluno;
 use App\Models\Avaliacao;
 use App\Models\Configuracao;
 use App\Models\VerificacaoEmail;
+use App\Services\Portal\AnaliseConsolidadaService;
 use App\Services\Portal\CaptchaVerifier;
 use App\Services\Portal\RateLimit2faService;
 use App\Services\Portal\RelatorioAlunoService;
@@ -217,15 +218,19 @@ class PortalController extends Controller
      * id do aluno na sessão — nada de repassar isso por querystring, senão
      * qualquer um poderia adivinhar/alterar a URL e ver boletim alheio.
      */
-    public function resultados(Request $request, ResultadoConsultaService $consultaService): View|RedirectResponse
-    {
+    public function resultados(
+        Request $request,
+        ResultadoConsultaService $consultaService,
+        RelatorioAlunoService $relatorioService,
+        AnaliseConsolidadaService $analiseService,
+    ): View|RedirectResponse {
         $aluno = $this->alunoAutenticado();
 
         if ($aluno === null) {
             return redirect()->route('portal.consulta');
         }
 
-        return $this->renderizarResultados($aluno, $consultaService, $request);
+        return $this->renderizarResultados($aluno, $consultaService, $relatorioService, $analiseService, $request);
     }
 
     /** Detalhe de uma única avaliacao, aberto a partir da tela de Resultados. */
@@ -268,9 +273,6 @@ class PortalController extends Controller
             'desempenhoBloom' => $visivel('desempenho_bloom') ? $relatorioService->desempenhoPorBloom($respostas, $gabaritos, $avaliacao) : null,
             'desempenhoMiller' => $visivel('desempenho_miller') ? $relatorioService->desempenhoPorMiller($respostas, $gabaritos, $avaliacao) : null,
             'comparativoQuestao' => $visivel('comparativo_questao') ? $relatorioService->comparativoQuestao($avaliacao, $periodo, $respostas, $gabaritos) : null,
-            'evolucaoHistorica' => $visivel('evolucao_categoria')
-                ? $relatorioService->evolucaoHistorica($consultaService->buscarPorAluno($aluno), $avaliacao->categoria_id)
-                : null,
         ]);
     }
 
@@ -318,7 +320,7 @@ class PortalController extends Controller
      * mostra só o período letivo mais recente (`''` na query string =
      * "Todos", igual ao filtro equivalente no admin).
      */
-    private function renderizarResultados(Aluno $aluno, ResultadoConsultaService $consultaService, Request $request): View
+    private function renderizarResultados(Aluno $aluno, ResultadoConsultaService $consultaService, RelatorioAlunoService $relatorioService, AnaliseConsolidadaService $analiseService, Request $request): View
     {
         $todos = $consultaService->buscarPorAluno($aluno);
 
@@ -340,6 +342,7 @@ class PortalController extends Controller
 
         $comPercentual = collect($resultados)->pluck('percentual')->filter(fn ($p) => $p !== null);
         $arvore = $consultaService->montarArvore($resultados);
+        $avaliacaoCodigos = collect($resultados)->pluck('avaliacao.codigo')->unique()->values()->all();
 
         return view('portal.resultados', [
             'aluno' => $aluno,
@@ -347,8 +350,15 @@ class PortalController extends Controller
             'mediaGeral' => $comPercentual->isNotEmpty() ? round($comPercentual->avg(), 1) : null,
             'periodosDisponiveis' => $periodosDisponiveis,
             'periodoSelecionado' => $periodoSelecionado,
-            'evolucaoGeral' => $consultaService->evolucaoGeral($resultados),
+            'evolucaoPorCategoria' => $relatorioService->evolucaoPorCategoria($resultados),
             'resumoPorCategoria' => $consultaService->resumoPorCategoria($arvore['arvore']),
+            'comparativoTurmaConsolidado' => $relatorioService->comparativoTurmaConsolidado($aluno, $resultados),
+            'curvaDificuldadePedagogica' => $analiseService->curvaDificuldadePedagogica($aluno, $avaliacaoCodigos),
+            'dispersaoTri' => $analiseService->dispersaoTri($aluno, $avaliacaoCodigos),
+            'coberturaHabilidade' => $analiseService->coberturaHabilidade($aluno, $avaliacaoCodigos),
+            'desempenhoBloomConsolidado' => $analiseService->desempenhoBloomConsolidado($aluno, $avaliacaoCodigos),
+            'desempenhoMillerConsolidado' => $analiseService->desempenhoMillerConsolidado($aluno, $avaliacaoCodigos),
+            'questoesDivergentesDaTurma' => $analiseService->questoesDivergentesDaTurma($aluno, $avaliacaoCodigos),
             ...$arvore,
         ]);
     }

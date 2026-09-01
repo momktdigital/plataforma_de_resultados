@@ -302,6 +302,45 @@ class PortalCategoriaTest extends TestCase
         $detalhe->assertSeeInOrder(['ph-trophy', 'Total', '87', 'Redação'], false);
     }
 
+    public function test_evolucao_por_categoria_aparece_com_duas_avaliacoes_na_mesma_categoria(): void
+    {
+        $aluno = $this->aluno();
+        $categoria = Categoria::create(['nome' => 'Simulado MedCof']);
+        $this->resultadoNaAvaliacao($aluno, $categoria->id, '2026-05-25', 'Simulado MedCof');
+        $this->resultadoNaAvaliacao($aluno, $categoria->id, '2026-06-20', 'Simulado MedCof');
+
+        $response = $this->followingRedirects()->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
+
+        $response->assertOk();
+        $response->assertSee('Evolução histórica na categoria');
+        // Datas das duas avaliações (formato d/m/Y) precisam estar na página,
+        // já que o rótulo do gráfico é "nome — data" — ver
+        // RelatorioAlunoServiceTest::test_evolucao_por_categoria_usa_nome_e_data_no_rotulo()
+        // pro formato exato do rótulo (o JSON embutido no <script> escapa o
+        // "—" e a "/", então não dá pra checar a string literal aqui).
+        $response->assertSee('25/05/2026');
+        $response->assertSee('20/06/2026');
+    }
+
+    public function test_evolucao_por_categoria_nao_mistura_categorias_diferentes_numa_so_serie(): void
+    {
+        // Bug relatado: com só 1 avaliação por categoria, o antigo gráfico
+        // "Evolução do desempenho" ainda assim juntava as duas numa única
+        // linha de tendência, como se fossem comparáveis. Categorias
+        // distintas não devem virar série nenhuma sem pelo menos 2
+        // avaliações CADA UMA.
+        $aluno = $this->aluno();
+        $diagnostico = Categoria::create(['nome' => 'Diagnóstico Institucional']);
+        $simulado = Categoria::create(['nome' => 'Simulado MedCof']);
+        $this->resultadoNaAvaliacao($aluno, $diagnostico->id, '2026-01-10', 'Diagnostico Institucional');
+        $this->resultadoNaAvaliacao($aluno, $simulado->id, '2026-02-10', 'Simulado 1');
+
+        $response = $this->followingRedirects()->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
+
+        $response->assertOk();
+        $response->assertDontSee('Evolução histórica na categoria');
+    }
+
     public function test_sair_encerra_a_sessao_dos_resultados(): void
     {
         $aluno = $this->aluno();
