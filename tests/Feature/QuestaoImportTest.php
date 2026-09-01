@@ -73,6 +73,44 @@ class QuestaoImportTest extends TestCase
         $this->assertSame(1, $questao->matrizes[0]->periodo);
     }
 
+    public function test_coluna_dificuldade_pura_sem_qualificar_pedagogica_e_gravada(): void
+    {
+        // Bug relatado: planilhas de coordenadores costumam ter só uma
+        // coluna "Dificuldade" (Fácil/Média/Difícil), sem qualificar
+        // "pedagógica" — o padrão de cabeçalho exigia "pedagog" no nome e
+        // deixava a coluna passar batido, sem gravar nada.
+        $avaliacao = Avaliacao::create([]);
+
+        $csv = "Questão,Gabarito,Área,Tema,Dificuldade\n"
+            ."1,A,Pediatria,Infectologia,Média\n"
+            ."2,A,GO,Gin Geral,Fácil\n"
+            ."3,C,Clínica Médica,Cardiologia,Difícil\n";
+        $arquivo = UploadedFile::fake()->createWithContent('gabarito.csv', $csv);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/questoes/import", ['arquivo' => $arquivo]);
+
+        $this->assertSame('medio', Questao::where('numero', 1)->firstOrFail()->dificuldade_pedagogica);
+        $this->assertSame('facil', Questao::where('numero', 2)->firstOrFail()->dificuldade_pedagogica);
+        $this->assertSame('dificil', Questao::where('numero', 3)->firstOrFail()->dificuldade_pedagogica);
+    }
+
+    public function test_coluna_dificuldade_tri_nao_e_confundida_com_a_pedagogica(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+
+        $csv = "Questão,Gabarito,Dificuldade,Dificuldade TRI\n"
+            .'1,A,Fácil,"-1,25"'."\n";
+        $arquivo = UploadedFile::fake()->createWithContent('gabarito.csv', $csv);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/questoes/import", ['arquivo' => $arquivo]);
+
+        $questao = Questao::where('numero', 1)->firstOrFail();
+        $this->assertSame('facil', $questao->dificuldade_pedagogica);
+        $this->assertEquals(-1.25, $questao->dificuldade_tri);
+    }
+
     public function test_reimportar_atualiza_em_vez_de_duplicar(): void
     {
         $avaliacao = Avaliacao::create([]);

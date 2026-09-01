@@ -261,7 +261,11 @@ class QuestaoImportService
         $campos['bloom_verbo'] = HeaderResolver::findValue($row, ['/(?=.*bloom)(?=.*verbo)/', '/\btaxonomia\b/']);
         $campos['miller_nivel'] = HeaderResolver::findValue($row, ['/miller/']);
 
-        $dificuldadePedagogica = HeaderResolver::findValue($row, ['/(?=.*dificuldade)(?=.*pedagog)/']);
+        // Aceita tanto "Dificuldade Pedagógica" quanto uma coluna "Dificuldade"
+        // pura (comum nas planilhas dos coordenadores, sem qualificar
+        // "pedagógica") — únicas exigências são conter "dificuldade" e NÃO
+        // ser a coluna de TRI (essa tem cabeçalho próprio, tratado abaixo).
+        $dificuldadePedagogica = HeaderResolver::findValue($row, ['/(?=.*dificuldade)(?!.*tri)/']);
         $campos['dificuldade_pedagogica'] = $this->normalizarDificuldade($dificuldadePedagogica);
 
         $dificuldadeTri = HeaderResolver::findValue($row, ['/(?=.*dificuldade)(?=.*tri)/']);
