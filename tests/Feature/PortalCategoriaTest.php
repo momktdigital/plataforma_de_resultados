@@ -312,7 +312,7 @@ class PortalCategoriaTest extends TestCase
         $response = $this->followingRedirects()->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
 
         $response->assertOk();
-        $response->assertSee('Evolução histórica na categoria');
+        $response->assertSee('Evolução histórica nesta categoria');
         // Datas das duas avaliações (formato d/m/Y) precisam estar na página,
         // já que o rótulo do gráfico é "nome — data" — ver
         // RelatorioAlunoServiceTest::test_evolucao_por_categoria_usa_nome_e_data_no_rotulo()
@@ -338,7 +338,50 @@ class PortalCategoriaTest extends TestCase
         $response = $this->followingRedirects()->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
 
         $response->assertOk();
-        $response->assertDontSee('Evolução histórica na categoria');
+        $response->assertDontSee('Evolução histórica nesta categoria');
+    }
+
+    public function test_categorias_diferentes_tem_graficos_de_evolucao_proprios_e_independentes(): void
+    {
+        // A "Evolução do desempenho"/"Análise consolidada" que existia no
+        // topo da tela (período inteiro, misturando categorias na mesma
+        // seção) virou parte de CADA categoria — cada uma com seu próprio
+        // gráfico, identificado pelo id da categoria.
+        $aluno = $this->aluno();
+        $catA = Categoria::create(['nome' => 'Categoria A']);
+        $catB = Categoria::create(['nome' => 'Categoria B']);
+        $this->resultadoNaAvaliacao($aluno, $catA->id, '2026-01-10', 'A1');
+        $this->resultadoNaAvaliacao($aluno, $catA->id, '2026-02-10', 'A2');
+        $this->resultadoNaAvaliacao($aluno, $catB->id, '2026-01-15', 'B1');
+        $this->resultadoNaAvaliacao($aluno, $catB->id, '2026-02-15', 'B2');
+
+        $response = $this->followingRedirects()->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
+
+        $response->assertOk();
+        $response->assertSee('grafico-evolucao-'.$catA->id, false);
+        $response->assertSee('grafico-evolucao-'.$catB->id, false);
+        $response->assertDontSee('Análise consolidada do período');
+    }
+
+    public function test_analise_consolidada_da_categoria_aparece_com_1_avaliacao_mesmo_sem_evolucao(): void
+    {
+        // Evolução exige 2+ avaliações na categoria (uma linha de tendência
+        // não faz sentido com 1 ponto só), mas a análise consolidada
+        // (habilidade, dificuldade etc.) não depende disso — já funciona com
+        // 1 avaliação só.
+        $aluno = $this->aluno();
+        $categoria = Categoria::create(['nome' => 'Categoria Única']);
+        $avaliacao = Avaliacao::create(['nome' => 'Prova única', 'categoria_id' => $categoria->id, 'data_avaliacao' => '2026-03-01']);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A', 'habilidade' => 'Anamnese']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => $aluno->ra, 'periodo' => '', 'questao_numero' => 1, 'resposta' => 'A']);
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+
+        $response = $this->followingRedirects()->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
+
+        $response->assertOk();
+        $response->assertDontSee('Evolução histórica nesta categoria');
+        $response->assertSee('Habilidades a reforçar');
+        $response->assertSee('Anamnese');
     }
 
     public function test_sair_encerra_a_sessao_dos_resultados(): void

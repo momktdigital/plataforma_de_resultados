@@ -79,14 +79,7 @@
     </div>
 @endif
 
-@php
-    $temAnaliseConsolidada = ! empty($comparativoTurmaConsolidado) || ! empty($curvaDificuldadePedagogica)
-        || ! empty($dispersaoTri) || ! empty($coberturaHabilidade)
-        || ! empty($desempenhoBloomConsolidado) || ! empty($desempenhoMillerConsolidado)
-        || ! empty($questoesDivergentesDaTurma);
-@endphp
-
-@if (! empty($evolucaoPorCategoria) || $temAnaliseConsolidada)
+@if ($temAnaliseNaArvore)
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"></script>
 @endif
 
@@ -109,258 +102,6 @@
             @endforeach
         </div>
     </div>
-@endif
-
-@if (! empty($evolucaoPorCategoria))
-    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 mb-6 fade-in">
-        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
-                <i class="ph-bold ph-trend-up text-primary"></i> Evolução histórica na categoria
-            </p>
-            @if (count($evolucaoPorCategoria) > 1)
-                <select id="evolucao-categoria-select" onchange="portalTrocarCategoriaEvolucao(this.value)"
-                        class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm bg-white">
-                    @foreach ($evolucaoPorCategoria as $i => $cat)
-                        <option value="{{ $i }}">{{ $cat['categoria_nome'] }}</option>
-                    @endforeach
-                </select>
-            @else
-                <span class="text-sm font-semibold text-slate-600">{{ $evolucaoPorCategoria[0]['categoria_nome'] }}</span>
-            @endif
-        </div>
-        <canvas id="grafico-evolucao-categoria" height="90"></canvas>
-    </div>
-
-    <script>
-    (function () {
-        var dadosPorCategoria = {{ Js::from(array_map(fn ($cat) => [
-            'labels' => array_map(fn ($p) => "{$p['nome']} — {$p['data']}", $cat['pontos']),
-            'percentuais' => array_column($cat['pontos'], 'percentual'),
-        ], $evolucaoPorCategoria)) }};
-
-        var grafico = null;
-
-        function renderizar(indice) {
-            var dados = dadosPorCategoria[indice];
-            if (grafico) grafico.destroy();
-            grafico = new Chart(document.getElementById('grafico-evolucao-categoria'), {
-                type: 'line',
-                data: {
-                    labels: dados.labels,
-                    datasets: [{
-                        label: '% de acerto',
-                        data: dados.percentuais,
-                        borderColor: '#00b48d',
-                        backgroundColor: 'rgba(0,180,141,0.12)',
-                        borderWidth: 2,
-                        pointRadius: 3,
-                        pointBackgroundColor: '#00b48d',
-                        fill: true,
-                        tension: 0.3,
-                    }],
-                },
-                options: {
-                    scales: { y: { beginAtZero: true, max: 100, grid: { color: '#f1f5f9' } }, x: { grid: { display: false } } },
-                    plugins: { legend: { display: false } },
-                },
-            });
-        }
-
-        window.portalTrocarCategoriaEvolucao = function (indice) { renderizar(indice); };
-        renderizar(0);
-    })();
-    </script>
-@endif
-
-@if ($temAnaliseConsolidada)
-    <div class="mb-6 fade-in">
-        <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-2">
-            <i class="ph-bold ph-chart-line-up text-primary"></i> Análise consolidada do período
-        </h2>
-
-        <div class="grid sm:grid-cols-2 gap-4 mb-4">
-            @if (! empty($comparativoTurmaConsolidado))
-                <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
-                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                        <i class="ph-bold ph-users-three text-primary"></i> Você x turma {{ $comparativoTurmaConsolidado['turma'] }}
-                    </p>
-                    <canvas id="grafico-comparativo-turma-consolidado" height="110"></canvas>
-                    <p class="text-[11px] text-slate-400 mt-2">Média de {{ $comparativoTurmaConsolidado['avaliacoesComparadas'] }} avaliação(ões) comparável(eis)</p>
-                </div>
-            @endif
-
-            @if (! empty($curvaDificuldadePedagogica))
-                @php
-                    $facilPct = $curvaDificuldadePedagogica['facil']['percentual'] ?? null;
-                    $dificilPct = $curvaDificuldadePedagogica['dificil']['percentual'] ?? null;
-                @endphp
-                <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
-                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                        <i class="ph-bold ph-gauge text-primary"></i> Desempenho por dificuldade pedagógica
-                    </p>
-                    <canvas id="grafico-curva-dificuldade" height="110"></canvas>
-                    @if ($facilPct !== null && $dificilPct !== null && $facilPct < $dificilPct)
-                        <p class="text-[11px] text-amber-600 mt-2 flex items-center gap-1">
-                            <i class="ph-bold ph-warning-circle"></i> Seu acerto em questões fáceis está menor que em difíceis.
-                        </p>
-                    @endif
-                </div>
-            @endif
-
-            @if (! empty($dispersaoTri))
-                <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
-                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                        <i class="ph-bold ph-chart-scatter text-primary"></i> Dispersão dificuldade (TRI) x acerto
-                    </p>
-                    <canvas id="grafico-dispersao-tri" height="110"></canvas>
-                </div>
-            @endif
-
-            @if (! empty($coberturaHabilidade))
-                <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
-                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                        <i class="ph-bold ph-target text-primary"></i> Habilidades a reforçar
-                    </p>
-                    <canvas id="grafico-habilidade" height="{{ max(110, count($coberturaHabilidade) * 26) }}"></canvas>
-                </div>
-            @endif
-
-            @if (! empty($desempenhoBloomConsolidado))
-                <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
-                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                        <i class="ph-bold ph-brain text-primary"></i> Desempenho por nível de Bloom
-                    </p>
-                    <canvas id="grafico-bloom-consolidado" height="140"></canvas>
-                </div>
-            @endif
-
-            @if (! empty($desempenhoMillerConsolidado))
-                <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
-                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                        <i class="ph-bold ph-stethoscope text-primary"></i> Desempenho por nível de Miller
-                    </p>
-                    <canvas id="grafico-miller-consolidado" height="140"></canvas>
-                </div>
-            @endif
-        </div>
-
-        @if (! empty($questoesDivergentesDaTurma))
-            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                    <i class="ph-bold ph-warning-circle text-primary"></i> Temas onde você mais diverge da turma
-                </p>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                        <thead class="bg-slate-50 text-slate-500 text-left">
-                            <tr><th class="px-3 py-2">Área</th><th class="px-3 py-2">Tema</th><th class="px-3 py-2">Vezes que errou</th><th class="px-3 py-2">% turma acertou</th></tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100">
-                            @foreach ($questoesDivergentesDaTurma as $d)
-                                <tr>
-                                    <td class="px-3 py-2">{{ $d['area'] }}</td>
-                                    <td class="px-3 py-2">{{ $d['tema'] }}</td>
-                                    <td class="px-3 py-2 font-bold text-red-600">{{ $d['ocorrencias'] }}</td>
-                                    <td class="px-3 py-2">{{ $d['taxaAcertoTurmaMedia'] }}%</td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        @endif
-    </div>
-
-    <script>
-    @if (! empty($comparativoTurmaConsolidado))
-    new Chart(document.getElementById('grafico-comparativo-turma-consolidado'), {
-        type: 'bar',
-        data: {
-            labels: ['Você', 'Média da turma'],
-            datasets: [{
-                data: [{{ $comparativoTurmaConsolidado['suaMedia'] }}, {{ $comparativoTurmaConsolidado['mediaTurma'] }}],
-                backgroundColor: ['#00b48d', '#94a3b8'],
-                borderRadius: 4,
-                maxBarThickness: 28,
-            }],
-        },
-        options: {
-            indexAxis: 'y',
-            scales: { x: { beginAtZero: true, max: 100, grid: { color: '#f1f5f9' } }, y: { grid: { display: false } } },
-            plugins: { legend: { display: false } },
-        },
-    });
-    @endif
-
-    @if (! empty($curvaDificuldadePedagogica))
-    new Chart(document.getElementById('grafico-curva-dificuldade'), {
-        type: 'bar',
-        data: {
-            labels: {{ Js::from(array_column($curvaDificuldadePedagogica, 'label')) }},
-            datasets: [{ label: '% de acerto', data: {{ Js::from(array_column($curvaDificuldadePedagogica, 'percentual')) }}, backgroundColor: '#00b48d', borderRadius: 4, maxBarThickness: 28 }],
-        },
-        options: { scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
-    });
-    @endif
-
-    @if (! empty($dispersaoTri))
-    new Chart(document.getElementById('grafico-dispersao-tri'), {
-        type: 'scatter',
-        data: {
-            datasets: [
-                {
-                    label: 'Acertou',
-                    data: {{ Js::from(collect($dispersaoTri)->filter(fn ($p) => $p['acertou'])->map(fn ($p) => ['x' => $p['dificuldade_tri'], 'y' => 1])->values()) }},
-                    backgroundColor: '#00b48d',
-                },
-                {
-                    label: 'Errou',
-                    data: {{ Js::from(collect($dispersaoTri)->filter(fn ($p) => ! $p['acertou'])->map(fn ($p) => ['x' => $p['dificuldade_tri'], 'y' => 0])->values()) }},
-                    backgroundColor: '#ef4444',
-                },
-            ],
-        },
-        options: {
-            scales: {
-                y: { min: -0.5, max: 1.5, ticks: { stepSize: 1, callback: function (v) { return v === 1 ? 'Acertou' : (v === 0 ? 'Errou' : ''); } } },
-                x: { title: { display: true, text: 'Dificuldade TRI' } },
-            },
-        },
-    });
-    @endif
-
-    @if (! empty($coberturaHabilidade))
-    new Chart(document.getElementById('grafico-habilidade'), {
-        type: 'bar',
-        data: {
-            labels: {{ Js::from(array_keys($coberturaHabilidade)) }},
-            datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($coberturaHabilidade)) }}, backgroundColor: '#00b48d', borderRadius: 4, maxBarThickness: 20 }],
-        },
-        options: { indexAxis: 'y', scales: { x: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
-    });
-    @endif
-
-    @if (! empty($desempenhoBloomConsolidado))
-    new Chart(document.getElementById('grafico-bloom-consolidado'), {
-        type: 'bar',
-        data: {
-            labels: {{ Js::from(array_keys($desempenhoBloomConsolidado)) }},
-            datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($desempenhoBloomConsolidado)) }}, backgroundColor: '#00b48d', borderRadius: 4, maxBarThickness: 24 }],
-        },
-        options: { indexAxis: 'y', scales: { x: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
-    });
-    @endif
-
-    @if (! empty($desempenhoMillerConsolidado))
-    new Chart(document.getElementById('grafico-miller-consolidado'), {
-        type: 'bar',
-        data: {
-            labels: {{ Js::from(array_keys($desempenhoMillerConsolidado)) }},
-            datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($desempenhoMillerConsolidado)) }}, backgroundColor: '#00b48d', borderRadius: 4, maxBarThickness: 24 }],
-        },
-        options: { indexAxis: 'y', scales: { x: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
-    });
-    @endif
-    </script>
 @endif
 
 @if (! empty($periodosDisponiveis) || ! empty($arvore) || ! empty($semCategoria))
@@ -434,6 +175,23 @@ function portalToggleCategoria(botao) {
     const conteudo = botao.nextElementSibling;
     conteudo.hidden = !conteudo.hidden;
     botao.querySelector('.categoria-seta').classList.toggle('rotate-180', !conteudo.hidden);
+
+    if (!conteudo.hidden) portalRedimensionarGraficos(conteudo);
+}
+
+// Os gráficos da categoria são criados enquanto o conteúdo ainda está hidden
+// (display:none) — o canvas reporta tamanho zero nesse momento, e nem todo
+// navegador/versão do Chart.js recalcula sozinho quando o elemento aparece
+// depois. resize() força o gráfico a se ajustar ao tamanho real assim que a
+// categoria é expandida — seja pelo clique (portalToggleCategoria) ou pelo
+// filtro de data expandindo automaticamente (portalAplicarFiltro).
+function portalRedimensionarGraficos(conteudo) {
+    if (typeof Chart === 'undefined') return;
+
+    conteudo.querySelectorAll('canvas').forEach(function (canvas) {
+        const grafico = Chart.getChart(canvas);
+        if (grafico) grafico.resize();
+    });
 }
 
 function portalAplicarFiltro() {
@@ -457,7 +215,11 @@ function portalAplicarFiltro() {
         if (temCartaoVisivel) algumVisivel = true;
         // Expande automaticamente quando o filtro restringe o resultado, pra não parecer vazio.
         if (temCartaoVisivel && (inicio || fim)) {
-            no.querySelector('.categoria-conteudo').hidden = false;
+            const conteudo = no.querySelector('.categoria-conteudo');
+            if (conteudo.hidden) {
+                conteudo.hidden = false;
+                portalRedimensionarGraficos(conteudo);
+            }
         }
     });
     document.querySelectorAll('#resultados-lista > .avaliacao-card').forEach(function (card) {
