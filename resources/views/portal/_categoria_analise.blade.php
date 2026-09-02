@@ -126,7 +126,7 @@
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead class="bg-slate-50 text-slate-500 text-left">
-                            <tr><th class="px-3 py-2">Área</th><th class="px-3 py-2">Tema</th><th class="px-3 py-2">Vezes que errou</th><th class="px-3 py-2">% turma acertou</th></tr>
+                            <tr><th class="px-3 py-2">Área</th><th class="px-3 py-2">Tema</th><th class="px-3 py-2">Vezes que errou</th><th class="px-3 py-2">Média de erro da turma</th></tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             @foreach ($analise['divergentes'] as $d)
@@ -134,7 +134,7 @@
                                     <td class="px-3 py-2">{{ $d['area'] }}</td>
                                     <td class="px-3 py-2">{{ $d['tema'] }}</td>
                                     <td class="px-3 py-2 font-bold text-red-600">{{ $d['ocorrencias'] }}</td>
-                                    <td class="px-3 py-2">{{ $d['taxaAcertoTurmaMedia'] }}%</td>
+                                    <td class="px-3 py-2">{{ $d['taxaErroTurmaMedia'] }}%</td>
                                 </tr>
                             @endforeach
                         </tbody>

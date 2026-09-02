@@ -127,7 +127,7 @@ class AnaliseConsolidadaService
      * ocorrências.
      *
      * @param  array<int, int>  $avaliacaoCodigos
-     * @return array<int, array{area: string, tema: string, ocorrencias: int, taxaAcertoTurmaMedia: float}>
+     * @return array<int, array{area: string, tema: string, ocorrencias: int, taxaErroTurmaMedia: float}>
      */
     public function questoesDivergentesDaTurma(Aluno $aluno, array $avaliacaoCodigos, float $limiarTurmaAcerto = 60.0, int $limite = 8): array
     {
@@ -199,11 +199,17 @@ class AnaliseConsolidadaService
             $acumulado[$chave]['somaTaxaTurma'] += $taxaAcertoTurma;
         }
 
+        // Exposto como taxa de ERRO da turma (não de acerto): a coluna ao
+        // lado já é "vezes que VOCÊ errou", então comparar erro com erro é
+        // mais direto de ler que comparar erro (seu) com acerto (da turma)
+        // — o aluno não precisa inverter um dos dois números de cabeça pra
+        // comparar. 100 - média é equivalente a média dos (100 - taxa) de
+        // cada ocorrência, já que a média é uma operação linear.
         $resultado = array_map(fn ($a) => [
             'area' => $a['area'],
             'tema' => $a['tema'],
             'ocorrencias' => $a['ocorrencias'],
-            'taxaAcertoTurmaMedia' => round($a['somaTaxaTurma'] / $a['ocorrencias'], 1),
+            'taxaErroTurmaMedia' => round(100 - ($a['somaTaxaTurma'] / $a['ocorrencias']), 1),
         ], array_values($acumulado));
 
         usort($resultado, fn ($a, $b) => $b['ocorrencias'] <=> $a['ocorrencias']);

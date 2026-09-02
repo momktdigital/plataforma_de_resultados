@@ -86,6 +86,6 @@ class AnaliseConsolidadaServiceTest extends TestCase
         $this->assertSame('Clínica Médica', $comDivergencia[0]['area']);
         $this->assertSame('Cardiologia', $comDivergencia[0]['tema']);
         $this->assertSame(1, $comDivergencia[0]['ocorrencias']);
-        $this->assertSame(60.0, $comDivergencia[0]['taxaAcertoTurmaMedia']);
+        $this->assertSame(40.0, $comDivergencia[0]['taxaErroTurmaMedia']);
     }
 }

@@ -226,7 +226,7 @@ class ExplicacaoVisualServiceTest extends TestCase
     {
         $analise = $this->analiseVazia();
         $analise['divergentes'] = [
-            ['area' => 'Clínica Médica', 'tema' => 'Cardiologia', 'ocorrencias' => 4, 'taxaAcertoTurmaMedia' => 80.0],
+            ['area' => 'Clínica Médica', 'tema' => 'Cardiologia', 'ocorrencias' => 4, 'taxaErroTurmaMedia' => 20.0],
         ];
 
         $pessoal = $this->service->gerar($analise)['divergentes']['pessoal'];

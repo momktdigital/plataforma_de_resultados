@@ -96,7 +96,7 @@
                         <span class="font-bold text-slate-700 shrink-0 ml-2">{{ $c['media'] }}%</span>
                     </div>
                     <div class="h-2 rounded-full bg-slate-100 overflow-hidden">
-                        <div class="h-full rounded-full bg-primary" style="width: {{ max(3, $c['media']) }}%"></div>
+                        <div class="h-full rounded-full {{ \App\Support\CorDesempenho::classeBg($c['media']) }}" style="width: {{ max(3, $c['media']) }}%"></div>
                     </div>
                 </div>
             @endforeach
@@ -203,7 +203,12 @@ document.addEventListener('click', function (evento) {
         const conteudo = toggle.nextElementSibling;
         const estavaAberto = !conteudo.hidden;
         document.querySelectorAll('.explicacao-conteudo').forEach(function (c) { c.hidden = true; });
-        conteudo.hidden = estavaAberto;
+        if (estavaAberto) {
+            conteudo.hidden = true;
+        } else {
+            conteudo.hidden = false;
+            portalPosicionarExplicacao(toggle, conteudo);
+        }
         evento.stopPropagation();
         return;
     }
@@ -212,6 +217,22 @@ document.addEventListener('click', function (evento) {
         document.querySelectorAll('.explicacao-conteudo').forEach(function (c) { c.hidden = true; });
     }
 });
+
+// position:fixed é relativo à VIEWPORT, não rola junto com a página — sem
+// isso, o popover ficaria "grudado" na tela depois que o botão já rolou pra
+// outro lugar. true (capture) pra pegar rolagem de containers internos também.
+document.addEventListener('scroll', function () {
+    document.querySelectorAll('.explicacao-conteudo:not([hidden])').forEach(function (c) { c.hidden = true; });
+}, true);
+
+function portalPosicionarExplicacao(botao, conteudo) {
+    const rect = botao.getBoundingClientRect();
+    const largura = conteudo.offsetWidth;
+    let left = rect.right - largura;
+    left = Math.max(8, Math.min(left, window.innerWidth - largura - 8));
+    conteudo.style.top = (rect.bottom + 4) + 'px';
+    conteudo.style.left = left + 'px';
+}
 
 function portalAplicarFiltro() {
     const inicio = document.getElementById('filtro-data-inicio').value;

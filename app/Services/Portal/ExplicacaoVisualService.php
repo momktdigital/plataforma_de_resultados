@@ -158,7 +158,7 @@ class ExplicacaoVisualService
         return ['generico' => $generico, 'pessoal' => $pessoal];
     }
 
-    /** @param  array<int, array{area: string, tema: string, ocorrencias: int, taxaAcertoTurmaMedia: float}>  $lista
+    /** @param  array<int, array{area: string, tema: string, ocorrencias: int, taxaErroTurmaMedia: float}>  $lista
      * @return array{generico: string, pessoal: ?string} */
     private function divergentes(array $lista): array
     {
@@ -169,7 +169,7 @@ class ExplicacaoVisualService
         }
 
         $top = $lista[0];
-        $pessoal = "O tema onde isso mais aconteceu foi \"{$top['tema']}\" (área {$top['area']}), em {$top['ocorrencias']} questão(ões) — enquanto {$top['taxaAcertoTurmaMedia']}% da turma acertou, você errou.";
+        $pessoal = "O tema onde isso mais aconteceu foi \"{$top['tema']}\" (área {$top['area']}), em {$top['ocorrencias']} questão(ões) — a turma errou essa questão só {$top['taxaErroTurmaMedia']}% das vezes, bem menos que você.";
 
         return ['generico' => $generico, 'pessoal' => $pessoal];
     }
