@@ -19,9 +19,12 @@
     <div class="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-4">
         @if ($temEvolucao)
             <div>
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                    <i class="ph-bold ph-trend-up text-primary"></i> Evolução histórica nesta categoria
-                </p>
+                <div class="flex items-center justify-between gap-2 mb-3">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                        <i class="ph-bold ph-trend-up text-primary"></i> Evolução histórica nesta categoria
+                    </p>
+                    @include('portal._explicacao_visual', ['no' => $no, 'chave' => 'evolucaoHistorica'])
+                </div>
                 <canvas id="grafico-evolucao-{{ $idSufixo }}" height="90"></canvas>
             </div>
         @endif
@@ -30,9 +33,12 @@
             <div class="grid sm:grid-cols-2 gap-3">
                 @if (! empty($analise['comparativoTurma']))
                     <div class="bg-white border border-slate-200 rounded-lg p-3">
-                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                            <i class="ph-bold ph-users-three text-primary"></i> Você x turma {{ $analise['comparativoTurma']['turma'] }}
-                        </p>
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                                <i class="ph-bold ph-users-three text-primary"></i> Você x turma {{ $analise['comparativoTurma']['turma'] }}
+                            </p>
+                            @include('portal._explicacao_visual', ['no' => $no, 'chave' => 'comparativoTurma'])
+                        </div>
                         <canvas id="grafico-turma-{{ $idSufixo }}" height="90"></canvas>
                         <p class="text-[11px] text-slate-400 mt-2">Média de {{ $analise['comparativoTurma']['avaliacoesComparadas'] }} avaliação(ões) comparável(eis)</p>
                     </div>
@@ -44,9 +50,12 @@
                         $dificilPct = $analise['curvaDificuldade']['dificil']['percentual'] ?? null;
                     @endphp
                     <div class="bg-white border border-slate-200 rounded-lg p-3">
-                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                            <i class="ph-bold ph-gauge text-primary"></i> Dificuldade pedagógica
-                        </p>
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                                <i class="ph-bold ph-gauge text-primary"></i> Dificuldade pedagógica
+                            </p>
+                            @include('portal._explicacao_visual', ['no' => $no, 'chave' => 'curvaDificuldade'])
+                        </div>
                         <canvas id="grafico-dificuldade-{{ $idSufixo }}" height="90"></canvas>
                         @if ($facilPct !== null && $dificilPct !== null && $facilPct < $dificilPct)
                             <p class="text-[11px] text-amber-600 mt-2 flex items-center gap-1">
@@ -58,36 +67,48 @@
 
                 @if (! empty($analise['dispersaoTri']))
                     <div class="bg-white border border-slate-200 rounded-lg p-3">
-                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                            <i class="ph-bold ph-chart-scatter text-primary"></i> Dificuldade (TRI) x acerto
-                        </p>
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                                <i class="ph-bold ph-chart-scatter text-primary"></i> Dificuldade (TRI) x acerto
+                            </p>
+                            @include('portal._explicacao_visual', ['no' => $no, 'chave' => 'dispersaoTri'])
+                        </div>
                         <canvas id="grafico-tri-{{ $idSufixo }}" height="90"></canvas>
                     </div>
                 @endif
 
                 @if (! empty($analise['coberturaHabilidade']))
                     <div class="bg-white border border-slate-200 rounded-lg p-3">
-                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                            <i class="ph-bold ph-target text-primary"></i> Habilidades a reforçar
-                        </p>
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                                <i class="ph-bold ph-target text-primary"></i> Habilidades a reforçar
+                            </p>
+                            @include('portal._explicacao_visual', ['no' => $no, 'chave' => 'coberturaHabilidade'])
+                        </div>
                         <canvas id="grafico-habilidade-{{ $idSufixo }}" height="{{ max(90, count($analise['coberturaHabilidade']) * 24) }}"></canvas>
                     </div>
                 @endif
 
                 @if (! empty($analise['bloom']))
                     <div class="bg-white border border-slate-200 rounded-lg p-3">
-                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                            <i class="ph-bold ph-brain text-primary"></i> Nível de Bloom
-                        </p>
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                                <i class="ph-bold ph-brain text-primary"></i> Nível de Bloom
+                            </p>
+                            @include('portal._explicacao_visual', ['no' => $no, 'chave' => 'bloom'])
+                        </div>
                         <canvas id="grafico-bloom-{{ $idSufixo }}" height="110"></canvas>
                     </div>
                 @endif
 
                 @if (! empty($analise['miller']))
                     <div class="bg-white border border-slate-200 rounded-lg p-3">
-                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                            <i class="ph-bold ph-stethoscope text-primary"></i> Nível de Miller
-                        </p>
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                                <i class="ph-bold ph-stethoscope text-primary"></i> Nível de Miller
+                            </p>
+                            @include('portal._explicacao_visual', ['no' => $no, 'chave' => 'miller'])
+                        </div>
                         <canvas id="grafico-miller-{{ $idSufixo }}" height="110"></canvas>
                     </div>
                 @endif
@@ -96,9 +117,12 @@
 
         @if (! empty($analise['divergentes']))
             <div class="bg-white border border-slate-200 rounded-lg p-3">
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                    <i class="ph-bold ph-warning-circle text-primary"></i> Temas onde você mais diverge da turma
-                </p>
+                <div class="flex items-center justify-between gap-2 mb-2">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                        <i class="ph-bold ph-warning-circle text-primary"></i> Temas onde você mais diverge da turma
+                    </p>
+                    @include('portal._explicacao_visual', ['no' => $no, 'chave' => 'divergentes'])
+                </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead class="bg-slate-50 text-slate-500 text-left">

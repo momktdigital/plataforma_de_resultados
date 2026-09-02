@@ -9,6 +9,7 @@ use App\Models\Configuracao;
 use App\Models\VerificacaoEmail;
 use App\Services\Portal\AnaliseConsolidadaService;
 use App\Services\Portal\CaptchaVerifier;
+use App\Services\Portal\ExplicacaoVisualService;
 use App\Services\Portal\InsightService;
 use App\Services\Portal\RateLimit2faService;
 use App\Services\Portal\RelatorioAlunoService;
@@ -225,6 +226,7 @@ class PortalController extends Controller
         RelatorioAlunoService $relatorioService,
         AnaliseConsolidadaService $analiseService,
         InsightService $insightService,
+        ExplicacaoVisualService $explicacaoService,
     ): View|RedirectResponse {
         $aluno = $this->alunoAutenticado();
 
@@ -232,7 +234,7 @@ class PortalController extends Controller
             return redirect()->route('portal.consulta');
         }
 
-        return $this->renderizarResultados($aluno, $consultaService, $relatorioService, $analiseService, $insightService, $request);
+        return $this->renderizarResultados($aluno, $consultaService, $relatorioService, $analiseService, $insightService, $explicacaoService, $request);
     }
 
     /** Detalhe de uma única avaliacao, aberto a partir da tela de Resultados. */
@@ -322,7 +324,7 @@ class PortalController extends Controller
      * mostra só o período letivo mais recente (`''` na query string =
      * "Todos", igual ao filtro equivalente no admin).
      */
-    private function renderizarResultados(Aluno $aluno, ResultadoConsultaService $consultaService, RelatorioAlunoService $relatorioService, AnaliseConsolidadaService $analiseService, InsightService $insightService, Request $request): View
+    private function renderizarResultados(Aluno $aluno, ResultadoConsultaService $consultaService, RelatorioAlunoService $relatorioService, AnaliseConsolidadaService $analiseService, InsightService $insightService, ExplicacaoVisualService $explicacaoService, Request $request): View
     {
         $todos = $consultaService->buscarPorAluno($aluno);
 
@@ -369,6 +371,7 @@ class PortalController extends Controller
             $evolucaoPorCategoriaPorId,
             $relatorioService,
             $analiseService,
+            $explicacaoService,
             $temAnaliseNaArvore,
         );
 
@@ -405,6 +408,7 @@ class PortalController extends Controller
         array $evolucaoPorCategoriaPorId,
         RelatorioAlunoService $relatorioService,
         AnaliseConsolidadaService $analiseService,
+        ExplicacaoVisualService $explicacaoService,
         bool &$temAlgumaAnalise,
     ): array {
         foreach ($nos as &$no) {
@@ -421,6 +425,8 @@ class PortalController extends Controller
                 'divergentes' => $analiseService->questoesDivergentesDaTurma($aluno, $avaliacaoCodigos),
             ];
 
+            $no['explicacoes'] = $explicacaoService->gerar($no['analise']);
+
             if (! $temAlgumaAnalise && collect($no['analise'])->contains(fn ($v) => ! empty($v))) {
                 $temAlgumaAnalise = true;
             }
@@ -432,6 +438,7 @@ class PortalController extends Controller
                     $evolucaoPorCategoriaPorId,
                     $relatorioService,
                     $analiseService,
+                    $explicacaoService,
                     $temAlgumaAnalise,
                 );
             }

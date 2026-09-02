@@ -194,6 +194,25 @@ function portalRedimensionarGraficos(conteudo) {
     });
 }
 
+// Botão "lâmpada" de cada gráfico (_explicacao_visual.blade.php) — um único
+// listener delegado no documento, em vez de um por botão, já que esse
+// parcial se repete várias vezes na página (um por painel x categoria).
+document.addEventListener('click', function (evento) {
+    const toggle = evento.target.closest('.explicacao-toggle');
+    if (toggle) {
+        const conteudo = toggle.nextElementSibling;
+        const estavaAberto = !conteudo.hidden;
+        document.querySelectorAll('.explicacao-conteudo').forEach(function (c) { c.hidden = true; });
+        conteudo.hidden = estavaAberto;
+        evento.stopPropagation();
+        return;
+    }
+
+    if (!evento.target.closest('.explicacao-conteudo')) {
+        document.querySelectorAll('.explicacao-conteudo').forEach(function (c) { c.hidden = true; });
+    }
+});
+
 function portalAplicarFiltro() {
     const inicio = document.getElementById('filtro-data-inicio').value;
     const fim = document.getElementById('filtro-data-fim').value;

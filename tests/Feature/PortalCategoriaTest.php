@@ -384,6 +384,28 @@ class PortalCategoriaTest extends TestCase
         $response->assertSee('Anamnese');
     }
 
+    public function test_cada_painel_de_analise_tem_botao_de_explicacao_com_leitura_pessoal(): void
+    {
+        $aluno = $this->aluno();
+        $categoria = Categoria::create(['nome' => 'Categoria Única']);
+        $avaliacao = Avaliacao::create(['nome' => 'Prova única', 'categoria_id' => $categoria->id, 'data_avaliacao' => '2026-03-01']);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A', 'habilidade' => 'Anamnese']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => $aluno->ra, 'periodo' => '', 'questao_numero' => 1, 'resposta' => 'A']);
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+
+        $response = $this->followingRedirects()->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
+
+        $response->assertOk();
+        // Um botão "explicacao-toggle" por painel renderizado (aqui só
+        // "Habilidades a reforçar", já que só 1 avaliação/1 questão) — o
+        // clique/toggle em si é comportamento de JS, testado via Playwright
+        // manualmente; aqui só confirma que o botão e o texto de apoio existem.
+        $response->assertSee('explicacao-toggle', false);
+        $response->assertSee('ph-lightbulb', false);
+        $response->assertSee('Mostra seu percentual de acerto em cada habilidade avaliada nesta categoria');
+        $response->assertSee('única habilidade avaliada nesta categoria foi &quot;Anamnese&quot;', false);
+    }
+
     public function test_sair_encerra_a_sessao_dos_resultados(): void
     {
         $aluno = $this->aluno();
