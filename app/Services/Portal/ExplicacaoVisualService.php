@@ -106,12 +106,34 @@ class ExplicacaoVisualService
 
         $mediaAcertos = round(array_sum(array_column($acertos, 'dificuldade_tri')) / count($acertos), 2);
         $mediaErros = round(array_sum(array_column($erros, 'dificuldade_tri')) / count($erros), 2);
+        $diferenca = round($mediaErros - $mediaAcertos, 2);
 
-        $pessoal = $mediaErros > $mediaAcertos
-            ? "Suas questões corretas tiveram dificuldade estatística média de {$mediaAcertos}, contra {$mediaErros} nas erradas — como esperado, você errou mais nas questões estatisticamente mais difíceis."
-            : "Suas questões corretas tiveram dificuldade estatística média de {$mediaAcertos}, contra {$mediaErros} nas erradas — um padrão pouco comum, vale olhar com atenção quais questões você errou.";
+        // "Como esperado" só quando a diferença entre as médias é grande o
+        // bastante pra sustentar a afirmação — uma diferença de poucos
+        // centésimos na escala TRI (tipicamente -2 a 2) não é um padrão,
+        // é ruído. Abaixo do limiar, é mais honesto dizer que a diferença
+        // não é conclusiva do que forçar uma leitura "como esperado".
+        $limiarRelevante = 0.15;
 
-        return ['generico' => $generico, 'pessoal' => $pessoal];
+        $fraseMedia = match (true) {
+            $diferenca >= $limiarRelevante => "Suas questões corretas tiveram dificuldade estatística média de {$mediaAcertos}, contra {$mediaErros} nas erradas — como esperado, você errou mais nas questões estatisticamente mais difíceis.",
+            $diferenca <= -$limiarRelevante => "Suas questões corretas tiveram dificuldade estatística média de {$mediaAcertos}, contra {$mediaErros} nas erradas — um padrão pouco comum (você errou mais nas mais fáceis), vale olhar com atenção quais questões você errou.",
+            default => "Suas questões corretas tiveram dificuldade estatística média de {$mediaAcertos} e as erradas {$mediaErros} — uma diferença pequena, que sozinha não é suficiente pra afirmar um padrão claro de erro por dificuldade.",
+        };
+
+        // Mesmo quando a média bate com o esperado, erros isolados em
+        // questões mais fáceis que a própria média de acerto do aluno são
+        // um sinal à parte (lacuna pontual, não "prova difícil") — o
+        // benchmark é a média de acerto DELE, não um valor fixo, porque a
+        // escala TRI varia de avaliação pra avaliação.
+        $errosAbaixoDaMediaDeAcerto = array_values(array_filter($erros, fn ($p) => $p['dificuldade_tri'] < $mediaAcertos));
+
+        if (! empty($errosAbaixoDaMediaDeAcerto)) {
+            $qtd = count($errosAbaixoDaMediaDeAcerto);
+            $fraseMedia .= " Atenção: {$qtd} questão(ões) errada(s) tinham dificuldade abaixo da sua própria média de acerto ({$mediaAcertos}) — ou seja, mais fáceis do que o padrão que você costuma acertar, o que vale revisar por tema específico.";
+        }
+
+        return ['generico' => $generico, 'pessoal' => $fraseMedia];
     }
 
     /** @param  array<string, float>  $habilidades  já ordenado do pior pro melhor
@@ -124,12 +146,34 @@ class ExplicacaoVisualService
             return ['generico' => $generico, 'pessoal' => null];
         }
 
-        $pior = array_key_first($habilidades);
-        $melhor = array_key_last($habilidades);
+        if (count($habilidades) === 1) {
+            $unica = array_key_first($habilidades);
 
-        $pessoal = $pior === $melhor
-            ? "Sua única habilidade avaliada nesta categoria foi \"{$pior}\", com {$habilidades[$pior]}% de acerto."
-            : "Sua habilidade com menor aproveitamento é \"{$pior}\" ({$habilidades[$pior]}%); a de maior domínio é \"{$melhor}\" ({$habilidades[$melhor]}%).";
+            return ['generico' => $generico, 'pessoal' => "Sua única habilidade avaliada nesta categoria foi \"{$unica}\", com {$habilidades[$unica]}% de acerto."];
+        }
+
+        $piorValor = min($habilidades);
+        $melhorValor = max($habilidades);
+
+        // array_key_first/array_key_last citavam só UMA habilidade mesmo
+        // quando várias empatavam no mesmo valor (ex.: várias a 0%) — o
+        // aluno lia "sua pior é X" quando na verdade eram X, Y e Z todas
+        // zeradas. Lista todas as que empatam no pior valor (a lista de
+        // melhores raramente empata em 100%, então mantém só uma citada).
+        $piores = array_keys(array_filter($habilidades, fn ($v) => $v === $piorValor));
+        $melhor = array_search($melhorValor, $habilidades, true);
+
+        if ($piorValor === $melhorValor) {
+            return ['generico' => $generico, 'pessoal' => 'Todas as suas '.count($habilidades)." habilidades avaliadas nesta categoria tiveram o mesmo aproveitamento: {$piorValor}%."];
+        }
+
+        if (count($piores) === 1) {
+            $pessoal = "Sua habilidade com menor aproveitamento é \"{$piores[0]}\" ({$piorValor}%); a de maior domínio é \"{$melhor}\" ({$melhorValor}%).";
+        } else {
+            $nomes = array_map(fn ($h) => "\"{$h}\"", array_slice($piores, 0, 3));
+            $listaPiores = implode(', ', $nomes).(count($piores) > 3 ? ' e outras' : '');
+            $pessoal = 'Você teve o menor aproveitamento ('.$piorValor.'%) em '.count($piores)." habilidades desta categoria: {$listaPiores}. A de maior domínio é \"{$melhor}\" ({$melhorValor}%).";
+        }
 
         return ['generico' => $generico, 'pessoal' => $pessoal];
     }
@@ -158,7 +202,7 @@ class ExplicacaoVisualService
         return ['generico' => $generico, 'pessoal' => $pessoal];
     }
 
-    /** @param  array<int, array{area: string, tema: string, ocorrencias: int, taxaErroTurmaMedia: float}>  $lista
+    /** @param  array<int, array{area: string, tema: string, ocorrencias: int, errosTurmaMedia: float}>  $lista
      * @return array{generico: string, pessoal: ?string} */
     private function divergentes(array $lista): array
     {
@@ -169,7 +213,7 @@ class ExplicacaoVisualService
         }
 
         $top = $lista[0];
-        $pessoal = "O tema onde isso mais aconteceu foi \"{$top['tema']}\" (área {$top['area']}), em {$top['ocorrencias']} questão(ões) — a turma errou essa questão só {$top['taxaErroTurmaMedia']}% das vezes, bem menos que você.";
+        $pessoal = "O tema onde isso mais aconteceu foi \"{$top['tema']}\" (área {$top['area']}), em {$top['ocorrencias']} questão(ões) — em média, só {$top['errosTurmaMedia']} pessoa(s) da turma erraram essas mesmas questões, bem menos que você.";
 
         return ['generico' => $generico, 'pessoal' => $pessoal];
     }

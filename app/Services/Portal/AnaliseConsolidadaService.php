@@ -127,7 +127,7 @@ class AnaliseConsolidadaService
      * ocorrências.
      *
      * @param  array<int, int>  $avaliacaoCodigos
-     * @return array<int, array{area: string, tema: string, ocorrencias: int, taxaErroTurmaMedia: float}>
+     * @return array<int, array{area: string, tema: string, ocorrencias: int, errosTurmaMedia: float}>
      */
     public function questoesDivergentesDaTurma(Aluno $aluno, array $avaliacaoCodigos, float $limiarTurmaAcerto = 60.0, int $limite = 8): array
     {
@@ -193,23 +193,23 @@ class AnaliseConsolidadaService
                 continue;
             }
 
+            // Nº absoluto de respondentes que erraram a questão (não %): a
+            // coluna ao lado já é "vezes que VOCÊ errou" (uma contagem), e
+            // misturar contagem com taxa percentual obriga o aluno a
+            // converter um dos dois números de cabeça pra comparar.
+            $errosTurma = $taxa !== null ? max(0, (int) $taxa->total - (int) $taxa->acertos) : 0;
+
             $chave = "{$resposta->area}|{$resposta->tema}";
-            $acumulado[$chave] ??= ['area' => $resposta->area, 'tema' => $resposta->tema, 'ocorrencias' => 0, 'somaTaxaTurma' => 0.0];
+            $acumulado[$chave] ??= ['area' => $resposta->area, 'tema' => $resposta->tema, 'ocorrencias' => 0, 'somaErrosTurma' => 0];
             $acumulado[$chave]['ocorrencias']++;
-            $acumulado[$chave]['somaTaxaTurma'] += $taxaAcertoTurma;
+            $acumulado[$chave]['somaErrosTurma'] += $errosTurma;
         }
 
-        // Exposto como taxa de ERRO da turma (não de acerto): a coluna ao
-        // lado já é "vezes que VOCÊ errou", então comparar erro com erro é
-        // mais direto de ler que comparar erro (seu) com acerto (da turma)
-        // — o aluno não precisa inverter um dos dois números de cabeça pra
-        // comparar. 100 - média é equivalente a média dos (100 - taxa) de
-        // cada ocorrência, já que a média é uma operação linear.
         $resultado = array_map(fn ($a) => [
             'area' => $a['area'],
             'tema' => $a['tema'],
             'ocorrencias' => $a['ocorrencias'],
-            'taxaErroTurmaMedia' => round(100 - ($a['somaTaxaTurma'] / $a['ocorrencias']), 1),
+            'errosTurmaMedia' => round($a['somaErrosTurma'] / $a['ocorrencias'], 1),
         ], array_values($acumulado));
 
         usort($resultado, fn ($a, $b) => $b['ocorrencias'] <=> $a['ocorrencias']);

@@ -166,6 +166,39 @@ class ExplicacaoVisualServiceTest extends TestCase
         $this->assertStringContainsString('como esperado', $pessoal);
     }
 
+    public function test_dispersao_tri_diferenca_pequena_nao_afirma_como_esperado(): void
+    {
+        $analise = $this->analiseVazia();
+        $analise['dispersaoTri'] = [
+            ['dificuldade_tri' => 0.5, 'acertou' => true],
+            ['dificuldade_tri' => 0.5, 'acertou' => true],
+            ['dificuldade_tri' => 0.55, 'acertou' => false],
+            ['dificuldade_tri' => 0.55, 'acertou' => false],
+        ];
+
+        $pessoal = $this->service->gerar($analise)['dispersaoTri']['pessoal'];
+
+        $this->assertStringNotContainsString('como esperado', $pessoal);
+        $this->assertStringContainsString('diferença pequena', $pessoal);
+    }
+
+    public function test_dispersao_tri_flags_erro_mais_facil_que_a_media_de_acerto(): void
+    {
+        $analise = $this->analiseVazia();
+        $analise['dispersaoTri'] = [
+            ['dificuldade_tri' => 0.3, 'acertou' => true],
+            ['dificuldade_tri' => 0.4, 'acertou' => true],
+            ['dificuldade_tri' => 0.5, 'acertou' => true],
+            ['dificuldade_tri' => 0.1, 'acertou' => false],
+            ['dificuldade_tri' => 0.6, 'acertou' => false],
+        ];
+
+        $pessoal = $this->service->gerar($analise)['dispersaoTri']['pessoal'];
+
+        $this->assertStringContainsString('Atenção', $pessoal);
+        $this->assertStringContainsString('1 questão', $pessoal);
+    }
+
     public function test_cobertura_habilidade_vazia_nao_tem_leitura_pessoal(): void
     {
         $entrada = $this->service->gerar($this->analiseVazia())['coberturaHabilidade'];
@@ -193,6 +226,30 @@ class ExplicacaoVisualServiceTest extends TestCase
 
         $this->assertStringContainsString('Anamnese', $pessoal);
         $this->assertStringContainsString('Exame físico', $pessoal);
+    }
+
+    public function test_cobertura_habilidade_lista_todas_as_habilidades_empatadas_no_pior_valor(): void
+    {
+        $analise = $this->analiseVazia();
+        $analise['coberturaHabilidade'] = ['Anamnese' => 0.0, 'Comunicação' => 0.0, 'Exame físico' => 90.0];
+
+        $pessoal = $this->service->gerar($analise)['coberturaHabilidade']['pessoal'];
+
+        $this->assertStringContainsString('2 habilidades', $pessoal);
+        $this->assertStringContainsString('Anamnese', $pessoal);
+        $this->assertStringContainsString('Comunicação', $pessoal);
+        $this->assertStringContainsString('Exame físico', $pessoal);
+    }
+
+    public function test_cobertura_habilidade_todas_com_mesmo_aproveitamento(): void
+    {
+        $analise = $this->analiseVazia();
+        $analise['coberturaHabilidade'] = ['Anamnese' => 50.0, 'Exame físico' => 50.0];
+
+        $pessoal = $this->service->gerar($analise)['coberturaHabilidade']['pessoal'];
+
+        $this->assertStringContainsString('mesmo aproveitamento', $pessoal);
+        $this->assertStringContainsString('50', $pessoal);
     }
 
     public function test_bloom_e_miller_tem_explicacoes_genericas_diferentes(): void
@@ -226,7 +283,7 @@ class ExplicacaoVisualServiceTest extends TestCase
     {
         $analise = $this->analiseVazia();
         $analise['divergentes'] = [
-            ['area' => 'Clínica Médica', 'tema' => 'Cardiologia', 'ocorrencias' => 4, 'taxaErroTurmaMedia' => 20.0],
+            ['area' => 'Clínica Médica', 'tema' => 'Cardiologia', 'ocorrencias' => 4, 'errosTurmaMedia' => 2.0],
         ];
 
         $pessoal = $this->service->gerar($analise)['divergentes']['pessoal'];

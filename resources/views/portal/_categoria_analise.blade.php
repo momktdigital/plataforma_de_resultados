@@ -126,7 +126,7 @@
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead class="bg-slate-50 text-slate-500 text-left">
-                            <tr><th class="px-3 py-2">Área</th><th class="px-3 py-2">Tema</th><th class="px-3 py-2">Vezes que errou</th><th class="px-3 py-2">Média de erro da turma</th></tr>
+                            <tr><th class="px-3 py-2">Área</th><th class="px-3 py-2">Tema</th><th class="px-3 py-2">Vezes que errou</th><th class="px-3 py-2">Média de erros da turma</th></tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             @foreach ($analise['divergentes'] as $d)
@@ -134,7 +134,7 @@
                                     <td class="px-3 py-2">{{ $d['area'] }}</td>
                                     <td class="px-3 py-2">{{ $d['tema'] }}</td>
                                     <td class="px-3 py-2 font-bold text-red-600">{{ $d['ocorrencias'] }}</td>
-                                    <td class="px-3 py-2">{{ $d['taxaErroTurmaMedia'] }}%</td>
+                                    <td class="px-3 py-2">{{ $d['errosTurmaMedia'] }}</td>
                                 </tr>
                             @endforeach
                         </tbody>
@@ -236,7 +236,24 @@
                 labels: {{ Js::from(array_keys($analise['coberturaHabilidade'])) }},
                 datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($analise['coberturaHabilidade'])) }}, backgroundColor: '#00b48d', borderRadius: 4, maxBarThickness: 18 }],
             },
-            options: { indexAxis: 'y', scales: { x: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
+            options: {
+                indexAxis: 'y',
+                scales: {
+                    x: { beginAtZero: true, max: 100 },
+                    // Nomes de habilidade podem ser longos (ex.: "E3 —
+                    // Avaliação e Julgamento Ético-Profissional") — sem
+                    // truncar, o Chart.js não quebra a linha e o rótulo
+                    // vaza pra fora do card, cortado pelo overflow. O
+                    // texto completo continua acessível: passa inteiro em
+                    // `labels` (só o tick exibido é encurtado), então o
+                    // tooltip ao passar o mouse mostra o nome completo.
+                    y: { ticks: { autoSkip: false, callback: function (valor) {
+                        const rotulo = this.getLabelForValue(valor);
+                        return rotulo.length > 26 ? rotulo.slice(0, 25) + '…' : rotulo;
+                    } } },
+                },
+                plugins: { legend: { display: false } },
+            },
         });
         @endif
 
