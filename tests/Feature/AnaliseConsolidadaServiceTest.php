@@ -101,4 +101,44 @@ class AnaliseConsolidadaServiceTest extends TestCase
         $this->assertSame(87.5, $resultado[1]['percentualTurma']);
         $this->assertSame(37.5, $resultado[1]['diferenca']);
     }
+
+    public function test_areas_divergentes_da_turma_ignora_diferenca_pequena_por_padrao(): void
+    {
+        $aluno = $this->aluno();
+        $avaliacao = Avaliacao::create(['nome' => 'Prova']);
+        for ($numero = 1; $numero <= 4; $numero++) {
+            Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => $numero, 'gabarito' => 'A', 'area' => 'Clínica Médica']);
+        }
+
+        // Aluno acerta 3 das 4 (75%). 4 colegas: 3 gabaritam tudo, 1 acerta
+        // só 1 — turma (incluindo o aluno) fecha em 16/20 = 80%, 5 pontos
+        // acima do aluno. Diferença pequena (< 10 pontos), não deve aparecer
+        // na lista por padrão, só quando o limiar é reduzido explicitamente.
+        $responder = function (Aluno $pessoa, int $corretos) use ($avaliacao) {
+            for ($numero = 1; $numero <= 4; $numero++) {
+                Resposta::create([
+                    'avaliacao_codigo' => $avaliacao->codigo, 'ra' => $pessoa->ra, 'periodo' => '',
+                    'questao_numero' => $numero, 'resposta' => $numero <= $corretos ? 'A' : 'X',
+                ]);
+            }
+        };
+
+        $responder($aluno, 3);
+        $responder(Aluno::create(['ra' => '2026002', 'cpf' => null, 'data_nascimento' => '2000-01-01', 'nome' => 'Colega 1']), 4);
+        $responder(Aluno::create(['ra' => '2026003', 'cpf' => null, 'data_nascimento' => '2000-01-01', 'nome' => 'Colega 2']), 4);
+        $responder(Aluno::create(['ra' => '2026004', 'cpf' => null, 'data_nascimento' => '2000-01-01', 'nome' => 'Colega 3']), 4);
+        $responder(Aluno::create(['ra' => '2026005', 'cpf' => null, 'data_nascimento' => '2000-01-01', 'nome' => 'Colega 4']), 1);
+
+        $service = app(AnaliseConsolidadaService::class);
+
+        $comLimiarPadrao = $service->areasDivergentesDaTurma($aluno, [$avaliacao->codigo]);
+        $this->assertSame([], $comLimiarPadrao);
+
+        $comLimiarReduzido = $service->areasDivergentesDaTurma($aluno, [$avaliacao->codigo], diferencaMinima: 1.0);
+        $this->assertCount(1, $comLimiarReduzido);
+        $this->assertSame('Clínica Médica', $comLimiarReduzido[0]['area']);
+        $this->assertSame(75.0, $comLimiarReduzido[0]['percentualAluno']);
+        $this->assertSame(80.0, $comLimiarReduzido[0]['percentualTurma']);
+        $this->assertSame(5.0, $comLimiarReduzido[0]['diferenca']);
+    }
 }

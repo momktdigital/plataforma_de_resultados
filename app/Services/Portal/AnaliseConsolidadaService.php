@@ -122,16 +122,18 @@ class AnaliseConsolidadaService
      * Áreas onde o aluno mais fica atrás da turma: % de acerto do aluno por
      * área (somando todas as avaliações do período) comparado ao % médio de
      * acerto da turma inteira na MESMA área — só entram áreas onde o aluno
-     * fica abaixo da turma, ordenadas pela maior diferença primeiro. Trocado
-     * de "por tema" pra "por área" porque tema é granular demais pra virar
-     * um sinal acionável (a lista virava uma dúzia de linhas de 1 ocorrência
-     * cada); área generaliza o suficiente pra apontar "onde estudar" sem
-     * perder a comparação direta aluno×turma.
+     * fica pelo menos $diferencaMinima pontos abaixo da turma (uma diferença
+     * de 1-2 pontos é ruído de amostra pequena, não divergência real),
+     * ordenadas pela maior diferença primeiro. Trocado de "por tema" pra
+     * "por área" porque tema é granular demais pra virar um sinal acionável
+     * (a lista virava uma dúzia de linhas de 1 ocorrência cada); área
+     * generaliza o suficiente pra apontar "onde estudar" sem perder a
+     * comparação direta aluno×turma.
      *
      * @param  array<int, int>  $avaliacaoCodigos
      * @return array<int, array{area: string, percentualAluno: float, percentualTurma: float, diferenca: float}>
      */
-    public function areasDivergentesDaTurma(Aluno $aluno, array $avaliacaoCodigos, int $limite = 8): array
+    public function areasDivergentesDaTurma(Aluno $aluno, array $avaliacaoCodigos, float $diferencaMinima = 10.0, int $limite = 8): array
     {
         if (empty($avaliacaoCodigos)) {
             return [];
@@ -154,8 +156,9 @@ class AnaliseConsolidadaService
 
             $percentualAluno = round((int) $linhaAluno->acertos / (int) $linhaAluno->total * 100, 1);
             $percentualTurma = round((int) $linhaTurma->acertos / (int) $linhaTurma->total * 100, 1);
+            $diferenca = round($percentualTurma - $percentualAluno, 1);
 
-            if ($percentualAluno >= $percentualTurma) {
+            if ($diferenca < $diferencaMinima) {
                 continue;
             }
 
@@ -163,7 +166,7 @@ class AnaliseConsolidadaService
                 'area' => $area,
                 'percentualAluno' => $percentualAluno,
                 'percentualTurma' => $percentualTurma,
-                'diferenca' => round($percentualTurma - $percentualAluno, 1),
+                'diferenca' => $diferenca,
             ];
         }
 

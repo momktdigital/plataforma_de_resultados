@@ -206,7 +206,7 @@ class ExplicacaoVisualService
      * @return array{generico: string, pessoal: ?string} */
     private function divergentes(array $lista): array
     {
-        $generico = 'Compara seu percentual de acerto em cada área com o percentual médio de acerto da turma na mesma área — só entram áreas onde você fica abaixo da turma, ordenadas pela maior diferença primeiro.';
+        $generico = 'Compara seu percentual de acerto em cada área com o percentual médio de acerto da turma na mesma área — só entram áreas onde você fica pelo menos 10 pontos abaixo da turma (uma diferença menor que essa é ruído, não divergência real), ordenadas pela maior diferença primeiro.';
 
         if (empty($lista)) {
             return ['generico' => $generico, 'pessoal' => null];
