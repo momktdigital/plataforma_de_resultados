@@ -57,35 +57,48 @@ class AnaliseConsolidadaServiceTest extends TestCase
         $this->assertSame(['Anamnese' => 100.0], $resultado);
     }
 
-    public function test_questoes_divergentes_da_turma_so_lista_erro_do_aluno_com_turma_acertando_acima_do_limiar(): void
+    public function test_areas_divergentes_da_turma_so_lista_areas_abaixo_da_turma_ordenadas_pela_maior_diferenca(): void
     {
-        $alunoAvaliado = $this->aluno();
-        $colega = Aluno::create(['ra' => '2026002', 'cpf' => null, 'data_nascimento' => '2000-01-01', 'nome' => 'Colega']);
+        $aluno = $this->aluno();
+        $colegas = collect(range(2, 4))->map(fn ($i) => Aluno::create([
+            'ra' => "202600{$i}", 'cpf' => null, 'data_nascimento' => '2000-01-01', 'nome' => "Colega {$i}",
+        ]));
 
         $avaliacao = Avaliacao::create(['nome' => 'Prova']);
-        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A', 'area' => 'Clínica Médica', 'tema' => 'Cardiologia']);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A', 'area' => 'Clínica Médica']);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 2, 'gabarito' => 'B', 'area' => 'Clínica Médica']);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 3, 'gabarito' => 'C', 'area' => 'Pneumologia']);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 4, 'gabarito' => 'D', 'area' => 'Neurologia']);
 
-        // O aluno avaliado erra; o colega acerta — turma acerta 50% (1 de 2),
-        // abaixo do limiar padrão (60%), então NÃO deve aparecer na lista.
-        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => $alunoAvaliado->ra, 'periodo' => '', 'questao_numero' => 1, 'resposta' => 'X']);
-        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => $colega->ra, 'periodo' => '', 'questao_numero' => 1, 'resposta' => 'X']);
-
-        $semDivergencia = app(AnaliseConsolidadaService::class)->questoesDivergentesDaTurma($alunoAvaliado, [$avaliacao->codigo]);
-        $this->assertSame([], $semDivergencia);
-
-        // Adiciona mais 3 colegas que acertam — turma passa a acertar 3 de 5
-        // (60%), no limiar, aluno avaliado continua errando.
-        foreach (range(3, 5) as $i) {
-            $outroColega = Aluno::create(['ra' => "202600{$i}", 'cpf' => null, 'data_nascimento' => '2000-01-01', 'nome' => "Colega {$i}"]);
-            Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => $outroColega->ra, 'periodo' => '', 'questao_numero' => 1, 'resposta' => 'A']);
+        // Aluno: Clínica Médica 1/2 (50%), Pneumologia 1/1 (100%, na média
+        // da turma), Neurologia 0/1 (0%).
+        foreach ([1 => 'A', 2 => 'X', 3 => 'C', 4 => 'X'] as $numero => $resposta) {
+            Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => $aluno->ra, 'periodo' => '', 'questao_numero' => $numero, 'resposta' => $resposta]);
         }
 
-        $comDivergencia = app(AnaliseConsolidadaService::class)->questoesDivergentesDaTurma($alunoAvaliado, [$avaliacao->codigo]);
+        // Colegas 1 e 2: gabarito certo em tudo. Colega 3: erra só a
+        // Neurologia — turma fica em Clínica Médica 87.5%, Pneumologia
+        // 100% (igual ao aluno) e Neurologia 50%.
+        foreach ($colegas as $i => $colega) {
+            $respostaNeurologia = $i === 2 ? 'X' : 'D';
+            foreach ([1 => 'A', 2 => 'B', 3 => 'C', 4 => $respostaNeurologia] as $numero => $resposta) {
+                Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => $colega->ra, 'periodo' => '', 'questao_numero' => $numero, 'resposta' => $resposta]);
+            }
+        }
 
-        $this->assertCount(1, $comDivergencia);
-        $this->assertSame('Clínica Médica', $comDivergencia[0]['area']);
-        $this->assertSame('Cardiologia', $comDivergencia[0]['tema']);
-        $this->assertSame(1, $comDivergencia[0]['ocorrencias']);
-        $this->assertSame(2.0, $comDivergencia[0]['errosTurmaMedia']);
+        $resultado = app(AnaliseConsolidadaService::class)->areasDivergentesDaTurma($aluno, [$avaliacao->codigo]);
+
+        // Pneumologia fica de fora (aluno empata com a turma, não fica
+        // abaixo). Neurologia (diferença de 50 pontos) vem antes de Clínica
+        // Médica (37.5 pontos) — maior diferença primeiro.
+        $this->assertCount(2, $resultado);
+        $this->assertSame('Neurologia', $resultado[0]['area']);
+        $this->assertSame(0.0, $resultado[0]['percentualAluno']);
+        $this->assertSame(50.0, $resultado[0]['percentualTurma']);
+        $this->assertSame(50.0, $resultado[0]['diferenca']);
+        $this->assertSame('Clínica Médica', $resultado[1]['area']);
+        $this->assertSame(50.0, $resultado[1]['percentualAluno']);
+        $this->assertSame(87.5, $resultado[1]['percentualTurma']);
+        $this->assertSame(37.5, $resultado[1]['diferenca']);
     }
 }

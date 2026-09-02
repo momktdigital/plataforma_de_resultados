@@ -391,7 +391,7 @@ class PortalController extends Controller
     /**
      * Anexa, em CADA nó da árvore de categorias (montarArvore()), a evolução
      * histórica e a análise consolidada (dificuldade, TRI, habilidade, Bloom/
-     * Miller, comparativo com turma, questões divergentes) escopadas só às
+     * Miller, comparativo com turma, áreas divergentes) escopadas só às
      * avaliações DAQUELE nó — mesmos serviços que antes calculavam isso pro
      * período inteiro (misturando categorias diferentes na mesma seção da
      * tela). Um nó "pasta" (só com subcategorias, sem avaliação própria) não
@@ -422,7 +422,7 @@ class PortalController extends Controller
                 'coberturaHabilidade' => $analiseService->coberturaHabilidade($aluno, $avaliacaoCodigos),
                 'bloom' => $analiseService->desempenhoBloomConsolidado($aluno, $avaliacaoCodigos),
                 'miller' => $analiseService->desempenhoMillerConsolidado($aluno, $avaliacaoCodigos),
-                'divergentes' => $analiseService->questoesDivergentesDaTurma($aluno, $avaliacaoCodigos),
+                'divergentes' => $analiseService->areasDivergentesDaTurma($aluno, $avaliacaoCodigos),
             ];
 
             $no['explicacoes'] = $explicacaoService->gerar($no['analise']);

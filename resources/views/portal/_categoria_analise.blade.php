@@ -119,22 +119,21 @@
             <div class="bg-white border border-slate-200 rounded-lg p-3">
                 <div class="flex items-center justify-between gap-2 mb-2">
                     <p class="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
-                        <i class="ph-bold ph-warning-circle text-primary"></i> Temas onde você mais diverge da turma
+                        <i class="ph-bold ph-warning-circle text-primary"></i> Áreas onde você mais diverge da turma
                     </p>
                     @include('portal._explicacao_visual', ['no' => $no, 'chave' => 'divergentes'])
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead class="bg-slate-50 text-slate-500 text-left">
-                            <tr><th class="px-3 py-2">Área</th><th class="px-3 py-2">Tema</th><th class="px-3 py-2">Vezes que errou</th><th class="px-3 py-2">Média de erros da turma</th></tr>
+                            <tr><th class="px-3 py-2">Área</th><th class="px-3 py-2">% de acerto (Você)</th><th class="px-3 py-2">Percentual médio de acerto (Turma)</th></tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             @foreach ($analise['divergentes'] as $d)
                                 <tr>
                                     <td class="px-3 py-2">{{ $d['area'] }}</td>
-                                    <td class="px-3 py-2">{{ $d['tema'] }}</td>
-                                    <td class="px-3 py-2 font-bold text-red-600">{{ $d['ocorrencias'] }}</td>
-                                    <td class="px-3 py-2">{{ $d['errosTurmaMedia'] }}</td>
+                                    <td class="px-3 py-2 font-bold text-red-600">{{ $d['percentualAluno'] }}%</td>
+                                    <td class="px-3 py-2">{{ $d['percentualTurma'] }}%</td>
                                 </tr>
                             @endforeach
                         </tbody>

@@ -202,18 +202,18 @@ class ExplicacaoVisualService
         return ['generico' => $generico, 'pessoal' => $pessoal];
     }
 
-    /** @param  array<int, array{area: string, tema: string, ocorrencias: int, errosTurmaMedia: float}>  $lista
+    /** @param  array<int, array{area: string, percentualAluno: float, percentualTurma: float, diferenca: float}>  $lista
      * @return array{generico: string, pessoal: ?string} */
     private function divergentes(array $lista): array
     {
-        $generico = 'Lista temas em que você errou questões que a maioria da turma acertou — isso costuma indicar uma lacuna específica de conteúdo, não só uma prova difícil pra todo mundo.';
+        $generico = 'Compara seu percentual de acerto em cada área com o percentual médio de acerto da turma na mesma área — só entram áreas onde você fica abaixo da turma, ordenadas pela maior diferença primeiro.';
 
         if (empty($lista)) {
             return ['generico' => $generico, 'pessoal' => null];
         }
 
         $top = $lista[0];
-        $pessoal = "O tema onde isso mais aconteceu foi \"{$top['tema']}\" (área {$top['area']}), em {$top['ocorrencias']} questão(ões) — em média, só {$top['errosTurmaMedia']} pessoa(s) da turma erraram essas mesmas questões, bem menos que você.";
+        $pessoal = "A área onde você mais fica atrás da turma é \"{$top['area']}\": você acertou {$top['percentualAluno']}%, contra {$top['percentualTurma']}% de média da turma — {$top['diferenca']} pontos de diferença.";
 
         return ['generico' => $generico, 'pessoal' => $pessoal];
     }

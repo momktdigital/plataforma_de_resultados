@@ -279,18 +279,18 @@ class ExplicacaoVisualServiceTest extends TestCase
         $this->assertNull($entrada['pessoal']);
     }
 
-    public function test_divergentes_cita_o_tema_com_mais_ocorrencias(): void
+    public function test_divergentes_cita_a_area_com_maior_diferenca(): void
     {
         $analise = $this->analiseVazia();
         $analise['divergentes'] = [
-            ['area' => 'Clínica Médica', 'tema' => 'Cardiologia', 'ocorrencias' => 4, 'errosTurmaMedia' => 2.0],
+            ['area' => 'Clínica Médica', 'percentualAluno' => 40.0, 'percentualTurma' => 75.0, 'diferenca' => 35.0],
         ];
 
         $pessoal = $this->service->gerar($analise)['divergentes']['pessoal'];
 
-        $this->assertStringContainsString('Cardiologia', $pessoal);
         $this->assertStringContainsString('Clínica Médica', $pessoal);
-        $this->assertStringContainsString('4', $pessoal);
+        $this->assertStringContainsString('40', $pessoal);
+        $this->assertStringContainsString('75', $pessoal);
     }
 
     /** @return array<string, mixed> */

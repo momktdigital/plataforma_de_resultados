@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Análises que cruzam VÁRIAS avaliações do aluno num mesmo período letivo
- * (dificuldade, habilidades, Bloom/Miller, comparativo com turma, questões
+ * (dificuldade, habilidades, Bloom/Miller, comparativo com turma, áreas
  * mais divergentes) — diferente de RelatorioAlunoService, que sempre parte
  * da Collection de respostas de UMA avaliação já carregada em memória, aqui
  * a base pode somar dezenas de avaliações × questões, então a agregação
@@ -119,100 +119,55 @@ class AnaliseConsolidadaService
     }
 
     /**
-     * Áreas/temas onde o aluno mais diverge da turma: questões que ele
-     * ERROU e que a turma, no agregado, ACERTOU acima de $limiarTurmaAcerto
-     * — sinal de erro conceitual específico, não só "prova difícil pra
-     * todo mundo". Agrupado por área+tema (não por questão isolada, que não
-     * se repete entre avaliações diferentes) e ordenado pela quantidade de
-     * ocorrências.
+     * Áreas onde o aluno mais fica atrás da turma: % de acerto do aluno por
+     * área (somando todas as avaliações do período) comparado ao % médio de
+     * acerto da turma inteira na MESMA área — só entram áreas onde o aluno
+     * fica abaixo da turma, ordenadas pela maior diferença primeiro. Trocado
+     * de "por tema" pra "por área" porque tema é granular demais pra virar
+     * um sinal acionável (a lista virava uma dúzia de linhas de 1 ocorrência
+     * cada); área generaliza o suficiente pra apontar "onde estudar" sem
+     * perder a comparação direta aluno×turma.
      *
      * @param  array<int, int>  $avaliacaoCodigos
-     * @return array<int, array{area: string, tema: string, ocorrencias: int, errosTurmaMedia: float}>
+     * @return array<int, array{area: string, percentualAluno: float, percentualTurma: float, diferenca: float}>
      */
-    public function questoesDivergentesDaTurma(Aluno $aluno, array $avaliacaoCodigos, float $limiarTurmaAcerto = 60.0, int $limite = 8): array
+    public function areasDivergentesDaTurma(Aluno $aluno, array $avaliacaoCodigos, int $limite = 8): array
     {
         if (empty($avaliacaoCodigos)) {
             return [];
         }
 
-        // Passo 1: taxa de acerto da TURMA (todos os respondentes) por
-        // questão — feito uma vez em SQL pra não precisar de N consultas
-        // (uma por avaliação), igual RelatorioAlunoService::comparativoQuestao()
-        // faz pra uma avaliação só.
-        $taxasPorQuestao = DB::table('respostas as r')
-            ->join('questoes as q', function ($join) use ($avaliacaoCodigos) {
-                Anulacao::excluirDistribuidas(
-                    $join->on('q.numero', '=', 'r.questao_numero')
-                        ->on('q.avaliacao_codigo', '=', 'r.avaliacao_codigo')
-                        ->whereIn('q.avaliacao_codigo', $avaliacaoCodigos)
-                        ->whereNull('q.deleted_at')
-                        ->whereNotNull('q.gabarito')->where('q.gabarito', '!=', ''),
-                    'q.anulada_modo',
-                );
-            })
-            ->whereIn('r.avaliacao_codigo', $avaliacaoCodigos)
-            ->groupBy('r.avaliacao_codigo', 'r.questao_numero')
-            ->selectRaw('r.avaliacao_codigo as avaliacao_codigo, r.questao_numero as numero')
-            ->selectRaw('COUNT(*) as total')
-            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
-            ->get()
-            ->keyBy(fn ($l) => "{$l->avaliacao_codigo}:{$l->numero}");
+        $doAluno = $this->mediaPorCampoAgregado($aluno, $avaliacaoCodigos, 'area')
+            ->filter(fn ($l) => (int) $l->total > 0)
+            ->keyBy('campo');
 
-        // Passo 2: respostas DESTE aluno, com área/tema, pra cruzar com as
-        // taxas calculadas acima.
-        $respostasDoAluno = DB::table('respostas as r')
-            ->join('questoes as q', function ($join) use ($avaliacaoCodigos) {
-                $join->on('q.numero', '=', 'r.questao_numero')
-                    ->on('q.avaliacao_codigo', '=', 'r.avaliacao_codigo')
-                    ->whereIn('q.avaliacao_codigo', $avaliacaoCodigos)
-                    ->whereNull('q.deleted_at')
-                    ->whereNotNull('q.gabarito')->where('q.gabarito', '!=', '')
-                    ->whereNotNull('q.area')->where('q.area', '!=', '')
-                    ->whereNotNull('q.tema')->where('q.tema', '!=', '');
-            })
-            ->whereIn('r.avaliacao_codigo', $avaliacaoCodigos)
-            ->where(fn ($q) => $this->porAluno($q, $aluno))
-            ->select('r.avaliacao_codigo', 'r.questao_numero', 'r.resposta', 'q.gabarito', 'q.area', 'q.tema', 'q.anulada_modo')
-            ->get();
+        $daTurma = $this->mediaPorCampoAgregado(null, $avaliacaoCodigos, 'area')
+            ->filter(fn ($l) => (int) $l->total > 0)
+            ->keyBy('campo');
 
-        $acumulado = [];
-        foreach ($respostasDoAluno as $resposta) {
-            if (Anulacao::distribuida($resposta->anulada_modo)) {
-                continue;
-            }
-            if (Anulacao::acertou($resposta->resposta, $resposta->gabarito, $resposta->anulada_modo)) {
+        $resultado = [];
+        foreach ($doAluno as $area => $linhaAluno) {
+            $linhaTurma = $daTurma->get($area);
+            if ($linhaTurma === null) {
                 continue;
             }
 
-            $taxa = $taxasPorQuestao->get("{$resposta->avaliacao_codigo}:{$resposta->questao_numero}");
-            $taxaAcertoTurma = ($taxa !== null && (int) $taxa->total > 0)
-                ? round((int) $taxa->acertos / (int) $taxa->total * 100, 1)
-                : 0.0;
+            $percentualAluno = round((int) $linhaAluno->acertos / (int) $linhaAluno->total * 100, 1);
+            $percentualTurma = round((int) $linhaTurma->acertos / (int) $linhaTurma->total * 100, 1);
 
-            if ($taxaAcertoTurma < $limiarTurmaAcerto) {
+            if ($percentualAluno >= $percentualTurma) {
                 continue;
             }
 
-            // Nº absoluto de respondentes que erraram a questão (não %): a
-            // coluna ao lado já é "vezes que VOCÊ errou" (uma contagem), e
-            // misturar contagem com taxa percentual obriga o aluno a
-            // converter um dos dois números de cabeça pra comparar.
-            $errosTurma = $taxa !== null ? max(0, (int) $taxa->total - (int) $taxa->acertos) : 0;
-
-            $chave = "{$resposta->area}|{$resposta->tema}";
-            $acumulado[$chave] ??= ['area' => $resposta->area, 'tema' => $resposta->tema, 'ocorrencias' => 0, 'somaErrosTurma' => 0];
-            $acumulado[$chave]['ocorrencias']++;
-            $acumulado[$chave]['somaErrosTurma'] += $errosTurma;
+            $resultado[] = [
+                'area' => $area,
+                'percentualAluno' => $percentualAluno,
+                'percentualTurma' => $percentualTurma,
+                'diferenca' => round($percentualTurma - $percentualAluno, 1),
+            ];
         }
 
-        $resultado = array_map(fn ($a) => [
-            'area' => $a['area'],
-            'tema' => $a['tema'],
-            'ocorrencias' => $a['ocorrencias'],
-            'errosTurmaMedia' => round($a['somaErrosTurma'] / $a['ocorrencias'], 1),
-        ], array_values($acumulado));
-
-        usort($resultado, fn ($a, $b) => $b['ocorrencias'] <=> $a['ocorrencias']);
+        usort($resultado, fn ($a, $b) => $b['diferenca'] <=> $a['diferenca']);
 
         return array_slice($resultado, 0, $limite);
     }
@@ -227,22 +182,24 @@ class AnaliseConsolidadaService
     }
 
     /**
-     * Soma acertos/total do aluno, agrupado por um campo direto de
-     * `questoes` (dificuldade_pedagogica, habilidade, bloom_nivel,
-     * miller_nivel), somando todas as avaliações informadas — mesmo padrão
-     * de RelatorioAdminService::mediaPorCampoDireto(), mas filtrando por UM
-     * aluno em vez de por uma avaliação inteira.
+     * Soma acertos/total agrupado por um campo direto de `questoes`
+     * (dificuldade_pedagogica, habilidade, bloom_nivel, miller_nivel, area),
+     * somando todas as avaliações informadas — mesmo padrão de
+     * RelatorioAdminService::mediaPorCampoDireto(). $aluno null soma a TURMA
+     * inteira (todos os respondentes, sem filtrar por um aluno) — usado por
+     * areasDivergentesDaTurma() pra comparar o aluno contra a turma na mesma
+     * agregação, sem duplicar a query.
      *
      * @param  array<int, int>  $avaliacaoCodigos
      * @return Collection<int, object{campo: string, total: int, acertos: int}>
      */
-    private function mediaPorCampoAgregado(Aluno $aluno, array $avaliacaoCodigos, string $campo): Collection
+    private function mediaPorCampoAgregado(?Aluno $aluno, array $avaliacaoCodigos, string $campo): Collection
     {
         if (empty($avaliacaoCodigos)) {
             return collect();
         }
 
-        return DB::table('respostas as r')
+        $query = DB::table('respostas as r')
             ->join('questoes as q', function ($join) use ($avaliacaoCodigos, $campo) {
                 Anulacao::excluirDistribuidas(
                     $join->on('q.numero', '=', 'r.questao_numero')
@@ -254,8 +211,13 @@ class AnaliseConsolidadaService
                     'q.anulada_modo',
                 );
             })
-            ->whereIn('r.avaliacao_codigo', $avaliacaoCodigos)
-            ->where(fn ($q) => $this->porAluno($q, $aluno))
+            ->whereIn('r.avaliacao_codigo', $avaliacaoCodigos);
+
+        if ($aluno !== null) {
+            $query->where(fn ($q) => $this->porAluno($q, $aluno));
+        }
+
+        return $query
             ->groupBy("q.{$campo}")
             ->selectRaw("q.{$campo} as campo")
             ->selectRaw('COUNT(*) as total')
