@@ -2,6 +2,13 @@
     $siteTitle = \App\Models\Configuracao::valor('site_title', 'Resultados DI');
     $siteLogo = \App\Models\Configuracao::valor('site_logo', '');
     $siteLogoDark = \App\Models\Configuracao::valor('site_logo_dark', '');
+    // Fallback só pra este gap específico: quando o admin configurou uma
+    // logo clara mas nunca subiu uma versão pro tema escuro, a logo clara
+    // some (CSS .logo-light{display:none} no tema escuro/alto contraste) e
+    // não sobra nada no lugar — SEM depender de $siteLogo, o ph-exam+texto
+    // já funciona nos dois temas (o filtro de inversão da página cuida do
+    // contraste sozinho), então o fallback não se aplica ali.
+    $siteLogoDarkPadrao = 'uploads/logos/1788356993_logo_dark_0e5723791771.png';
 @endphp
 <!doctype html>
 <html lang="pt-BR">
@@ -35,10 +42,10 @@
             @if ($siteLogo || $siteLogoDark)
                 @if ($siteLogo)
                     <img src="{{ asset('uploads/logos/'.basename($siteLogo)) }}" alt="{{ $siteTitle }}" class="h-8 object-contain logo-light">
-                @endif
-                @if ($siteLogoDark)
-                    <img src="{{ asset('uploads/logos/'.basename($siteLogoDark)) }}" alt="{{ $siteTitle }}"
-                         class="h-8 object-contain logo-dark" @if($siteLogo) style="display:none" @endif>
+                    <img src="{{ asset($siteLogoDark ? 'uploads/logos/'.basename($siteLogoDark) : $siteLogoDarkPadrao) }}" alt="{{ $siteTitle }}"
+                         class="h-8 object-contain logo-dark" style="display:none">
+                @elseif ($siteLogoDark)
+                    <img src="{{ asset('uploads/logos/'.basename($siteLogoDark)) }}" alt="{{ $siteTitle }}" class="h-8 object-contain logo-dark">
                 @endif
             @else
                 <i class="ph-fill ph-exam text-primary text-3xl"></i>
