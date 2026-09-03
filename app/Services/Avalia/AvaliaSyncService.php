@@ -110,23 +110,32 @@ class AvaliaSyncService
      * dados de aluno) e atualiza App\Models\AvaliaAvaliacaoDisponivel — usada
      * pelo botão "Atualizar lista de provas disponíveis" da tela de
      * Integração, para popular o que o admin pode selecionar. Nunca mexe na
-     * coluna `selecionada` de uma prova já conhecida (só some/some não
-     * escolhas do admin ao atualizar a lista).
+     * coluna `selecionada` de uma prova/disciplina já conhecida (só atualiza
+     * nome/curso e adiciona o que for novo).
+     *
+     * Duas passadas: primeiro as provas (pai_id null), depois as disciplinas
+     * (pai_id apontando pra prova) — precisa saber o id real da prova (dado
+     * pelo banco no upsert) antes de gravar as disciplinas que dependem dele.
      */
     public function atualizarCatalogo(string $produto): int
     {
-        $provas = $this->extractor->listarProvasDisponiveis($produto);
+        $linhas = $this->extractor->listarProvasDisponiveis($produto);
 
-        if ($provas->isEmpty()) {
+        if ($linhas->isEmpty()) {
             return 0;
         }
 
+        $provas = $linhas->filter(fn ($l) => ($l->pai_externo ?? null) === null);
+        $disciplinas = $linhas->filter(fn ($l) => ($l->pai_externo ?? null) !== null);
+
         $agora = now();
 
-        $registros = $provas->map(fn ($p) => [
+        $registrosProvas = $provas->map(fn ($p) => [
             'produto' => $produto,
+            'pai_id' => null,
             'id_externo' => (string) $p->id_externo,
             'nome' => $p->nome ?? null,
+            'curso' => null,
             'tipo' => $p->tipo ?? null,
             'data_referencia' => $p->data_referencia ?? null,
             'selecionada' => false,
@@ -134,7 +143,7 @@ class AvaliaSyncService
             'updated_at' => $agora,
         ])->all();
 
-        foreach (array_chunk($registros, self::TAMANHO_LOTE) as $lote) {
+        foreach (array_chunk($registrosProvas, self::TAMANHO_LOTE) as $lote) {
             DB::table('avalia_avaliacoes_disponiveis')->upsert(
                 $lote,
                 ['produto', 'id_externo'],
@@ -144,15 +153,70 @@ class AvaliaSyncService
             );
         }
 
-        return count($registros);
+        $gravadas = count($registrosProvas);
+
+        if ($disciplinas->isNotEmpty()) {
+            $mapaProvas = AvaliaAvaliacaoDisponivel::where('produto', $produto)
+                ->whereNull('pai_id')
+                ->pluck('id', 'id_externo');
+
+            $registrosDisciplinas = $disciplinas
+                ->map(function ($d) use ($produto, $mapaProvas, $agora) {
+                    $paiId = $mapaProvas[(string) $d->pai_externo] ?? null;
+
+                    // A prova-mãe deveria sempre existir (a mesma extração
+                    // devolve os dois níveis juntos) — pular defensivamente
+                    // se algum dia não existir, em vez de quebrar o catálogo
+                    // inteiro por uma disciplina órfã.
+                    if ($paiId === null) {
+                        return null;
+                    }
+
+                    return [
+                        'produto' => $produto,
+                        'pai_id' => $paiId,
+                        'id_externo' => (string) $d->id_externo,
+                        'nome' => $d->nome ?? null,
+                        'curso' => $d->curso ?? null,
+                        'tipo' => null,
+                        'data_referencia' => null,
+                        'selecionada' => false,
+                        'created_at' => $agora,
+                        'updated_at' => $agora,
+                    ];
+                })
+                ->filter()
+                ->values()
+                ->all();
+
+            foreach (array_chunk($registrosDisciplinas, self::TAMANHO_LOTE) as $lote) {
+                DB::table('avalia_avaliacoes_disponiveis')->upsert(
+                    $lote,
+                    ['produto', 'id_externo'],
+                    ['nome', 'curso', 'pai_id', 'updated_at']
+                );
+            }
+
+            $gravadas += count($registrosDisciplinas);
+        }
+
+        return $gravadas;
     }
 
     /**
      * null = sem filtro (sincroniza todas as provas do produto); array = só
-     * as provas com esse id_externo (assessment_id/questionnaire_id). Modo
-     * padrão é 'selecionadas' com nada marcado — ou seja, uma instalação
-     * nova não sincroniza nada até o admin escolher, de propósito (ver
-     * migration de avalia_avaliacoes_disponiveis).
+     * as provas/disciplinas com esse id_externo. Modo padrão é 'selecionadas'
+     * com nada marcado — ou seja, uma instalação nova não sincroniza nada
+     * até o admin escolher, de propósito (ver migration de
+     * avalia_avaliacoes_disponiveis).
+     *
+     * Pro Avalia Pro a seleção real vive sempre na folha (disciplina,
+     * pai_id preenchido) — uma prova pode cobrir dezenas de disciplinas em
+     * cursos diferentes, então marcar só a prova (pai_id null) não diz
+     * "sincronize tudo dela"; a tela marca as disciplinas via JS quando o
+     * admin marca a prova toda. Pro Avalia Online não há folha (um
+     * questionário já é a unidade inteira), então a seleção fica no nível
+     * de topo mesmo.
      *
      * @return array<int, string>|null
      */
@@ -166,6 +230,7 @@ class AvaliaSyncService
 
         return AvaliaAvaliacaoDisponivel::where('produto', $produto)
             ->where('selecionada', true)
+            ->when($produto === 'avalia_pro', fn ($query) => $query->whereNotNull('pai_id'))
             ->pluck('id_externo')
             ->all();
     }

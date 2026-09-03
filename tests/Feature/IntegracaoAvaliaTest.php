@@ -160,6 +160,34 @@ class IntegracaoAvaliaTest extends TestCase
         $this->assertMatchesRegularExpression('/<form method="POST" action="[^"]*integracao-avalia\/selecao"/', $html);
     }
 
+    public function test_tela_mostra_arvore_de_disciplinas_agrupadas_por_curso(): void
+    {
+        $prova = AvaliaAvaliacaoDisponivel::create(['produto' => 'avalia_pro', 'id_externo' => '100', 'nome' => 'SEMI - A1']);
+        AvaliaAvaliacaoDisponivel::create(['produto' => 'avalia_pro', 'pai_id' => $prova->id, 'id_externo' => '100:7', 'nome' => 'Matemática', 'curso' => 'Enfermagem']);
+        AvaliaAvaliacaoDisponivel::create(['produto' => 'avalia_pro', 'pai_id' => $prova->id, 'id_externo' => '100:12', 'nome' => 'Farmacologia', 'curso' => 'Farmácia']);
+
+        $response = $this->actingAs($this->admin(), 'admin')->get('/sistema/integracao-avalia');
+
+        $response->assertOk();
+        $response->assertSee('SEMI - A1');
+        $response->assertSee('Enfermagem');
+        $response->assertSee('Farmácia');
+        $response->assertSee('Matemática');
+        $response->assertSee('Farmacologia');
+    }
+
+    public function test_tela_tem_campo_de_busca_de_provas_por_produto(): void
+    {
+        AvaliaAvaliacaoDisponivel::create(['produto' => 'avalia_pro', 'id_externo' => '1', 'nome' => 'Prova 1']);
+        AvaliaAvaliacaoDisponivel::create(['produto' => 'avalia_online', 'id_externo' => '1', 'nome' => 'Questionário 1']);
+
+        $response = $this->actingAs($this->admin(), 'admin')->get('/sistema/integracao-avalia');
+
+        $response->assertOk();
+        $response->assertSee('id="busca-avalia_pro"', false);
+        $response->assertSee('id="busca-avalia_online"', false);
+    }
+
     public function test_formulario_de_configuracoes_usa_post_com_spoofing_de_put(): void
     {
         // Regressão: <form method="PUT"> não existe em HTML — o navegador

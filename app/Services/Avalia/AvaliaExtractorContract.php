@@ -22,10 +22,12 @@ interface AvaliaExtractorContract
      * `avaliacoes` (uma por disciplina/questionário) + a métrica de nota
      * final em `resultado_metricas`.
      *
-     * $idsPermitidos filtra pela prova/questionário inteiro (assessment_id ou
-     * questionnaire_id — não a chave por disciplina): null = sem filtro
-     * (todas as provas), [] = nenhuma (nada sincroniza), lista = só essas.
-     * Ver App\Services\Avalia\AvaliaSyncService::idsPermitidos().
+     * $idsPermitidos: null = sem filtro (todas as provas); [] = nenhuma
+     * (nada sincroniza); lista = só essas. Pro Avalia Pro a chave é composta
+     * ("{assessment_id}:{subject_sk}" — o mesmo id_externo de uma linha de
+     * disciplina em listarProvasDisponiveis()), porque uma prova pode cobrir
+     * várias disciplinas em cursos diferentes. Pro Avalia Online é só o
+     * questionnaire_id. Ver App\Services\Avalia\AvaliaSyncService::idsPermitidos().
      *
      * @param  array<int, string>|null  $idsPermitidos
      * @return Collection<int, array<string, mixed>>
@@ -44,13 +46,19 @@ interface AvaliaExtractorContract
     public function respostas(string $produto, ?string $desde, ?array $idsPermitidos): Collection;
 
     /**
-     * Lista leve (SELECT DISTINCT nas dimensões, não nas fatos) das
-     * provas/questionários existentes no Avalia — usada para popular
-     * App\Models\AvaliaAvaliacaoDisponivel, não para sincronizar dado de
-     * aluno. Cada linha: id_externo, nome, tipo (nullable), data_referencia
-     * (nullable).
+     * Lista leve das provas/questionários existentes no Avalia — usada para
+     * popular App\Models\AvaliaAvaliacaoDisponivel, não para sincronizar
+     * dado de aluno. Duas "linhagens" na mesma coleção, distinguidas por
+     * `pai_externo`:
+     * - `pai_externo` null: uma prova/questionário (id_externo, nome, tipo,
+     *   data_referencia).
+     * - `pai_externo` preenchido (só Avalia Pro): uma disciplina dentro da
+     *   prova cujo id_externo é esse `pai_externo` — id_externo aqui é
+     *   "{assessment_id}:{subject_sk}", nome é o nome da disciplina, `curso`
+     *   é o rótulo de agrupamento. Avalia Online nunca tem essas linhas
+     *   (um questionário já é uma unidade só, sem quebra por disciplina).
      *
-     * @return Collection<int, array<string, mixed>>
+     * @return Collection<int, object{id_externo: string, nome: ?string, tipo: ?string, data_referencia: ?string, pai_externo: ?string, curso: ?string}>
      */
     public function listarProvasDisponiveis(string $produto): Collection;
 }

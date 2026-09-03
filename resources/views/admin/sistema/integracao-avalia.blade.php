@@ -71,7 +71,7 @@
                 @endif
             </div>
 
-            @php $modo = $modoPorProduto[$produto]; $selecionadasCount = $catalogoPorProduto[$produto]->where('selecionada', true)->count(); @endphp
+            @php $modo = $modoPorProduto[$produto]; $selecionadasCount = $selecionadasCountPorProduto[$produto]; @endphp
             <p class="text-xs text-slate-500 mb-3">
                 @if ($modo === 'todas')
                     Modo: <span class="font-semibold text-slate-700">todas as provas</span>
@@ -150,15 +150,46 @@
                         </label>
                     </div>
 
-                    <div class="max-h-64 overflow-y-auto border border-slate-100 rounded-lg divide-y divide-slate-100 mb-3">
+                    <input type="text" id="busca-{{ $produto }}" placeholder="Buscar prova, curso ou disciplina..."
+                           class="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm mb-2">
+
+                    <div id="arvore-{{ $produto }}" class="max-h-72 overflow-y-auto border border-slate-100 rounded-lg mb-3">
                         @foreach ($catalogo as $prova)
-                            <label class="flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50">
-                                <input type="checkbox" name="selecionadas[]" value="{{ $prova->id }}" {{ $prova->selecionada ? 'checked' : '' }}>
-                                <span class="flex-1">{{ $prova->nome ?? $prova->id_externo }}</span>
-                                @if ($prova->data_referencia)
-                                    <span class="text-xs text-slate-400">{{ $prova->data_referencia->format('d/m/Y') }}</span>
+                            @php $temFilhos = $prova->disciplinasPorCurso->isNotEmpty(); @endphp
+                            <details class="js-prova border-b border-slate-100 last:border-b-0" data-search="{{ Str::lower($prova->nome ?? $prova->id_externo) }}" {{ $temFilhos ? '' : 'open' }}>
+                                <summary class="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-slate-50 select-none">
+                                    @if ($temFilhos)
+                                        <input type="checkbox" class="js-check-prova" onclick="event.stopPropagation()">
+                                    @else
+                                        <input type="checkbox" name="selecionadas[]" value="{{ $prova->id }}" {{ $prova->selecionada ? 'checked' : '' }} onclick="event.stopPropagation()">
+                                    @endif
+                                    <span class="flex-1 font-medium">{{ $prova->nome ?? $prova->id_externo }}</span>
+                                    @if ($prova->data_referencia)
+                                        <span class="text-xs text-slate-400">{{ $prova->data_referencia->format('d/m/Y') }}</span>
+                                    @endif
+                                </summary>
+
+                                @if ($temFilhos)
+                                    <div class="pl-6 js-cursos">
+                                        @foreach ($prova->disciplinasPorCurso as $curso => $disciplinas)
+                                            <details class="js-curso border-t border-slate-50" data-search="{{ Str::lower($curso) }}">
+                                                <summary class="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-slate-50 select-none">
+                                                    <input type="checkbox" class="js-check-curso" onclick="event.stopPropagation()">
+                                                    <span class="flex-1 text-slate-600">{{ $curso }} <span class="text-xs text-slate-400">({{ $disciplinas->count() }})</span></span>
+                                                </summary>
+                                                <div class="pl-6 js-leaves">
+                                                    @foreach ($disciplinas as $disciplina)
+                                                        <label class="js-leaf flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-slate-50" data-search="{{ Str::lower($disciplina->nome ?? $disciplina->id_externo) }}">
+                                                            <input type="checkbox" name="selecionadas[]" value="{{ $disciplina->id }}" {{ $disciplina->selecionada ? 'checked' : '' }}>
+                                                            <span>{{ $disciplina->nome ?? $disciplina->id_externo }}</span>
+                                                        </label>
+                                                    @endforeach
+                                                </div>
+                                            </details>
+                                        @endforeach
+                                    </div>
                                 @endif
-                            </label>
+                            </details>
                         @endforeach
                     </div>
 
@@ -265,5 +296,71 @@
     @if (collect($ultimaPorProduto)->contains(fn ($e) => $e && $e->status === 'processando'))
         setTimeout(function () { window.location.reload(); }, 5000);
     @endif
+
+    // Marcar a prova ou o curso propaga a marcação pros checkboxes reais
+    // (as disciplinas) dentro dela — a prova/curso em si nunca é enviada no
+    // formulário (só as disciplinas têm `name="selecionadas[]"`; quando uma
+    // prova não tem disciplinas — caso do Avalia Online — ela própria é a
+    // folha marcável).
+    document.querySelectorAll('.js-check-prova').forEach(function (cb) {
+        cb.addEventListener('change', function () {
+            cb.closest('.js-prova').querySelectorAll('input[type=checkbox]').forEach(function (filho) {
+                if (filho !== cb) filho.checked = cb.checked;
+            });
+        });
+    });
+    document.querySelectorAll('.js-check-curso').forEach(function (cb) {
+        cb.addEventListener('change', function () {
+            cb.closest('.js-curso').querySelectorAll('input[type=checkbox]').forEach(function (filho) {
+                if (filho !== cb) filho.checked = cb.checked;
+            });
+        });
+    });
+
+    // Busca: filtra por prova, curso ou disciplina — sem servidor, a lista
+    // inteira já está na página. Casa acento/maiúscula de forma tolerante
+    // (normalize + remove diacríticos) porque os nomes vêm cheios de
+    // acentuação ("Nutrição", "Estética").
+    function normalizarBusca(texto) {
+        return (texto || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+
+    function configurarBuscaDeProvas(produto) {
+        const input = document.getElementById('busca-' + produto);
+        const raiz = document.getElementById('arvore-' + produto);
+        if (!input || !raiz) return;
+
+        input.addEventListener('input', function () {
+            const termo = normalizarBusca(input.value);
+
+            raiz.querySelectorAll(':scope > .js-prova').forEach(function (prova) {
+                const provaCasa = termo === '' || normalizarBusca(prova.dataset.search).includes(termo);
+                const semFilhos = prova.querySelectorAll('.js-leaf').length === 0;
+                let algumCursoVisivel = false;
+
+                prova.querySelectorAll(':scope > .js-cursos > .js-curso').forEach(function (curso) {
+                    const cursoCasa = provaCasa || termo === '' || normalizarBusca(curso.dataset.search).includes(termo);
+                    let algumLeafVisivel = false;
+
+                    curso.querySelectorAll(':scope > .js-leaves > .js-leaf').forEach(function (leaf) {
+                        const visivel = cursoCasa || normalizarBusca(leaf.dataset.search).includes(termo);
+                        leaf.style.display = visivel ? '' : 'none';
+                        if (visivel) algumLeafVisivel = true;
+                    });
+
+                    curso.style.display = algumLeafVisivel ? '' : 'none';
+                    curso.open = termo !== '' && algumLeafVisivel;
+                    if (algumLeafVisivel) algumCursoVisivel = true;
+                });
+
+                const visivel = semFilhos ? provaCasa : (provaCasa || algumCursoVisivel);
+                prova.style.display = visivel ? '' : 'none';
+                prova.open = termo === '' ? semFilhos : (visivel && !semFilhos);
+            });
+        });
+    }
+
+    configurarBuscaDeProvas('avalia_pro');
+    configurarBuscaDeProvas('avalia_online');
 </script>
 @endsection

@@ -21,6 +21,12 @@ use RuntimeException;
  *    environment_sk (um por campus/polo — "unifaa_prod" e "arcoverde").
  *    `avalia_environment_sk` guarda os dois separados por vírgula; ver
  *    environmentSks().
+ * 1b. Uma prova do Avalia Pro (`assessment_id`) pode cobrir dezenas de
+ *    disciplinas em vários cursos ao mesmo tempo — confirmado com dado real
+ *    desta IES (uma prova chegou a ter 89 disciplinas em 8 cursos). Por
+ *    isso o filtro de seleção pro Avalia Pro é sempre pela chave composta
+ *    "{assessment_id}:{subject_sk}" (a mesma que vira `avaliacoes.id_externo`),
+ *    nunca só pelo assessment_id — ver notasPro()/respostasPro().
  * 2. Para 'avalia_online', `fct_activities_questions_avalia` não expõe o
  *    texto da resposta (só a nota da questão) — respostasOnline() grava
  *    `resposta` como null nesse caso; só a nota chega em `resultado_metricas`
@@ -85,7 +91,9 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
             ->join('dimensions.dim_users as u', 'u.user_sk', '=', 's.user_sk')
             ->where('s.tenant_sk', $this->tenantSk())
             ->whereIn('s.environment_sk', $this->environmentSks())
-            ->when($idsPermitidos !== null, fn ($query) => $query->whereIn('e.assessment_id_avalia_pro', $idsPermitidos))
+            ->when($idsPermitidos !== null, fn ($query) => $query->whereIn(
+                DB::raw("e.assessment_id_avalia_pro || ':' || s.subject_sk"), $idsPermitidos
+            ))
             ->when($desde !== null, fn ($query) => $query->where('s.cdc_datetime', '>', $desde))
             ->select([
                 's.exam_sk', 's.subject_sk', 's.final_grade', 's.subject_grade', 's.weight',
@@ -108,7 +116,9 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
             ->join('dimensions.dim_users as u', 'u.user_sk', '=', 'q.user_sk')
             ->where('q.tenant_sk', $this->tenantSk())
             ->whereIn('q.environment_sk', $this->environmentSks())
-            ->when($idsPermitidos !== null, fn ($query) => $query->whereIn('e.assessment_id_avalia_pro', $idsPermitidos))
+            ->when($idsPermitidos !== null, fn ($query) => $query->whereIn(
+                DB::raw("e.assessment_id_avalia_pro || ':' || q.subject_sk"), $idsPermitidos
+            ))
             ->when($desde !== null, fn ($query) => $query->where('q.cdc_datetime', '>', $desde))
             ->select([
                 'q.exam_sk', 'q.subject_sk', 'q.question_grade', 'q.question_weight',
@@ -174,13 +184,22 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
     }
 
     /**
-     * Lista leve das provas do Avalia Pro — DISTINCT em `dim_exams`, não na
-     * fato (que tem grão aluno×prova, ordens de magnitude maior). Uma linha
-     * por prova (assessment_id), não por disciplina.
+     * Lista leve das provas do Avalia Pro (uma linha por prova, id_externo =
+     * assessment_id) + suas disciplinas (uma linha por prova×disciplina,
+     * id_externo = "{assessment_id}:{subject_sk}" — a mesma chave usada em
+     * `avaliacoes.id_externo` e no filtro de notasPro()/respostasPro()).
+     * Linhas de disciplina trazem `pai_externo` (o assessment_id da prova) e
+     * `curso` (rótulo de agrupamento na árvore de seleção da tela) —
+     * App\Services\Avalia\AvaliaSyncService::atualizarCatalogo() é quem
+     * resolve `pai_externo` para o `pai_id` real ao gravar.
+     *
+     * A parte de disciplinas precisa consultar a fato (não só `dim_exams`,
+     * que não tem subject_sk) — mais pesada que a lista pura de provas, mas
+     * ainda é um DISTINCT colunar, não uma leitura linha a linha da fato.
      */
     private function provasDisponiveisPro(): Collection
     {
-        return DB::connection(self::CONNECTION)
+        $provas = DB::connection(self::CONNECTION)
             ->table('dimensions.dim_exams as e')
             ->where('e.tenant_sk', $this->tenantSk())
             ->whereIn('e.environment_sk', $this->environmentSks())
@@ -189,10 +208,31 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
                 'e.assessment_name_avalia_pro as nome',
                 'e.exam_type_name_avalia_pro as tipo',
                 'e.assessment_start_date_avalia_pro as data_referencia',
+                DB::raw('CAST(NULL AS varchar) as pai_externo'),
+                DB::raw('CAST(NULL AS varchar) as curso'),
             ])
             ->distinct()
-            ->orderByDesc('e.assessment_start_date_avalia_pro')
             ->get();
+
+        $disciplinas = DB::connection(self::CONNECTION)
+            ->table('mart_academic.fct_student_exam_subject_scores_avalia_pro as s')
+            ->join('dimensions.dim_exams as e', 'e.exam_sk', '=', 's.exam_sk')
+            ->join('dimensions.dim_subjects as subj', 'subj.subject_sk', '=', 's.subject_sk')
+            ->leftJoin('dimensions.dim_categories as cat', 'cat.category_sk', '=', 's.category_sk')
+            ->where('s.tenant_sk', $this->tenantSk())
+            ->whereIn('s.environment_sk', $this->environmentSks())
+            ->select([
+                DB::raw("e.assessment_id_avalia_pro || ':' || s.subject_sk as id_externo"),
+                'subj.subject_name_avalia_pro as nome',
+                DB::raw('CAST(NULL AS varchar) as tipo'),
+                DB::raw('CAST(NULL AS date) as data_referencia'),
+                DB::raw('CAST(e.assessment_id_avalia_pro AS varchar) as pai_externo'),
+                'cat.category_name_avalia_pro as curso',
+            ])
+            ->distinct()
+            ->get();
+
+        return $provas->concat($disciplinas);
     }
 
     /** Lista leve dos questionários do Avalia Online — DISTINCT em `dim_questionnaires`. */
@@ -206,6 +246,10 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
             ->select([
                 'qn.questionnaire_id_avalia_online as id_externo',
                 'qn.questionnaire_name_avalia_online as nome',
+                DB::raw('CAST(NULL AS varchar) as tipo'),
+                DB::raw('CAST(NULL AS date) as data_referencia'),
+                DB::raw('CAST(NULL AS varchar) as pai_externo'),
+                DB::raw('CAST(NULL AS varchar) as curso'),
             ])
             ->distinct()
             ->get();

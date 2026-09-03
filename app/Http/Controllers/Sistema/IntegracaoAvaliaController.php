@@ -12,6 +12,7 @@ use App\Services\Avalia\RedshiftAvaliaExtractor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
@@ -38,14 +39,21 @@ class IntegracaoAvaliaController extends Controller
         ]);
 
         $catalogoPorProduto = collect(self::PRODUTOS)->mapWithKeys(fn (string $produto) => [
-            $produto => AvaliaAvaliacaoDisponivel::where('produto', $produto)
-                ->orderByDesc('data_referencia')
-                ->orderBy('nome')
-                ->get(),
+            $produto => $this->construirCatalogoComArvore($produto),
         ]);
 
         $modoPorProduto = collect(self::PRODUTOS)->mapWithKeys(fn (string $produto) => [
             $produto => ConfiguracaoSistema::valor("avalia_modo_{$produto}", 'selecionadas'),
+        ]);
+
+        // A seleção real vive na folha pro Avalia Pro (disciplina, pai_id
+        // preenchido) e no topo pro Avalia Online (sem disciplinas) — ver
+        // AvaliaSyncService::idsPermitidos().
+        $selecionadasCountPorProduto = collect(self::PRODUTOS)->mapWithKeys(fn (string $produto) => [
+            $produto => AvaliaAvaliacaoDisponivel::where('produto', $produto)
+                ->where('selecionada', true)
+                ->when($produto === 'avalia_pro', fn ($query) => $query->whereNotNull('pai_id'))
+                ->count(),
         ]);
 
         return view('admin.sistema.integracao-avalia', [
@@ -57,7 +65,31 @@ class IntegracaoAvaliaController extends Controller
             'environmentSk' => ConfiguracaoSistema::valor('avalia_environment_sk', ''),
             'catalogoPorProduto' => $catalogoPorProduto,
             'modoPorProduto' => $modoPorProduto,
+            'selecionadasCountPorProduto' => $selecionadasCountPorProduto,
         ]);
+    }
+
+    /**
+     * Monta a árvore de seleção pra um produto: cada prova (pai_id null)
+     * ganha uma propriedade dinâmica `disciplinasPorCurso` — suas
+     * disciplinas (pai_id apontando pra ela), agrupadas por curso pra
+     * exibição em admin.sistema.integracao-avalia. Pro Avalia Online
+     * (sem disciplinas) o grupo sempre vem vazio, e a tela renderiza a
+     * prova como item de lista simples em vez de árvore.
+     */
+    private function construirCatalogoComArvore(string $produto): Collection
+    {
+        $todas = AvaliaAvaliacaoDisponivel::where('produto', $produto)->get();
+        $disciplinasPorPai = $todas->whereNotNull('pai_id')->groupBy('pai_id');
+
+        return $todas->whereNull('pai_id')
+            ->sortByDesc('data_referencia')
+            ->values()
+            ->each(function (AvaliaAvaliacaoDisponivel $prova) use ($disciplinasPorPai) {
+                $prova->disciplinasPorCurso = $disciplinasPorPai->get($prova->id, collect())
+                    ->sortBy('nome')
+                    ->groupBy(fn (AvaliaAvaliacaoDisponivel $d) => $d->curso ?? 'Sem curso informado');
+            });
     }
 
     public function atualizarConfiguracoes(Request $request): RedirectResponse

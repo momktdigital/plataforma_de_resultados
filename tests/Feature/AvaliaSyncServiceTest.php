@@ -157,16 +157,22 @@ class AvaliaSyncServiceTest extends TestCase
         $this->assertDatabaseCount('resultado_metricas', 0);
     }
 
-    public function test_modo_selecionadas_so_sincroniza_a_prova_marcada(): void
+    public function test_modo_selecionadas_so_sincroniza_a_disciplina_marcada(): void
     {
+        // A seleção real vive na folha (disciplina) — marcar só a prova
+        // (pai_id null) não sincroniza nada, porque uma prova pode cobrir
+        // dezenas de disciplinas em cursos diferentes (ver migration
+        // 2026_09_06_100000). "100:7" é a disciplina marcada; "100:9" é
+        // outra disciplina da MESMA prova que não foi marcada.
         $this->alunoComCpf('11122233344');
         ConfiguracaoSistema::definir('avalia_modo_avalia_pro', 'selecionadas');
 
-        AvaliaAvaliacaoDisponivel::create(['produto' => 'avalia_pro', 'id_externo' => '100', 'nome' => 'Selecionada', 'selecionada' => true]);
-        AvaliaAvaliacaoDisponivel::create(['produto' => 'avalia_pro', 'id_externo' => '200', 'nome' => 'Não selecionada', 'selecionada' => false]);
+        $prova = AvaliaAvaliacaoDisponivel::create(['produto' => 'avalia_pro', 'id_externo' => '100', 'nome' => 'Prova 100']);
+        AvaliaAvaliacaoDisponivel::create(['produto' => 'avalia_pro', 'pai_id' => $prova->id, 'id_externo' => '100:7', 'nome' => 'Matemática', 'curso' => 'Enfermagem', 'selecionada' => true]);
+        AvaliaAvaliacaoDisponivel::create(['produto' => 'avalia_pro', 'pai_id' => $prova->id, 'id_externo' => '100:9', 'nome' => 'Português', 'curso' => 'Enfermagem', 'selecionada' => false]);
 
         $extractor = new FakeAvaliaExtractor(
-            notas: new Collection([$this->notaProFake(100, 7), $this->notaProFake(200, 8)]),
+            notas: new Collection([$this->notaProFake(100, 7), $this->notaProFake(100, 9)]),
             respostas: new Collection,
         );
 
@@ -174,7 +180,7 @@ class AvaliaSyncServiceTest extends TestCase
 
         $this->assertDatabaseCount('avaliacoes', 1);
         $this->assertDatabaseHas('avaliacoes', ['origem' => 'avalia_pro', 'id_externo' => '100:7']);
-        $this->assertDatabaseMissing('avaliacoes', ['origem' => 'avalia_pro', 'id_externo' => '200:8']);
+        $this->assertDatabaseMissing('avaliacoes', ['origem' => 'avalia_pro', 'id_externo' => '100:9']);
     }
 
     public function test_atualizar_catalogo_grava_provas_sem_sobrescrever_selecao_existente(): void
@@ -202,6 +208,40 @@ class AvaliaSyncServiceTest extends TestCase
         $this->assertDatabaseHas('avalia_avaliacoes_disponiveis', [
             'produto' => 'avalia_pro', 'id_externo' => '300', 'nome' => 'Prova nova', 'selecionada' => false,
         ]);
+    }
+
+    public function test_atualizar_catalogo_vincula_disciplinas_a_sua_prova(): void
+    {
+        // Uma prova real desta IES chegou a ter 89 disciplinas em 8 cursos
+        // diferentes — o catálogo precisa refletir essa hierarquia (prova →
+        // disciplina, com o curso como rótulo), não só uma lista achatada.
+        $extractor = new FakeAvaliaExtractor(
+            notas: new Collection,
+            respostas: new Collection,
+            provasDisponiveis: new Collection([
+                (object) ['id_externo' => 100, 'nome' => 'SEMI - A1', 'tipo' => 'Regular', 'data_referencia' => '2026-03-01', 'pai_externo' => null, 'curso' => null],
+                (object) ['id_externo' => '100:7', 'nome' => 'Matemática', 'pai_externo' => 100, 'curso' => 'Enfermagem'],
+                (object) ['id_externo' => '100:9', 'nome' => 'Anatomia', 'pai_externo' => 100, 'curso' => 'Enfermagem'],
+                (object) ['id_externo' => '100:12', 'nome' => 'Farmacologia', 'pai_externo' => 100, 'curso' => 'Farmácia'],
+            ]),
+        );
+
+        $quantidade = (new AvaliaSyncService($extractor))->atualizarCatalogo('avalia_pro');
+
+        $this->assertSame(4, $quantidade);
+
+        $prova = AvaliaAvaliacaoDisponivel::where('produto', 'avalia_pro')->whereNull('pai_id')->firstOrFail();
+        $this->assertSame('SEMI - A1', $prova->nome);
+
+        $this->assertDatabaseCount('avalia_avaliacoes_disponiveis', 4);
+        $this->assertDatabaseHas('avalia_avaliacoes_disponiveis', [
+            'id_externo' => '100:7', 'pai_id' => $prova->id, 'curso' => 'Enfermagem', 'nome' => 'Matemática',
+        ]);
+        $this->assertDatabaseHas('avalia_avaliacoes_disponiveis', [
+            'id_externo' => '100:12', 'pai_id' => $prova->id, 'curso' => 'Farmácia', 'nome' => 'Farmacologia',
+        ]);
+
+        $this->assertSame(3, $prova->disciplinas()->count());
     }
 
     private function notaProFake(int $assessmentId, int $subjectSk): object
@@ -320,10 +360,12 @@ class FakeAvaliaExtractor implements AvaliaExtractorContract
     }
 
     /**
-     * Reproduz o whereIn(assessment_id/questionnaire_id) que
-     * RedshiftAvaliaExtractor aplica de verdade — sem isso, os testes que
-     * dependem do filtro de seleção passariam mesmo se AvaliaSyncService
-     * parasse de repassar $idsPermitidos pro extractor.
+     * Reproduz o whereIn(...) que RedshiftAvaliaExtractor aplica de verdade
+     * (chave composta "{assessment_id}:{subject_sk}" pro Avalia Pro, já que
+     * uma prova pode cobrir várias disciplinas; questionnaire_id sozinho pro
+     * Avalia Online) — sem isso, os testes que dependem do filtro de seleção
+     * passariam mesmo se AvaliaSyncService parasse de repassar
+     * $idsPermitidos pro extractor, ou mesmo se a chave real estivesse errada.
      */
     private function filtrarPorIdPermitido(Collection $linhas, ?array $idsPermitidos): Collection
     {
@@ -332,7 +374,9 @@ class FakeAvaliaExtractor implements AvaliaExtractorContract
         }
 
         return $linhas->filter(function ($linha) use ($idsPermitidos) {
-            $id = $linha->assessment_id_avalia_pro ?? $linha->questionnaire_id_avalia_online ?? null;
+            $id = isset($linha->assessment_id_avalia_pro)
+                ? "{$linha->assessment_id_avalia_pro}:{$linha->subject_sk}"
+                : ($linha->questionnaire_id_avalia_online ?? null);
 
             return $id !== null && in_array((string) $id, $idsPermitidos, true);
         })->values();
