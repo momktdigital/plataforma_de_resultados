@@ -517,6 +517,29 @@ class AvaliaSyncService
         return Aluno::whereIn('cpf', $cpfs)->orderBy('id')->pluck('id', 'cpf')->all();
     }
 
+    /**
+     * Zera o watermark de um produto — precisa ser chamado sempre que a
+     * seleção de provas/disciplinas mudar (ver
+     * IntegracaoAvaliaController::atualizarSelecao()).
+     *
+     * Incidente real que motivou isto: o watermark avança pra "a data mais
+     * recente vista na última sincronização", sem distinguir de QUAL prova/
+     * disciplina veio esse dado. Um sync amplo (ex.: modo 'todas', ou uma
+     * seleção diferente) pode empurrar o watermark pra depois da última
+     * atualização de uma disciplina que só foi selecionada DEPOIS — como
+     * essa disciplina nunca mais vai ter `cdc_datetime > watermark`, ela
+     * fica bloqueada pra sempre, silenciosamente (sync "com sucesso", 0
+     * linhas). Zerar ao salvar a seleção força a próxima sincronização a
+     * buscar tudo de novo pro que estiver selecionado agora — mais caro uma
+     * vez, mas correto; upsert já é idempotente, então rebuscar dado que já
+     * existe não duplica nada.
+     */
+    public function resetarWatermark(string $produto): void
+    {
+        ConfiguracaoSistema::definir("avalia_watermark_notas_{$produto}", null);
+        ConfiguracaoSistema::definir("avalia_watermark_respostas_{$produto}", null);
+    }
+
     private function watermark(string $produto, string $fonte): ?string
     {
         return ConfiguracaoSistema::valor("avalia_watermark_{$fonte}_{$produto}");

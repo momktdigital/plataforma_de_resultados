@@ -256,6 +256,26 @@ class AvaliaSyncServiceTest extends TestCase
         ];
     }
 
+    public function test_resetar_watermark_zera_notas_e_respostas_do_produto(): void
+    {
+        // Regressão real: um watermark avançado por uma seleção anterior (ou
+        // por "todas") bloqueava pra sempre uma disciplina selecionada
+        // depois, mesmo com dado real dela no Avalia — confirmado comparando
+        // o watermark salvo com o cdc_datetime real da disciplina no
+        // Redshift desta IES. Ver AvaliaSyncService::resetarWatermark().
+        ConfiguracaoSistema::definir('avalia_watermark_notas_avalia_pro', '2026-09-02 20:37:41.953');
+        ConfiguracaoSistema::definir('avalia_watermark_respostas_avalia_pro', '2026-09-02 20:37:41.957');
+        ConfiguracaoSistema::definir('avalia_watermark_notas_avalia_online', '2026-09-02 20:00:00');
+
+        (new AvaliaSyncService(new FakeAvaliaExtractor(new Collection, new Collection)))
+            ->resetarWatermark('avalia_pro');
+
+        $this->assertNull(ConfiguracaoSistema::valor('avalia_watermark_notas_avalia_pro'));
+        $this->assertNull(ConfiguracaoSistema::valor('avalia_watermark_respostas_avalia_pro'));
+        // Não mexe no watermark de outro produto.
+        $this->assertNotNull(ConfiguracaoSistema::valor('avalia_watermark_notas_avalia_online'));
+    }
+
     public function test_linhas_sem_cpf_sao_contadas_mas_nao_gravadas(): void
     {
         // Regressão do incidente real: dim_users.user_identity_document_integrate_module

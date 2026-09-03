@@ -147,6 +147,28 @@ class IntegracaoAvaliaTest extends TestCase
         $this->assertFalse($p2->fresh()->selecionada);
     }
 
+    public function test_salvar_selecao_zera_watermark_do_produto(): void
+    {
+        // Regressão real: sem zerar, um watermark avançado antes de mudar a
+        // seleção bloqueava pra sempre a disciplina recém-selecionada.
+        ConfiguracaoSistema::definir('avalia_watermark_notas_avalia_pro', '2026-09-02 20:37:41.953');
+        ConfiguracaoSistema::definir('avalia_watermark_respostas_avalia_pro', '2026-09-02 20:37:41.957');
+
+        $prova = AvaliaAvaliacaoDisponivel::create(['produto' => 'avalia_pro', 'id_externo' => '1', 'nome' => 'Prova 1']);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post('/sistema/integracao-avalia/selecao', [
+                '_method' => 'PUT',
+                'produto' => 'avalia_pro',
+                'modo' => 'selecionadas',
+                'selecionadas' => [$prova->id],
+            ])
+            ->assertRedirect(route('sistema.integracao-avalia.index'));
+
+        $this->assertNull(ConfiguracaoSistema::valor('avalia_watermark_notas_avalia_pro'));
+        $this->assertNull(ConfiguracaoSistema::valor('avalia_watermark_respostas_avalia_pro'));
+    }
+
     public function test_tela_usa_post_com_spoofing_nos_formularios_de_catalogo_e_selecao(): void
     {
         // Mesma regressão do 405 do form de configurações — todo <form> pra

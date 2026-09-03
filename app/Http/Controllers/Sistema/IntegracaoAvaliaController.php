@@ -147,7 +147,7 @@ class IntegracaoAvaliaController extends Controller
             ->with('status', "{$quantidade} prova(s) encontrada(s) no Avalia.");
     }
 
-    public function atualizarSelecao(Request $request): RedirectResponse
+    public function atualizarSelecao(Request $request, AvaliaSyncService $service): RedirectResponse
     {
         $dados = $request->validate([
             'produto' => ['required', 'string', 'in:avalia_pro,avalia_online'],
@@ -162,6 +162,12 @@ class IntegracaoAvaliaController extends Controller
         AvaliaAvaliacaoDisponivel::where('produto', $dados['produto'])
             ->whereIn('id', $dados['selecionadas'] ?? [])
             ->update(['selecionada' => true]);
+
+        // Sem isto, um watermark avançado por uma seleção anterior (ou por
+        // "todas") pode bloquear pra sempre uma disciplina só selecionada
+        // agora, mesmo com dado real dela no Avalia — ver
+        // AvaliaSyncService::resetarWatermark().
+        $service->resetarWatermark($dados['produto']);
 
         return redirect()->route('sistema.integracao-avalia.index')
             ->with('status', 'Seleção de provas salva com sucesso.');
