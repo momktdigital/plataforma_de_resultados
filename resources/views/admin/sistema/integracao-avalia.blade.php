@@ -71,6 +71,18 @@
                 @endif
             </div>
 
+            @php $modo = $modoPorProduto[$produto]; $selecionadasCount = $catalogoPorProduto[$produto]->where('selecionada', true)->count(); @endphp
+            <p class="text-xs text-slate-500 mb-3">
+                @if ($modo === 'todas')
+                    Modo: <span class="font-semibold text-slate-700">todas as provas</span>
+                @else
+                    Modo: <span class="font-semibold text-slate-700">só as selecionadas</span> ({{ $selecionadasCount }} escolhida(s))
+                    @if ($selecionadasCount === 0)
+                        <span class="text-amber-700">— nada será sincronizado até escolher alguma abaixo</span>
+                    @endif
+                @endif
+            </p>
+
             @if ($ultima === null)
                 <p class="text-sm text-slate-400 mb-4">Nunca sincronizado.</p>
             @else
@@ -99,6 +111,62 @@
                     Forçar sincronização agora
                 </button>
             </form>
+        </div>
+    @endforeach
+</div>
+
+{{-- Seleção de provas a sincronizar --}}
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mb-6">
+    @foreach ($produtos as $produto)
+        @php $catalogo = $catalogoPorProduto[$produto]; $modo = $modoPorProduto[$produto]; @endphp
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-semibold">Provas — {{ $produto === 'avalia_pro' ? 'Avalia Pro' : 'Avalia Online' }}</h3>
+                <form method="POST" action="{{ route('sistema.integracao-avalia.catalogo') }}">
+                    @csrf
+                    <input type="hidden" name="produto" value="{{ $produto }}">
+                    <button type="submit" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg px-3 py-1.5 text-xs">
+                        Atualizar lista de provas disponíveis
+                    </button>
+                </form>
+            </div>
+
+            @if ($catalogo->isEmpty())
+                <p class="text-sm text-slate-400 mb-2">Nenhuma prova listada ainda — clique em "Atualizar lista" acima.</p>
+            @else
+                <form method="POST" action="{{ route('sistema.integracao-avalia.selecao') }}">
+                    @csrf
+                    @method('PUT')
+                    <input type="hidden" name="produto" value="{{ $produto }}">
+
+                    <div class="flex gap-4 mb-3 text-sm">
+                        <label class="flex items-center gap-1.5">
+                            <input type="radio" name="modo" value="selecionadas" {{ $modo !== 'todas' ? 'checked' : '' }}>
+                            Só as selecionadas
+                        </label>
+                        <label class="flex items-center gap-1.5">
+                            <input type="radio" name="modo" value="todas" {{ $modo === 'todas' ? 'checked' : '' }}>
+                            Todas
+                        </label>
+                    </div>
+
+                    <div class="max-h-64 overflow-y-auto border border-slate-100 rounded-lg divide-y divide-slate-100 mb-3">
+                        @foreach ($catalogo as $prova)
+                            <label class="flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50">
+                                <input type="checkbox" name="selecionadas[]" value="{{ $prova->id }}" {{ $prova->selecionada ? 'checked' : '' }}>
+                                <span class="flex-1">{{ $prova->nome ?? $prova->id_externo }}</span>
+                                @if ($prova->data_referencia)
+                                    <span class="text-xs text-slate-400">{{ $prova->data_referencia->format('d/m/Y') }}</span>
+                                @endif
+                            </label>
+                        @endforeach
+                    </div>
+
+                    <button type="submit" class="bg-slate-700 hover:bg-slate-800 text-white font-semibold rounded-lg px-4 py-2 text-sm">
+                        Salvar seleção
+                    </button>
+                </form>
+            @endif
         </div>
     @endforeach
 </div>

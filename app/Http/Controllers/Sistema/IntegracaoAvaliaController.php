@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Sistema;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\SincronizarAvaliaJob;
+use App\Models\AvaliaAvaliacaoDisponivel;
 use App\Models\AvaliaSyncExecucao;
 use App\Models\ConfiguracaoSistema;
+use App\Services\Avalia\AvaliaSyncService;
 use App\Services\Avalia\RedshiftAvaliaExtractor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -30,6 +32,17 @@ class IntegracaoAvaliaController extends Controller
             $produto => AvaliaSyncExecucao::where('produto', $produto)->orderByDesc('iniciado_em')->first(),
         ]);
 
+        $catalogoPorProduto = collect(self::PRODUTOS)->mapWithKeys(fn (string $produto) => [
+            $produto => AvaliaAvaliacaoDisponivel::where('produto', $produto)
+                ->orderByDesc('data_referencia')
+                ->orderBy('nome')
+                ->get(),
+        ]);
+
+        $modoPorProduto = collect(self::PRODUTOS)->mapWithKeys(fn (string $produto) => [
+            $produto => ConfiguracaoSistema::valor("avalia_modo_{$produto}", 'selecionadas'),
+        ]);
+
         return view('admin.sistema.integracao-avalia', [
             'produtos' => self::PRODUTOS,
             'ultimaPorProduto' => $ultimaPorProduto,
@@ -37,6 +50,8 @@ class IntegracaoAvaliaController extends Controller
             'conexaoConfigurada' => filled(config('database.connections.redshift.host')),
             'tenantSk' => ConfiguracaoSistema::valor('avalia_tenant_sk', ''),
             'environmentSk' => ConfiguracaoSistema::valor('avalia_environment_sk', ''),
+            'catalogoPorProduto' => $catalogoPorProduto,
+            'modoPorProduto' => $modoPorProduto,
         ]);
     }
 
@@ -76,6 +91,43 @@ class IntegracaoAvaliaController extends Controller
 
         return redirect()->route('sistema.integracao-avalia.index')
             ->with('status', 'Sincronização solicitada — está sendo processada em segundo plano.');
+    }
+
+    public function atualizarCatalogo(Request $request, AvaliaSyncService $service): RedirectResponse
+    {
+        $dados = $request->validate([
+            'produto' => ['required', 'string', 'in:avalia_pro,avalia_online'],
+        ]);
+
+        try {
+            $quantidade = $service->atualizarCatalogo($dados['produto']);
+        } catch (Throwable $e) {
+            return redirect()->route('sistema.integracao-avalia.index')
+                ->withErrors(['catalogo' => 'Não foi possível listar as provas do Avalia: '.$e->getMessage()]);
+        }
+
+        return redirect()->route('sistema.integracao-avalia.index')
+            ->with('status', "{$quantidade} prova(s) encontrada(s) no Avalia.");
+    }
+
+    public function atualizarSelecao(Request $request): RedirectResponse
+    {
+        $dados = $request->validate([
+            'produto' => ['required', 'string', 'in:avalia_pro,avalia_online'],
+            'modo' => ['required', 'string', 'in:todas,selecionadas'],
+            'selecionadas' => ['array'],
+            'selecionadas.*' => ['integer'],
+        ]);
+
+        ConfiguracaoSistema::definir("avalia_modo_{$dados['produto']}", $dados['modo']);
+
+        AvaliaAvaliacaoDisponivel::where('produto', $dados['produto'])->update(['selecionada' => false]);
+        AvaliaAvaliacaoDisponivel::where('produto', $dados['produto'])
+            ->whereIn('id', $dados['selecionadas'] ?? [])
+            ->update(['selecionada' => true]);
+
+        return redirect()->route('sistema.integracao-avalia.index')
+            ->with('status', 'Seleção de provas salva com sucesso.');
     }
 
     public function testarConexao(): JsonResponse

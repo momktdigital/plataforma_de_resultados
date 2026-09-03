@@ -4,13 +4,16 @@ namespace Tests\Feature;
 
 use App\Jobs\SincronizarAvaliaJob;
 use App\Models\Admin;
+use App\Models\AvaliaAvaliacaoDisponivel;
 use App\Models\Avaliacao;
 use App\Models\ConfiguracaoSistema;
 use App\Models\Questao;
 use App\Models\Resposta;
+use App\Services\Avalia\AvaliaSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
+use RuntimeException;
 use Tests\TestCase;
 
 class IntegracaoAvaliaTest extends TestCase
@@ -63,6 +66,63 @@ class IntegracaoAvaliaTest extends TestCase
         $response->assertStatus(500);
         $response->assertJsonPath('status', 'error');
         $this->assertStringContainsString('tenant', $response->json('message'));
+    }
+
+    public function test_atualizar_catalogo_lista_provas_do_avalia(): void
+    {
+        $this->mock(AvaliaSyncService::class)
+            ->shouldReceive('atualizarCatalogo')
+            ->once()
+            ->with('avalia_pro')
+            ->andReturn(5);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post('/sistema/integracao-avalia/catalogo', ['produto' => 'avalia_pro'])
+            ->assertRedirect(route('sistema.integracao-avalia.index'))
+            ->assertSessionHas('status');
+    }
+
+    public function test_atualizar_catalogo_mostra_erro_em_vez_de_500(): void
+    {
+        $this->mock(AvaliaSyncService::class)
+            ->shouldReceive('atualizarCatalogo')
+            ->andThrow(new RuntimeException('Redshift indisponível'));
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post('/sistema/integracao-avalia/catalogo', ['produto' => 'avalia_pro'])
+            ->assertSessionHasErrors('catalogo');
+    }
+
+    public function test_salvar_selecao_atualiza_modo_e_provas_marcadas(): void
+    {
+        $p1 = AvaliaAvaliacaoDisponivel::create(['produto' => 'avalia_pro', 'id_externo' => '1', 'nome' => 'Prova 1']);
+        $p2 = AvaliaAvaliacaoDisponivel::create(['produto' => 'avalia_pro', 'id_externo' => '2', 'nome' => 'Prova 2', 'selecionada' => true]);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post('/sistema/integracao-avalia/selecao', [
+                '_method' => 'PUT',
+                'produto' => 'avalia_pro',
+                'modo' => 'selecionadas',
+                'selecionadas' => [$p1->id],
+            ])
+            ->assertRedirect(route('sistema.integracao-avalia.index'));
+
+        $this->assertSame('selecionadas', ConfiguracaoSistema::valor('avalia_modo_avalia_pro'));
+        $this->assertTrue($p1->fresh()->selecionada);
+        $this->assertFalse($p2->fresh()->selecionada);
+    }
+
+    public function test_tela_usa_post_com_spoofing_nos_formularios_de_catalogo_e_selecao(): void
+    {
+        // Mesma regressão do 405 do form de configurações — todo <form> pra
+        // uma rota PUT precisa ser method="POST" + @method('PUT'). O form de
+        // seleção só existe quando há pelo menos uma prova no catálogo.
+        AvaliaAvaliacaoDisponivel::create(['produto' => 'avalia_pro', 'id_externo' => '1', 'nome' => 'Prova 1']);
+
+        $html = $this->actingAs($this->admin(), 'admin')->get('/sistema/integracao-avalia')->getContent();
+
+        $this->assertMatchesRegularExpression('/<form method="POST" action="[^"]*integracao-avalia\/catalogo"/', $html);
+        $this->assertMatchesRegularExpression('/<form method="POST" action="[^"]*integracao-avalia\/selecao"/', $html);
     }
 
     public function test_formulario_de_configuracoes_usa_post_com_spoofing_de_put(): void

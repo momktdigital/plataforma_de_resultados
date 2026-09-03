@@ -185,6 +185,8 @@ Route::middleware('instalado')->group(function () {
             Route::post('/integracao-avalia', [IntegracaoAvaliaController::class, 'store'])->name('integracao-avalia.store');
             Route::put('/integracao-avalia/configuracoes', [IntegracaoAvaliaController::class, 'atualizarConfiguracoes'])->name('integracao-avalia.configuracoes');
             Route::post('/integracao-avalia/testar-conexao', [IntegracaoAvaliaController::class, 'testarConexao'])->name('integracao-avalia.testar-conexao');
+            Route::post('/integracao-avalia/catalogo', [IntegracaoAvaliaController::class, 'atualizarCatalogo'])->name('integracao-avalia.catalogo');
+            Route::put('/integracao-avalia/selecao', [IntegracaoAvaliaController::class, 'atualizarSelecao'])->name('integracao-avalia.selecao');
 
             Route::get('/legado', [LegadoController::class, 'index'])->name('legado.index');
             Route::post('/legado/banco', [LegadoController::class, 'importarDoBanco'])->name('legado.banco');

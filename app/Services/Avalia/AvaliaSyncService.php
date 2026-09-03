@@ -3,6 +3,7 @@
 namespace App\Services\Avalia;
 
 use App\Models\Aluno;
+use App\Models\AvaliaAvaliacaoDisponivel;
 use App\Models\Avaliacao;
 use App\Models\AvaliaSyncExecucao;
 use App\Models\ConfiguracaoSistema;
@@ -43,13 +44,14 @@ class AvaliaSyncService
 
         try {
             $mapaAvaliacoes = $this->carregarMapaAvaliacoes($produto);
+            $idsPermitidos = $this->idsPermitidos($produto);
 
-            $notas = $this->extractor->notas($produto, $this->watermark($produto, 'notas'));
+            $notas = $this->extractor->notas($produto, $this->watermark($produto, 'notas'), $idsPermitidos);
             $novasAvaliacoes = $this->upsertAvaliacoes($produto, $notas, $mapaAvaliacoes);
             $metricasGravadas = $this->upsertMetricas($produto, $notas, $mapaAvaliacoes);
             $this->atualizarWatermark($produto, 'notas', $notas);
 
-            $respostas = $this->extractor->respostas($produto, $this->watermark($produto, 'respostas'));
+            $respostas = $this->extractor->respostas($produto, $this->watermark($produto, 'respostas'), $idsPermitidos);
             $questoesGravadas = $this->upsertQuestoes($produto, $respostas, $mapaAvaliacoes);
             $respostasGravadas = $this->upsertRespostas($produto, $respostas, $mapaAvaliacoes);
             $this->atualizarWatermark($produto, 'respostas', $respostas);
@@ -78,6 +80,71 @@ class AvaliaSyncService
     {
         return Avaliacao::where('origem', $produto)
             ->pluck('codigo', 'id_externo')
+            ->all();
+    }
+
+    /**
+     * Consulta leve as provas/questionários existentes no Avalia (não os
+     * dados de aluno) e atualiza App\Models\AvaliaAvaliacaoDisponivel — usada
+     * pelo botão "Atualizar lista de provas disponíveis" da tela de
+     * Integração, para popular o que o admin pode selecionar. Nunca mexe na
+     * coluna `selecionada` de uma prova já conhecida (só some/some não
+     * escolhas do admin ao atualizar a lista).
+     */
+    public function atualizarCatalogo(string $produto): int
+    {
+        $provas = $this->extractor->listarProvasDisponiveis($produto);
+
+        if ($provas->isEmpty()) {
+            return 0;
+        }
+
+        $agora = now();
+
+        $registros = $provas->map(fn ($p) => [
+            'produto' => $produto,
+            'id_externo' => (string) $p->id_externo,
+            'nome' => $p->nome ?? null,
+            'tipo' => $p->tipo ?? null,
+            'data_referencia' => $p->data_referencia ?? null,
+            'selecionada' => false,
+            'created_at' => $agora,
+            'updated_at' => $agora,
+        ])->all();
+
+        foreach (array_chunk($registros, self::TAMANHO_LOTE) as $lote) {
+            DB::table('avalia_avaliacoes_disponiveis')->upsert(
+                $lote,
+                ['produto', 'id_externo'],
+                // 'selecionada' de propósito fora daqui — não pode resetar a
+                // escolha do admin numa prova que ele já marcou antes.
+                ['nome', 'tipo', 'data_referencia', 'updated_at']
+            );
+        }
+
+        return count($registros);
+    }
+
+    /**
+     * null = sem filtro (sincroniza todas as provas do produto); array = só
+     * as provas com esse id_externo (assessment_id/questionnaire_id). Modo
+     * padrão é 'selecionadas' com nada marcado — ou seja, uma instalação
+     * nova não sincroniza nada até o admin escolher, de propósito (ver
+     * migration de avalia_avaliacoes_disponiveis).
+     *
+     * @return array<int, string>|null
+     */
+    private function idsPermitidos(string $produto): ?array
+    {
+        $modo = ConfiguracaoSistema::valor("avalia_modo_{$produto}", 'selecionadas');
+
+        if ($modo === 'todas') {
+            return null;
+        }
+
+        return AvaliaAvaliacaoDisponivel::where('produto', $produto)
+            ->where('selecionada', true)
+            ->pluck('id_externo')
             ->all();
     }
 

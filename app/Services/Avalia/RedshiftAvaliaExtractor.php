@@ -44,20 +44,29 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
         DB::connection(self::CONNECTION)->select('select 1');
     }
 
-    public function notas(string $produto, ?string $desde): Collection
+    public function notas(string $produto, ?string $desde, ?array $idsPermitidos): Collection
     {
         return match ($produto) {
-            'avalia_pro' => $this->notasPro($desde),
-            'avalia_online' => $this->notasOnline($desde),
+            'avalia_pro' => $this->notasPro($desde, $idsPermitidos),
+            'avalia_online' => $this->notasOnline($desde, $idsPermitidos),
             default => throw new RuntimeException("Produto desconhecido: {$produto}"),
         };
     }
 
-    public function respostas(string $produto, ?string $desde): Collection
+    public function respostas(string $produto, ?string $desde, ?array $idsPermitidos): Collection
     {
         return match ($produto) {
-            'avalia_pro' => $this->respostasPro($desde),
-            'avalia_online' => $this->respostasOnline($desde),
+            'avalia_pro' => $this->respostasPro($desde, $idsPermitidos),
+            'avalia_online' => $this->respostasOnline($desde, $idsPermitidos),
+            default => throw new RuntimeException("Produto desconhecido: {$produto}"),
+        };
+    }
+
+    public function listarProvasDisponiveis(string $produto): Collection
+    {
+        return match ($produto) {
+            'avalia_pro' => $this->provasDisponiveisPro(),
+            'avalia_online' => $this->provasDisponiveisOnline(),
             default => throw new RuntimeException("Produto desconhecido: {$produto}"),
         };
     }
@@ -67,7 +76,7 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
      * (id_externo = "{assessment_id}:{subject_sk}") + uma métrica de nota
      * final em `resultado_metricas`.
      */
-    private function notasPro(?string $desde): Collection
+    private function notasPro(?string $desde, ?array $idsPermitidos): Collection
     {
         return DB::connection(self::CONNECTION)
             ->table('mart_academic.fct_student_exam_subject_scores_avalia_pro as s')
@@ -76,6 +85,7 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
             ->join('dimensions.dim_users as u', 'u.user_sk', '=', 's.user_sk')
             ->where('s.tenant_sk', $this->tenantSk())
             ->whereIn('s.environment_sk', $this->environmentSks())
+            ->when($idsPermitidos !== null, fn ($query) => $query->whereIn('e.assessment_id_avalia_pro', $idsPermitidos))
             ->when($desde !== null, fn ($query) => $query->where('s.cdc_datetime', '>', $desde))
             ->select([
                 's.exam_sk', 's.subject_sk', 's.final_grade', 's.subject_grade', 's.weight',
@@ -89,7 +99,7 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
     }
 
     /** Grão: aluno × prova × questão — cada linha vira uma `respostas`. */
-    private function respostasPro(?string $desde): Collection
+    private function respostasPro(?string $desde, ?array $idsPermitidos): Collection
     {
         return DB::connection(self::CONNECTION)
             ->table('mart_academic.fct_student_exam_questions_avalia_pro as q')
@@ -98,6 +108,7 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
             ->join('dimensions.dim_users as u', 'u.user_sk', '=', 'q.user_sk')
             ->where('q.tenant_sk', $this->tenantSk())
             ->whereIn('q.environment_sk', $this->environmentSks())
+            ->when($idsPermitidos !== null, fn ($query) => $query->whereIn('e.assessment_id_avalia_pro', $idsPermitidos))
             ->when($desde !== null, fn ($query) => $query->where('q.cdc_datetime', '>', $desde))
             ->select([
                 'q.exam_sk', 'q.subject_sk', 'q.question_grade', 'q.question_weight',
@@ -113,7 +124,7 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
      * Grão: aluno × questionário × tentativa. `questionnaire_type_avalia_online`
      * filtra para trazer só avaliações (não pesquisas/formulários).
      */
-    private function notasOnline(?string $desde): Collection
+    private function notasOnline(?string $desde, ?array $idsPermitidos): Collection
     {
         return DB::connection(self::CONNECTION)
             ->table('mart_academic.fct_activities_avalia as a')
@@ -123,6 +134,7 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
             ->whereIn('a.environment_sk', $this->environmentSks())
             ->where('a.activity_is_deleted', false)
             ->where('qn.questionnaire_type_avalia_online', 'avaliacao')
+            ->when($idsPermitidos !== null, fn ($query) => $query->whereIn('qn.questionnaire_id_avalia_online', $idsPermitidos))
             ->when($desde !== null, fn ($query) => $query->where('a.activity_finished_at', '>', $desde))
             ->select([
                 'a.questionnaire_sk', 'a.activity_attempt', 'a.activity_grade', 'a.activity_final_grade',
@@ -138,7 +150,7 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
      * fato do Avalia Online não expõe o texto da resposta, só a nota (ver
      * aviso na docblock da classe).
      */
-    private function respostasOnline(?string $desde): Collection
+    private function respostasOnline(?string $desde, ?array $idsPermitidos): Collection
     {
         return DB::connection(self::CONNECTION)
             ->table('mart_academic.fct_activities_questions_avalia as aq')
@@ -149,6 +161,7 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
             ->whereIn('aq.environment_sk', $this->environmentSks())
             ->where('aq.activity_is_deleted', false)
             ->where('aq.question_is_deleted', false)
+            ->when($idsPermitidos !== null, fn ($query) => $query->whereIn('qn.questionnaire_id_avalia_online', $idsPermitidos))
             ->when($desde !== null, fn ($query) => $query->where('aq.question_corrected_at', '>', $desde))
             ->select([
                 'aq.questionnaire_sk', 'aq.question_user_grade', 'aq.question_has_answer',
@@ -157,6 +170,44 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
                 'dq.question_id_avalia_online as question_id', 'dq.question_text_avalia_online',
                 'u.user_identity_document_integrate_module as cpf',
             ])
+            ->get();
+    }
+
+    /**
+     * Lista leve das provas do Avalia Pro — DISTINCT em `dim_exams`, não na
+     * fato (que tem grão aluno×prova, ordens de magnitude maior). Uma linha
+     * por prova (assessment_id), não por disciplina.
+     */
+    private function provasDisponiveisPro(): Collection
+    {
+        return DB::connection(self::CONNECTION)
+            ->table('dimensions.dim_exams as e')
+            ->where('e.tenant_sk', $this->tenantSk())
+            ->whereIn('e.environment_sk', $this->environmentSks())
+            ->select([
+                'e.assessment_id_avalia_pro as id_externo',
+                'e.assessment_name_avalia_pro as nome',
+                'e.exam_type_name_avalia_pro as tipo',
+                'e.assessment_start_date_avalia_pro as data_referencia',
+            ])
+            ->distinct()
+            ->orderByDesc('e.assessment_start_date_avalia_pro')
+            ->get();
+    }
+
+    /** Lista leve dos questionários do Avalia Online — DISTINCT em `dim_questionnaires`. */
+    private function provasDisponiveisOnline(): Collection
+    {
+        return DB::connection(self::CONNECTION)
+            ->table('dimensions.dim_questionnaires as qn')
+            ->where('qn.tenant_sk', $this->tenantSk())
+            ->whereIn('qn.environment_sk', $this->environmentSks())
+            ->where('qn.questionnaire_type_avalia_online', 'avaliacao')
+            ->select([
+                'qn.questionnaire_id_avalia_online as id_externo',
+                'qn.questionnaire_name_avalia_online as nome',
+            ])
+            ->distinct()
             ->get();
     }
 
