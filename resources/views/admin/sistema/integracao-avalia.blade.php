@@ -182,6 +182,7 @@
                 <th class="px-4 py-3">Duração</th>
                 <th class="px-4 py-3">Status</th>
                 <th class="px-4 py-3">Linhas</th>
+                <th class="px-4 py-3">Sem identificador</th>
             </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
@@ -208,10 +209,19 @@
                         @endif
                     </td>
                     <td class="px-4 py-3 text-slate-500">{{ $execucao->linhas_gravadas ?? '—' }} / {{ $execucao->linhas_lidas ?? '—' }}</td>
+                    <td class="px-4 py-3">
+                        @if ($execucao->linhas_sem_identificador)
+                            <span class="text-amber-700 font-medium" title="Linhas do Avalia sem CPF cadastrado — não puderam ser vinculadas a um aluno.">
+                                {{ $execucao->linhas_sem_identificador }}
+                            </span>
+                        @else
+                            <span class="text-slate-400">—</span>
+                        @endif
+                    </td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="6" class="px-4 py-8 text-center text-slate-400">Nenhuma sincronização registrada ainda.</td>
+                    <td colspan="7" class="px-4 py-8 text-center text-slate-400">Nenhuma sincronização registrada ainda.</td>
                 </tr>
             @endforelse
         </tbody>

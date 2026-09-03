@@ -48,12 +48,12 @@ class AvaliaSyncService
 
             $notas = $this->extractor->notas($produto, $this->watermark($produto, 'notas'), $idsPermitidos);
             $novasAvaliacoes = $this->upsertAvaliacoes($produto, $notas, $mapaAvaliacoes);
-            $metricasGravadas = $this->upsertMetricas($produto, $notas, $mapaAvaliacoes);
+            ['gravadas' => $metricasGravadas, 'sem_identificador' => $metricasSemId] = $this->upsertMetricas($produto, $notas, $mapaAvaliacoes);
             $this->atualizarWatermark($produto, 'notas', $notas);
 
             $respostas = $this->extractor->respostas($produto, $this->watermark($produto, 'respostas'), $idsPermitidos);
             $questoesGravadas = $this->upsertQuestoes($produto, $respostas, $mapaAvaliacoes);
-            $respostasGravadas = $this->upsertRespostas($produto, $respostas, $mapaAvaliacoes);
+            ['gravadas' => $respostasGravadas, 'sem_identificador' => $respostasSemId] = $this->upsertRespostas($produto, $respostas, $mapaAvaliacoes);
             $this->atualizarWatermark($produto, 'respostas', $respostas);
 
             $execucao->update([
@@ -61,6 +61,12 @@ class AvaliaSyncService
                 'concluido_em' => now(),
                 'linhas_lidas' => $notas->count() + $respostas->count(),
                 'linhas_gravadas' => $novasAvaliacoes + $metricasGravadas + $questoesGravadas + $respostasGravadas,
+                // Linhas que vieram do Avalia sem CPF (obrigatório em
+                // respostas/resultado_metricas) e por isso foram descartadas
+                // — ver migration 2026_09_05_100000. Um número alto aqui
+                // costuma indicar que o CPF não está vindo populado do lado
+                // do Avalia pra esse produto/ambiente, não um bug daqui.
+                'linhas_sem_identificador' => $metricasSemId + $respostasSemId,
             ]);
         } catch (Throwable $e) {
             $execucao->update([
@@ -194,20 +200,26 @@ class AvaliaSyncService
         return $criadas;
     }
 
-    /** @param  array<string, int>  $mapaAvaliacoes */
-    private function upsertMetricas(string $produto, Collection $notas, array $mapaAvaliacoes): int
+    /**
+     * @param  array<string, int>  $mapaAvaliacoes
+     * @return array{gravadas: int, sem_identificador: int}
+     */
+    private function upsertMetricas(string $produto, Collection $notas, array $mapaAvaliacoes): array
     {
         $cpfs = $notas->pluck('cpf')->filter()->unique()->values()->all();
         $alunoIdPorCpf = $this->resolverAlunoIdsPorCpf($cpfs);
 
         $agora = now();
         $gravadas = 0;
+        $semIdentificador = 0;
 
         foreach ($notas->chunk(self::TAMANHO_LOTE) as $lote) {
             $registros = [];
 
             foreach ($lote as $linha) {
                 if ($linha->cpf === null) {
+                    $semIdentificador++;
+
                     continue;
                 }
 
@@ -248,7 +260,7 @@ class AvaliaSyncService
             $gravadas += count($registros);
         }
 
-        return $gravadas;
+        return ['gravadas' => $gravadas, 'sem_identificador' => $semIdentificador];
     }
 
     /** @param  array<string, int>  $mapaAvaliacoes */
@@ -330,14 +342,18 @@ class AvaliaSyncService
         return $existentes;
     }
 
-    /** @param  array<string, int>  $mapaAvaliacoes */
-    private function upsertRespostas(string $produto, Collection $respostas, array $mapaAvaliacoes): int
+    /**
+     * @param  array<string, int>  $mapaAvaliacoes
+     * @return array{gravadas: int, sem_identificador: int}
+     */
+    private function upsertRespostas(string $produto, Collection $respostas, array $mapaAvaliacoes): array
     {
         $cpfs = $respostas->pluck('cpf')->filter()->unique()->values()->all();
         $alunoIdPorCpf = $this->resolverAlunoIdsPorCpf($cpfs);
 
         $agora = now();
         $gravadas = 0;
+        $semIdentificador = 0;
 
         $porAvaliacao = $respostas->groupBy(fn ($linha) => $mapaAvaliacoes[$this->chaveAvaliacao($produto, $linha)] ?? null);
 
@@ -357,6 +373,8 @@ class AvaliaSyncService
 
                 foreach ($lote as $linha) {
                     if ($linha->cpf === null) {
+                        $semIdentificador++;
+
                         continue;
                     }
 
@@ -395,7 +413,7 @@ class AvaliaSyncService
             }
         }
 
-        return $gravadas;
+        return ['gravadas' => $gravadas, 'sem_identificador' => $semIdentificador];
     }
 
     /**

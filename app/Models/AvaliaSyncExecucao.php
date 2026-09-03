@@ -34,6 +34,7 @@ class AvaliaSyncExecucao extends Model
         'concluido_em',
         'linhas_lidas',
         'linhas_gravadas',
+        'linhas_sem_identificador',
         'mensagem_erro',
     ];
 

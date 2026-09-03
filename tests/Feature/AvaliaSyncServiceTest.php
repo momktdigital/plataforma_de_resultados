@@ -216,6 +216,47 @@ class AvaliaSyncServiceTest extends TestCase
         ];
     }
 
+    public function test_linhas_sem_cpf_sao_contadas_mas_nao_gravadas(): void
+    {
+        // Regressão do incidente real: dim_users.user_identity_document_integrate_module
+        // veio nulo pra todo mundo no Avalia Pro desta IES — as questões
+        // foram criadas (não dependem de CPF) mas nenhuma resposta/nota, sem
+        // nenhum aviso na tela. Este teste garante que agora o número de
+        // linhas descartadas fica visível em linhas_sem_identificador.
+        ConfiguracaoSistema::definir('avalia_modo_avalia_pro', 'todas');
+
+        $notaSemCpf = $this->notaProFake(100, 7);
+        $notaSemCpf->cpf = null;
+
+        $respostaSemCpf1 = (object) [
+            'exam_sk' => 1, 'subject_sk' => 7, 'question_grade' => 1, 'question_weight' => 1,
+            'question_answer' => 'A', 'answer_status' => 'correta', 'watermark' => '2026-09-01 10:00:00',
+            'assessment_id_avalia_pro' => 100, 'question_id' => 501, 'question_text_avalia_pro' => 'Q1',
+            'cpf' => null,
+        ];
+        $respostaSemCpf2 = (object) [
+            'exam_sk' => 1, 'subject_sk' => 7, 'question_grade' => 0, 'question_weight' => 1,
+            'question_answer' => 'B', 'answer_status' => 'errada', 'watermark' => '2026-09-01 10:00:00',
+            'assessment_id_avalia_pro' => 100, 'question_id' => 502, 'question_text_avalia_pro' => 'Q2',
+            'cpf' => null,
+        ];
+
+        $extractor = new FakeAvaliaExtractor(
+            notas: new Collection([$notaSemCpf]),
+            respostas: new Collection([$respostaSemCpf1, $respostaSemCpf2]),
+        );
+
+        $execucao = (new AvaliaSyncService($extractor))->sincronizar('avalia_pro', AvaliaSyncExecucao::DISPARADO_MANUAL);
+
+        // A avaliação e as questões existem (não dependem de CPF)...
+        $this->assertDatabaseCount('avaliacoes', 1);
+        $this->assertDatabaseCount('questoes', 2);
+        // ...mas nenhuma resposta/nota foi gravada, e isso fica visível no log.
+        $this->assertDatabaseCount('respostas', 0);
+        $this->assertDatabaseCount('resultado_metricas', 0);
+        $this->assertSame(1 + 2, $execucao->linhas_sem_identificador);
+    }
+
     public function test_execucao_registra_erro_e_relanca_quando_extrator_falha(): void
     {
         $service = new AvaliaSyncService(new FailingAvaliaExtractor);
