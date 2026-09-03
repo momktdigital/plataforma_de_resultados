@@ -73,11 +73,23 @@ class AvaliaSyncService
                 'linhas_sem_identificador' => $metricasSemId + $respostasSemId,
             ]);
         } catch (Throwable $e) {
-            $execucao->update([
-                'status' => AvaliaSyncExecucao::STATUS_ERRO,
-                'concluido_em' => now(),
-                'mensagem_erro' => $e->getMessage(),
-            ]);
+            // Incidente real: se essa própria atualização falhar (ex.: banco
+            // desatualizado sem uma coluna que o código já espera — como
+            // aconteceu em homologação), a exceção secundária mascarava a
+            // original e a linha ficava presa em 'processando' pra sempre,
+            // sem NENHUMA mensagem de erro registrada. Isolado aqui — o pior
+            // caso agora é "sem detalhe no log", nunca "trava tudo sem
+            // rastro" (AvaliaSyncExecucao::marcarTravadasComoErro() ainda
+            // destrava a tela mais tarde de qualquer forma).
+            try {
+                $execucao->update([
+                    'status' => AvaliaSyncExecucao::STATUS_ERRO,
+                    'concluido_em' => now(),
+                    'mensagem_erro' => $e->getMessage(),
+                ]);
+            } catch (Throwable $erroAoRegistrar) {
+                report($erroAoRegistrar);
+            }
 
             throw $e;
         }
