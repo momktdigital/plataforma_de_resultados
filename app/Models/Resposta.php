@@ -40,6 +40,8 @@ class Resposta extends Model
         'periodo',
         'questao_numero',
         'resposta',
+        'origem',
+        'id_externo',
     ];
 
     protected function casts(): array

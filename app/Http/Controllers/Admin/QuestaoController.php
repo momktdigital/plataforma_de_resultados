@@ -29,12 +29,19 @@ class QuestaoController extends Controller
     /** Tipos de questao_referencias editáveis como "chips" no formulário. */
     private const TIPOS_REFERENCIA = ['matriz_prova', 'dcn', 'portaria_inep', 'ppc'];
 
+    /** Ver Avaliacao::origemBloqueiaEdicao(). */
+    private const ERRO_ORIGEM_AVALIA = 'Esta avaliação foi sincronizada do Avalia e suas questões não podem ser editadas por aqui — qualquer alteração seria sobrescrita na próxima sincronização.';
+
     public function store(
         StoreQuestaoRequest $request,
         Avaliacao $avaliacao,
         ResumoResultadoService $resumos,
         QuestaoReferenciaService $referencias,
     ): RedirectResponse {
+        if ($avaliacao->origemBloqueiaEdicao()) {
+            return back()->withErrors(['origem' => self::ERRO_ORIGEM_AVALIA]);
+        }
+
         $dados = $request->validated();
 
         $questao = Questao::withTrashed()
@@ -89,6 +96,10 @@ class QuestaoController extends Controller
 
     public function destroy(Avaliacao $avaliacao, Questao $questao, ResumoResultadoService $resumos): RedirectResponse
     {
+        if ($avaliacao->origemBloqueiaEdicao()) {
+            return back()->withErrors(['origem' => self::ERRO_ORIGEM_AVALIA]);
+        }
+
         $questao->delete();
 
         $resumos->recalcular($avaliacao->codigo);
@@ -105,6 +116,10 @@ class QuestaoController extends Controller
 
     public function destroyBulk(Request $request, Avaliacao $avaliacao, ResumoResultadoService $resumos): RedirectResponse
     {
+        if ($avaliacao->origemBloqueiaEdicao()) {
+            return back()->withErrors(['origem' => self::ERRO_ORIGEM_AVALIA]);
+        }
+
         $ids = array_values(array_unique(array_map('intval', $request->input('ids', []))));
 
         if ($ids === []) {
@@ -133,6 +148,10 @@ class QuestaoController extends Controller
 
     public function restore(Avaliacao $avaliacao, int $questao, ResumoResultadoService $resumos): RedirectResponse
     {
+        if ($avaliacao->origemBloqueiaEdicao()) {
+            return back()->withErrors(['origem' => self::ERRO_ORIGEM_AVALIA]);
+        }
+
         $questaoModel = Questao::withTrashed()
             ->where('avaliacao_codigo', $avaliacao->codigo)
             ->findOrFail($questao);

@@ -24,6 +24,13 @@ return Application::configure(basePath: dirname(__DIR__))
         // sem supervisão contraria a confirmação manual de tag/hash exigida
         // na tela de atualização (ver AtualizacaoController).
         $schedule->command('sistema:atualizar --check')->daily()->onOneServer();
+
+        // A cada 12h — cai dentro da janela de atualização do próprio +A
+        // Data (diariamente entre 06h30 e 00h30, a cada 3h em dias úteis),
+        // então nunca sincronizamos mais rápido do que o dado de origem é
+        // atualizado. Sem efeito enquanto REDSHIFT_HOST não estiver
+        // configurado (ver AvaliaSyncService/RedshiftAvaliaExtractor).
+        $schedule->command('avalia:sincronizar')->twiceDaily(6, 18)->onOneServer();
     })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([

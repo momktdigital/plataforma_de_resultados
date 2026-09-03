@@ -26,6 +26,8 @@ class Questao extends Model
         'miller_nivel',
         'dificuldade_pedagogica',
         'dificuldade_tri',
+        'origem',
+        'id_externo',
     ];
 
     protected function casts(): array

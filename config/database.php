@@ -99,6 +99,27 @@ return [
             'sslmode' => env('DB_SSLMODE', 'prefer'),
         ],
 
+        // +A Data / Redshift do Avalia — somente leitura (o usuário fornecido
+        // pelo Avalia só tem SELECT). Nunca é a conexão 'default' da
+        // aplicação: é usada explicitamente por
+        // App\Services\Avalia\RedshiftAvaliaExtractor via
+        // DB::connection('redshift'). Redshift fala o protocolo PostgreSQL,
+        // então o driver 'pgsql' (extensão PHP pdo_pgsql) funciona normalmente
+        // para leitura — ver AvaliaSyncStatusTracker/tela de integração para
+        // como testar essa conexão.
+        'redshift' => [
+            'driver' => 'pgsql',
+            'host' => env('REDSHIFT_HOST'),
+            'port' => env('REDSHIFT_PORT', '5439'),
+            'database' => env('REDSHIFT_DATABASE'),
+            'username' => env('REDSHIFT_USERNAME'),
+            'password' => env('REDSHIFT_PASSWORD'),
+            'charset' => 'utf8',
+            'prefix' => '',
+            'search_path' => 'public',
+            'sslmode' => env('REDSHIFT_SSLMODE', 'prefer'),
+        ],
+
         'sqlsrv' => [
             'driver' => 'sqlsrv',
             'url' => env('DB_URL'),

@@ -1,0 +1,373 @@
+<?php
+
+namespace App\Services\Avalia;
+
+use App\Models\Aluno;
+use App\Models\Avaliacao;
+use App\Models\AvaliaSyncExecucao;
+use App\Models\ConfiguracaoSistema;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Throwable;
+
+/**
+ * Orquestra uma sincronização com o Avalia: extrai (AvaliaExtractorContract),
+ * transforma para o schema desta aplicação e grava. Segue a mesma divisão
+ * que o resto do projeto usa entre Eloquent e DB::table (ver CLAUDE.md):
+ * `avaliacoes`/`questoes` (baixa cardinalidade — uma linha por
+ * avaliação/questão, não por respondente) via Eloquent updateOrCreate();
+ * `respostas`/`resultado_metricas` (cresce aluno × avaliação × questão) via
+ * DB::table()->upsert() em lote, igual a ResultadoImportService/QuestaoImportService.
+ *
+ * Cada avaliação sincronizada daqui é uma (prova, disciplina) do Avalia Pro
+ * ou um questionário do Avalia Online — não a prova inteira "globalizada"
+ * (decisão registrada na conversa de planejamento da integração).
+ */
+class AvaliaSyncService
+{
+    private const TAMANHO_LOTE = 1000;
+
+    private const NOME_METRICA_NOTA_FINAL = 'Nota Final';
+
+    public function __construct(private readonly AvaliaExtractorContract $extractor = new RedshiftAvaliaExtractor) {}
+
+    public function sincronizar(string $produto, string $disparadoPor, ?int $adminId = null): AvaliaSyncExecucao
+    {
+        $execucao = AvaliaSyncExecucao::create([
+            'produto' => $produto,
+            'status' => AvaliaSyncExecucao::STATUS_PROCESSANDO,
+            'disparado_por' => $disparadoPor,
+            'admin_id' => $adminId,
+            'iniciado_em' => now(),
+        ]);
+
+        try {
+            $mapaAvaliacoes = $this->carregarMapaAvaliacoes($produto);
+
+            $notas = $this->extractor->notas($produto, $this->watermark($produto, 'notas'));
+            $novasAvaliacoes = $this->upsertAvaliacoes($produto, $notas, $mapaAvaliacoes);
+            $metricasGravadas = $this->upsertMetricas($produto, $notas, $mapaAvaliacoes);
+            $this->atualizarWatermark($produto, 'notas', $notas);
+
+            $respostas = $this->extractor->respostas($produto, $this->watermark($produto, 'respostas'));
+            $questoesGravadas = $this->upsertQuestoes($produto, $respostas, $mapaAvaliacoes);
+            $respostasGravadas = $this->upsertRespostas($produto, $respostas, $mapaAvaliacoes);
+            $this->atualizarWatermark($produto, 'respostas', $respostas);
+
+            $execucao->update([
+                'status' => AvaliaSyncExecucao::STATUS_SUCESSO,
+                'concluido_em' => now(),
+                'linhas_lidas' => $notas->count() + $respostas->count(),
+                'linhas_gravadas' => $novasAvaliacoes + $metricasGravadas + $questoesGravadas + $respostasGravadas,
+            ]);
+        } catch (Throwable $e) {
+            $execucao->update([
+                'status' => AvaliaSyncExecucao::STATUS_ERRO,
+                'concluido_em' => now(),
+                'mensagem_erro' => $e->getMessage(),
+            ]);
+
+            throw $e;
+        }
+
+        return $execucao;
+    }
+
+    /** @return array<string, int> id_externo da avaliação => avaliacoes.codigo */
+    private function carregarMapaAvaliacoes(string $produto): array
+    {
+        return Avaliacao::where('origem', $produto)
+            ->pluck('codigo', 'id_externo')
+            ->all();
+    }
+
+    private function chaveAvaliacao(string $produto, object $linha): string
+    {
+        return $produto === 'avalia_pro'
+            ? "{$linha->assessment_id_avalia_pro}:{$linha->subject_sk}"
+            : (string) $linha->questionnaire_id_avalia_online;
+    }
+
+    /**
+     * Cria/atualiza as avaliações referenciadas nas linhas de nota — uma por
+     * (prova, disciplina) no Avalia Pro, uma por questionário no Avalia
+     * Online. Atualiza $mapaAvaliacoes (por referência) com os códigos novos.
+     *
+     * @param  array<string, int>  $mapaAvaliacoes
+     */
+    private function upsertAvaliacoes(string $produto, Collection $notas, array &$mapaAvaliacoes): int
+    {
+        $criadas = 0;
+
+        foreach ($notas->unique(fn ($linha) => $this->chaveAvaliacao($produto, $linha)) as $linha) {
+            $chave = $this->chaveAvaliacao($produto, $linha);
+
+            $dados = $produto === 'avalia_pro'
+                ? [
+                    'nome' => trim("{$linha->assessment_name_avalia_pro} — {$linha->subject_name_avalia_pro}"),
+                    'tipo' => $linha->exam_type_name_avalia_pro,
+                ]
+                : [
+                    'nome' => $linha->questionnaire_name_avalia_online,
+                    'tipo' => 'Avalia Online',
+                ];
+
+            $avaliacao = Avaliacao::updateOrCreate(
+                ['origem' => $produto, 'id_externo' => $chave],
+                $dados,
+            );
+
+            if ($avaliacao->wasRecentlyCreated) {
+                $criadas++;
+            }
+
+            $mapaAvaliacoes[$chave] = $avaliacao->codigo;
+        }
+
+        return $criadas;
+    }
+
+    /** @param  array<string, int>  $mapaAvaliacoes */
+    private function upsertMetricas(string $produto, Collection $notas, array $mapaAvaliacoes): int
+    {
+        $cpfs = $notas->pluck('cpf')->filter()->unique()->values()->all();
+        $alunoIdPorCpf = $this->resolverAlunoIdsPorCpf($cpfs);
+
+        $agora = now();
+        $gravadas = 0;
+
+        foreach ($notas->chunk(self::TAMANHO_LOTE) as $lote) {
+            $registros = [];
+
+            foreach ($lote as $linha) {
+                if ($linha->cpf === null) {
+                    continue;
+                }
+
+                $chave = $this->chaveAvaliacao($produto, $linha);
+                $avaliacaoCodigo = $mapaAvaliacoes[$chave] ?? null;
+                if ($avaliacaoCodigo === null) {
+                    continue;
+                }
+
+                $notaFinal = $produto === 'avalia_pro' ? $linha->final_grade : $linha->activity_final_grade;
+
+                $registros[] = [
+                    'avaliacao_codigo' => $avaliacaoCodigo,
+                    'cpf' => $linha->cpf,
+                    'ra' => null,
+                    'periodo' => '',
+                    'nome_metrica' => self::NOME_METRICA_NOTA_FINAL,
+                    'valor' => $notaFinal !== null ? (string) $notaFinal : null,
+                    'aluno_id' => $alunoIdPorCpf[$linha->cpf] ?? null,
+                    'origem' => $produto,
+                    'id_externo' => $chave,
+                    'deleted_at' => null,
+                    'created_at' => $agora,
+                    'updated_at' => $agora,
+                ];
+            }
+
+            if ($registros === []) {
+                continue;
+            }
+
+            DB::table('resultado_metricas')->upsert(
+                $registros,
+                ['avaliacao_codigo', 'aluno_chave', 'periodo', 'nome_metrica'],
+                ['valor', 'aluno_id', 'origem', 'id_externo', 'deleted_at', 'updated_at']
+            );
+
+            $gravadas += count($registros);
+        }
+
+        return $gravadas;
+    }
+
+    /** @param  array<string, int>  $mapaAvaliacoes */
+    private function upsertQuestoes(string $produto, Collection $respostas, array $mapaAvaliacoes): int
+    {
+        $agora = now();
+        $gravadas = 0;
+
+        $porAvaliacao = $respostas->groupBy(fn ($linha) => $mapaAvaliacoes[$this->chaveAvaliacao($produto, $linha)] ?? null);
+
+        foreach ($porAvaliacao as $avaliacaoCodigo => $linhasDaAvaliacao) {
+            if ($avaliacaoCodigo === null) {
+                continue;
+            }
+
+            $numeroPorIdExterno = $this->resolverNumerosQuestao($avaliacaoCodigo, $produto, $linhasDaAvaliacao);
+
+            $registros = [];
+            foreach ($linhasDaAvaliacao->unique('question_id') as $linha) {
+                $idExterno = (string) $linha->question_id;
+
+                $registros[] = [
+                    'avaliacao_codigo' => $avaliacaoCodigo,
+                    'numero' => $numeroPorIdExterno[$idExterno],
+                    // Sem gabarito próprio: o Avalia já manda o veredito
+                    // pronto por resposta (answer_status/question_user_grade)
+                    // — ver AvaliaSyncService::upsertRespostas(). '-' é só
+                    // para satisfazer a coluna NOT NULL do schema legado.
+                    'gabarito' => '-',
+                    'origem' => $produto,
+                    'id_externo' => $idExterno,
+                    'deleted_at' => null,
+                    'created_at' => $agora,
+                    'updated_at' => $agora,
+                ];
+            }
+
+            foreach (array_chunk($registros, self::TAMANHO_LOTE) as $lote) {
+                DB::table('questoes')->upsert(
+                    $lote,
+                    ['avaliacao_codigo', 'id_externo'],
+                    ['deleted_at', 'updated_at']
+                );
+                $gravadas += count($lote);
+            }
+        }
+
+        return $gravadas;
+    }
+
+    /**
+     * O Avalia não expõe uma posição/ordinal da questão dentro da prova —
+     * só o id dela. `questoes.numero` é obrigatório e único por avaliação,
+     * então atribuímos um número sequencial determinístico (ordenado pelo
+     * id externo) na primeira vez que a questão aparece, e preservamos o
+     * número já atribuído nas sincronizações seguintes.
+     *
+     * @return array<string, int> id_externo da questão => numero
+     */
+    private function resolverNumerosQuestao(int $avaliacaoCodigo, string $produto, Collection $linhasDaAvaliacao): array
+    {
+        $existentes = DB::table('questoes')
+            ->where('avaliacao_codigo', $avaliacaoCodigo)
+            ->whereNotNull('id_externo')
+            ->pluck('numero', 'id_externo')
+            ->all();
+
+        $proximoNumero = $existentes === [] ? 1 : max($existentes) + 1;
+
+        $idsExternos = $linhasDaAvaliacao->pluck('question_id')->unique()->sort()->values();
+
+        foreach ($idsExternos as $idExterno) {
+            $idExterno = (string) $idExterno;
+            if (! isset($existentes[$idExterno])) {
+                $existentes[$idExterno] = $proximoNumero++;
+            }
+        }
+
+        return $existentes;
+    }
+
+    /** @param  array<string, int>  $mapaAvaliacoes */
+    private function upsertRespostas(string $produto, Collection $respostas, array $mapaAvaliacoes): int
+    {
+        $cpfs = $respostas->pluck('cpf')->filter()->unique()->values()->all();
+        $alunoIdPorCpf = $this->resolverAlunoIdsPorCpf($cpfs);
+
+        $agora = now();
+        $gravadas = 0;
+
+        $porAvaliacao = $respostas->groupBy(fn ($linha) => $mapaAvaliacoes[$this->chaveAvaliacao($produto, $linha)] ?? null);
+
+        foreach ($porAvaliacao as $avaliacaoCodigo => $linhasDaAvaliacao) {
+            if ($avaliacaoCodigo === null) {
+                continue;
+            }
+
+            // Um SELECT por avaliação (não por linha) — os números já foram
+            // atribuídos por upsertQuestoes() logo antes, no mesmo ciclo.
+            $numeroPorIdExterno = DB::table('questoes')
+                ->where('avaliacao_codigo', $avaliacaoCodigo)
+                ->pluck('numero', 'id_externo');
+
+            foreach ($linhasDaAvaliacao->chunk(self::TAMANHO_LOTE) as $lote) {
+                $registros = [];
+
+                foreach ($lote as $linha) {
+                    if ($linha->cpf === null) {
+                        continue;
+                    }
+
+                    $questaoNumero = $numeroPorIdExterno[(string) $linha->question_id] ?? null;
+                    if ($questaoNumero === null) {
+                        continue;
+                    }
+
+                    $registros[] = [
+                        'avaliacao_codigo' => $avaliacaoCodigo,
+                        'cpf' => $linha->cpf,
+                        'ra' => null,
+                        'periodo' => '',
+                        'questao_numero' => $questaoNumero,
+                        'resposta' => $this->respostaTexto($produto, $linha),
+                        'aluno_id' => $alunoIdPorCpf[$linha->cpf] ?? null,
+                        'origem' => $produto,
+                        'id_externo' => (string) $linha->question_id,
+                        'deleted_at' => null,
+                        'created_at' => $agora,
+                        'updated_at' => $agora,
+                    ];
+                }
+
+                if ($registros === []) {
+                    continue;
+                }
+
+                DB::table('respostas')->upsert(
+                    $registros,
+                    ['avaliacao_codigo', 'aluno_chave', 'periodo', 'questao_numero'],
+                    ['resposta', 'aluno_id', 'origem', 'id_externo', 'deleted_at', 'updated_at']
+                );
+
+                $gravadas += count($registros);
+            }
+        }
+
+        return $gravadas;
+    }
+
+    /**
+     * Avalia Pro manda a resposta escolhida; Avalia Online não expõe esse
+     * texto (ver aviso em RedshiftAvaliaExtractor) — fica null, só a nota
+     * (question_user_grade, gravada como métrica separada) fica disponível.
+     */
+    private function respostaTexto(string $produto, object $linha): ?string
+    {
+        return $produto === 'avalia_pro' ? $linha->question_answer : null;
+    }
+
+    /** @param  array<int, string>  $cpfs @return array<string, int> */
+    private function resolverAlunoIdsPorCpf(array $cpfs): array
+    {
+        if ($cpfs === []) {
+            return [];
+        }
+
+        return Aluno::whereIn('cpf', $cpfs)->orderBy('id')->pluck('id', 'cpf')->all();
+    }
+
+    private function watermark(string $produto, string $fonte): ?string
+    {
+        return ConfiguracaoSistema::valor("avalia_watermark_{$fonte}_{$produto}");
+    }
+
+    /**
+     * Cada consulta do extractor já normaliza sua coluna de "última
+     * atualização" (cdc_datetime, activity_finished_at ou
+     * question_corrected_at, dependendo do produto/fonte) para `watermark`
+     * — ver RedshiftAvaliaExtractor.
+     */
+    private function atualizarWatermark(string $produto, string $fonte, Collection $linhas): void
+    {
+        $maisRecente = $linhas->pluck('watermark')->filter()->max();
+
+        if ($maisRecente !== null) {
+            ConfiguracaoSistema::definir("avalia_watermark_{$fonte}_{$produto}", (string) $maisRecente);
+        }
+    }
+}

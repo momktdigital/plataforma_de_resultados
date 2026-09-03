@@ -26,6 +26,8 @@ class ResultadoMetrica extends Model
         'periodo',
         'nome_metrica',
         'valor',
+        'origem',
+        'id_externo',
     ];
 
     public function avaliacao(): BelongsTo

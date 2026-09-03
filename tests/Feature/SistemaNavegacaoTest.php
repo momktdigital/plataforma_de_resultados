@@ -31,6 +31,7 @@ class SistemaNavegacaoTest extends TestCase
         $response->assertOk();
         $response->assertSee('Geral');
         $response->assertSee('Backups');
+        $response->assertSee('Integração Avalia');
         $response->assertSee('Dados legados');
         $response->assertSee('Atualizações');
         $response->assertSee('Auditoria');
@@ -41,6 +42,7 @@ class SistemaNavegacaoTest extends TestCase
         return [
             'configurações' => ['/sistema/configuracoes'],
             'backups' => ['/sistema/backups'],
+            'integração avalia' => ['/sistema/integracao-avalia'],
             'dados legados' => ['/sistema/legado'],
             'atualizações' => ['/sistema/atualizacao'],
             'auditoria' => ['/sistema/atividades'],

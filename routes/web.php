@@ -23,6 +23,7 @@ use App\Http\Controllers\Sistema\AtividadeController;
 use App\Http\Controllers\Sistema\AtualizacaoController;
 use App\Http\Controllers\Sistema\BackupController;
 use App\Http\Controllers\Sistema\ConfiguracaoController;
+use App\Http\Controllers\Sistema\IntegracaoAvaliaController;
 use App\Http\Controllers\Sistema\LegadoController;
 use App\Http\Controllers\Sistema\PortalConfiguracaoController;
 use Illuminate\Support\Facades\Auth;
@@ -179,6 +180,11 @@ Route::middleware('instalado')->group(function () {
             Route::post('/atualizacao', [AtualizacaoController::class, 'store'])->name('atualizacao.store');
 
             Route::get('/atividades', [AtividadeController::class, 'index'])->name('atividades.index');
+
+            Route::get('/integracao-avalia', [IntegracaoAvaliaController::class, 'index'])->name('integracao-avalia.index');
+            Route::post('/integracao-avalia', [IntegracaoAvaliaController::class, 'store'])->name('integracao-avalia.store');
+            Route::put('/integracao-avalia/configuracoes', [IntegracaoAvaliaController::class, 'atualizarConfiguracoes'])->name('integracao-avalia.configuracoes');
+            Route::post('/integracao-avalia/testar-conexao', [IntegracaoAvaliaController::class, 'testarConexao'])->name('integracao-avalia.testar-conexao');
 
             Route::get('/legado', [LegadoController::class, 'index'])->name('legado.index');
             Route::post('/legado/banco', [LegadoController::class, 'importarDoBanco'])->name('legado.banco');

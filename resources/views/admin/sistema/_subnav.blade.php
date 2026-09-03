@@ -3,6 +3,7 @@
         ['label' => 'Geral', 'route' => 'sistema.configuracoes.index', 'padrao' => 'sistema.configuracoes.*'],
         ['label' => 'Portal público', 'route' => 'sistema.portal.index', 'padrao' => 'sistema.portal.*'],
         ['label' => 'Backups', 'route' => 'sistema.backups.index', 'padrao' => 'sistema.backups.*'],
+        ['label' => 'Integração Avalia', 'route' => 'sistema.integracao-avalia.index', 'padrao' => 'sistema.integracao-avalia.*'],
         ['label' => 'Dados legados', 'route' => 'sistema.legado.index', 'padrao' => 'sistema.legado.*'],
         ['label' => 'Atualizações', 'route' => 'sistema.atualizacao.index', 'padrao' => 'sistema.atualizacao.*'],
         ['label' => 'Auditoria', 'route' => 'sistema.atividades.index', 'padrao' => 'sistema.atividades.*'],

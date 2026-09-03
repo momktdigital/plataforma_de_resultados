@@ -26,6 +26,10 @@ class ResultadoImportController extends Controller
 
     public function store(ImportArquivoRequest $request, Avaliacao $avaliacao): RedirectResponse
     {
+        if ($avaliacao->origemBloqueiaEdicao()) {
+            return back()->withErrors(['origem' => 'Esta avaliação foi sincronizada do Avalia e não aceita import manual de resultados.']);
+        }
+
         $arquivo = $request->file('arquivo');
         $caminho = $arquivo->store('imports');
 

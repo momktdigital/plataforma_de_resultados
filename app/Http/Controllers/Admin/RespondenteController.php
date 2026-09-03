@@ -22,6 +22,9 @@ use Illuminate\View\View;
  */
 class RespondenteController extends Controller
 {
+    /** Ver Avaliacao::origemBloqueiaEdicao(). */
+    private const ERRO_ORIGEM_AVALIA = 'Esta avaliação foi sincronizada do Avalia e seus resultados não podem ser editados por aqui — qualquer alteração seria sobrescrita na próxima sincronização.';
+
     public function index(Request $request, Avaliacao $avaliacao): View
     {
         $search = trim((string) $request->query('search', ''));
@@ -147,6 +150,10 @@ class RespondenteController extends Controller
     {
         abort_if($resposta->avaliacao_codigo !== $avaliacao->codigo, 404);
 
+        if ($avaliacao->origemBloqueiaEdicao()) {
+            return back()->withErrors(['origem' => self::ERRO_ORIGEM_AVALIA]);
+        }
+
         $dados = $request->validate([
             'resposta' => ['nullable', 'string', 'max:10'],
         ]);
@@ -177,6 +184,10 @@ class RespondenteController extends Controller
 
     public function destroyPeriodo(Request $request, Avaliacao $avaliacao, ResumoResultadoService $resumos): RedirectResponse
     {
+        if ($avaliacao->origemBloqueiaEdicao()) {
+            return back()->withErrors(['origem' => self::ERRO_ORIGEM_AVALIA]);
+        }
+
         $periodo = (string) $request->input('periodo', '');
 
         $excluidas = $avaliacao->resultados()->where('periodo', $periodo)->delete();
@@ -196,6 +207,10 @@ class RespondenteController extends Controller
 
     public function restorePeriodo(Request $request, Avaliacao $avaliacao, ResumoResultadoService $resumos): RedirectResponse
     {
+        if ($avaliacao->origemBloqueiaEdicao()) {
+            return back()->withErrors(['origem' => self::ERRO_ORIGEM_AVALIA]);
+        }
+
         $periodo = (string) $request->input('periodo', '');
 
         $restauradas = $avaliacao->resultados()->onlyTrashed()->where('periodo', $periodo)->restore();

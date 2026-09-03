@@ -27,13 +27,17 @@ class Avaliacao extends Model
         'categoria_id',
         'data_avaliacao',
         'status',
+        'origem',
+        'id_externo',
     ];
 
     // Espelha o default da coluna no banco — sem isso, uma instância recém-
-    // criada em memória (Avaliacao::create([])) fica com status null até um
-    // refresh(), já que Eloquent não lê de volta o DEFAULT do SQL sozinho.
+    // criada em memória (Avaliacao::create([])) fica com status/origem null
+    // até um refresh(), já que Eloquent não lê de volta o DEFAULT do SQL
+    // sozinho.
     protected $attributes = [
         'status' => 'ativa',
+        'origem' => 'manual',
     ];
 
     protected function casts(): array
@@ -71,5 +75,18 @@ class Avaliacao extends Model
     public function visualizacoes(): HasMany
     {
         return $this->hasMany(AvaliacaoVisualizacao::class, 'avaliacao_codigo', 'codigo');
+    }
+
+    /**
+     * Avaliação sincronizada do Avalia (origem != 'manual') não pode ser
+     * editada/excluída por aqui, nem receber import manual de
+     * questões/resultados — o Avalia é a fonte da verdade para ela; a
+     * próxima sincronização sobrescreveria qualquer edição feita no admin
+     * de qualquer forma. Ver App\Http\Controllers\Admin\AvaliacaoController
+     * e QuestaoController pelos pontos onde isso é checado.
+     */
+    public function origemBloqueiaEdicao(): bool
+    {
+        return $this->origem !== 'manual';
     }
 }

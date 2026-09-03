@@ -27,6 +27,9 @@ class AvaliacaoController extends Controller
     // SQLite (ambos aceitam ORDER BY pelo alias do SELECT).
     private const COLUNAS_ORDENAVEIS = ['codigo', 'nome', 'data_avaliacao', 'questoes_count', 'alunos_count'];
 
+    /** Ver Avaliacao::origemBloqueiaEdicao(). */
+    private const ERRO_ORIGEM_AVALIA = 'Esta avaliação foi sincronizada do Avalia e não pode ser editada por aqui — qualquer alteração seria sobrescrita na próxima sincronização.';
+
     public function index(Request $request): View
     {
         $search = trim((string) $request->query('search', ''));
@@ -116,6 +119,10 @@ class AvaliacaoController extends Controller
 
     public function update(StoreAvaliacaoRequest $request, Avaliacao $avaliacao): RedirectResponse
     {
+        if ($avaliacao->origemBloqueiaEdicao()) {
+            return back()->withErrors(['origem' => self::ERRO_ORIGEM_AVALIA]);
+        }
+
         try {
             $dados = $this->comDataConvertida($request);
         } catch (RuntimeException $e) {
@@ -163,6 +170,10 @@ class AvaliacaoController extends Controller
 
     public function destroy(Avaliacao $avaliacao): RedirectResponse
     {
+        if ($avaliacao->origemBloqueiaEdicao()) {
+            return back()->withErrors(['origem' => self::ERRO_ORIGEM_AVALIA]);
+        }
+
         $avaliacao->questoes()->delete();
         $avaliacao->resultados()->delete();
         $avaliacao->metricas()->delete();
