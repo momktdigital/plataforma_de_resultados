@@ -32,11 +32,24 @@ use RuntimeException;
  *    `resposta` como null nesse caso; só a nota chega em `resultado_metricas`
  *    (ver notasOnline()). Confirmar se existe outra fonte liberada para o
  *    nosso papel de acesso antes de considerar isso definitivo.
- * 3. O identificador do aluno usado aqui é sempre o CPF
- *    (dim_users.user_identity_document_integrate_module) — vem do mesmo
- *    sistema acadêmico que já alimenta `alunos.cpf`. Não usamos RA daqui
- *    porque o join entre dim_users e dim_enrollments (que tem o RA) não está
- *    confirmado; se o CPF sozinho não for suficiente na prática, revisitar.
+ * 3. O identificador do aluno usado aqui é o CPF, mas
+ *    `dim_users.user_identity_document_integrate_module` (o campo do Módulo
+ *    Integrador, que seria o óbvio) está 100% vazio pra este tenant —
+ *    confirmado com dado real (0 de 11,4M+ linhas). Todo o pipeline do
+ *    Módulo Integrador está vazio aqui (idem pros `user_external_id_*`). O
+ *    único campo populado encontrado foi `user_username_safe_a` — login de
+ *    outro produto do Grupo A (Safe A), que neste tenant usa o CPF como
+ *    username (confirmado com amostra real: valores puramente numéricos de
+ *    11 dígitos batendo com nomes de alunos conhecidos). Cobertura parcial
+ *    (~47%, 9.049 de 19.099 usuários) — os demais alunos ficam sem
+ *    identificador e são descartados na sincronização (ver
+ *    `linhas_sem_identificador` em AvaliaSyncExecucao). `COALESCE` com
+ *    `user_identity_document_integrate_module` primeiro por precaução, caso
+ *    o Avalia venha a popular o Módulo Integrador no futuro. O valor não é
+ *    validado aqui — AvaliaSyncService sanitiza (só dígitos, 11 caracteres)
+ *    antes de gravar, já que `user_username_safe_a` não foi desenhado pra
+ *    ser um CPF. Não usamos RA daqui porque o join entre dim_users e
+ *    dim_enrollments (que tem o RA) não está confirmado.
  */
 class RedshiftAvaliaExtractor implements AvaliaExtractorContract
 {
@@ -101,7 +114,7 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
                 's.cdc_datetime as watermark',
                 'e.assessment_id_avalia_pro', 'e.assessment_name_avalia_pro', 'e.exam_type_name_avalia_pro',
                 'subj.subject_name_avalia_pro', 'subj.subject_external_id_avalia_pro',
-                'u.user_identity_document_integrate_module as cpf',
+                DB::raw('COALESCE(u.user_identity_document_integrate_module, u.user_username_safe_a) as cpf'),
             ])
             ->get();
     }
@@ -125,7 +138,7 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
                 'q.question_answer', 'q.answer_status', 'q.cdc_datetime as watermark',
                 'e.assessment_id_avalia_pro',
                 'dq.question_id_avalia_pro as question_id', 'dq.question_text_avalia_pro',
-                'u.user_identity_document_integrate_module as cpf',
+                DB::raw('COALESCE(u.user_identity_document_integrate_module, u.user_username_safe_a) as cpf'),
             ])
             ->get();
     }
@@ -150,7 +163,7 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
                 'a.questionnaire_sk', 'a.activity_attempt', 'a.activity_grade', 'a.activity_final_grade',
                 'a.activity_finished_at as watermark',
                 'qn.questionnaire_id_avalia_online', 'qn.questionnaire_name_avalia_online',
-                'u.user_identity_document_integrate_module as cpf',
+                DB::raw('COALESCE(u.user_identity_document_integrate_module, u.user_username_safe_a) as cpf'),
             ])
             ->get();
     }
@@ -178,7 +191,7 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
                 'aq.question_corrected_at as watermark',
                 'qn.questionnaire_id_avalia_online',
                 'dq.question_id_avalia_online as question_id', 'dq.question_text_avalia_online',
-                'u.user_identity_document_integrate_module as cpf',
+                DB::raw('COALESCE(u.user_identity_document_integrate_module, u.user_username_safe_a) as cpf'),
             ])
             ->get();
     }

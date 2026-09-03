@@ -317,6 +317,40 @@ class AvaliaSyncServiceTest extends TestCase
         $this->assertSame(1 + 2, $execucao->linhas_sem_identificador);
     }
 
+    public function test_cpf_com_pontuacao_e_sanitizado_antes_de_gravar(): void
+    {
+        // Regressão: user_username_safe_a (a fonte real de CPF pra este
+        // tenant, ver RedshiftAvaliaExtractor) é um campo de login de outro
+        // produto, não validado como CPF — não dá pra confiar que sempre vem
+        // só com dígitos.
+        $this->alunoComCpf('11122233344');
+        ConfiguracaoSistema::definir('avalia_modo_avalia_pro', 'todas');
+
+        $nota = $this->notaProFake(100, 7);
+        $nota->cpf = '111.222.333-44';
+
+        $extractor = new FakeAvaliaExtractor(notas: new Collection([$nota]), respostas: new Collection);
+
+        (new AvaliaSyncService($extractor))->sincronizar('avalia_pro', AvaliaSyncExecucao::DISPARADO_MANUAL);
+
+        $this->assertDatabaseHas('resultado_metricas', ['cpf' => '11122233344']);
+    }
+
+    public function test_cpf_com_tamanho_invalido_e_tratado_como_sem_identificador(): void
+    {
+        ConfiguracaoSistema::definir('avalia_modo_avalia_pro', 'todas');
+
+        $nota = $this->notaProFake(100, 7);
+        $nota->cpf = '123'; // curto demais pra ser um CPF válido.
+
+        $extractor = new FakeAvaliaExtractor(notas: new Collection([$nota]), respostas: new Collection);
+
+        $execucao = (new AvaliaSyncService($extractor))->sincronizar('avalia_pro', AvaliaSyncExecucao::DISPARADO_MANUAL);
+
+        $this->assertDatabaseCount('resultado_metricas', 0);
+        $this->assertSame(1, $execucao->linhas_sem_identificador);
+    }
+
     public function test_nova_sincronizacao_autocorrige_execucao_travada_de_uma_tentativa_anterior(): void
     {
         // Regressão: se o worker morrer no meio de uma sincronização (kill

@@ -50,12 +50,12 @@ class AvaliaSyncService
             $mapaAvaliacoes = $this->carregarMapaAvaliacoes($produto);
             $idsPermitidos = $this->idsPermitidos($produto);
 
-            $notas = $this->extractor->notas($produto, $this->watermark($produto, 'notas'), $idsPermitidos);
+            $notas = $this->normalizarCpfs($this->extractor->notas($produto, $this->watermark($produto, 'notas'), $idsPermitidos));
             $novasAvaliacoes = $this->upsertAvaliacoes($produto, $notas, $mapaAvaliacoes);
             ['gravadas' => $metricasGravadas, 'sem_identificador' => $metricasSemId] = $this->upsertMetricas($produto, $notas, $mapaAvaliacoes);
             $this->atualizarWatermark($produto, 'notas', $notas);
 
-            $respostas = $this->extractor->respostas($produto, $this->watermark($produto, 'respostas'), $idsPermitidos);
+            $respostas = $this->normalizarCpfs($this->extractor->respostas($produto, $this->watermark($produto, 'respostas'), $idsPermitidos));
             $questoesGravadas = $this->upsertQuestoes($produto, $respostas, $mapaAvaliacoes);
             ['gravadas' => $respostasGravadas, 'sem_identificador' => $respostasSemId] = $this->upsertRespostas($produto, $respostas, $mapaAvaliacoes);
             $this->atualizarWatermark($produto, 'respostas', $respostas);
@@ -505,6 +505,23 @@ class AvaliaSyncService
     private function respostaTexto(string $produto, object $linha): ?string
     {
         return $produto === 'avalia_pro' ? $linha->question_answer : null;
+    }
+
+    /**
+     * Sanitiza o CPF vindo do Avalia antes de qualquer uso — a fonte real
+     * (dim_users.user_username_safe_a, ver docblock de RedshiftAvaliaExtractor)
+     * é o login de outro produto (Safe A), não um CPF validado como tal.
+     * Mesma limpeza do import manual (ResultadoImportService::normalizarLinhas):
+     * só dígitos, exatamente 11 — qualquer coisa fora disso vira null (linha
+     * sem identificador, descartada como se o Avalia não tivesse mandado
+     * CPF nenhum) em vez de gravar lixo em `respostas.cpf`/`resultado_metricas.cpf`.
+     */
+    private function normalizarCpfs(Collection $linhas): Collection
+    {
+        return $linhas->each(function (object $linha) {
+            $cpfLimpo = $linha->cpf !== null ? preg_replace('/\D/', '', $linha->cpf) : null;
+            $linha->cpf = ($cpfLimpo !== null && strlen($cpfLimpo) === 11) ? $cpfLimpo : null;
+        });
     }
 
     /** @param  array<int, string>  $cpfs @return array<string, int> */
