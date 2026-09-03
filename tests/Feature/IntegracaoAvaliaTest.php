@@ -6,6 +6,7 @@ use App\Jobs\SincronizarAvaliaJob;
 use App\Models\Admin;
 use App\Models\AvaliaAvaliacaoDisponivel;
 use App\Models\Avaliacao;
+use App\Models\AvaliaSyncExecucao;
 use App\Models\ConfiguracaoSistema;
 use App\Models\Questao;
 use App\Models\Resposta;
@@ -38,6 +39,40 @@ class IntegracaoAvaliaTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Nunca sincronizado.');
+    }
+
+    public function test_execucao_travada_e_marcada_como_erro_ao_abrir_a_tela(): void
+    {
+        // Regressão: worker da fila morreu no meio de uma sincronização
+        // (sem passar pelo catch de AvaliaSyncService) — sem a autocorreção,
+        // a linha ficaria em 'processando' pra sempre e o botão "Forçar
+        // sincronização" desabilitado indefinidamente, sem forma de destravar.
+        AvaliaSyncExecucao::create([
+            'produto' => 'avalia_pro',
+            'status' => AvaliaSyncExecucao::STATUS_PROCESSANDO,
+            'disparado_por' => AvaliaSyncExecucao::DISPARADO_MANUAL,
+            'iniciado_em' => now()->subHours(2),
+        ]);
+
+        $response = $this->actingAs($this->admin(), 'admin')->get('/sistema/integracao-avalia');
+
+        $response->assertOk();
+        $response->assertDontSee('Sincronizando');
+        $this->assertSame(AvaliaSyncExecucao::STATUS_ERRO, AvaliaSyncExecucao::first()->status);
+    }
+
+    public function test_execucao_processando_recente_nao_e_mexida(): void
+    {
+        AvaliaSyncExecucao::create([
+            'produto' => 'avalia_pro',
+            'status' => AvaliaSyncExecucao::STATUS_PROCESSANDO,
+            'disparado_por' => AvaliaSyncExecucao::DISPARADO_MANUAL,
+            'iniciado_em' => now()->subMinutes(2),
+        ]);
+
+        $this->actingAs($this->admin(), 'admin')->get('/sistema/integracao-avalia')->assertOk();
+
+        $this->assertSame(AvaliaSyncExecucao::STATUS_PROCESSANDO, AvaliaSyncExecucao::first()->status);
     }
 
     public function test_forcar_sincronizacao_enfileira_o_job_por_produto(): void

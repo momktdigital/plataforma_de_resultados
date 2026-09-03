@@ -257,6 +257,27 @@ class AvaliaSyncServiceTest extends TestCase
         $this->assertSame(1 + 2, $execucao->linhas_sem_identificador);
     }
 
+    public function test_nova_sincronizacao_autocorrige_execucao_travada_de_uma_tentativa_anterior(): void
+    {
+        // Regressão: se o worker morrer no meio de uma sincronização (kill
+        // do processo, timeout do sistema operacional), o catch() de
+        // sincronizar() nunca roda e a linha anterior fica presa em
+        // 'processando'. Uma nova tentativa precisa limpar isso sozinha —
+        // ver AvaliaSyncExecucao::marcarTravadasComoErro().
+        $travada = AvaliaSyncExecucao::create([
+            'produto' => 'avalia_pro',
+            'status' => AvaliaSyncExecucao::STATUS_PROCESSANDO,
+            'disparado_por' => AvaliaSyncExecucao::DISPARADO_MANUAL,
+            'iniciado_em' => now()->subHours(2),
+        ]);
+
+        (new AvaliaSyncService(new FakeAvaliaExtractor(new Collection, new Collection)))
+            ->sincronizar('avalia_pro', AvaliaSyncExecucao::DISPARADO_MANUAL);
+
+        $this->assertSame(AvaliaSyncExecucao::STATUS_ERRO, $travada->fresh()->status);
+        $this->assertNotNull($travada->fresh()->mensagem_erro);
+    }
+
     public function test_execucao_registra_erro_e_relanca_quando_extrator_falha(): void
     {
         $service = new AvaliaSyncService(new FailingAvaliaExtractor);

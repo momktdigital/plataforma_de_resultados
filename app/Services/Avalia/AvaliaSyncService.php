@@ -34,6 +34,10 @@ class AvaliaSyncService
 
     public function sincronizar(string $produto, string $disparadoPor, ?int $adminId = null): AvaliaSyncExecucao
     {
+        // Autocorrige uma sincronização travada de uma tentativa anterior
+        // antes de começar uma nova — ver AvaliaSyncExecucao::marcarTravadasComoErro().
+        AvaliaSyncExecucao::marcarTravadasComoErro();
+
         $execucao = AvaliaSyncExecucao::create([
             'produto' => $produto,
             'status' => AvaliaSyncExecucao::STATUS_PROCESSANDO,

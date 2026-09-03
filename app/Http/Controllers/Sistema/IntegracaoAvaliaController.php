@@ -28,6 +28,11 @@ class IntegracaoAvaliaController extends Controller
 
     public function index(): View
     {
+        // Autocorrige qualquer sincronização travada (worker caiu no meio,
+        // sem chance de rodar o catch de AvaliaSyncService) — ver
+        // AvaliaSyncExecucao::marcarTravadasComoErro().
+        AvaliaSyncExecucao::marcarTravadasComoErro();
+
         $ultimaPorProduto = collect(self::PRODUTOS)->mapWithKeys(fn (string $produto) => [
             $produto => AvaliaSyncExecucao::where('produto', $produto)->orderByDesc('iniciado_em')->first(),
         ]);
