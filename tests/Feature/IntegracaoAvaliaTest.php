@@ -65,10 +65,26 @@ class IntegracaoAvaliaTest extends TestCase
         $this->assertStringContainsString('tenant', $response->json('message'));
     }
 
-    public function test_salvar_configuracoes_grava_tenant_e_environment_sk(): void
+    public function test_formulario_de_configuracoes_usa_post_com_spoofing_de_put(): void
+    {
+        // Regressão: <form method="PUT"> não existe em HTML — o navegador
+        // ignora e envia como GET, batendo numa rota que só aceita PUT (405).
+        // O form precisa ser method="POST" com @method('PUT') fazendo o
+        // spoofing; $this->put() no teste abaixo não pegaria essa quebra
+        // porque manda o verbo PUT direto, sem passar pelo HTML do form.
+        $html = $this->actingAs($this->admin(), 'admin')->get('/sistema/integracao-avalia')->getContent();
+
+        $this->assertMatchesRegularExpression(
+            '/<form method="POST" action="[^"]*integracao-avalia\/configuracoes"/',
+            $html
+        );
+    }
+
+    public function test_salvar_configuracoes_via_post_com_spoofing_grava_tenant_e_environment_sk(): void
     {
         $this->actingAs($this->admin(), 'admin')
-            ->put('/sistema/integracao-avalia/configuracoes', [
+            ->post('/sistema/integracao-avalia/configuracoes', [
+                '_method' => 'PUT',
                 'avalia_tenant_sk' => '123',
                 'avalia_environment_sk' => '456',
             ])

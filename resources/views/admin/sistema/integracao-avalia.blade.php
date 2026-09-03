@@ -32,7 +32,7 @@
     </div>
     <div id="resultado-teste-conexao" class="text-sm" style="display:none"></div>
 
-    <form method="PUT" action="{{ route('sistema.integracao-avalia.configuracoes') }}" class="space-y-3 mt-4 pt-4 border-t border-slate-100">
+    <form method="POST" action="{{ route('sistema.integracao-avalia.configuracoes') }}" class="space-y-3 mt-4 pt-4 border-t border-slate-100">
         @csrf
         @method('PUT')
         <div class="grid grid-cols-2 gap-3">
