@@ -5,8 +5,6 @@ namespace Tests\Feature;
 use App\Models\Aluno;
 use App\Models\Avaliacao;
 use App\Models\AvaliaSyncExecucao;
-use App\Models\Questao;
-use App\Models\Resposta;
 use App\Models\ResultadoMetrica;
 use App\Services\Avalia\AvaliaExtractorContract;
 use App\Services\Avalia\AvaliaSyncService;
@@ -137,22 +135,7 @@ class AvaliaSyncServiceTest extends TestCase
 
     public function test_execucao_registra_erro_e_relanca_quando_extrator_falha(): void
     {
-        $extractor = new class implements AvaliaExtractorContract
-        {
-            public function testarConexao(): void {}
-
-            public function notas(string $produto, ?string $desde): Collection
-            {
-                throw new RuntimeException('Redshift indisponível');
-            }
-
-            public function respostas(string $produto, ?string $desde): Collection
-            {
-                return new Collection;
-            }
-        };
-
-        $service = new AvaliaSyncService($extractor);
+        $service = new AvaliaSyncService(new FailingAvaliaExtractor);
 
         $this->expectException(RuntimeException::class);
 
@@ -183,5 +166,20 @@ class FakeAvaliaExtractor implements AvaliaExtractorContract
     public function respostas(string $produto, ?string $desde): Collection
     {
         return $this->respostas;
+    }
+}
+
+class FailingAvaliaExtractor implements AvaliaExtractorContract
+{
+    public function testarConexao(): void {}
+
+    public function notas(string $produto, ?string $desde): Collection
+    {
+        throw new RuntimeException('Redshift indisponível');
+    }
+
+    public function respostas(string $produto, ?string $desde): Collection
+    {
+        return new Collection;
     }
 }

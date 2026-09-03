@@ -9,6 +9,7 @@ use App\Models\ConfiguracaoSistema;
 use App\Models\Questao;
 use App\Models\Resposta;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -23,6 +24,8 @@ class IntegracaoAvaliaTest extends TestCase
 
     public function test_guest_nao_acessa_integracao_avalia(): void
     {
+        $this->admin();
+
         $this->get('/sistema/integracao-avalia')->assertRedirect(route('login'));
     }
 
@@ -113,7 +116,9 @@ class IntegracaoAvaliaTest extends TestCase
         $avaliacao = Avaliacao::create(['origem' => 'avalia_pro', 'id_externo' => '1:1']);
 
         $this->actingAs($this->admin(), 'admin')
-            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", [])
+            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", [
+                'arquivo' => UploadedFile::fake()->createWithContent('resultados.csv', "RA,Questão,Resposta\n123,1,B\n"),
+            ])
             ->assertSessionHasErrors('origem');
     }
 
