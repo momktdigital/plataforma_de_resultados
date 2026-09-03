@@ -61,65 +61,47 @@
 })();
 </script>
 
-@if (count($evolucaoGeral) >= 2 || ! empty($resumoPorCategoria))
-    <div class="grid lg:grid-cols-2 gap-4 mb-6 fade-in">
-        @if (count($evolucaoGeral) >= 2)
-            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                    <i class="ph-bold ph-trend-up text-primary"></i> Evolução do desempenho
-                </p>
-                <canvas id="grafico-evolucao-geral" height="110"></canvas>
+@if (! empty($insights))
+    <div class="grid sm:grid-cols-2 gap-3 mb-6 fade-in">
+        @foreach ($insights as $insight)
+            @php
+                $estiloInsight = match ($insight['tom']) {
+                    'positivo' => ['bg' => 'bg-emerald-50', 'borda' => 'border-emerald-100', 'icone' => 'text-emerald-600'],
+                    'atencao' => ['bg' => 'bg-amber-50', 'borda' => 'border-amber-100', 'icone' => 'text-amber-600'],
+                    default => ['bg' => 'bg-slate-50', 'borda' => 'border-slate-100', 'icone' => 'text-slate-600'],
+                };
+            @endphp
+            <div class="{{ $estiloInsight['bg'] }} border {{ $estiloInsight['borda'] }} rounded-xl p-4 flex items-start gap-3">
+                <i class="ph-bold {{ $insight['icone'] }} {{ $estiloInsight['icone'] }} text-xl shrink-0 mt-0.5"></i>
+                <p class="text-sm text-slate-700">{{ $insight['texto'] }}</p>
             </div>
-        @endif
-
-        @if (! empty($resumoPorCategoria))
-            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                    <i class="ph-bold ph-chart-bar-horizontal text-primary"></i> Desempenho por categoria
-                </p>
-                <div class="space-y-3">
-                    @foreach ($resumoPorCategoria as $c)
-                        <div>
-                            <div class="flex items-center justify-between text-xs mb-1">
-                                <span class="font-medium text-slate-600 truncate">{{ $c['nome'] }}</span>
-                                <span class="font-bold text-slate-700 shrink-0 ml-2">{{ $c['media'] }}%</span>
-                            </div>
-                            <div class="h-2 rounded-full bg-slate-100 overflow-hidden">
-                                <div class="h-full rounded-full bg-primary" style="width: {{ max(3, $c['media']) }}%"></div>
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
-            </div>
-        @endif
+        @endforeach
     </div>
+@endif
 
-    @if (count($evolucaoGeral) >= 2)
-        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"></script>
-        <script>
-        new Chart(document.getElementById('grafico-evolucao-geral'), {
-            type: 'line',
-            data: {
-                labels: {{ Js::from(array_column($evolucaoGeral, 'nome')) }},
-                datasets: [{
-                    label: '% de acerto',
-                    data: {{ Js::from(array_column($evolucaoGeral, 'percentual')) }},
-                    borderColor: '#00b48d',
-                    backgroundColor: 'rgba(0,180,141,0.12)',
-                    borderWidth: 2,
-                    pointRadius: 3,
-                    pointBackgroundColor: '#00b48d',
-                    fill: true,
-                    tension: 0.3,
-                }],
-            },
-            options: {
-                scales: { y: { beginAtZero: true, max: 100, grid: { color: '#f1f5f9' } }, x: { grid: { display: false } } },
-                plugins: { legend: { display: false } },
-            },
-        });
-        </script>
-    @endif
+@if ($temAnaliseNaArvore)
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"></script>
+@endif
+
+@if (! empty($resumoPorCategoria))
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 mb-6 fade-in">
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+            <i class="ph-bold ph-chart-bar-horizontal text-primary"></i> Desempenho por categoria
+        </p>
+        <div class="grid sm:grid-cols-2 gap-x-6 gap-y-3">
+            @foreach ($resumoPorCategoria as $c)
+                <div>
+                    <div class="flex items-center justify-between text-xs mb-1">
+                        <span class="font-medium text-slate-600 truncate">{{ $c['nome'] }}</span>
+                        <span class="font-bold text-slate-700 shrink-0 ml-2">{{ $c['media'] }}%</span>
+                    </div>
+                    <div class="h-2 rounded-full bg-slate-100 overflow-hidden">
+                        <div class="h-full rounded-full {{ \App\Support\CorDesempenho::classeBg($c['media']) }}" style="width: {{ max(3, $c['media']) }}%"></div>
+                    </div>
+                </div>
+            @endforeach
+        </div>
+    </div>
 @endif
 
 @if (! empty($periodosDisponiveis) || ! empty($arvore) || ! empty($semCategoria))
@@ -193,6 +175,63 @@ function portalToggleCategoria(botao) {
     const conteudo = botao.nextElementSibling;
     conteudo.hidden = !conteudo.hidden;
     botao.querySelector('.categoria-seta').classList.toggle('rotate-180', !conteudo.hidden);
+
+    if (!conteudo.hidden) portalRedimensionarGraficos(conteudo);
+}
+
+// Os gráficos da categoria são criados enquanto o conteúdo ainda está hidden
+// (display:none) — o canvas reporta tamanho zero nesse momento, e nem todo
+// navegador/versão do Chart.js recalcula sozinho quando o elemento aparece
+// depois. resize() força o gráfico a se ajustar ao tamanho real assim que a
+// categoria é expandida — seja pelo clique (portalToggleCategoria) ou pelo
+// filtro de data expandindo automaticamente (portalAplicarFiltro).
+function portalRedimensionarGraficos(conteudo) {
+    if (typeof Chart === 'undefined') return;
+
+    conteudo.querySelectorAll('canvas').forEach(function (canvas) {
+        const grafico = Chart.getChart(canvas);
+        if (grafico) grafico.resize();
+    });
+}
+
+// Botão "lâmpada" de cada gráfico (_explicacao_visual.blade.php) — um único
+// listener delegado no documento, em vez de um por botão, já que esse
+// parcial se repete várias vezes na página (um por painel x categoria).
+document.addEventListener('click', function (evento) {
+    const toggle = evento.target.closest('.explicacao-toggle');
+    if (toggle) {
+        const conteudo = toggle.nextElementSibling;
+        const estavaAberto = !conteudo.hidden;
+        document.querySelectorAll('.explicacao-conteudo').forEach(function (c) { c.hidden = true; });
+        if (estavaAberto) {
+            conteudo.hidden = true;
+        } else {
+            conteudo.hidden = false;
+            portalPosicionarExplicacao(toggle, conteudo);
+        }
+        evento.stopPropagation();
+        return;
+    }
+
+    if (!evento.target.closest('.explicacao-conteudo')) {
+        document.querySelectorAll('.explicacao-conteudo').forEach(function (c) { c.hidden = true; });
+    }
+});
+
+// position:fixed é relativo à VIEWPORT, não rola junto com a página — sem
+// isso, o popover ficaria "grudado" na tela depois que o botão já rolou pra
+// outro lugar. true (capture) pra pegar rolagem de containers internos também.
+document.addEventListener('scroll', function () {
+    document.querySelectorAll('.explicacao-conteudo:not([hidden])').forEach(function (c) { c.hidden = true; });
+}, true);
+
+function portalPosicionarExplicacao(botao, conteudo) {
+    const rect = botao.getBoundingClientRect();
+    const largura = conteudo.offsetWidth;
+    let left = rect.right - largura;
+    left = Math.max(8, Math.min(left, window.innerWidth - largura - 8));
+    conteudo.style.top = (rect.bottom + 4) + 'px';
+    conteudo.style.left = left + 'px';
 }
 
 function portalAplicarFiltro() {
@@ -216,7 +255,11 @@ function portalAplicarFiltro() {
         if (temCartaoVisivel) algumVisivel = true;
         // Expande automaticamente quando o filtro restringe o resultado, pra não parecer vazio.
         if (temCartaoVisivel && (inicio || fim)) {
-            no.querySelector('.categoria-conteudo').hidden = false;
+            const conteudo = no.querySelector('.categoria-conteudo');
+            if (conteudo.hidden) {
+                conteudo.hidden = false;
+                portalRedimensionarGraficos(conteudo);
+            }
         }
     });
     document.querySelectorAll('#resultados-lista > .avaliacao-card').forEach(function (card) {

@@ -50,7 +50,10 @@
         <p>{{ $status['resumo'] }}</p>
         @if (! empty($status['ignoradas']))
             <details class="mt-2">
-                <summary class="cursor-pointer font-medium">Ver linhas ignoradas ({{ count($status['ignoradas']) }})</summary>
+                <summary class="cursor-pointer font-medium">Ver linhas ignoradas ({{ $status['ignoradasTotal'] }})</summary>
+                @if ($status['ignoradasTotal'] > count($status['ignoradas']))
+                    <p class="mt-1.5 {{ $corDetalhes }}">Mostrando as primeiras {{ count($status['ignoradas']) }} de {{ $status['ignoradasTotal'] }} — provavelmente o mesmo motivo se repete em várias linhas.</p>
+                @endif
                 <ul class="mt-1.5 space-y-0.5 {{ $corDetalhes }}">
                     @foreach ($status['ignoradas'] as $ignorada)
                         <li>Linha {{ $ignorada['linha'] }}: {{ $ignorada['motivo'] }}</li>

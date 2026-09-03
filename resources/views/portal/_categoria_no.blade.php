@@ -8,6 +8,10 @@
         <i class="ph-bold ph-caret-down categoria-seta text-slate-400 transition-transform"></i>
     </button>
     <div class="categoria-conteudo px-5 pb-5 space-y-4 border-t border-slate-100 pt-4" hidden>
+        @if (! empty($no['analise']))
+            @include('portal._categoria_analise', ['no' => $no])
+        @endif
+
         @if (! empty($no['subcategorias']))
             <ul class="space-y-3">
                 @foreach ($no['subcategorias'] as $filho)

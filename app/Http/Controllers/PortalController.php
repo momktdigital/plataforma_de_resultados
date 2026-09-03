@@ -7,7 +7,10 @@ use App\Models\Aluno;
 use App\Models\Avaliacao;
 use App\Models\Configuracao;
 use App\Models\VerificacaoEmail;
+use App\Services\Portal\AnaliseConsolidadaService;
 use App\Services\Portal\CaptchaVerifier;
+use App\Services\Portal\ExplicacaoVisualService;
+use App\Services\Portal\InsightService;
 use App\Services\Portal\RateLimit2faService;
 use App\Services\Portal\RelatorioAlunoService;
 use App\Services\Portal\ResultadoConsultaService;
@@ -217,15 +220,21 @@ class PortalController extends Controller
      * id do aluno na sessão — nada de repassar isso por querystring, senão
      * qualquer um poderia adivinhar/alterar a URL e ver boletim alheio.
      */
-    public function resultados(Request $request, ResultadoConsultaService $consultaService): View|RedirectResponse
-    {
+    public function resultados(
+        Request $request,
+        ResultadoConsultaService $consultaService,
+        RelatorioAlunoService $relatorioService,
+        AnaliseConsolidadaService $analiseService,
+        InsightService $insightService,
+        ExplicacaoVisualService $explicacaoService,
+    ): View|RedirectResponse {
         $aluno = $this->alunoAutenticado();
 
         if ($aluno === null) {
             return redirect()->route('portal.consulta');
         }
 
-        return $this->renderizarResultados($aluno, $consultaService, $request);
+        return $this->renderizarResultados($aluno, $consultaService, $relatorioService, $analiseService, $insightService, $explicacaoService, $request);
     }
 
     /** Detalhe de uma única avaliacao, aberto a partir da tela de Resultados. */
@@ -268,9 +277,6 @@ class PortalController extends Controller
             'desempenhoBloom' => $visivel('desempenho_bloom') ? $relatorioService->desempenhoPorBloom($respostas, $gabaritos, $avaliacao) : null,
             'desempenhoMiller' => $visivel('desempenho_miller') ? $relatorioService->desempenhoPorMiller($respostas, $gabaritos, $avaliacao) : null,
             'comparativoQuestao' => $visivel('comparativo_questao') ? $relatorioService->comparativoQuestao($avaliacao, $periodo, $respostas, $gabaritos) : null,
-            'evolucaoHistorica' => $visivel('evolucao_categoria')
-                ? $relatorioService->evolucaoHistorica($consultaService->buscarPorAluno($aluno), $avaliacao->categoria_id)
-                : null,
         ]);
     }
 
@@ -318,7 +324,7 @@ class PortalController extends Controller
      * mostra só o período letivo mais recente (`''` na query string =
      * "Todos", igual ao filtro equivalente no admin).
      */
-    private function renderizarResultados(Aluno $aluno, ResultadoConsultaService $consultaService, Request $request): View
+    private function renderizarResultados(Aluno $aluno, ResultadoConsultaService $consultaService, RelatorioAlunoService $relatorioService, AnaliseConsolidadaService $analiseService, InsightService $insightService, ExplicacaoVisualService $explicacaoService, Request $request): View
     {
         $todos = $consultaService->buscarPorAluno($aluno);
 
@@ -340,6 +346,34 @@ class PortalController extends Controller
 
         $comPercentual = collect($resultados)->pluck('percentual')->filter(fn ($p) => $p !== null);
         $arvore = $consultaService->montarArvore($resultados);
+        $avaliacaoCodigos = collect($resultados)->pluck('avaliacao.codigo')->unique()->values()->all();
+
+        // Estas duas continuam calculadas pro PERÍODO INTEIRO só porque
+        // InsightService::gerar() usa (comparativo geral com a turma,
+        // habilidade mais fraca/forte do período) — não são mais renderizadas
+        // como seção própria: cada categoria agora tem a sua, escopada só às
+        // avaliações dela (ver anexarAnaliseNaArvore()), pra não misturar
+        // categorias diferentes numa tela só nem virar uma tela só de gráficos
+        // quando o aluno tem muito resultado.
+        $evolucaoPorCategoria = $relatorioService->evolucaoPorCategoria($resultados);
+        $comparativoTurmaConsolidado = $relatorioService->comparativoTurmaConsolidado($aluno, $resultados);
+        $coberturaHabilidade = $analiseService->coberturaHabilidade($aluno, $avaliacaoCodigos);
+
+        $evolucaoPorCategoriaPorId = [];
+        foreach ($evolucaoPorCategoria as $cat) {
+            $evolucaoPorCategoriaPorId[$cat['categoria_id']] = $cat['pontos'];
+        }
+
+        $temAnaliseNaArvore = false;
+        $arvore['arvore'] = $this->anexarAnaliseNaArvore(
+            $aluno,
+            $arvore['arvore'],
+            $evolucaoPorCategoriaPorId,
+            $relatorioService,
+            $analiseService,
+            $explicacaoService,
+            $temAnaliseNaArvore,
+        );
 
         return view('portal.resultados', [
             'aluno' => $aluno,
@@ -347,10 +381,70 @@ class PortalController extends Controller
             'mediaGeral' => $comPercentual->isNotEmpty() ? round($comPercentual->avg(), 1) : null,
             'periodosDisponiveis' => $periodosDisponiveis,
             'periodoSelecionado' => $periodoSelecionado,
-            'evolucaoGeral' => $consultaService->evolucaoGeral($resultados),
+            'insights' => $insightService->gerar($aluno, $resultados, $evolucaoPorCategoria, $comparativoTurmaConsolidado, $coberturaHabilidade),
             'resumoPorCategoria' => $consultaService->resumoPorCategoria($arvore['arvore']),
+            'temAnaliseNaArvore' => $temAnaliseNaArvore,
             ...$arvore,
         ]);
+    }
+
+    /**
+     * Anexa, em CADA nó da árvore de categorias (montarArvore()), a evolução
+     * histórica e a análise consolidada (dificuldade, TRI, habilidade, Bloom/
+     * Miller, comparativo com turma, áreas divergentes) escopadas só às
+     * avaliações DAQUELE nó — mesmos serviços que antes calculavam isso pro
+     * período inteiro (misturando categorias diferentes na mesma seção da
+     * tela). Um nó "pasta" (só com subcategorias, sem avaliação própria) não
+     * tem nada pra mostrar aqui — os serviços já voltam vazio/null pra uma
+     * lista de avaliações vazia — mas a recursão ainda desce pras filhas.
+     *
+     * @param  array<int, array<string, mixed>>  $nos  nível da árvore (raízes ou subcategorias) de montarArvore()
+     * @param  array<int, array<int, array{codigo:int,nome:string,data:string,percentual:float}>>  $evolucaoPorCategoriaPorId  categoria_id => pontos, já filtrado (≥2 avaliações) por RelatorioAlunoService::evolucaoPorCategoria()
+     * @return array<int, array<string, mixed>>
+     */
+    private function anexarAnaliseNaArvore(
+        Aluno $aluno,
+        array $nos,
+        array $evolucaoPorCategoriaPorId,
+        RelatorioAlunoService $relatorioService,
+        AnaliseConsolidadaService $analiseService,
+        ExplicacaoVisualService $explicacaoService,
+        bool &$temAlgumaAnalise,
+    ): array {
+        foreach ($nos as &$no) {
+            $avaliacaoCodigos = collect($no['resultados'])->pluck('avaliacao.codigo')->unique()->values()->all();
+
+            $no['analise'] = [
+                'evolucaoHistorica' => $evolucaoPorCategoriaPorId[$no['categoria']->id] ?? [],
+                'comparativoTurma' => $relatorioService->comparativoTurmaConsolidado($aluno, $no['resultados']),
+                'curvaDificuldade' => $analiseService->curvaDificuldadePedagogica($aluno, $avaliacaoCodigos),
+                'dispersaoTri' => $analiseService->dispersaoTri($aluno, $avaliacaoCodigos),
+                'coberturaHabilidade' => $analiseService->coberturaHabilidade($aluno, $avaliacaoCodigos),
+                'bloom' => $analiseService->desempenhoBloomConsolidado($aluno, $avaliacaoCodigos),
+                'miller' => $analiseService->desempenhoMillerConsolidado($aluno, $avaliacaoCodigos),
+                'divergentes' => $analiseService->areasDivergentesDaTurma($aluno, $avaliacaoCodigos),
+            ];
+
+            $no['explicacoes'] = $explicacaoService->gerar($no['analise']);
+
+            if (! $temAlgumaAnalise && collect($no['analise'])->contains(fn ($v) => ! empty($v))) {
+                $temAlgumaAnalise = true;
+            }
+
+            if (! empty($no['subcategorias'])) {
+                $no['subcategorias'] = $this->anexarAnaliseNaArvore(
+                    $aluno,
+                    $no['subcategorias'],
+                    $evolucaoPorCategoriaPorId,
+                    $relatorioService,
+                    $analiseService,
+                    $explicacaoService,
+                    $temAlgumaAnalise,
+                );
+            }
+        }
+
+        return $nos;
     }
 
     /** @return array{recaptchaAtivo: bool, recaptchaSiteKey: string, hcaptchaAtivo: bool, hcaptchaSiteKey: string} */

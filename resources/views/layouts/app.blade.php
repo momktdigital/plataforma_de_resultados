@@ -2,6 +2,10 @@
     $siteTitle = \App\Models\Configuracao::valor('site_title', 'Resultados DI');
     $siteLogo = \App\Models\Configuracao::valor('site_logo', '');
     $siteLogoDark = \App\Models\Configuracao::valor('site_logo_dark', '');
+    // Sidebar do admin é sempre fundo escuro (bg-slate-950) — se nada foi
+    // configurado ainda, mostra esta logo em vez do ícone genérico ph-exam.
+    // Nunca substitui uma logo que o admin já configurou (clara ou escura).
+    $siteLogoDarkPadrao = 'uploads/logos/1788356993_logo_dark_0e5723791771.png';
 @endphp
 <!doctype html>
 <html lang="pt-BR">
@@ -41,8 +45,7 @@
                 @if ($siteLogoDark || $siteLogo)
                     <img src="{{ asset('uploads/logos/'.basename($siteLogoDark ?: $siteLogo)) }}" alt="{{ $siteTitle }}" class="h-8 object-contain">
                 @else
-                    <i class="ph-fill ph-exam text-primary text-2xl mr-2"></i>
-                    <span class="text-lg font-bold text-white tracking-wide">{{ $siteTitle }}</span>
+                    <img src="{{ asset($siteLogoDarkPadrao) }}" alt="{{ $siteTitle }}" class="h-8 object-contain">
                 @endif
             </div>
 

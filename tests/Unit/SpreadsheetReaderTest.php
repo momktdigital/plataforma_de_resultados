@@ -21,14 +21,51 @@ class SpreadsheetReaderTest extends TestCase
         $this->assertSame('valor-1', $linhas[0]['coluna']);
     }
 
-    public function test_rejeita_xlsx_acima_do_limite_de_linhas(): void
+    public function test_limite_real_de_producao_e_450_mil_celulas(): void
     {
-        $arquivo = $this->xlsxComLinhas(50_001);
+        // Congela o valor de produção pra qualquer mudança futura ser
+        // deliberada — sem gerar as 450.000 células de verdade (lento demais
+        // pra rodar em toda execução da suíte; os testes de comportamento
+        // abaixo usam FakeSpreadsheetReader com um limite pequeno).
+        $this->assertSame(450_000, (new \ReflectionClass(SpreadsheetReader::class))->getConstant('MAX_CELULAS_XLSX'));
+    }
+
+    public function test_rejeita_xlsx_acima_do_limite_de_celulas(): void
+    {
+        // 3 colunas x 4 linhas = 12 células > limite de 10 da subclasse de teste.
+        $arquivo = $this->xlsxComLinhasEColunas(4, 3);
 
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('50001 linhas de dados');
+        $this->expectExceptionMessage('4 linhas de dados x 3 colunas (12 células)');
+        $this->expectExceptionMessage('máximo suportado é 10 células');
 
-        SpreadsheetReader::readRows($arquivo);
+        FakeSpreadsheetReader::readRows($arquivo);
+    }
+
+    public function test_aceita_xlsx_exatamente_no_limite_de_celulas(): void
+    {
+        // 2 colunas x 5 linhas = 10 células == limite (não pode passar, mas
+        // bater exatamente no teto tem que continuar funcionando).
+        $arquivo = $this->xlsxComLinhasEColunas(5, 2);
+
+        $linhas = FakeSpreadsheetReader::readRows($arquivo);
+
+        $this->assertCount(5, $linhas);
+    }
+
+    public function test_planilha_larga_e_limitada_por_menos_linhas_que_uma_estreita(): void
+    {
+        // Mesmo limite de células (10) pras duas: 1 coluna aceita até 10
+        // linhas, mas 5 colunas só aceita até 2 — a lógica é por CÉLULA
+        // (linhas x colunas), não só por linha (bug do limite antigo, que
+        // deixava uma planilha larga — ex.: import de questões com ~20
+        // colunas — consumir memória desproporcional sem ser barrada).
+        $estreita = $this->xlsxComLinhasEColunas(10, 1);
+        $this->assertCount(10, FakeSpreadsheetReader::readRows($estreita));
+
+        $larga = $this->xlsxComLinhasEColunas(3, 5);
+        $this->expectException(RuntimeException::class);
+        FakeSpreadsheetReader::readRows($larga);
     }
 
     public function test_ignora_linhas_em_branco_no_meio_do_xlsx(): void
@@ -126,4 +163,32 @@ class SpreadsheetReaderTest extends TestCase
 
         return new UploadedFile($caminho, 'planilha.xlsx', test: true);
     }
+
+    private function xlsxComLinhasEColunas(int $linhas, int $colunas): UploadedFile
+    {
+        $spreadsheet = new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
+        $cabecalho = array_map(fn ($c) => "coluna{$c}", range(1, $colunas));
+        $sheet->fromArray($cabecalho, null, 'A1');
+
+        for ($linha = 2; $linha <= $linhas + 1; $linha++) {
+            $sheet->fromArray(array_fill(0, $colunas, 'v'), null, "A{$linha}");
+        }
+
+        $caminho = tempnam(sys_get_temp_dir(), 'xlsx_reader_test_').'.xlsx';
+        (new Xlsx($spreadsheet))->save($caminho);
+
+        return new UploadedFile($caminho, 'planilha.xlsx', test: true);
+    }
+}
+
+/**
+ * Limite de células reduzido só pra testar a LÓGICA de
+ * SpreadsheetReader::readSpreadsheet() sem precisar gerar as 450.000 células
+ * reais do limite de produção a cada rodada da suíte (levaria dezenas de
+ * segundos). MAX_CELULAS_XLSX é `protected` justamente pra permitir isso.
+ */
+class FakeSpreadsheetReader extends SpreadsheetReader
+{
+    protected const MAX_CELULAS_XLSX = 10;
 }

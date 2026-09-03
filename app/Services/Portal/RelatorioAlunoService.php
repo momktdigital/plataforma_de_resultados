@@ -118,6 +118,65 @@ class RelatorioAlunoService
         ];
     }
 
+    /**
+     * Versão consolidada de rankingPercentil() — média simples do percentil
+     * do aluno em cada avaliação do período informado (mesmo critério de
+     * "média das médias" de comparativoTurmaConsolidado()), pra alimentar um
+     * insight tipo "você está entre os X% melhores da turma neste período"
+     * sem precisar de uma query nova (reaproveita rankingPercentil() por
+     * avaliação, já testado).
+     *
+     * @param  array<int, array<string, mixed>>  $resultados  já filtrados pelo período letivo selecionado
+     * @return array{percentil: float, avaliacoesComparadas: int}|null
+     */
+    public function percentilConsolidado(Aluno $aluno, array $resultados): ?array
+    {
+        $percentis = collect($resultados)
+            ->map(fn ($r) => $this->rankingPercentil($aluno, $r['avaliacao'], $r['periodo']))
+            ->filter();
+
+        if ($percentis->isEmpty()) {
+            return null;
+        }
+
+        return [
+            'percentil' => round((float) $percentis->avg('percentil'), 1),
+            'avaliacoesComparadas' => $percentis->count(),
+        ];
+    }
+
+    /**
+     * Versão consolidada de comparativoTurma() — em vez de "você x turma"
+     * numa avaliação só, faz a média simples do aluno e da turma ao longo de
+     * TODAS as avaliações do período informado (mesmo critério de média
+     * usada em PortalController::renderizarResultados() pra "média geral":
+     * média das médias, não ponderada por quantidade de questões).
+     *
+     * @param  array<int, array<string, mixed>>  $resultados  já filtrados pelo período letivo selecionado
+     * @return array{turma: string, suaMedia: float, mediaTurma: float, avaliacoesComparadas: int}|null
+     */
+    public function comparativoTurmaConsolidado(Aluno $aluno, array $resultados): ?array
+    {
+        if (empty($aluno->turma)) {
+            return null;
+        }
+
+        $comparativos = collect($resultados)
+            ->map(fn ($r) => $this->comparativoTurma($aluno, $r['avaliacao'], $r['periodo']))
+            ->filter();
+
+        if ($comparativos->isEmpty()) {
+            return null;
+        }
+
+        return [
+            'turma' => $aluno->turma,
+            'suaMedia' => round((float) $comparativos->avg('suaMedia'), 1),
+            'mediaTurma' => round((float) $comparativos->avg('mediaTurma'), 1),
+            'avaliacoesComparadas' => $comparativos->count(),
+        ];
+    }
+
     /** @return array<string, float> */
     public function radarDisciplina(Collection $respostas, Collection $gabaritos, Avaliacao $avaliacao): array
     {
@@ -228,6 +287,46 @@ class RelatorioAlunoService
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * Agrupa evolucaoHistorica() por categoria — usada no boletim (lista de
+     * resultados) pra mostrar uma série por categoria em vez de misturar
+     * avaliações de categorias diferentes numa única linha (percentuais de
+     * provas com propósitos distintos não são comparáveis entre si). Mesmo
+     * critério de "pelo menos 2 avaliações com data e percentual" já usado
+     * em VisualizacaoDisponibilidadeService::calcular() para 'evolucao_categoria'.
+     *
+     * @param  array<int, array<string, mixed>>  $resultadosDoAluno  saída de ResultadoConsultaService::buscarPorAluno()
+     * @return array<int, array{categoria_id: int, categoria_nome: string, pontos: array<int, array{codigo: int, nome: string, data: string, percentual: float}>}>
+     */
+    public function evolucaoPorCategoria(array $resultadosDoAluno): array
+    {
+        $porCategoriaId = collect($resultadosDoAluno)
+            ->filter(fn ($r) => $r['avaliacao']->categoria_id !== null)
+            ->groupBy(fn ($r) => $r['avaliacao']->categoria_id);
+
+        $resultado = [];
+        foreach ($porCategoriaId as $categoriaId => $doCategoria) {
+            $pontos = collect($this->evolucaoHistorica($resultadosDoAluno, (int) $categoriaId))
+                ->filter(fn ($p) => $p['percentual'] !== null && $p['data'] !== null)
+                ->values()
+                ->all();
+
+            if (count($pontos) < 2) {
+                continue;
+            }
+
+            $resultado[] = [
+                'categoria_id' => (int) $categoriaId,
+                'categoria_nome' => $doCategoria->first()['avaliacao']->categoria->nome ?? "Categoria #{$categoriaId}",
+                'pontos' => $pontos,
+            ];
+        }
+
+        usort($resultado, fn ($a, $b) => strcmp($a['categoria_nome'], $b['categoria_nome']));
+
+        return $resultado;
     }
 
     /**

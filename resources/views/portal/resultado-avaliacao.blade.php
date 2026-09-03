@@ -184,8 +184,7 @@
             $temArea = $estado['desempenho_area']['visivelAluno'] && ! empty($desempenhoArea);
             $temBloom = $estado['desempenho_bloom']['visivelAluno'] && ! empty($desempenhoBloom);
             $temMiller = $estado['desempenho_miller']['visivelAluno'] && ! empty($desempenhoMiller);
-            $temEvolucao = $estado['evolucao_categoria']['visivelAluno'] && ! empty($evolucaoHistorica) && count($evolucaoHistorica) >= 2;
-            $temAlgumPainel = $temComparativoTurma || $temRankingPercentil || $temRadar || $temArea || $temBloom || $temMiller || $temEvolucao;
+            $temAlgumPainel = $temComparativoTurma || $temRankingPercentil || $temRadar || $temArea || $temBloom || $temMiller;
             $temLacunasConsolidados = $estado['lacunas_conhecimentos']['visivelAluno']
                 && ! empty($lacunasConsolidados)
                 && (! empty($lacunasConsolidados['lacunas']) || ! empty($lacunasConsolidados['consolidados']));
@@ -251,15 +250,6 @@
                             <i class="ph-bold ph-stethoscope text-primary"></i> Desempenho por nível de Miller
                         </p>
                         <canvas id="grafico-miller" height="180"></canvas>
-                    </div>
-                @endif
-
-                @if ($temEvolucao)
-                    <div class="bg-slate-50 border border-slate-100 rounded-xl p-4">
-                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                            <i class="ph-bold ph-trend-up text-primary"></i> Evolução histórica na categoria
-                        </p>
-                        <canvas id="grafico-evolucao" height="180"></canvas>
                     </div>
                 @endif
             </div>
@@ -425,17 +415,6 @@ new Chart(document.getElementById('grafico-miller'), {
         datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($desempenhoMiller)) }}, backgroundColor: '#00b48d', borderRadius: 4, maxBarThickness: 24 }],
     },
     options: { indexAxis: 'y', scales: { x: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
-});
-@endif
-
-@if ($estado['evolucao_categoria']['visivelAluno'] && ! empty($evolucaoHistorica) && count($evolucaoHistorica) >= 2)
-new Chart(document.getElementById('grafico-evolucao'), {
-    type: 'line',
-    data: {
-        labels: {{ Js::from(array_column($evolucaoHistorica, 'nome')) }},
-        datasets: [{ label: '% de acerto', data: {{ Js::from(array_column($evolucaoHistorica, 'percentual')) }}, borderColor: '#00b48d', backgroundColor: 'rgba(0,180,141,0.2)', tension: 0.2 }],
-    },
-    options: { scales: { y: { beginAtZero: true, max: 100 } } },
 });
 @endif
 </script>

@@ -16,8 +16,10 @@ use Throwable;
  * Import de resultados no formato "longo": uma linha por resposta de um
  * respondente a uma questão. Únicos campos obrigatórios: CPF ou RA, Questão
  * e Resposta (a resposta pode ser vazia — significa que o aluno deixou em
- * branco — mas a coluna precisa existir). Período é opcional: só existe para
- * diferenciar tentativas do mesmo aluno na mesma avaliação em períodos diferentes.
+ * branco — mas a coluna precisa existir). Período é opcional na planilha —
+ * quando ausente numa linha, cai pro período cadastrado no perfil do aluno
+ * (ver montarRegistros()); só fica vazio de verdade se nem a planilha nem o
+ * cadastro do aluno tiverem essa informação.
  */
 class ResultadoImportService
 {
@@ -165,9 +167,13 @@ class ResultadoImportService
      * Resolve todos os aluno_id de uma vez (duas consultas indexadas, em vez
      * de uma por linha) — mesmo critério do lookup original (CPF OU RA),
      * mantendo o menor id em caso de ambiguidade entre dois alunos diferentes.
+     * Também traz o `periodo` cadastrado no perfil de cada aluno — usado como
+     * fallback em montarRegistros() quando a planilha de resultados não tem
+     * coluna de Período (comum: período aqui é o período do CURSO do aluno,
+     * ex.: "5º", não o período letivo do exame — ver CLAUDE.md).
      *
      * @param  array<int, array{ra: ?string, cpf: ?string}>  $linhas
-     * @return array{porCpf: array<string, int>, porRa: array<string, int>}
+     * @return array{porCpf: array<string, int>, porRa: array<string, int>, periodoPorId: array<int, string>}
      */
     private function resolverAlunoIds(array $linhas): array
     {
@@ -175,17 +181,18 @@ class ResultadoImportService
         $ras = array_values(array_unique(array_filter(array_column($linhas, 'ra'))));
 
         if ($cpfs === [] && $ras === []) {
-            return ['porCpf' => [], 'porRa' => []];
+            return ['porCpf' => [], 'porRa' => [], 'periodoPorId' => []];
         }
 
         $alunos = Aluno::query()
             ->when($cpfs, fn ($query) => $query->orWhereIn('cpf', $cpfs))
             ->when($ras, fn ($query) => $query->orWhereIn('ra', $ras))
             ->orderBy('id')
-            ->get(['id', 'cpf', 'ra']);
+            ->get(['id', 'cpf', 'ra', 'periodo']);
 
         $porCpf = [];
         $porRa = [];
+        $periodoPorId = [];
 
         foreach ($alunos as $aluno) {
             if ($aluno->cpf !== null && ! isset($porCpf[$aluno->cpf])) {
@@ -194,9 +201,12 @@ class ResultadoImportService
             if ($aluno->ra !== null && ! isset($porRa[$aluno->ra])) {
                 $porRa[$aluno->ra] = $aluno->id;
             }
+            if (! empty($aluno->periodo)) {
+                $periodoPorId[$aluno->id] = $aluno->periodo;
+            }
         }
 
-        return ['porCpf' => $porCpf, 'porRa' => $porRa];
+        return ['porCpf' => $porCpf, 'porRa' => $porRa, 'periodoPorId' => $periodoPorId];
     }
 
     /**
@@ -225,8 +235,13 @@ class ResultadoImportService
      * o erro corretamente se essa chave falhar ao salvar) — removido antes
      * de virar a linha do upsert.
      *
+     * Quando a planilha não traz Período pra uma linha, cai pro período
+     * cadastrado no perfil do aluno (resolverAlunoIds()) em vez de gravar
+     * vazio — só fica vazio mesmo se o aluno não for encontrado ou também
+     * não tiver período cadastrado.
+     *
      * @param  array<int, array{linha: int, ra: ?string, cpf: ?string, numero: int, resposta: ?string, periodo: string}>  $linhas
-     * @param  array{porCpf: array<string, int>, porRa: array<string, int>}  $alunoIds
+     * @param  array{porCpf: array<string, int>, porRa: array<string, int>, periodoPorId: array<int, string>}  $alunoIds
      * @return array<string, array{linha: int, dados: array<string, mixed>}>
      */
     private function montarRegistros(Avaliacao $avaliacao, array $linhas, array $alunoIds): array
@@ -235,23 +250,29 @@ class ResultadoImportService
 
         foreach ($linhas as $linha) {
             $alunoChave = $linha['cpf'] ?? $linha['ra'];
-            $chave = "{$linha['periodo']}|{$linha['numero']}|{$alunoChave}";
 
             $candidatos = array_filter([
                 $linha['cpf'] !== null ? ($alunoIds['porCpf'][$linha['cpf']] ?? null) : null,
                 $linha['ra'] !== null ? ($alunoIds['porRa'][$linha['ra']] ?? null) : null,
             ], fn ($id) => $id !== null);
 
+            $alunoId = $candidatos === [] ? null : min($candidatos);
+            $periodo = $linha['periodo'] !== ''
+                ? $linha['periodo']
+                : ($alunoId !== null ? ($alunoIds['periodoPorId'][$alunoId] ?? '') : '');
+
+            $chave = "{$periodo}|{$linha['numero']}|{$alunoChave}";
+
             $registros[$chave] = [
                 'linha' => $linha['linha'],
                 'dados' => [
                     'avaliacao_codigo' => $avaliacao->codigo,
                     'questao_numero' => $linha['numero'],
-                    'periodo' => $linha['periodo'],
+                    'periodo' => $periodo,
                     'ra' => $linha['ra'],
                     'cpf' => $linha['cpf'],
                     'resposta' => $linha['resposta'],
-                    'aluno_id' => $candidatos === [] ? null : min($candidatos),
+                    'aluno_id' => $alunoId,
                     'deleted_at' => null,
                 ],
             ];

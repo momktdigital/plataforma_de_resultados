@@ -302,6 +302,110 @@ class PortalCategoriaTest extends TestCase
         $detalhe->assertSeeInOrder(['ph-trophy', 'Total', '87', 'Redação'], false);
     }
 
+    public function test_evolucao_por_categoria_aparece_com_duas_avaliacoes_na_mesma_categoria(): void
+    {
+        $aluno = $this->aluno();
+        $categoria = Categoria::create(['nome' => 'Simulado MedCof']);
+        $this->resultadoNaAvaliacao($aluno, $categoria->id, '2026-05-25', 'Simulado MedCof');
+        $this->resultadoNaAvaliacao($aluno, $categoria->id, '2026-06-20', 'Simulado MedCof');
+
+        $response = $this->followingRedirects()->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
+
+        $response->assertOk();
+        $response->assertSee('Evolução histórica nesta categoria');
+        // Datas das duas avaliações (formato d/m/Y) precisam estar na página,
+        // já que o rótulo do gráfico é "nome — data" — ver
+        // RelatorioAlunoServiceTest::test_evolucao_por_categoria_usa_nome_e_data_no_rotulo()
+        // pro formato exato do rótulo (o JSON embutido no <script> escapa o
+        // "—" e a "/", então não dá pra checar a string literal aqui).
+        $response->assertSee('25/05/2026');
+        $response->assertSee('20/06/2026');
+    }
+
+    public function test_evolucao_por_categoria_nao_mistura_categorias_diferentes_numa_so_serie(): void
+    {
+        // Bug relatado: com só 1 avaliação por categoria, o antigo gráfico
+        // "Evolução do desempenho" ainda assim juntava as duas numa única
+        // linha de tendência, como se fossem comparáveis. Categorias
+        // distintas não devem virar série nenhuma sem pelo menos 2
+        // avaliações CADA UMA.
+        $aluno = $this->aluno();
+        $diagnostico = Categoria::create(['nome' => 'Diagnóstico Institucional']);
+        $simulado = Categoria::create(['nome' => 'Simulado MedCof']);
+        $this->resultadoNaAvaliacao($aluno, $diagnostico->id, '2026-01-10', 'Diagnostico Institucional');
+        $this->resultadoNaAvaliacao($aluno, $simulado->id, '2026-02-10', 'Simulado 1');
+
+        $response = $this->followingRedirects()->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
+
+        $response->assertOk();
+        $response->assertDontSee('Evolução histórica nesta categoria');
+    }
+
+    public function test_categorias_diferentes_tem_graficos_de_evolucao_proprios_e_independentes(): void
+    {
+        // A "Evolução do desempenho"/"Análise consolidada" que existia no
+        // topo da tela (período inteiro, misturando categorias na mesma
+        // seção) virou parte de CADA categoria — cada uma com seu próprio
+        // gráfico, identificado pelo id da categoria.
+        $aluno = $this->aluno();
+        $catA = Categoria::create(['nome' => 'Categoria A']);
+        $catB = Categoria::create(['nome' => 'Categoria B']);
+        $this->resultadoNaAvaliacao($aluno, $catA->id, '2026-01-10', 'A1');
+        $this->resultadoNaAvaliacao($aluno, $catA->id, '2026-02-10', 'A2');
+        $this->resultadoNaAvaliacao($aluno, $catB->id, '2026-01-15', 'B1');
+        $this->resultadoNaAvaliacao($aluno, $catB->id, '2026-02-15', 'B2');
+
+        $response = $this->followingRedirects()->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
+
+        $response->assertOk();
+        $response->assertSee('grafico-evolucao-'.$catA->id, false);
+        $response->assertSee('grafico-evolucao-'.$catB->id, false);
+        $response->assertDontSee('Análise consolidada do período');
+    }
+
+    public function test_analise_consolidada_da_categoria_aparece_com_1_avaliacao_mesmo_sem_evolucao(): void
+    {
+        // Evolução exige 2+ avaliações na categoria (uma linha de tendência
+        // não faz sentido com 1 ponto só), mas a análise consolidada
+        // (habilidade, dificuldade etc.) não depende disso — já funciona com
+        // 1 avaliação só.
+        $aluno = $this->aluno();
+        $categoria = Categoria::create(['nome' => 'Categoria Única']);
+        $avaliacao = Avaliacao::create(['nome' => 'Prova única', 'categoria_id' => $categoria->id, 'data_avaliacao' => '2026-03-01']);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A', 'habilidade' => 'Anamnese']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => $aluno->ra, 'periodo' => '', 'questao_numero' => 1, 'resposta' => 'A']);
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+
+        $response = $this->followingRedirects()->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
+
+        $response->assertOk();
+        $response->assertDontSee('Evolução histórica nesta categoria');
+        $response->assertSee('Habilidades a reforçar');
+        $response->assertSee('Anamnese');
+    }
+
+    public function test_cada_painel_de_analise_tem_botao_de_explicacao_com_leitura_pessoal(): void
+    {
+        $aluno = $this->aluno();
+        $categoria = Categoria::create(['nome' => 'Categoria Única']);
+        $avaliacao = Avaliacao::create(['nome' => 'Prova única', 'categoria_id' => $categoria->id, 'data_avaliacao' => '2026-03-01']);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A', 'habilidade' => 'Anamnese']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => $aluno->ra, 'periodo' => '', 'questao_numero' => 1, 'resposta' => 'A']);
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+
+        $response = $this->followingRedirects()->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000']);
+
+        $response->assertOk();
+        // Um botão "explicacao-toggle" por painel renderizado (aqui só
+        // "Habilidades a reforçar", já que só 1 avaliação/1 questão) — o
+        // clique/toggle em si é comportamento de JS, testado via Playwright
+        // manualmente; aqui só confirma que o botão e o texto de apoio existem.
+        $response->assertSee('explicacao-toggle', false);
+        $response->assertSee('ph-lightbulb', false);
+        $response->assertSee('Mostra seu percentual de acerto em cada habilidade avaliada nesta categoria');
+        $response->assertSee('única habilidade avaliada nesta categoria foi &quot;Anamnese&quot;', false);
+    }
+
     public function test_sair_encerra_a_sessao_dos_resultados(): void
     {
         $aluno = $this->aluno();
