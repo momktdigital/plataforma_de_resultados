@@ -16,9 +16,11 @@ use RuntimeException;
  *
  * IMPORTANTE — validar contra dado real antes de confiar cegamente:
  * 1. tenant_sk/environment_sk vêm de ConfiguracaoSistema (avalia_tenant_sk /
- *    avalia_environment_sk) — precisam ser confirmados rodando uma consulta
- *    em dim_tenants/dim_environments no ambiente de homologação, ainda não
- *    validados contra o Redshift real desta IES.
+ *    avalia_environment_sk) — já confirmados via `dim_tenants`/`dim_environments`
+ *    no Redshift real desta IES: um único tenant_sk (UNIFAA), com DOIS
+ *    environment_sk (um por campus/polo — "unifaa_prod" e "arcoverde").
+ *    `avalia_environment_sk` guarda os dois separados por vírgula; ver
+ *    environmentSks().
  * 2. Para 'avalia_online', `fct_activities_questions_avalia` não expõe o
  *    texto da resposta (só a nota da questão) — respostasOnline() grava
  *    `resposta` como null nesse caso; só a nota chega em `resultado_metricas`
@@ -37,7 +39,7 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
     public function testarConexao(): void
     {
         $this->tenantSk();
-        $this->environmentSk();
+        $this->environmentSks();
 
         DB::connection(self::CONNECTION)->select('select 1');
     }
@@ -73,7 +75,7 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
             ->join('dimensions.dim_subjects as subj', 'subj.subject_sk', '=', 's.subject_sk')
             ->join('dimensions.dim_users as u', 'u.user_sk', '=', 's.user_sk')
             ->where('s.tenant_sk', $this->tenantSk())
-            ->where('s.environment_sk', $this->environmentSk())
+            ->whereIn('s.environment_sk', $this->environmentSks())
             ->when($desde !== null, fn ($query) => $query->where('s.cdc_datetime', '>', $desde))
             ->select([
                 's.exam_sk', 's.subject_sk', 's.final_grade', 's.subject_grade', 's.weight',
@@ -95,7 +97,7 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
             ->join('dimensions.dim_questions as dq', 'dq.question_sk', '=', 'q.question_sk')
             ->join('dimensions.dim_users as u', 'u.user_sk', '=', 'q.user_sk')
             ->where('q.tenant_sk', $this->tenantSk())
-            ->where('q.environment_sk', $this->environmentSk())
+            ->whereIn('q.environment_sk', $this->environmentSks())
             ->when($desde !== null, fn ($query) => $query->where('q.cdc_datetime', '>', $desde))
             ->select([
                 'q.exam_sk', 'q.subject_sk', 'q.question_grade', 'q.question_weight',
@@ -118,7 +120,7 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
             ->join('dimensions.dim_questionnaires as qn', 'qn.questionnaire_sk', '=', 'a.questionnaire_sk')
             ->join('dimensions.dim_users as u', 'u.user_sk', '=', 'a.user_sk')
             ->where('a.tenant_sk', $this->tenantSk())
-            ->where('a.environment_sk', $this->environmentSk())
+            ->whereIn('a.environment_sk', $this->environmentSks())
             ->where('a.activity_is_deleted', false)
             ->where('qn.questionnaire_type_avalia_online', 'avaliacao')
             ->when($desde !== null, fn ($query) => $query->where('a.activity_finished_at', '>', $desde))
@@ -144,7 +146,7 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
             ->join('dimensions.dim_questions as dq', 'dq.question_sk', '=', 'aq.question_sk')
             ->join('dimensions.dim_users as u', 'u.user_sk', '=', 'aq.user_sk')
             ->where('aq.tenant_sk', $this->tenantSk())
-            ->where('aq.environment_sk', $this->environmentSk())
+            ->whereIn('aq.environment_sk', $this->environmentSks())
             ->where('aq.activity_is_deleted', false)
             ->where('aq.question_is_deleted', false)
             ->when($desde !== null, fn ($query) => $query->where('aq.question_corrected_at', '>', $desde))
@@ -164,9 +166,25 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
             ?? throw new RuntimeException('Configure o "tenant" do Avalia na tela de Integração antes de sincronizar.');
     }
 
-    private function environmentSk(): string
+    /**
+     * Um tenant pode ter mais de um campus/polo (cada um com seu próprio
+     * environment_sk) — `avalia_environment_sk` guarda todos separados por
+     * vírgula (ex.: "5558077742612549577,6023501672592045297") e todos são
+     * sincronizados juntos.
+     *
+     * @return array<int, string>
+     */
+    private function environmentSks(): array
     {
-        return ConfiguracaoSistema::valor('avalia_environment_sk')
-            ?? throw new RuntimeException('Configure o "ambiente" do Avalia na tela de Integração antes de sincronizar.');
+        $valor = ConfiguracaoSistema::valor('avalia_environment_sk')
+            ?? throw new RuntimeException('Configure o(s) "ambiente(s)" do Avalia na tela de Integração antes de sincronizar.');
+
+        $sks = array_values(array_filter(array_map('trim', explode(',', $valor))));
+
+        if ($sks === []) {
+            throw new RuntimeException('Configure o(s) "ambiente(s)" do Avalia na tela de Integração antes de sincronizar.');
+        }
+
+        return $sks;
     }
 }

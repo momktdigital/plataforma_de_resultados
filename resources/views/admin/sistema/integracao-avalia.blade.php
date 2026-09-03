@@ -42,13 +42,14 @@
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono">
             </div>
             <div>
-                <label class="block text-sm font-medium mb-1" for="avalia_environment_sk">Ambiente (environment_sk)</label>
+                <label class="block text-sm font-medium mb-1" for="avalia_environment_sk">Ambiente(s) (environment_sk)</label>
                 <input id="avalia_environment_sk" name="avalia_environment_sk" type="text" value="{{ old('avalia_environment_sk', $environmentSk) }}"
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono">
             </div>
         </div>
         <p class="text-xs text-slate-400">
             Identificam a instituição dentro do Data Warehouse do Avalia (compartilhado entre clientes) — confirme os valores corretos com o suporte do Avalia antes de sincronizar.
+            Um campus/polo por ambiente: se houver mais de um (ex.: sede + polo Arcoverde), separe os <code class="bg-slate-100 px-1 rounded">environment_sk</code> por vírgula.
         </p>
         <button type="submit" class="bg-slate-700 hover:bg-slate-800 text-white font-semibold rounded-lg px-4 py-2 text-sm">
             Salvar
