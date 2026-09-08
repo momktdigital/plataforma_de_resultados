@@ -75,7 +75,7 @@
                     </div>
                     <div class="text-sm font-bold text-primary uppercase tracking-wide truncate">{{ $metricaTotal->nome_metrica }}</div>
                 </div>
-                <div class="text-3xl font-black text-primary shrink-0">{{ $metricaTotal->valor }}</div>
+                <div class="text-3xl font-black text-primary shrink-0">{{ is_numeric($metricaTotal->valor) ? number_format((float) $metricaTotal->valor, 2, ',', '.') : $metricaTotal->valor }}</div>
             </div>
         @endif
 
@@ -84,7 +84,7 @@
                 @foreach ($outrasMetricas as $metrica)
                     <div class="bg-slate-50 border border-slate-100 rounded-lg p-3">
                         <div class="text-xs font-bold text-slate-500 uppercase truncate" title="{{ $metrica->nome_metrica }}">{{ $metrica->nome_metrica }}</div>
-                        <div class="text-lg font-black text-slate-800">{{ $metrica->valor }}</div>
+                        <div class="text-lg font-black text-slate-800">{{ is_numeric($metrica->valor) ? number_format((float) $metrica->valor, 2, ',', '.') : $metrica->valor }}</div>
                     </div>
                 @endforeach
             </div>

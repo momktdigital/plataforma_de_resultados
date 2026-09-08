@@ -318,7 +318,12 @@ class AvaliaSyncService
                     'ra' => null,
                     'periodo' => '',
                     'nome_metrica' => self::NOME_METRICA_NOTA_FINAL,
-                    'valor' => $notaFinal !== null ? (string) $notaFinal : null,
+                    // O Redshift devolve final_grade/activity_final_grade como
+                    // NUMERIC (mais casas decimais do que o boletim exibe, ex.
+                    // "1.9024390243902439") — number_format normaliza pra 2
+                    // casas antes de gravar, evitando repetir esse
+                    // arredondamento em cada view que mostra a nota.
+                    'valor' => $notaFinal !== null ? number_format((float) $notaFinal, 2, '.', '') : null,
                     'aluno_id' => $alunoIdPorCpf[$linha->cpf] ?? null,
                     'origem' => $produto,
                     'id_externo' => $chave,

@@ -73,7 +73,7 @@ class AvaliaSyncServiceTest extends TestCase
 
         $metrica = ResultadoMetrica::where('avaliacao_codigo', $avaliacao->codigo)->firstOrFail();
         $this->assertSame('Nota Final', $metrica->nome_metrica);
-        $this->assertSame('8.5', $metrica->valor);
+        $this->assertSame('8.50', $metrica->valor);
         $this->assertNotNull($metrica->aluno_id);
     }
 
@@ -103,7 +103,7 @@ class AvaliaSyncServiceTest extends TestCase
 
         $this->assertDatabaseCount('avaliacoes', 1);
         $this->assertDatabaseCount('resultado_metricas', 1);
-        $this->assertDatabaseHas('resultado_metricas', ['valor' => '9']);
+        $this->assertDatabaseHas('resultado_metricas', ['valor' => '9.00']);
     }
 
     public function test_avalia_online_grava_nota_sem_texto_de_resposta(): void
@@ -135,7 +135,7 @@ class AvaliaSyncServiceTest extends TestCase
         $this->assertSame('Quiz de Português', $avaliacao->nome);
 
         $this->assertDatabaseHas('respostas', ['avaliacao_codigo' => $avaliacao->codigo, 'resposta' => null]);
-        $this->assertDatabaseHas('resultado_metricas', ['avaliacao_codigo' => $avaliacao->codigo, 'valor' => '6']);
+        $this->assertDatabaseHas('resultado_metricas', ['avaliacao_codigo' => $avaliacao->codigo, 'valor' => '6.00']);
     }
 
     public function test_por_padrao_nao_sincroniza_nada_ate_uma_prova_ser_selecionada(): void
@@ -315,6 +315,25 @@ class AvaliaSyncServiceTest extends TestCase
         $this->assertDatabaseCount('respostas', 0);
         $this->assertDatabaseCount('resultado_metricas', 0);
         $this->assertSame(1 + 2, $execucao->linhas_sem_identificador);
+    }
+
+    public function test_nota_final_e_arredondada_para_duas_casas_decimais(): void
+    {
+        // Regressão: o Redshift devolve final_grade como NUMERIC de alta
+        // precisão (ex. "1.9024390243902439", visto em dado real) — sem
+        // arredondar, o boletim mostrava a nota inteira crua em vez de
+        // "1,90". Ver AvaliaSyncService::upsertMetricas().
+        $this->alunoComCpf('11122233344');
+        ConfiguracaoSistema::definir('avalia_modo_avalia_pro', 'todas');
+
+        $nota = $this->notaProFake(100, 7);
+        $nota->final_grade = 1.9024390243902439;
+
+        $extractor = new FakeAvaliaExtractor(notas: new Collection([$nota]), respostas: new Collection);
+
+        (new AvaliaSyncService($extractor))->sincronizar('avalia_pro', AvaliaSyncExecucao::DISPARADO_MANUAL);
+
+        $this->assertDatabaseHas('resultado_metricas', ['valor' => '1.90']);
     }
 
     public function test_cpf_com_pontuacao_e_sanitizado_antes_de_gravar(): void

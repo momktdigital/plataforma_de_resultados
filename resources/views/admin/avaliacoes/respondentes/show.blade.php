@@ -31,7 +31,7 @@
             @foreach ($metricas as $metrica)
                 <div class="bg-slate-50 border border-slate-100 rounded-lg p-3">
                     <div class="text-xs font-bold text-slate-500 uppercase truncate" title="{{ $metrica->nome_metrica }}">{{ $metrica->nome_metrica }}</div>
-                    <div class="text-xl font-black text-emerald-700">{{ $metrica->valor }}</div>
+                    <div class="text-xl font-black text-emerald-700">{{ is_numeric($metrica->valor) ? number_format((float) $metrica->valor, 2, ',', '.') : $metrica->valor }}</div>
                 </div>
             @endforeach
         </div>
