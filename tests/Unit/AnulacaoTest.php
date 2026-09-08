@@ -78,6 +78,72 @@ class AnulacaoTest extends TestCase
         $this->assertSame($esperado, $obtidoSql, "PHP e SQL divergem para {$descricao}");
     }
 
+    /**
+     * `correta` (respostas.correta) é o veredito pré-calculado usado quando a
+     * fonte não expõe um gabarito comparável entre respondentes (ver docblock
+     * de Anulacao::condicaoAcertoSql()) — quando não é null, ele decide por
+     * cima da comparação resposta=gabarito de sempre.
+     *
+     * @return array<string, array{0: ?string, 1: string, 2: ?string, 3: ?bool}>
+     */
+    public static function combinacoesComCorreta(): array
+    {
+        $respostas = [null, 'A', 'B'];
+        $gabaritos = ['A', 'B'];
+        $modos = [null, Anulacao::MODO_DAR_PONTO, Anulacao::MODO_DISTRIBUIR_PONTUACAO];
+        $corretas = [null, true, false];
+
+        $casos = [];
+        foreach ($respostas as $resposta) {
+            foreach ($gabaritos as $gabarito) {
+                foreach ($modos as $modo) {
+                    foreach ($corretas as $correta) {
+                        $chave = 'resposta='.($resposta ?? 'NULL').',gabarito='.$gabarito
+                            .',modo='.($modo ?? 'NULL').',correta='.($correta === null ? 'NULL' : ($correta ? 'true' : 'false'));
+                        $casos[$chave] = [$resposta, $gabarito, $modo, $correta];
+                    }
+                }
+            }
+        }
+
+        return $casos;
+    }
+
+    #[DataProvider('combinacoesComCorreta')]
+    public function test_acertou_e_condicao_sql_concordam_com_correta_pre_calculada(?string $resposta, string $gabarito, ?string $anuladaModo, ?bool $correta): void
+    {
+        $esperado = Anulacao::acertou($resposta, $gabarito, $anuladaModo, $correta);
+
+        $sql = 'SELECT '.Anulacao::condicaoAcertoSql('resposta', 'gabarito', 'anulada_modo', 'correta').' AS acertou '
+            .'FROM (SELECT :resposta AS resposta, :gabarito AS gabarito, :modo AS anulada_modo, :correta AS correta)';
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([
+            'resposta' => $resposta,
+            'gabarito' => $gabarito,
+            'modo' => $anuladaModo,
+            'correta' => $correta === null ? null : (int) $correta,
+        ]);
+        $obtidoSql = (bool) $stmt->fetchColumn();
+
+        $descricao = 'resposta='.var_export($resposta, true)
+            .', gabarito='.var_export($gabarito, true)
+            .', anulada_modo='.var_export($anuladaModo, true)
+            .', correta='.var_export($correta, true);
+
+        $this->assertSame($esperado, $obtidoSql, "PHP e SQL divergem para {$descricao}");
+    }
+
+    public function test_correta_pre_calculada_vence_mesmo_quando_resposta_bate_com_gabarito_por_acaso(): void
+    {
+        // O ponto inteiro de "correta": pra uma fonte cuja letra não é
+        // comparável entre alunos (Avalia Pro embaralha alternativas), o
+        // veredito pré-calculado manda, mesmo que a letra bata por
+        // coincidência com o gabarito de outro contexto.
+        $this->assertFalse(Anulacao::acertou('A', 'A', null, correta: false));
+        $this->assertTrue(Anulacao::acertou('A', 'B', null, correta: true));
+    }
+
     public function test_distribuida_identifica_apenas_o_modo_distribuir_pontuacao(): void
     {
         $this->assertFalse(Anulacao::distribuida(null));

@@ -70,7 +70,7 @@ class BiDashboardService
             // aleatório (Avalia Pro) dá uma quantidade de questões diferente
             // por aluno.
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('respostas.resposta', 'questoes.gabarito', 'questoes.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
+            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('respostas.resposta', 'questoes.gabarito', 'questoes.anulada_modo', 'respostas.correta').' THEN 1 ELSE 0 END) as acertos')
             ->selectRaw("SUM(CASE WHEN NOT {$semResposta} THEN 1 ELSE 0 END) as respondidas")
             ->groupBy('respostas.aluno_chave', 'respostas.periodo')
             ->get();
@@ -153,7 +153,7 @@ class BiDashboardService
             ->whereIn('respostas.questao_numero', $paresQuestaoDisciplina->pluck('numero')->unique())
             ->selectRaw('respostas.questao_numero as numero')
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('respostas.resposta', 'questoes.gabarito', 'questoes.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
+            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('respostas.resposta', 'questoes.gabarito', 'questoes.anulada_modo', 'respostas.correta').' THEN 1 ELSE 0 END) as acertos')
             ->groupBy('respostas.questao_numero')
             ->get()
             ->keyBy('numero');

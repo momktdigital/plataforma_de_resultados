@@ -80,6 +80,7 @@ class RespondenteController extends Controller
         abort_if($respostas->isEmpty(), 404);
 
         $gabaritos = $avaliacao->questoes()->whereNotNull('gabarito')->pluck('gabarito', 'numero');
+        $anuladas = $avaliacao->questoes()->whereNotNull('anulada_modo')->pluck('anulada_modo', 'numero');
         $metricas = $avaliacao->metricas()->where('aluno_chave', $chave)->where('periodo', $periodo)->get();
 
         $aluno = Aluno::where('ra', $chave)->orWhere('cpf', $chave)->first();
@@ -92,6 +93,7 @@ class RespondenteController extends Controller
             'avaliacao' => $avaliacao,
             'respostas' => $respostas,
             'gabaritos' => $gabaritos,
+            'anuladas' => $anuladas,
             'metricas' => $metricas,
             'chave' => $chave,
             'periodo' => $periodo,

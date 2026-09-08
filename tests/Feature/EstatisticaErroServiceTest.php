@@ -100,4 +100,18 @@ class EstatisticaErroServiceTest extends TestCase
         $this->assertSame(2500, $stats[0]['erros']);
         $this->assertLessThan(5.0, $duracao, 'Cálculo deve ser feito em SQL agregado, não linha a linha em PHP.');
     }
+
+    public function test_correta_pre_calculada_vence_a_comparacao_de_letra(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => '-']);
+
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A', 'correta' => true]);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2', 'questao_numero' => 1, 'resposta' => 'A', 'correta' => false]);
+
+        $stats = (new EstatisticaErroService)->calcular($avaliacao);
+
+        $this->assertSame(1, $stats[0]['acertos']);
+        $this->assertSame(1, $stats[0]['erros']);
+    }
 }

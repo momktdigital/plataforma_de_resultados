@@ -228,4 +228,17 @@ class RelatorioAdminServiceTest extends TestCase
         $comAusentes = (new RelatorioAdminService)->distribuicaoPorTurma($avaliacao, incluirAusentes: true);
         $this->assertSame(2, $comAusentes[0]['respondentes']);
     }
+
+    public function test_dispersao_tri_respeita_correta_pre_calculada(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => '-', 'dificuldade_tri' => 0.5]);
+
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A', 'correta' => true]);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2', 'questao_numero' => 1, 'resposta' => 'A', 'correta' => false]);
+
+        $resultado = (new RelatorioAdminService)->dispersaoTri($avaliacao);
+
+        $this->assertSame(50.0, $resultado[0]['taxa_acerto']);
+    }
 }

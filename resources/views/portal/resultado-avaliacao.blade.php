@@ -150,7 +150,7 @@
                         $cor = 'bg-slate-400';
                         $statusIcone = null; // sinal além da cor, pra quem tem daltonismo
                         if ($correta !== null && $correta !== '') {
-                            $acertou = \App\Support\Anulacao::acertou($marcada, $correta, $anuladaModo);
+                            $acertou = \App\Support\Anulacao::acertou($marcada, $correta, $anuladaModo, $resposta->correta);
                             if ($acertou) {
                                 $cor = 'bg-green-500';
                                 $statusIcone = 'ph-check';
@@ -451,13 +451,21 @@ const PORTAL_ALUNO = {nome: @json($aluno->nome), ra: @json($aluno->ra)};
 const PORTAL_QUESTOES = {{ Js::from(
     $r['respostas']->mapWithKeys(function ($resposta) use ($r) {
         $meta = $r['questoesMeta'][$resposta->questao_numero] ?? null;
+        $gabarito = $r['gabaritos'][$resposta->questao_numero] ?? null;
+        $anuladaModo = $r['anuladas'][$resposta->questao_numero] ?? null;
 
         return [$resposta->questao_numero => [
             'area' => $meta['area'] ?? null,
             'tema' => $meta['tema'] ?? null,
             'suaResposta' => $resposta->resposta ?: null,
-            'gabarito' => $r['gabaritos'][$resposta->questao_numero] ?? null,
-            'anulada' => ($r['anuladas'][$resposta->questao_numero] ?? null) !== null,
+            'gabarito' => $gabarito,
+            'anulada' => $anuladaModo !== null,
+            // Calculado aqui (não recomparado em JS) porque origens como o
+            // Avalia Pro trazem `correta` já pronto em vez de um gabarito
+            // comparável entre alunos — ver Anulacao::condicaoAcertoSql().
+            'acertou' => $gabarito !== null && $gabarito !== ''
+                ? \App\Support\Anulacao::acertou($resposta->resposta, $gabarito, $anuladaModo, $resposta->correta)
+                : null,
         ]];
     })
 ) }};
@@ -481,7 +489,7 @@ function portalAbrirDetalheQuestao(numero) {
 
     const suaResposta = document.getElementById('modal-detalhe-sua-resposta');
     suaResposta.textContent = q.suaResposta || 'Em branco';
-    suaResposta.className = 'font-bold text-right ' + ((q.anulada || q.suaResposta === q.gabarito) ? 'text-emerald-700' : 'text-red-600');
+    suaResposta.className = 'font-bold text-right ' + ((q.anulada || q.acertou) ? 'text-emerald-700' : 'text-red-600');
 
     document.getElementById('modal-detalhe-gabarito').textContent = q.gabarito || '—';
 

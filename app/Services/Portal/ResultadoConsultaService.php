@@ -131,7 +131,7 @@ class ResultadoConsultaService
         } else {
             $acertos = $respostas->filter(
                 fn ($r) => $gabaritos->has($r->questao_numero)
-                    && Anulacao::acertou($r->resposta, $gabaritos[$r->questao_numero], $anuladas->get($r->questao_numero))
+                    && Anulacao::acertou($r->resposta, $gabaritos[$r->questao_numero], $anuladas->get($r->questao_numero), $r->correta)
             )->count();
             $total = $gabaritos->count();
             $percentual = $total > 0 ? round($acertos / $total * 100, 1) : null;

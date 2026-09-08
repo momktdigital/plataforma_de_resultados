@@ -173,7 +173,7 @@ class RelatorioAlunoService
             ->groupBy('r.questao_numero')
             ->selectRaw('r.questao_numero as numero')
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
+            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo', 'r.correta').' THEN 1 ELSE 0 END) as acertos')
             ->get()
             ->keyBy('numero');
 
@@ -197,7 +197,7 @@ class RelatorioAlunoService
                 'sua_resposta' => (string) ($resposta->resposta ?: ''),
                 'gabarito' => $gabarito,
                 'anulada' => $anuladaModo !== null,
-                'acertou' => Anulacao::acertou($resposta->resposta, $gabarito, $anuladaModo),
+                'acertou' => Anulacao::acertou($resposta->resposta, $gabarito, $anuladaModo, $resposta->correta),
                 'taxa_acerto_turma' => $taxa !== null && (int) $taxa->total > 0
                     ? round((int) $taxa->acertos / (int) $taxa->total * 100, 1)
                     : 0.0,
@@ -270,7 +270,7 @@ class RelatorioAlunoService
                 continue;
             }
 
-            if (Anulacao::acertou($resposta->resposta, $gabarito, $meta->anulada_modo)) {
+            if (Anulacao::acertou($resposta->resposta, $gabarito, $meta->anulada_modo, $resposta->correta)) {
                 $acertosPorArea[$meta->area]['total'] = ($acertosPorArea[$meta->area]['total'] ?? 0) + 1;
                 $acertosPorArea[$meta->area]['temas'][$meta->tema] = true;
             } else {
@@ -395,7 +395,7 @@ class RelatorioAlunoService
                 continue;
             }
 
-            $acertou = Anulacao::acertou($resposta->resposta, $gabarito, $anuladaModo);
+            $acertou = Anulacao::acertou($resposta->resposta, $gabarito, $anuladaModo, $resposta->correta);
 
             foreach ($grupos as $grupo) {
                 $acumulado[$grupo] ??= ['acertos' => 0, 'total' => 0];

@@ -13,6 +13,13 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  *
  * Tabela `respostas` (não `resultados`) de propósito: a aplicação legada já
  * tem uma tabela `resultados` no mesmo banco compartilhado.
+ *
+ * `correta` (nullable) é um veredito pré-calculado, usado só quando a fonte
+ * já manda ele pronto por resposta em vez de um gabarito comparável entre
+ * respondentes (hoje: avalia_pro, cujo `question_answer` é uma letra
+ * embaralhada por aluno — ver App\Support\Anulacao e o motivo dessa coluna
+ * na migration que a criou). Null em todo import manual — nesse caso a
+ * comparação de sempre (resposta === gabarito) continua valendo.
  */
 class Resposta extends Model
 {
@@ -40,6 +47,7 @@ class Resposta extends Model
         'periodo',
         'questao_numero',
         'resposta',
+        'correta',
         'origem',
         'id_externo',
     ];
@@ -48,6 +56,7 @@ class Resposta extends Model
     {
         return [
             'questao_numero' => 'integer',
+            'correta' => 'boolean',
         ];
     }
 

@@ -58,6 +58,22 @@ class ResumoResultadoServiceTest extends TestCase
         $this->assertDatabaseHas('resultado_resumos', ['ra' => '1', 'acertos' => 0, 'total' => 2, 'ausente' => true]);
     }
 
+    public function test_correta_pre_calculada_vence_a_comparacao_de_letra(): void
+    {
+        // Caso real: o Avalia Pro embaralha a ordem das alternativas por
+        // aluno, então a letra marcada não é comparável com um gabarito
+        // único — respostas.correta é o veredito de verdade nesse caso (ver
+        // Anulacao::condicaoAcertoSql()).
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => '-']);
+
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A', 'correta' => true]);
+
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+
+        $this->assertDatabaseHas('resultado_resumos', ['ra' => '1', 'acertos' => 1, 'total' => 1]);
+    }
+
     public function test_aluno_com_pelo_menos_uma_resposta_real_nao_e_marcado_como_ausente(): void
     {
         $avaliacao = Avaliacao::create([]);

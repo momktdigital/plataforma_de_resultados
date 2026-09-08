@@ -53,7 +53,7 @@ class ResumoResultadoService
                 // exatamente o mesmo resultado que o total fixo de antes.
                 ."sum(case when q.gabarito is not null and q.gabarito != '' then 1 else 0 end) as total, "
                 ."sum(case when q.gabarito is not null and q.gabarito != '' and "
-                .Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo')
+                .Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo', 'r.correta')
                 .' then 1 else 0 end) as acertos, '
                 // Nenhuma resposta real registrada nesta avaliação = aluno
                 // ausente, não "aluno errou tudo" — ver migration

@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Aluno;
 use App\Models\Avaliacao;
 use App\Models\Categoria;
+use App\Models\Questao;
+use App\Models\Resposta;
 use App\Models\ResultadoResumo;
 use App\Services\Portal\ResultadoConsultaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -99,5 +101,22 @@ class ResultadoConsultaServiceTest extends TestCase
         $resumo = $service->resumoPorCategoria($arvore['arvore']);
         $this->assertSame(80.0, $resumo[0]['media']);
         $this->assertSame(1, $resumo[0]['quantidade']);
+    }
+
+    public function test_buscar_uma_avaliacao_sem_resumo_pre_calculado_respeita_correta_pre_calculada(): void
+    {
+        // Fallback calculado na hora (sem resultado_resumos ainda) — mesmo
+        // raciocínio do resumo pré-calculado: correta já pronta vence a
+        // comparação de letra.
+        $avaliacao = Avaliacao::create(['nome' => 'Prova']);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => '-']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2026001', 'periodo' => '', 'questao_numero' => 1, 'resposta' => 'A', 'correta' => true]);
+
+        $aluno = Aluno::create(['ra' => '2026001', 'cpf' => null, 'data_nascimento' => '2000-01-01', 'nome' => 'Fulano de Tal']);
+
+        $resultado = app(ResultadoConsultaService::class)->buscarUmaAvaliacao($aluno, $avaliacao->codigo, '');
+
+        $this->assertSame(1, $resultado['acertos']);
+        $this->assertSame(1, $resultado['total']);
     }
 }

@@ -176,6 +176,31 @@ class AnulacaoQuestaoTest extends TestCase
         $detalhe->assertSee('2/2', false);
     }
 
+    public function test_boletim_do_aluno_usa_correta_pre_calculada_em_vez_da_letra(): void
+    {
+        // Caso real: o Avalia Pro embaralha a ordem das alternativas por
+        // aluno — a letra 'A' aqui não bate com o gabarito placeholder '-',
+        // mas correta=true (o veredito de verdade) diz que o aluno acertou.
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => '-']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2026001', 'questao_numero' => 1, 'resposta' => 'A', 'correta' => true]);
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+
+        $this->admin();
+        Aluno::create(['ra' => '2026001', 'cpf' => '12345678909', 'data_nascimento' => '2000-03-15', 'nome' => 'Fulano']);
+
+        $this->followingRedirects()->post('/portal/consultar', [
+            'cpf' => '123.456.789-09',
+            'data_nascimento' => '15/03/2000',
+        ]);
+
+        $detalhe = $this->get(route('portal.resultados.avaliacao', ['avaliacao' => $avaliacao->codigo, 'periodo' => '']));
+        $detalhe->assertOk();
+        $detalhe->assertSee('1/1', false);
+        $detalhe->assertSee('bg-green-500', false);
+        $detalhe->assertDontSee('bg-red-500', false);
+    }
+
     public function test_lacunas_e_consolidados_ignoram_questao_distribuir_pontuacao(): void
     {
         $avaliacao = Avaliacao::create([]);
@@ -207,5 +232,23 @@ class AnulacaoQuestaoTest extends TestCase
         $lacunas = app(RelatorioAlunoService::class)
             ->lacunasEConsolidados($respostas, $gabaritos, $avaliacao);
         $this->assertStringNotContainsString('COVID', json_encode($lacunas));
+    }
+
+    public function test_lacunas_e_consolidados_respeita_correta_pre_calculada(): void
+    {
+        // Caso real: o Avalia Pro embaralha a ordem das alternativas por
+        // aluno — a letra 'A' aqui não bate com o gabarito placeholder '-',
+        // mas correta=true (o veredito de verdade) diz que o aluno acertou.
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => '-', 'area' => 'Cardiologia', 'tema' => 'Arritmia']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A', 'correta' => true]);
+
+        $respostas = Resposta::where('avaliacao_codigo', $avaliacao->codigo)->get();
+        $gabaritos = Questao::where('avaliacao_codigo', $avaliacao->codigo)->pluck('gabarito', 'numero');
+
+        $resultado = app(RelatorioAlunoService::class)->lacunasEConsolidados($respostas, $gabaritos, $avaliacao);
+
+        $this->assertStringContainsString('Arritmia', json_encode($resultado['consolidados']));
+        $this->assertStringNotContainsString('Arritmia', json_encode($resultado['lacunas']));
     }
 }

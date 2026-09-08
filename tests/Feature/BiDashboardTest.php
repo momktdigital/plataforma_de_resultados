@@ -148,6 +148,18 @@ class BiDashboardTest extends TestCase
         $this->assertSame(0, array_sum(array_slice($dados['histograma'], 0, 9)));
     }
 
+    public function test_correta_pre_calculada_vence_a_comparacao_de_letra_no_painel_bi(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => '-']);
+
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A', 'correta' => true]);
+
+        $dados = app(BiDashboardService::class)->gerar($avaliacao);
+
+        $this->assertSame(9, array_search(1, $dados['histograma']));
+    }
+
     public function test_ranking_completo_mostra_badge_ausente_quando_incluido(): void
     {
         $avaliacao = Avaliacao::create([]);

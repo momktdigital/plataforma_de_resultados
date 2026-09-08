@@ -47,20 +47,45 @@ final class Anulacao
     /**
      * Fragmento SQL booleano pra usar dentro de `SUM(CASE WHEN {$expr} THEN
      * 1 ELSE 0 END)`: conta como acerto quando a questão tem dar_ponto
-     * (credita todo mundo) OU quando a resposta bate com o gabarito.
-     * Nunca inclui questões distribuir_pontuacao — sempre combine com
-     * excluirDistribuidas() na mesma query, senão elas ficam de fora da
-     * soma mas continuam contando no total via outra parte da query.
+     * (credita todo mundo), OU quando `$colunaCorreta` já traz um veredito
+     * pré-calculado (não nulo — ver abaixo), OU (fallback de sempre) quando
+     * a resposta bate com o gabarito. Nunca inclui questões
+     * distribuir_pontuacao — sempre combine com excluirDistribuidas() na
+     * mesma query, senão elas ficam de fora da soma mas continuam contando
+     * no total via outra parte da query.
+     *
+     * `$colunaCorreta` (opcional): passe `'r.correta'` (ver
+     * `respostas.correta`) quando a fonte pode mandar um veredito já pronto
+     * por resposta, em vez de só um gabarito comparável entre respondentes —
+     * caso real: o Avalia embaralha a ordem das alternativas por aluno, então
+     * a "letra certa" de uma questão não é a mesma pra todo mundo, e comparar
+     * resposta=gabarito globalmente dá errado quase sempre. Omitir esse
+     * parâmetro preserva o comportamento de sempre (só resposta=gabarito) —
+     * é assim que os imports manuais, que nunca preenchem `correta`, continuam
+     * funcionando sem mudança nenhuma.
      */
-    public static function condicaoAcertoSql(string $colunaResposta, string $colunaGabarito, string $colunaModo): string
+    public static function condicaoAcertoSql(string $colunaResposta, string $colunaGabarito, string $colunaModo, ?string $colunaCorreta = null): string
     {
-        return "({$colunaModo} = '".self::MODO_DAR_PONTO."' OR {$colunaResposta} = {$colunaGabarito})";
+        $comparacao = $colunaCorreta !== null
+            ? "(CASE WHEN {$colunaCorreta} IS NOT NULL THEN {$colunaCorreta} ELSE {$colunaResposta} = {$colunaGabarito} END)"
+            : "{$colunaResposta} = {$colunaGabarito}";
+
+        return "({$colunaModo} = '".self::MODO_DAR_PONTO."' OR {$comparacao})";
     }
 
-    /** Equivalente em PHP de condicaoAcertoSql(), pras comparações feitas fora de SQL (ex.: sobre a Collection de respostas de um único aluno). */
-    public static function acertou(?string $resposta, ?string $gabarito, ?string $anuladaModo): bool
+    /**
+     * Equivalente em PHP de condicaoAcertoSql(), pras comparações feitas fora
+     * de SQL (ex.: sobre a Collection de respostas de um único aluno).
+     * `$correta` é o mesmo veredito pré-calculado — ver docblock de
+     * condicaoAcertoSql().
+     */
+    public static function acertou(?string $resposta, ?string $gabarito, ?string $anuladaModo, ?bool $correta = null): bool
     {
-        return $anuladaModo === self::MODO_DAR_PONTO || $resposta === $gabarito;
+        if ($anuladaModo === self::MODO_DAR_PONTO) {
+            return true;
+        }
+
+        return $correta ?? ($resposta === $gabarito);
     }
 
     public static function distribuida(?string $anuladaModo): bool

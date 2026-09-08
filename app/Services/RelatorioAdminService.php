@@ -170,7 +170,7 @@ class RelatorioAdminService
             ->groupBy('r.questao_numero')
             ->selectRaw('r.questao_numero as numero')
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
+            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo', 'r.correta').' THEN 1 ELSE 0 END) as acertos')
             ->get()
             ->keyBy('numero');
 
@@ -230,7 +230,7 @@ class RelatorioAdminService
             ->groupBy('r.aluno_chave', 'q.habilidade')
             ->selectRaw('r.aluno_chave as aluno_chave, q.habilidade as habilidade')
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
+            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo', 'r.correta').' THEN 1 ELSE 0 END) as acertos')
             ->get();
 
         if ($porAlunoHabilidade->isEmpty()) {
@@ -420,7 +420,7 @@ class RelatorioAdminService
             ->selectRaw('q.area as area, q.tema as tema')
             ->selectRaw('COUNT(DISTINCT q.numero) as total_questoes')
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
+            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo', 'r.correta').' THEN 1 ELSE 0 END) as acertos')
             ->get();
 
         $resultado = $linhas->map(fn ($l) => [
@@ -567,7 +567,7 @@ class RelatorioAdminService
             ->groupBy("q.{$campo}")
             ->selectRaw("q.{$campo} as campo")
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
+            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo', 'r.correta').' THEN 1 ELSE 0 END) as acertos')
             ->get();
     }
 

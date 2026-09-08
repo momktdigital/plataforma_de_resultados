@@ -47,12 +47,17 @@
     <div class="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
         @foreach ($respostas as $resposta)
             @php
-                $correta = $gabaritos[$resposta->questao_numero] ?? null;
+                $gabarito = $gabaritos[$resposta->questao_numero] ?? null;
+                $anuladaModo = $anuladas[$resposta->questao_numero] ?? null;
                 $marcada = $resposta->resposta ?: '';
                 $cor = 'bg-slate-400';
                 $statusIcone = null; // 'ph-check' | 'ph-x' | null — sinal além da cor, pra quem tem daltonismo
-                if ($correta !== null && $correta !== '') {
-                    if ($marcada === $correta) {
+                // Anulacao::acertou() (não uma comparação direta) porque
+                // origens como o Avalia Pro trazem `correta` já calculado
+                // (respostas.correta) em vez de um gabarito comparável entre
+                // alunos — ver docblock de Anulacao::condicaoAcertoSql().
+                if ($gabarito !== null && $gabarito !== '') {
+                    if ($marcada !== '' && \App\Support\Anulacao::acertou($resposta->resposta, $gabarito, $anuladaModo, $resposta->correta)) {
                         $cor = 'bg-green-500';
                         $statusIcone = 'ph-check';
                     } elseif ($marcada !== '') {

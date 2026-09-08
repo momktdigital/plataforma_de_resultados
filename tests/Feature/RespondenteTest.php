@@ -216,4 +216,21 @@ class RespondenteTest extends TestCase
         $detalhe->assertOk();
         $detalhe->assertSee('Ausente');
     }
+
+    public function test_grade_de_respostas_usa_correta_pre_calculada_em_vez_da_letra(): void
+    {
+        // Caso real: o Avalia Pro embaralha a ordem das alternativas por
+        // aluno — comparar a letra marcada com um gabarito único (aqui, o
+        // placeholder '-') sempre dá "errado"; correta=true precisa vencer.
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => '-']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '444', 'periodo' => '', 'questao_numero' => 1, 'resposta' => 'A', 'correta' => true]);
+
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->get("/avaliacoes/{$avaliacao->codigo}/respondentes/show?chave=444&periodo=");
+
+        $response->assertOk();
+        $response->assertSee('bg-green-500', false);
+        $response->assertDontSee('bg-red-500', false);
+    }
 }
