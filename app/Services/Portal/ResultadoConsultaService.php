@@ -25,7 +25,7 @@ class ResultadoConsultaService
      * avaliação, então lê de `resultado_resumos` (App\Services\ResumoResultadoService)
      * em vez de escanear `respostas`, que cresce um por aluno×avaliação×questão.
      *
-     * @return array<int, array{avaliação: Avaliação, periodo: string, periodo_letivo: string, acertos: int, total: int, percentual: ?float}>
+     * @return array<int, array{avaliação: Avaliação, periodo: string, periodo_letivo: string, acertos: int, total: int, percentual: ?float, ausente: bool}>
      */
     public function buscarPorAluno(Aluno $aluno): array
     {
@@ -40,6 +40,7 @@ class ResultadoConsultaService
                 'acertos' => $resumo->acertos,
                 'total' => $resumo->total,
                 'percentual' => $resumo->percentual !== null ? (float) $resumo->percentual : null,
+                'ausente' => $resumo->ausente,
             ])
             ->values()
             ->all();
@@ -73,7 +74,7 @@ class ResultadoConsultaService
      * abre em nova aba, então a "posse" do resultado precisa ser conferida
      * aqui (nunca confiar que o código da avaliação na URL já é do aluno certo).
      *
-     * @return array{avaliação: Avaliação, periodo: string, respostas: Collection, gabaritos: Collection, acertos: int, total: int, percentual: ?float, metricas: Collection}|null
+     * @return array{avaliação: Avaliação, periodo: string, respostas: Collection, gabaritos: Collection, acertos: int, total: int, percentual: ?float, ausente: bool, metricas: Collection}|null
      */
     public function buscarUmaAvaliacao(Aluno $aluno, int $avaliacaoCodigo, string $periodo): ?array
     {
@@ -95,7 +96,7 @@ class ResultadoConsultaService
         return $this->montarResultado($aluno, $avaliacao, $periodo, $respostas);
     }
 
-    /** @return array{avaliacao: Avaliacao, periodo: string, respostas: Collection, gabaritos: Collection, anuladas: Collection, questoesMeta: Collection, acertos: int, total: int, percentual: ?float, metricas: Collection} */
+    /** @return array{avaliacao: Avaliacao, periodo: string, respostas: Collection, gabaritos: Collection, anuladas: Collection, questoesMeta: Collection, acertos: int, total: int, percentual: ?float, ausente: bool, metricas: Collection} */
     private function montarResultado(Aluno $aluno, Avaliacao $avaliacao, string $periodo, Collection $respostas): array
     {
         // 'anuladas' guarda o anulada_modo de TODA questão anulada (mesmo as
@@ -126,6 +127,7 @@ class ResultadoConsultaService
             $acertos = $resumo->acertos;
             $total = $resumo->total;
             $percentual = $resumo->percentual !== null ? (float) $resumo->percentual : null;
+            $ausente = $resumo->ausente;
         } else {
             $acertos = $respostas->filter(
                 fn ($r) => $gabaritos->has($r->questao_numero)
@@ -133,6 +135,7 @@ class ResultadoConsultaService
             )->count();
             $total = $gabaritos->count();
             $percentual = $total > 0 ? round($acertos / $total * 100, 1) : null;
+            $ausente = $respostas->every(fn ($r) => Resposta::ehSemResposta($r->resposta));
         }
 
         $metricas = ResultadoMetrica::where('avaliacao_codigo', $avaliacao->codigo)
@@ -150,6 +153,7 @@ class ResultadoConsultaService
             'acertos' => $acertos,
             'total' => $total,
             'percentual' => $percentual,
+            'ausente' => $ausente,
             'metricas' => $metricas,
         ];
     }
@@ -225,7 +229,7 @@ class ResultadoConsultaService
     public function evolucaoGeral(array $resultados): array
     {
         return collect($resultados)
-            ->filter(fn ($r) => $r['percentual'] !== null && $r['avaliacao']->data_avaliacao !== null)
+            ->filter(fn ($r) => $r['percentual'] !== null && ! $r['ausente'] && $r['avaliacao']->data_avaliacao !== null)
             ->sortBy(fn ($r) => $r['avaliacao']->data_avaliacao->format('Y-m-d'))
             ->map(fn ($r) => [
                 'nome' => $r['avaliacao']->nome ?? "Avaliação #{$r['avaliacao']->codigo}",
@@ -247,7 +251,9 @@ class ResultadoConsultaService
     public function resumoPorCategoria(array $arvore): array
     {
         $coletarPercentuais = function (array $no) use (&$coletarPercentuais): array {
-            $percentuais = collect($no['resultados'])->pluck('percentual')->filter(fn ($p) => $p !== null)->all();
+            $percentuais = collect($no['resultados'])
+                ->reject(fn ($r) => $r['ausente'])
+                ->pluck('percentual')->filter(fn ($p) => $p !== null)->all();
 
             foreach ($no['subcategorias'] as $sub) {
                 $percentuais = [...$percentuais, ...$coletarPercentuais($sub)];

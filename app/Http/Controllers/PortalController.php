@@ -338,7 +338,7 @@ class PortalController extends Controller
             ? $todos
             : collect($todos)->filter(fn ($r) => $r['periodo_letivo'] === $periodoSelecionado)->values()->all();
 
-        $comPercentual = collect($resultados)->pluck('percentual')->filter(fn ($p) => $p !== null);
+        $comPercentual = collect($resultados)->reject(fn ($r) => $r['ausente'])->pluck('percentual')->filter(fn ($p) => $p !== null);
         $arvore = $consultaService->montarArvore($resultados);
 
         return view('portal.resultados', [

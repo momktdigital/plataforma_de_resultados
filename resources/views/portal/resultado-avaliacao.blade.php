@@ -40,7 +40,11 @@
                     Período: {{ $r['periodo'] !== '' ? $r['periodo'] : '—' }}
                 </p>
             </div>
-            @if ($estado['nota_geral']['visivelAluno'] && $r['total'] > 0)
+            @if ($r['ausente'])
+                <div class="shrink-0">
+                    <span class="inline-block bg-amber-100 text-amber-700 text-sm font-bold uppercase rounded-lg px-3 py-1.5">Ausente</span>
+                </div>
+            @elseif ($estado['nota_geral']['visivelAluno'] && $r['total'] > 0)
                 <div class="flex items-center gap-3 shrink-0">
                     <div class="text-right hidden sm:block">
                         <div class="text-xs text-slate-500 font-medium">{{ $r['acertos'] }}/{{ $r['total'] }}</div>

@@ -16,7 +16,11 @@
             Período: {{ $periodo !== '' ? $periodo : '(sem período)' }}
         </p>
     </div>
-    @if ($total !== null)
+    @if ($ausente)
+        <div class="text-right shrink-0">
+            <span class="inline-block bg-amber-100 text-amber-700 text-sm font-bold uppercase rounded-lg px-3 py-1.5">Ausente</span>
+        </div>
+    @elseif ($total !== null)
         <div class="text-right shrink-0">
             <div class="text-2xl font-black text-emerald-700">{{ $acertos }}/{{ $total }}</div>
             <div class="text-xs text-slate-500 font-medium">acertos</div>

@@ -98,6 +98,7 @@ class RespondenteController extends Controller
             'aluno' => $aluno,
             'acertos' => $resumo?->acertos,
             'total' => $resumo?->total,
+            'ausente' => $resumo?->ausente ?? false,
         ]);
     }
 
@@ -138,6 +139,7 @@ class RespondenteController extends Controller
             $resumo = $resumosPorChavePeriodo->get("{$linha->aluno_chave}|{$linha->periodo}");
             $linha->acertos = $resumo?->acertos;
             $linha->total = $resumo?->total;
+            $linha->ausente = $resumo?->ausente ?? false;
         }
     }
 

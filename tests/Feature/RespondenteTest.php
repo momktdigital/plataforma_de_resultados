@@ -197,4 +197,23 @@ class RespondenteTest extends TestCase
 
         $this->get("/avaliacoes/{$avaliacao->codigo}/respondentes")->assertRedirect(route('login'));
     }
+
+    public function test_lista_e_detalhe_marcam_aluno_ausente_em_vez_de_0_acertos(): void
+    {
+        $admin = $this->admin();
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '333', 'periodo' => '', 'questao_numero' => 1, 'resposta' => '-']);
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+
+        $lista = $this->actingAs($admin, 'admin')->get("/avaliacoes/{$avaliacao->codigo}/respondentes");
+        $lista->assertOk();
+        $lista->assertSee('Ausente');
+        $lista->assertDontSee('0/1');
+
+        $detalhe = $this->actingAs($admin, 'admin')
+            ->get("/avaliacoes/{$avaliacao->codigo}/respondentes/show?chave=333&periodo=");
+        $detalhe->assertOk();
+        $detalhe->assertSee('Ausente');
+    }
 }

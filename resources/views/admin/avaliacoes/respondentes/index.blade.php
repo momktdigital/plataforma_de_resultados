@@ -73,7 +73,13 @@
                     <td class="px-4 py-3">{{ $r->ra ?: '—' }}</td>
                     <td class="px-4 py-3">{{ $r->cpf ?: '—' }}</td>
                     <td class="px-4 py-3">{{ $r->periodo !== '' ? $r->periodo : '—' }}</td>
-                    <td class="px-4 py-3">{{ $r->total !== null ? "{$r->acertos}/{$r->total}" : '—' }}</td>
+                    <td class="px-4 py-3">
+                        @if ($r->ausente)
+                            <span class="inline-block bg-amber-100 text-amber-700 text-xs font-bold uppercase rounded px-2 py-0.5">Ausente</span>
+                        @else
+                            {{ $r->total !== null ? "{$r->acertos}/{$r->total}" : '—' }}
+                        @endif
+                    </td>
                     <td class="px-4 py-3">{{ $r->total_respostas }}</td>
                     <td class="px-4 py-3 text-slate-500">{{ \Illuminate\Support\Carbon::parse($r->updated_at)->format('d/m/Y H:i') }}</td>
                     <td class="px-4 py-3 text-right">

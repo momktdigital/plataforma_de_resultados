@@ -31,7 +31,9 @@
         </div>
     </div>
     <div class="flex items-center gap-3 shrink-0">
-        @if ($r['total'] > 0)
+        @if ($r['ausente'])
+            <span class="inline-block bg-amber-100 text-amber-700 text-xs font-bold uppercase rounded px-2 py-1">Ausente</span>
+        @elseif ($r['total'] > 0)
             <div class="flex items-center gap-2.5">
                 @include('portal._anel_progresso', ['percentual' => $r['percentual'], 'tamanho' => 44, 'espessura' => 5, 'tamanhoTexto' => 'text-[11px]'])
                 <div class="text-[11px] text-slate-500 font-medium hidden sm:block">{{ $r['acertos'] }}/{{ $r['total'] }}<br>acertos</div>
