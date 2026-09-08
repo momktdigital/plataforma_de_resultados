@@ -201,6 +201,29 @@ class AnulacaoQuestaoTest extends TestCase
         $detalhe->assertDontSee('bg-red-500', false);
     }
 
+    public function test_boletim_do_aluno_mostra_posicao_local_com_numero_do_banco_entre_parenteses(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 3, 'gabarito' => 'A']);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 18, 'gabarito' => 'B']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2026001', 'questao_numero' => 3, 'resposta' => 'A']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2026001', 'questao_numero' => 18, 'resposta' => 'B']);
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+
+        $this->admin();
+        Aluno::create(['ra' => '2026001', 'cpf' => '12345678909', 'data_nascimento' => '2000-03-15', 'nome' => 'Fulano']);
+
+        $this->followingRedirects()->post('/portal/consultar', [
+            'cpf' => '123.456.789-09',
+            'data_nascimento' => '15/03/2000',
+        ]);
+
+        $detalhe = $this->get(route('portal.resultados.avaliacao', ['avaliacao' => $avaliacao->codigo, 'periodo' => '']));
+        $detalhe->assertOk();
+        $detalhe->assertSeeInOrder(['Q1', '(3)', 'Q2', '(18)'], false);
+        $detalhe->assertDontSee('Q18', false);
+    }
+
     public function test_lacunas_e_consolidados_ignoram_questao_distribuir_pontuacao(): void
     {
         $avaliacao = Avaliacao::create([]);

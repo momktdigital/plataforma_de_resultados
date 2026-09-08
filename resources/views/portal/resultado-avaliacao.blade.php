@@ -160,12 +160,12 @@
                             }
                         }
                     @endphp
-                    <button type="button" onclick="portalAbrirDetalheQuestao({{ $resposta->questao_numero }})"
+                    <button type="button" onclick="portalAbrirDetalheQuestao({{ $loop->iteration }}, {{ $resposta->questao_numero }})"
                             data-area="{{ $meta['area'] ?? '' }}" data-tema="{{ $meta['tema'] ?? '' }}"
                             class="detalhe-questao-item rounded-lg overflow-hidden border border-slate-200 shadow-sm text-left cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all"
                             @if ($anuladaModo) title="Questão anulada — não conta na nota" @endif>
                         <div class="{{ $cor }} text-white text-[10px] text-center font-bold py-1 flex items-center justify-center gap-0.5">
-                            <span>Q{{ $resposta->questao_numero }}{{ $anuladaModo ? '*' : '' }}</span>
+                            <span>Q{{ $loop->iteration }}@if ($loop->iteration !== $resposta->questao_numero) <span class="font-normal opacity-75">({{ $resposta->questao_numero }})</span>@endif{{ $anuladaModo ? '*' : '' }}</span>
                             @if ($statusIcone)
                                 <i class="ph-bold {{ $statusIcone }}" aria-hidden="true"></i>
                             @endif
@@ -318,9 +318,11 @@
                         <tbody class="divide-y divide-slate-100">
                             @foreach ($comparativoQuestao as $q)
                                 <tr @if ($q['anulada']) title="Questão anulada — não conta na nota" @endif>
-                                    <td class="px-3 py-2 font-mono">Q{{ $q['numero'] }}{{ $q['anulada'] ? '*' : '' }}</td>
+                                    <td class="px-3 py-2 font-mono">
+                                        Q{{ $q['numero_local'] }}@if ($q['numero_local'] !== $q['numero']) <span class="text-slate-400">({{ $q['numero'] }})</span>@endif{{ $q['anulada'] ? '*' : '' }}
+                                    </td>
                                     <td class="px-3 py-2 {{ $q['acertou'] ? 'text-green-600 font-bold' : 'text-red-600 font-bold' }}">{{ $q['sua_resposta'] ?: '—' }}</td>
-                                    <td class="px-3 py-2">{{ $q['gabarito'] }}</td>
+                                    <td class="px-3 py-2">{{ $q['gabarito'] !== '-' ? $q['gabarito'] : '—' }}</td>
                                     <td class="px-3 py-2">{{ $q['taxa_acerto_turma'] }}%</td>
                                 </tr>
                             @endforeach
@@ -358,7 +360,7 @@
                 <dt class="text-slate-500">Sua resposta</dt>
                 <dd id="modal-detalhe-sua-resposta" class="font-bold text-right"></dd>
             </div>
-            <div class="flex justify-between gap-3">
+            <div id="modal-detalhe-gabarito-linha" class="hidden flex justify-between gap-3">
                 <dt class="text-slate-500">Resposta correta</dt>
                 <dd id="modal-detalhe-gabarito" class="font-bold text-emerald-700 text-right"></dd>
             </div>
@@ -472,11 +474,11 @@ const PORTAL_QUESTOES = {{ Js::from(
 
 let portalUltimoFocoAntesDoModal = null;
 
-function portalAbrirDetalheQuestao(numero) {
-    const q = PORTAL_QUESTOES[numero];
+function portalAbrirDetalheQuestao(numeroLocal, numeroReal) {
+    const q = PORTAL_QUESTOES[numeroReal];
     if (!q) return;
 
-    document.getElementById('modal-detalhe-titulo').textContent = 'Questão ' + numero;
+    document.getElementById('modal-detalhe-titulo').textContent = 'Questão ' + numeroLocal;
     document.getElementById('modal-detalhe-anulada').classList.toggle('hidden', !q.anulada);
 
     const areaLinha = document.getElementById('modal-detalhe-area-linha');
@@ -491,7 +493,14 @@ function portalAbrirDetalheQuestao(numero) {
     suaResposta.textContent = q.suaResposta || 'Em branco';
     suaResposta.className = 'font-bold text-right ' + ((q.anulada || q.acertou) ? 'text-emerald-700' : 'text-red-600');
 
-    document.getElementById('modal-detalhe-gabarito').textContent = q.gabarito || '—';
+    // '-' é o placeholder de "sem gabarito comparável" (ver Anulacao) — não
+    // mostra como se fosse a resposta certa de verdade (ex.: Avalia Pro, que
+    // embaralha a ordem das alternativas por aluno e nunca tem um gabarito
+    // de letra único).
+    const gabaritoLinha = document.getElementById('modal-detalhe-gabarito-linha');
+    const temGabarito = q.gabarito && q.gabarito !== '-';
+    gabaritoLinha.classList.toggle('hidden', !temGabarito);
+    if (temGabarito) document.getElementById('modal-detalhe-gabarito').textContent = q.gabarito;
 
     const modal = document.getElementById('modal-detalhe-questao');
     modal.classList.remove('hidden');

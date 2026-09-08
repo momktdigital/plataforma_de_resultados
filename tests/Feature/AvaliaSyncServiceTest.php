@@ -79,7 +79,7 @@ class AvaliaSyncServiceTest extends TestCase
         $this->assertNotNull($metrica->aluno_id);
     }
 
-    public function test_sincronizacao_gera_resultado_resumo_com_gabarito_derivado(): void
+    public function test_sincronizacao_gera_resultado_resumo_com_correta_pre_calculada(): void
     {
         // Regressão: AvaliaSyncService nunca chamava ResumoResultadoService,
         // então resultado_resumos (acertos/total/ausente/percentual
@@ -102,9 +102,10 @@ class AvaliaSyncServiceTest extends TestCase
         $avaliacao = Avaliacao::where('origem', 'avalia_pro')->where('id_externo', '100:7')->firstOrFail();
         $resumo = ResultadoResumo::where('avaliacao_codigo', $avaliacao->codigo)->firstOrFail();
 
-        // O aluno respondeu exatamente o que o Avalia marcou como correto
-        // pras duas questões — com o gabarito derivado por consenso, os
-        // dois acertos precisam aparecer aqui, não "0 de 2".
+        // O Avalia marcou as duas respostas do aluno como 'Correta' — o
+        // veredito vai direto pra respostas.correta (não dá pra reconstruir
+        // um gabarito comparável, ver docblock da classe), e os dois
+        // acertos precisam aparecer aqui, não "0 de 2".
         $this->assertSame(2, $resumo->acertos);
         $this->assertSame(2, $resumo->total);
         $this->assertFalse($resumo->ausente);
@@ -413,12 +414,16 @@ class AvaliaSyncServiceTest extends TestCase
         ];
     }
 
-    public function test_gabarito_e_derivado_do_consenso_de_respostas_marcadas_corretas(): void
+    public function test_gabarito_fica_sempre_placeholder_e_correta_vem_do_answer_status(): void
     {
-        // dim_questions não expõe gabarito (confirmado consultando o schema
-        // real) — a única fonte é o veredito que o Avalia já calculou por
-        // resposta (answer_status = 'Correta'/'Errada'/'Anulada', valores
-        // reais confirmados via SELECT DISTINCT no Redshift desta IES).
+        // Regressão: uma tentativa anterior de derivar o gabarito pelo
+        // "consenso" de quem acertou foi provada errada com dado real — o
+        // Avalia embaralha a ordem das alternativas por aluno (a MESMA
+        // questão teve as 5 letras diferentes marcadas como 'Correta' por
+        // alunos diferentes em fct_student_exam_questions_avalia_pro). Não
+        // existe gabarito de letra comparável entre respondentes; o
+        // veredito de verdade vem de answer_status, direto pra
+        // respostas.correta — nunca reconstruído a partir da letra.
         $this->alunoComCpf('11122233344');
         ConfiguracaoSistema::definir('avalia_modo_avalia_pro', 'todas');
 
@@ -432,34 +437,29 @@ class AvaliaSyncServiceTest extends TestCase
 
         (new AvaliaSyncService($extractor))->sincronizar('avalia_pro', AvaliaSyncExecucao::DISPARADO_MANUAL);
 
-        // Questão 501: quem acertou marcou 'A' — vira o gabarito.
-        $this->assertDatabaseHas('questoes', ['id_externo' => '501', 'gabarito' => 'A']);
-        // Questão 502: ninguém acertou nesta leva — sem consenso ainda, fica
-        // com o placeholder até uma sincronização futura resolver.
+        $this->assertDatabaseHas('questoes', ['id_externo' => '501', 'gabarito' => '-']);
         $this->assertDatabaseHas('questoes', ['id_externo' => '502', 'gabarito' => '-']);
+        $this->assertDatabaseHas('respostas', ['id_externo' => '501', 'resposta' => 'A', 'correta' => true]);
+        $this->assertDatabaseHas('respostas', ['id_externo' => '502', 'resposta' => 'C', 'correta' => false]);
     }
 
-    public function test_gabarito_inconsistente_entre_respondentes_nao_e_gravado(): void
+    public function test_correta_fica_nula_para_resposta_em_branco_ou_anulada(): void
     {
-        // Duas respostas diferentes marcadas 'Correta' pra mesma questão não
-        // deveria acontecer numa prova objetiva — mas se acontecer (dado
-        // inconsistente/anomalia), não arrisca gravar um gabarito errado.
-        Aluno::create(['ra' => 'RA1', 'cpf' => '11122233344', 'nome' => 'Aluno 1']);
-        Aluno::create(['ra' => 'RA2', 'cpf' => '55566677788', 'nome' => 'Aluno 2']);
+        $this->alunoComCpf('11122233344');
         ConfiguracaoSistema::definir('avalia_modo_avalia_pro', 'todas');
-
-        $resposta1 = $this->respostaProFake(501, 'A', 'Correta');
-        $resposta2 = $this->respostaProFake(501, 'B', 'Correta');
-        $resposta2->cpf = '55566677788';
 
         $extractor = new FakeAvaliaExtractor(
             notas: new Collection([$this->notaProFake(100, 7)]),
-            respostas: new Collection([$resposta1, $resposta2]),
+            respostas: new Collection([
+                $this->respostaProFake(501, '', ''),
+                $this->respostaProFake(502, 'A', 'Anulada'),
+            ]),
         );
 
         (new AvaliaSyncService($extractor))->sincronizar('avalia_pro', AvaliaSyncExecucao::DISPARADO_MANUAL);
 
-        $this->assertDatabaseHas('questoes', ['id_externo' => '501', 'gabarito' => '-']);
+        $this->assertDatabaseHas('respostas', ['id_externo' => '501', 'correta' => null]);
+        $this->assertDatabaseHas('respostas', ['id_externo' => '502', 'correta' => null]);
     }
 
     public function test_questao_anulada_e_marcada_distribuir_pontuacao(): void
@@ -477,23 +477,25 @@ class AvaliaSyncServiceTest extends TestCase
         $this->assertDatabaseHas('questoes', ['id_externo' => '501', 'anulada_modo' => Anulacao::MODO_DISTRIBUIR_PONTUACAO]);
     }
 
-    public function test_gabarito_ja_resolvido_nao_e_apagado_por_sync_incremental_sem_consenso_no_lote(): void
+    public function test_anulacao_ja_detectada_nao_e_esquecida_por_sync_incremental_sem_anulada_no_lote(): void
     {
         // Uma sincronização incremental só vê as respostas NOVAS desde o
-        // último watermark — sem preservar o gabarito já resolvido, um lote
-        // incremental sem nenhum acerto novo pra essa questão apagaria o
-        // gabarito de um sync anterior.
+        // último watermark — sem preservar a anulação já detectada, um lote
+        // incremental sem nenhuma resposta 'Anulada' pra essa questão
+        // desfaria a anulação marcada por um sync anterior.
         $this->alunoComCpf('11122233344');
         ConfiguracaoSistema::definir('avalia_modo_avalia_pro', 'todas');
 
         $service1 = new AvaliaSyncService(new FakeAvaliaExtractor(
             notas: new Collection([$this->notaProFake(100, 7)]),
-            respostas: new Collection([$this->respostaProFake(501, 'A', 'Correta')]),
+            respostas: new Collection([$this->respostaProFake(501, 'A', 'Anulada')]),
         ));
         $service1->sincronizar('avalia_pro', AvaliaSyncExecucao::DISPARADO_MANUAL);
-        $this->assertDatabaseHas('questoes', ['id_externo' => '501', 'gabarito' => 'A']);
+        $this->assertDatabaseHas('questoes', ['id_externo' => '501', 'anulada_modo' => Anulacao::MODO_DISTRIBUIR_PONTUACAO]);
 
-        // Segunda leva: outro aluno errando a mesma questão, sem nenhum acerto.
+        // Segunda leva: outro aluno respondendo a mesma questão, já sem
+        // status 'Anulada' nesta leva (ex.: cache da fato ainda não refletiu
+        // pra essa linha nova).
         Aluno::create(['ra' => 'RA2', 'cpf' => '55566677788', 'nome' => 'Aluno 2']);
         $notaSeguinte = $this->notaProFake(100, 7);
         $notaSeguinte->cpf = '55566677788';
@@ -508,7 +510,7 @@ class AvaliaSyncServiceTest extends TestCase
         ));
         $service2->sincronizar('avalia_pro', AvaliaSyncExecucao::DISPARADO_MANUAL);
 
-        $this->assertDatabaseHas('questoes', ['id_externo' => '501', 'gabarito' => 'A']);
+        $this->assertDatabaseHas('questoes', ['id_externo' => '501', 'anulada_modo' => Anulacao::MODO_DISTRIBUIR_PONTUACAO]);
     }
 
     public function test_nova_sincronizacao_autocorrige_execucao_travada_de_uma_tentativa_anterior(): void

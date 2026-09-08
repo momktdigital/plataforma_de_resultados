@@ -393,34 +393,34 @@ class AvaliaSyncService
 
             $numeroPorIdExterno = $this->resolverNumerosQuestao($avaliacaoCodigo, $produto, $linhasDaAvaliacao);
 
-            // O gabarito/anulação já gravados (se houver) — uma sincronização
+            // anulada_modo já gravado (se houver) — uma sincronização
             // incremental só vê as respostas NOVAS desde o último watermark,
-            // que podem não incluir nenhum acerto pra derivar consenso (ver
-            // derivarGabaritoAvaliaPro); sem isso, um resync incremental
-            // apagaria um gabarito já resolvido por um lote anterior.
-            $existentes = DB::table('questoes')
-                ->where('avaliacao_codigo', $avaliacaoCodigo)
-                ->whereNotNull('id_externo')
-                ->get(['id_externo', 'gabarito', 'anulada_modo'])
-                ->keyBy('id_externo');
+            // que podem não incluir nenhuma 'Anulada' pra essa questão nesta
+            // leva; sem isso, um resync incremental "esqueceria" uma
+            // anulação já detectada por um lote anterior.
+            $anuladasExistentes = $produto === 'avalia_pro'
+                ? DB::table('questoes')->where('avaliacao_codigo', $avaliacaoCodigo)->whereNotNull('id_externo')->pluck('anulada_modo', 'id_externo')
+                : collect();
 
-            [$gabaritos, $anuladas] = $produto === 'avalia_pro'
-                ? $this->derivarGabaritoAvaliaPro($linhasDaAvaliacao)
-                : [[], []];
+            $anuladas = $produto === 'avalia_pro' ? $this->derivarAnuladasAvaliaPro($linhasDaAvaliacao) : [];
 
             $registros = [];
             foreach ($linhasDaAvaliacao->unique('question_id') as $linha) {
                 $idExterno = (string) $linha->question_id;
-                $existente = $existentes->get($idExterno);
 
                 $registros[] = [
                     'avaliacao_codigo' => $avaliacaoCodigo,
                     'numero' => $numeroPorIdExterno[$idExterno],
-                    // '-' só quando nenhuma fonte (este lote ou um anterior)
-                    // conseguiu resolver o gabarito ainda — satisfaz a coluna
-                    // NOT NULL do schema legado sem fingir uma resposta real.
-                    'gabarito' => $gabaritos[$idExterno] ?? $existente?->gabarito ?? '-',
-                    'anulada_modo' => $anuladas[$idExterno] ?? $existente?->anulada_modo ?? null,
+                    // Sem gabarito comparável entre respondentes: o Avalia
+                    // embaralha a ordem das alternativas por aluno
+                    // (confirmado com dado real — a MESMA questão teve as 5
+                    // letras diferentes marcadas como corretas por alunos
+                    // diferentes), então não existe uma "letra certa" única
+                    // pra gravar aqui. '-' só satisfaz a coluna NOT NULL do
+                    // schema legado — o veredito de verdade vai em
+                    // respostas.correta (ver upsertRespostas()/Anulacao).
+                    'gabarito' => '-',
+                    'anulada_modo' => $anuladas[$idExterno] ?? $anuladasExistentes->get($idExterno),
                     'origem' => $produto,
                     'id_externo' => $idExterno,
                     'deleted_at' => null,
@@ -443,47 +443,28 @@ class AvaliaSyncService
     }
 
     /**
-     * O Avalia não expõe o gabarito em nenhuma dimensão (`dim_questions` não
-     * tem campo de resposta correta — confirmado consultando o schema real)
-     * — a única fonte é o veredito que ele já calculou por resposta
-     * (`answer_status`). Deriva o gabarito de cada questão pelo CONSENSO das
-     * respostas marcadas 'Correta' (só aceita quando todo mundo que acertou
-     * marcou a MESMA alternativa — o normal pra múltipla escolha; se
-     * divergir, não arrisca um gabarito errado, deixa pra próxima sincronização).
-     *
-     * `anulada_modo`: uma questão com pelo menos uma resposta 'Anulada' é
-     * marcada distribuir_pontuacao (sai do total pra todo mundo). Modo
-     * conservador escolhido de propósito: o dado bruto não distingue, no
-     * nível da questão, "anulada com crédito pra todos" de "isenta" (só há
-     * contadores agregados annulled_questions_count/exempted_questions_count
-     * por aluno×prova×disciplina, sem apontar QUAL questão é qual) — excluir
-     * do total nunca credita nem culpa ninguém indevidamente, ao contrário de
+     * Uma questão com pelo menos uma resposta 'Anulada' é marcada
+     * distribuir_pontuacao (sai do total pra todo mundo). Modo conservador
+     * escolhido de propósito: o dado bruto não distingue, no nível da
+     * questão, "anulada com crédito pra todos" de "isenta" (só há contadores
+     * agregados annulled_questions_count/exempted_questions_count por
+     * aluno×prova×disciplina, sem apontar QUAL questão é qual) — excluir do
+     * total nunca credita nem culpa ninguém indevidamente, ao contrário de
      * assumir dar_ponto errado.
      *
-     * @return array{0: array<string, string>, 1: array<string, string>} [gabaritos, anuladas] por id_externo da questão
+     * @return array<string, string> anulada_modo por id_externo da questão
      */
-    private function derivarGabaritoAvaliaPro(Collection $linhasDaAvaliacao): array
+    private function derivarAnuladasAvaliaPro(Collection $linhasDaAvaliacao): array
     {
-        $gabaritos = [];
         $anuladas = [];
 
         foreach ($linhasDaAvaliacao->groupBy(fn ($linha) => (string) $linha->question_id) as $idExterno => $linhasDaQuestao) {
-            $corretas = $linhasDaQuestao
-                ->where('answer_status', 'Correta')
-                ->pluck('question_answer')
-                ->filter()
-                ->unique();
-
-            if ($corretas->count() === 1) {
-                $gabaritos[$idExterno] = $corretas->first();
-            }
-
             if ($linhasDaQuestao->contains('answer_status', 'Anulada')) {
                 $anuladas[$idExterno] = Anulacao::MODO_DISTRIBUIR_PONTUACAO;
             }
         }
 
-        return [$gabaritos, $anuladas];
+        return $anuladas;
     }
 
     /**
@@ -565,6 +546,7 @@ class AvaliaSyncService
                         'periodo' => '',
                         'questao_numero' => $questaoNumero,
                         'resposta' => $this->respostaTexto($produto, $linha),
+                        'correta' => $this->corretaVeredito($produto, $linha),
                         'aluno_id' => $alunoIdPorCpf[$linha->cpf] ?? null,
                         'origem' => $produto,
                         'id_externo' => (string) $linha->question_id,
@@ -581,7 +563,7 @@ class AvaliaSyncService
                 DB::table('respostas')->upsert(
                     $registros,
                     ['avaliacao_codigo', 'aluno_chave', 'periodo', 'questao_numero'],
-                    ['resposta', 'aluno_id', 'origem', 'id_externo', 'deleted_at', 'updated_at']
+                    ['resposta', 'correta', 'aluno_id', 'origem', 'id_externo', 'deleted_at', 'updated_at']
                 );
 
                 $gravadas += count($registros);
@@ -599,6 +581,34 @@ class AvaliaSyncService
     private function respostaTexto(string $produto, object $linha): ?string
     {
         return $produto === 'avalia_pro' ? $linha->question_answer : null;
+    }
+
+    /**
+     * Veredito pronto por resposta — grava direto em `respostas.correta`, em
+     * vez de depender de comparar `resposta` com um gabarito (ver
+     * Anulacao::acertou()). Necessário porque o Avalia embaralha a ordem das
+     * alternativas por aluno: a letra que ele marcou não é comparável com a
+     * de outro aluno pra mesma questão, então só o `answer_status` que o
+     * próprio Avalia já calculou é confiável aqui.
+     *
+     * null pra 'Errada'/'Correta' ausentes (aluno não respondeu — sem
+     * veredito objetivo) e pra 'Anulada' (a questão inteira sai do cálculo
+     * via anulada_modo=distribuir_pontuacao, ver derivarAnuladasAvaliaPro();
+     * o veredito individual não importa nesse caso). Avalia Online não tem
+     * equivalente (nem answer_status nem o texto da resposta — ver aviso na
+     * docblock da classe do extractor), então fica sempre null.
+     */
+    private function corretaVeredito(string $produto, object $linha): ?bool
+    {
+        if ($produto !== 'avalia_pro') {
+            return null;
+        }
+
+        return match ($linha->answer_status ?? null) {
+            'Correta' => true,
+            'Errada' => false,
+            default => null,
+        };
     }
 
     /**

@@ -217,6 +217,30 @@ class RespondenteTest extends TestCase
         $detalhe->assertSee('Ausente');
     }
 
+    public function test_grade_de_respostas_mostra_posicao_local_do_aluno_com_numero_do_banco_entre_parenteses(): void
+    {
+        // Regressão: numa prova com banco de questões aleatório, o número
+        // global da questão (ex.: 18) não corresponde à posição que o aluno
+        // realmente viu (ele só respondeu 12) — mostrar "Q18" pro aluno é
+        // confuso. A grade mostra a posição LOCAL dele (1, 2, 3...) com o
+        // número do banco entre parênteses só quando eles divergem.
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 3, 'gabarito' => 'A']);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 18, 'gabarito' => 'B']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '555', 'periodo' => '', 'questao_numero' => 3, 'resposta' => 'A']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '555', 'periodo' => '', 'questao_numero' => 18, 'resposta' => 'B']);
+
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->get("/avaliacoes/{$avaliacao->codigo}/respondentes/show?chave=555&periodo=");
+
+        $response->assertOk();
+        // Primeira questão do aluno (numero=3 no banco) vira "Q1 (3)"; a
+        // segunda (numero=18) vira "Q2 (18)" — nunca "Q18" pra quem só
+        // respondeu 2.
+        $response->assertSeeInOrder(['Q1', '(3)', 'Q2', '(18)'], false);
+        $response->assertDontSee('Q18', false);
+    }
+
     public function test_grade_de_respostas_usa_correta_pre_calculada_em_vez_da_letra(): void
     {
         // Caso real: o Avalia Pro embaralha a ordem das alternativas por

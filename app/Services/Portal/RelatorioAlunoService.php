@@ -154,9 +154,19 @@ class RelatorioAlunoService
         return $this->desempenhoPorCampoDireto($respostas, $gabaritos, $avaliacao, 'miller_nivel');
     }
 
-    /** @return array<int, array{numero: int, sua_resposta: string, gabarito: string, anulada: bool, acertou: bool, taxa_acerto_turma: float}> */
+    /** @return array<int, array{numero: int, numero_local: int, sua_resposta: string, gabarito: string, anulada: bool, acertou: bool, taxa_acerto_turma: float}> */
     public function comparativoQuestao(Avaliacao $avaliacao, string $periodo, Collection $respostas, Collection $gabaritos): array
     {
+        // Posição do aluno na PRÓPRIA prova (1, 2, 3...), não o número global
+        // da questão no banco — numa prova de banco de questões aleatório
+        // (Avalia Pro), o número global pode ser bem maior que a quantidade
+        // de questões que esse aluno respondeu (ver mesmo raciocínio na
+        // grade principal, resultado-avaliacao.blade.php).
+        $posicaoLocalPorNumero = [];
+        foreach ($respostas as $indice => $resposta) {
+            $posicaoLocalPorNumero[$resposta->questao_numero] ??= $indice + 1;
+        }
+
         $taxasPorQuestao = DB::table('respostas as r')
             ->join('questoes as q', function ($join) use ($avaliacao) {
                 Anulacao::excluirDistribuidas(
@@ -194,6 +204,7 @@ class RelatorioAlunoService
 
             $resultado[] = [
                 'numero' => (int) $resposta->questao_numero,
+                'numero_local' => $posicaoLocalPorNumero[$resposta->questao_numero],
                 'sua_resposta' => (string) ($resposta->resposta ?: ''),
                 'gabarito' => $gabarito,
                 'anulada' => $anuladaModo !== null,

@@ -51,13 +51,17 @@ use RuntimeException;
  *    ser um CPF. Não usamos RA daqui porque o join entre dim_users e
  *    dim_enrollments (que tem o RA) não está confirmado.
  * 4. `dimensions.dim_questions` não tem NENHUM campo de gabarito/resposta
- *    correta (confirmado inspecionando as colunas reais da tabela) — por
- *    isso `answer_status`/`question_answer` (Avalia Pro) são trazidos aqui
- *    e AvaliaSyncService::derivarGabaritoAvaliaPro() deriva o gabarito pelo
- *    consenso das respostas marcadas 'Correta', em vez de ler um gabarito
- *    pronto. Avalia Online não tem equivalente (nem answer_status nem o
- *    texto da resposta — ver ponto 2), então questões de lá ficam sem
- *    gabarito derivável por ora.
+ *    correta (confirmado inspecionando as colunas reais da tabela) — e não
+ *    dá pra reconstruir um gabarito comparável a partir de `question_answer`
+ *    (a letra marcada): o Avalia embaralha a ordem das alternativas por
+ *    aluno, confirmado com dado real — a MESMA questão (question_sk) teve
+ *    as 5 letras diferentes marcadas como 'Correta' por alunos diferentes
+ *    em `fct_student_exam_questions_avalia_pro`. Por isso `questoes.gabarito`
+ *    fica sempre '-' (placeholder) pro Avalia Pro, e o veredito de verdade
+ *    (`answer_status`) vai direto pra `respostas.correta` — ver
+ *    AvaliaSyncService::corretaVeredito() e App\Support\Anulacao. Avalia
+ *    Online não tem equivalente (nem answer_status nem o texto da resposta
+ *    — ver ponto 2), então fica sempre sem correção automática.
  */
 class RedshiftAvaliaExtractor implements AvaliaExtractorContract
 {

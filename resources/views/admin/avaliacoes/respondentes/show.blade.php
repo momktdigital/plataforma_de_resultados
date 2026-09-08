@@ -67,14 +67,15 @@
                 }
             @endphp
             <div class="rounded overflow-hidden border border-slate-200">
-                <div class="{{ $cor }} text-white text-[10px] text-center font-bold py-1 flex items-center justify-center gap-0.5">
-                    <span>Q{{ $resposta->questao_numero }}</span>
+                <div class="{{ $cor }} text-white text-[10px] text-center font-bold py-1 flex items-center justify-center gap-0.5"
+                     title="Questão {{ $resposta->questao_numero }} no banco">
+                    <span>Q{{ $loop->iteration }}@if ($loop->iteration !== $resposta->questao_numero) <span class="font-normal opacity-75">({{ $resposta->questao_numero }})</span>@endif</span>
                     @if ($statusIcone)
                         <i class="ph-bold {{ $statusIcone }}" aria-hidden="true"></i>
                     @endif
                 </div>
                 <button type="button" class="resposta-editar-btn w-full bg-white text-center font-bold text-sm py-1.5 hover:bg-slate-50 {{ $marcada === '' ? 'text-slate-300' : 'text-slate-700' }}"
-                        data-questao="{{ $resposta->questao_numero }}"
+                        data-questao="{{ $loop->iteration }}"
                         data-resposta-id="{{ $resposta->id }}"
                         data-resposta-atual="{{ $marcada }}"
                         data-update-url="{{ route('avaliacoes.respondentes.respostas.update', ['avaliacao' => $avaliacao, 'resposta' => $resposta->id]) }}"
