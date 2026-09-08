@@ -16,7 +16,7 @@ class ResultadoResumo extends Model
 {
     protected $table = 'resultado_resumos';
 
-    protected $fillable = ['avaliacao_codigo', 'aluno_chave', 'periodo', 'ra', 'cpf', 'aluno_id', 'acertos', 'total', 'percentual'];
+    protected $fillable = ['avaliacao_codigo', 'aluno_chave', 'periodo', 'ra', 'cpf', 'aluno_id', 'acertos', 'total', 'percentual', 'ausente'];
 
     protected function casts(): array
     {
@@ -24,6 +24,7 @@ class ResultadoResumo extends Model
             'acertos' => 'integer',
             'total' => 'integer',
             'percentual' => 'decimal:1',
+            'ausente' => 'boolean',
         ];
     }
 

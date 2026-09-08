@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Resposta;
 use App\Services\Visualizacoes\VisualizacaoDisponibilidadeService;
 use App\Support\AlunoVinculoResolver;
 use App\Support\Anulacao;
@@ -25,13 +26,7 @@ class ResumoResultadoService
 {
     public function recalcular(int $avaliacaoCodigo): void
     {
-        $total = Anulacao::excluirDistribuidas(
-            DB::table('questoes')
-                ->where('avaliacao_codigo', $avaliacaoCodigo)
-                ->whereNull('deleted_at')
-                ->whereNotNull('gabarito')
-                ->where('gabarito', '!=', '')
-        )->count();
+        $semResposta = Resposta::semRespostaSql('r.resposta');
 
         $linhas = DB::table('respostas as r')
             ->join('questoes as q', function ($join) {
@@ -48,13 +43,26 @@ class ResumoResultadoService
             ->selectRaw(
                 'r.aluno_chave as aluno_chave, r.periodo as periodo, '
                 .'max(r.ra) as ra, max(r.cpf) as cpf, max(r.aluno_id) as aluno_id, '
+                // Total por ALUNO (não fixo pra avaliação inteira) — uma
+                // prova do Avalia Pro com banco de questões aleatório dá uma
+                // quantidade de questões diferente por aluno (ex.: banco de
+                // 18, 12 sorteadas por aluno); usar um total fixo faria todo
+                // mundo ser avaliado sobre o pool inteiro, não só o que ele
+                // de fato viu. Pra avaliação de gabarito único e igual pra
+                // todo mundo (o caso comum hoje), total-por-aluno dá
+                // exatamente o mesmo resultado que o total fixo de antes.
+                ."sum(case when q.gabarito is not null and q.gabarito != '' then 1 else 0 end) as total, "
                 ."sum(case when q.gabarito is not null and q.gabarito != '' and "
                 .Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo')
-                .' then 1 else 0 end) as acertos'
+                .' then 1 else 0 end) as acertos, '
+                // Nenhuma resposta real registrada nesta avaliação = aluno
+                // ausente, não "aluno errou tudo" — ver migration
+                // add_ausente_to_resultado_resumos_table.
+                ."sum(case when not {$semResposta} then 1 else 0 end) as respondidas"
             )
             ->get();
 
-        DB::transaction(function () use ($avaliacaoCodigo, $total, $linhas) {
+        DB::transaction(function () use ($avaliacaoCodigo, $linhas) {
             DB::table('resultado_resumos')->where('avaliacao_codigo', $avaliacaoCodigo)->delete();
 
             // resultado_resumos é justamente o que AlunoVinculoResolver::resolver()
@@ -78,20 +86,25 @@ class ResumoResultadoService
             // Em blocos, não tudo de uma vez: uma avaliação com muitos
             // milhares de respondentes num único INSERT arrisca estourar o
             // max_allowed_packet do MySQL.
-            $linhas->chunk(500)->each(function ($lote) use ($avaliacaoCodigo, $total, $agora) {
-                DB::table('resultado_resumos')->insert($lote->map(fn ($linha) => [
-                    'avaliacao_codigo' => $avaliacaoCodigo,
-                    'aluno_chave' => $linha->aluno_chave,
-                    'periodo' => $linha->periodo,
-                    'ra' => $linha->ra,
-                    'cpf' => $linha->cpf,
-                    'aluno_id' => $linha->aluno_id,
-                    'acertos' => (int) $linha->acertos,
-                    'total' => $total,
-                    'percentual' => $total > 0 ? round($linha->acertos / $total * 100, 1) : null,
-                    'created_at' => $agora,
-                    'updated_at' => $agora,
-                ])->all());
+            $linhas->chunk(500)->each(function ($lote) use ($avaliacaoCodigo, $agora) {
+                DB::table('resultado_resumos')->insert($lote->map(function ($linha) use ($avaliacaoCodigo, $agora) {
+                    $total = (int) $linha->total;
+
+                    return [
+                        'avaliacao_codigo' => $avaliacaoCodigo,
+                        'aluno_chave' => $linha->aluno_chave,
+                        'periodo' => $linha->periodo,
+                        'ra' => $linha->ra,
+                        'cpf' => $linha->cpf,
+                        'aluno_id' => $linha->aluno_id,
+                        'acertos' => (int) $linha->acertos,
+                        'total' => $total,
+                        'percentual' => $total > 0 ? round($linha->acertos / $total * 100, 1) : null,
+                        'ausente' => (int) $linha->respondidas === 0,
+                        'created_at' => $agora,
+                        'updated_at' => $agora,
+                    ];
+                })->all());
             });
         });
     }
