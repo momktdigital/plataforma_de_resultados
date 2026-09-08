@@ -148,6 +148,7 @@ Route::middleware('instalado')->group(function () {
         Route::get('/avaliacoes/{avaliacao}/respondentes/show', [RespondenteController::class, 'show'])->name('avaliacoes.respondentes.show');
         Route::put('/avaliacoes/{avaliacao}/respondentes/respostas/{resposta}', [RespondenteController::class, 'updateResposta'])->name('avaliacoes.respondentes.respostas.update');
         Route::put('/avaliacoes/{avaliacao}/respondentes/vinculo', [RespondenteController::class, 'updateVinculo'])->name('avaliacoes.respondentes.vinculo.update');
+        Route::delete('/avaliacoes/{avaliacao}/respondentes', [RespondenteController::class, 'destroyRespondente'])->name('avaliacoes.respondentes.destroy');
         Route::delete('/avaliacoes/{avaliacao}/periodos', [RespondenteController::class, 'destroyPeriodo'])->name('avaliacoes.periodos.destroy');
         Route::post('/avaliacoes/{avaliacao}/periodos/restaurar', [RespondenteController::class, 'restorePeriodo'])->name('avaliacoes.periodos.restore');
 

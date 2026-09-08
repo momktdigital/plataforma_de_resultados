@@ -251,6 +251,81 @@ class RespondenteTest extends TestCase
         $this->assertDatabaseHas('respostas', ['avaliacao_codigo' => $avaliacao1->codigo, 'aluno_chave' => '111']);
     }
 
+    public function test_admin_exclui_o_resultado_de_um_respondente(): void
+    {
+        $avaliacao = $this->provaComRespostas();
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+
+        $admin = $this->admin();
+        $response = $this->actingAs($admin, 'admin')
+            ->delete(route('avaliacoes.respondentes.destroy', $avaliacao), [
+                'chave' => '111',
+                'periodo' => '2026/1',
+            ]);
+
+        $response->assertRedirect(route('avaliacoes.respondentes.index', ['avaliacao' => $avaliacao, 'periodo' => '2026/1']));
+        $response->assertSessionHas('status');
+
+        $this->assertSoftDeleted('respostas', ['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '111']);
+        $this->assertSoftDeleted('resultado_metricas', ['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '111']);
+        $this->assertDatabaseMissing('resultado_resumos', ['avaliacao_codigo' => $avaliacao->codigo, 'aluno_chave' => '111']);
+
+        // O outro respondente do mesmo período não é afetado.
+        $this->assertNotSoftDeleted('respostas', ['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '222']);
+        $this->assertDatabaseHas('resultado_resumos', ['avaliacao_codigo' => $avaliacao->codigo, 'aluno_chave' => '222']);
+
+        $this->assertDatabaseHas('atividades', [
+            'admin_username' => $admin->username,
+            'acao' => 'respondente.excluido',
+            'alvo_tipo' => 'Avaliacao',
+            'alvo_id' => (string) $avaliacao->codigo,
+        ]);
+    }
+
+    public function test_restauracao_do_periodo_tambem_restaura_o_respondente_excluido_individualmente(): void
+    {
+        $avaliacao = $this->provaComRespostas();
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+        $admin = $this->admin();
+
+        $this->actingAs($admin, 'admin')
+            ->delete(route('avaliacoes.respondentes.destroy', $avaliacao), ['chave' => '111', 'periodo' => '2026/1']);
+
+        $this->actingAs($admin, 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/periodos/restaurar", ['periodo' => '2026/1']);
+
+        $this->assertNotSoftDeleted('respostas', ['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '111']);
+        $this->assertNotSoftDeleted('resultado_metricas', ['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '111']);
+        $this->assertDatabaseHas('resultado_resumos', ['avaliacao_codigo' => $avaliacao->codigo, 'aluno_chave' => '111']);
+    }
+
+    public function test_nao_exclui_resultado_de_respondente_inexistente(): void
+    {
+        $avaliacao = $this->provaComRespostas();
+
+        $this->actingAs($this->admin(), 'admin')
+            ->delete(route('avaliacoes.respondentes.destroy', $avaliacao), [
+                'chave' => '999',
+                'periodo' => '2026/1',
+            ])
+            ->assertNotFound();
+    }
+
+    public function test_nao_exclui_resultado_de_respondente_de_outra_avaliacao(): void
+    {
+        $avaliacao1 = $this->provaComRespostas();
+        $avaliacao2 = Avaliacao::create([]);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->delete(route('avaliacoes.respondentes.destroy', $avaliacao2), [
+                'chave' => '111',
+                'periodo' => '2026/1',
+            ])
+            ->assertNotFound();
+
+        $this->assertNotSoftDeleted('respostas', ['avaliacao_codigo' => $avaliacao1->codigo, 'ra' => '111']);
+    }
+
     public function test_exclui_e_restaura_resultados_de_um_periodo(): void
     {
         $avaliacao = $this->provaComRespostas();

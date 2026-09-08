@@ -263,6 +263,39 @@ class RespondenteController extends Controller
             ->with('status', "Aluno vinculado alterado para {$novoAluno->nome} — boletim recalculado.");
     }
 
+    /**
+     * Exclui (soft delete) o resultado de UM respondente — o grupo de linhas
+     * em `respostas`/`resultado_metricas` daquele aluno_chave+periodo —
+     * sem precisar excluir o período inteiro. Mesmo mecanismo de
+     * destroyPeriodo (soft delete + recalcular); a restauração já existe via
+     * "Restaurar registros excluídos deste período" na listagem, que também
+     * cobre esses registros — não precisa de uma restauração por aluno.
+     */
+    public function destroyRespondente(Request $request, Avaliacao $avaliacao, ResumoResultadoService $resumos): RedirectResponse
+    {
+        $chave = (string) $request->input('chave', '');
+        $periodo = (string) $request->input('periodo', '');
+
+        abort_if($chave === '', 404);
+
+        $excluidas = $avaliacao->resultados()->where('aluno_chave', $chave)->where('periodo', $periodo)->delete();
+        $excluidas += $avaliacao->metricas()->where('aluno_chave', $chave)->where('periodo', $periodo)->delete();
+
+        abort_if($excluidas === 0, 404);
+
+        $resumos->recalcular($avaliacao->codigo);
+
+        AtividadeLogger::registrar('respondente.excluido', 'Avaliacao', $avaliacao->codigo, [
+            'periodo' => $periodo,
+            'aluno_chave' => $chave,
+            'registros_excluidos' => $excluidas,
+        ]);
+
+        return redirect()
+            ->route('avaliacoes.respondentes.index', ['avaliacao' => $avaliacao, 'periodo' => $periodo])
+            ->with('status', "Resultado do aluno excluído ({$excluidas} registro(s)).");
+    }
+
     public function destroyPeriodo(Request $request, Avaliacao $avaliacao, ResumoResultadoService $resumos): RedirectResponse
     {
         $periodo = (string) $request->input('periodo', '');

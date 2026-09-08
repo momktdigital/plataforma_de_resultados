@@ -15,10 +15,23 @@
             @endif
             Período: {{ $periodo !== '' ? $periodo : '(sem período)' }}
         </p>
-        <button type="button" id="btn-trocar-vinculo" class="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline">
-            <i class="ph-bold ph-arrows-left-right" aria-hidden="true"></i>
-            Trocar aluno vinculado
-        </button>
+        <div class="mt-2 flex flex-wrap items-center gap-4">
+            <button type="button" id="btn-trocar-vinculo" class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline">
+                <i class="ph-bold ph-arrows-left-right" aria-hidden="true"></i>
+                Trocar aluno vinculado
+            </button>
+            <form method="POST" action="{{ route('avaliacoes.respondentes.destroy', $avaliacao) }}"
+                  onsubmit="return confirm('Excluir o resultado deste aluno nesta avaliação/período? Pode ser desfeito restaurando o período inteiro na listagem de resultados.');">
+                @csrf
+                @method('DELETE')
+                <input type="hidden" name="chave" value="{{ $chave }}">
+                <input type="hidden" name="periodo" value="{{ $periodo }}">
+                <button type="submit" class="inline-flex items-center gap-1 text-xs font-semibold text-red-600 hover:underline">
+                    <i class="ph-bold ph-trash" aria-hidden="true"></i>
+                    Excluir resultado deste aluno
+                </button>
+            </form>
+        </div>
     </div>
     @if ($total !== null)
         <div class="text-right shrink-0">
