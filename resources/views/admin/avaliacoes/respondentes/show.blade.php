@@ -15,6 +15,10 @@
             @endif
             Período: {{ $periodo !== '' ? $periodo : '(sem período)' }}
         </p>
+        <button type="button" id="btn-trocar-vinculo" class="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline">
+            <i class="ph-bold ph-arrows-left-right" aria-hidden="true"></i>
+            Trocar aluno vinculado
+        </button>
     </div>
     @if ($total !== null)
         <div class="text-right shrink-0">
@@ -107,6 +111,117 @@
         </form>
     </div>
 </div>
+
+<div id="modal-trocar-vinculo" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 p-4"
+     role="dialog" aria-modal="true" aria-labelledby="modal-trocar-vinculo-titulo">
+    <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5">
+        <div class="flex items-center justify-between mb-4">
+            <h3 id="modal-trocar-vinculo-titulo" class="font-bold text-slate-800">Trocar aluno vinculado</h3>
+            <button type="button" id="modal-trocar-vinculo-fechar" aria-label="Fechar" class="text-slate-400 hover:text-slate-600">
+                <i class="ph-bold ph-x text-lg"></i>
+            </button>
+        </div>
+        <form method="POST" action="{{ route('avaliacoes.respondentes.vinculo.update', $avaliacao) }}">
+            @csrf
+            @method('PUT')
+            <input type="hidden" name="chave" value="{{ $chave }}">
+            <input type="hidden" name="periodo" value="{{ $periodo }}">
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1" for="modal-trocar-vinculo-valor">CPF ou RA do aluno correto</label>
+                <input id="modal-trocar-vinculo-valor" name="cpf_ou_ra" type="text" maxlength="32"
+                       value="{{ old('cpf_ou_ra') }}"
+                       class="w-full rounded-lg border px-3 py-2 text-sm {{ $errors->has('cpf_ou_ra') ? 'border-red-400' : 'border-slate-300' }}">
+                @error('cpf_ou_ra')
+                    <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
+                @enderror
+                <p class="text-xs text-slate-400 mt-1">Busca o aluno cadastrado por CPF ou RA e reatribui todas as respostas e notas deste respondente a ele.</p>
+            </div>
+            <div class="flex gap-3">
+                <button type="button" id="modal-trocar-vinculo-cancelar" class="flex-1 border border-slate-300 text-slate-700 hover:bg-slate-50 font-semibold rounded-lg px-4 py-2 text-sm">
+                    Cancelar
+                </button>
+                <button type="submit" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-4 py-2 text-sm">
+                    Salvar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+(function () {
+    var modal = document.getElementById('modal-trocar-vinculo');
+    var form = modal.querySelector('form');
+    var btnAbrir = document.getElementById('btn-trocar-vinculo');
+    var btnFechar = document.getElementById('modal-trocar-vinculo-fechar');
+    var btnCancelar = document.getElementById('modal-trocar-vinculo-cancelar');
+    var campoValor = document.getElementById('modal-trocar-vinculo-valor');
+    var ultimoFoco = null;
+
+    function focaveisDoModal() {
+        return Array.prototype.slice.call(
+            modal.querySelectorAll('button, input, [href]')
+        ).filter(function (el) { return ! el.disabled && el.offsetParent !== null; });
+    }
+
+    function abrirModal() {
+        ultimoFoco = document.activeElement;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        campoValor.focus();
+    }
+
+    function fecharModal() {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        if (ultimoFoco) {
+            ultimoFoco.focus();
+            ultimoFoco = null;
+        }
+    }
+
+    btnAbrir.addEventListener('click', abrirModal);
+    btnFechar.addEventListener('click', fecharModal);
+    btnCancelar.addEventListener('click', fecharModal);
+    modal.addEventListener('click', function (event) {
+        if (event.target === modal) fecharModal();
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (modal.classList.contains('hidden')) return;
+
+        if (event.key === 'Escape') {
+            fecharModal();
+
+            return;
+        }
+
+        if (event.key === 'Tab') {
+            var focaveis = focaveisDoModal();
+            var primeiro = focaveis[0];
+            var ultimo = focaveis[focaveis.length - 1];
+
+            if (event.shiftKey && document.activeElement === primeiro) {
+                event.preventDefault();
+                ultimo.focus();
+            } else if (! event.shiftKey && document.activeElement === ultimo) {
+                event.preventDefault();
+                primeiro.focus();
+            }
+        }
+    });
+
+    form.addEventListener('submit', function (event) {
+        if (! confirm('Trocar o aluno vinculado reatribui todas as respostas e notas deste respondente e recalcula o boletim agora mesmo, sem desfazer. Continuar?')) {
+            event.preventDefault();
+        }
+    });
+
+    @if ($errors->has('cpf_ou_ra'))
+        abrirModal();
+    @endif
+})();
+</script>
 
 <script>
 (function () {

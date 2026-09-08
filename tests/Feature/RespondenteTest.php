@@ -156,6 +156,101 @@ class RespondenteTest extends TestCase
         $this->assertNotSame('Z', $resposta->fresh()->resposta);
     }
 
+    public function test_admin_troca_o_aluno_vinculado_de_um_respondente(): void
+    {
+        $avaliacao = $this->provaComRespostas();
+        $novoAluno = Aluno::create(['ra' => '999', 'cpf' => '99988877766', 'data_nascimento' => '2000-01-01', 'nome' => 'Novo Aluno']);
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+
+        $admin = $this->admin();
+        $response = $this->actingAs($admin, 'admin')
+            ->put(route('avaliacoes.respondentes.vinculo.update', $avaliacao), [
+                'chave' => '111',
+                'periodo' => '2026/1',
+                'cpf_ou_ra' => '99988877766',
+            ]);
+
+        $response->assertRedirect(route('avaliacoes.respondentes.show', ['avaliacao' => $avaliacao, 'chave' => '99988877766', 'periodo' => '2026/1']));
+        $response->assertSessionHas('status');
+
+        $this->assertDatabaseHas('respostas', [
+            'avaliacao_codigo' => $avaliacao->codigo,
+            'aluno_chave' => '99988877766',
+            'aluno_id' => $novoAluno->id,
+            'questao_numero' => 1,
+        ]);
+        $this->assertDatabaseHas('respostas', [
+            'avaliacao_codigo' => $avaliacao->codigo,
+            'aluno_chave' => '99988877766',
+            'aluno_id' => $novoAluno->id,
+            'questao_numero' => 2,
+        ]);
+        $this->assertDatabaseHas('resultado_metricas', [
+            'avaliacao_codigo' => $avaliacao->codigo,
+            'aluno_chave' => '99988877766',
+            'aluno_id' => $novoAluno->id,
+        ]);
+        $this->assertDatabaseMissing('respostas', ['avaliacao_codigo' => $avaliacao->codigo, 'aluno_chave' => '111']);
+
+        // O resumo do boletim segue o novo vínculo.
+        $this->assertDatabaseHas('resultado_resumos', ['avaliacao_codigo' => $avaliacao->codigo, 'aluno_chave' => '99988877766', 'periodo' => '2026/1']);
+        $this->assertDatabaseMissing('resultado_resumos', ['avaliacao_codigo' => $avaliacao->codigo, 'aluno_chave' => '111']);
+
+        $this->assertDatabaseHas('atividades', [
+            'admin_username' => $admin->username,
+            'acao' => 'respondente.vinculo_alterado',
+            'alvo_tipo' => 'Avaliacao',
+            'alvo_id' => (string) $avaliacao->codigo,
+        ]);
+    }
+
+    public function test_nao_troca_vinculo_quando_aluno_nao_existe(): void
+    {
+        $avaliacao = $this->provaComRespostas();
+
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->put(route('avaliacoes.respondentes.vinculo.update', $avaliacao), [
+                'chave' => '111',
+                'periodo' => '2026/1',
+                'cpf_ou_ra' => '00000000000',
+            ]);
+
+        $response->assertSessionHasErrors('cpf_ou_ra');
+        $this->assertDatabaseHas('respostas', ['avaliacao_codigo' => $avaliacao->codigo, 'aluno_chave' => '111']);
+    }
+
+    public function test_nao_troca_vinculo_quando_ja_existe_respondente_com_a_nova_chave_no_periodo(): void
+    {
+        $avaliacao = $this->provaComRespostas();
+        Aluno::create(['ra' => '222', 'data_nascimento' => '2000-01-01', 'nome' => 'Beatriz']);
+
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->put(route('avaliacoes.respondentes.vinculo.update', $avaliacao), [
+                'chave' => '111',
+                'periodo' => '2026/1',
+                'cpf_ou_ra' => '222',
+            ]);
+
+        $response->assertSessionHasErrors('cpf_ou_ra');
+        $this->assertDatabaseHas('respostas', ['avaliacao_codigo' => $avaliacao->codigo, 'aluno_chave' => '111']);
+    }
+
+    public function test_nao_troca_vinculo_de_respondente_de_outra_avaliacao(): void
+    {
+        $avaliacao1 = $this->provaComRespostas();
+        $avaliacao2 = Avaliacao::create([]);
+        Aluno::create(['ra' => '999', 'cpf' => '99988877766', 'data_nascimento' => '2000-01-01', 'nome' => 'Novo Aluno']);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->put(route('avaliacoes.respondentes.vinculo.update', $avaliacao2), [
+                'chave' => '111',
+                'periodo' => '2026/1',
+                'cpf_ou_ra' => '99988877766',
+            ]);
+
+        $this->assertDatabaseHas('respostas', ['avaliacao_codigo' => $avaliacao1->codigo, 'aluno_chave' => '111']);
+    }
+
     public function test_exclui_e_restaura_resultados_de_um_periodo(): void
     {
         $avaliacao = $this->provaComRespostas();

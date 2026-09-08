@@ -12,6 +12,7 @@ use App\Support\AtividadeLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
@@ -187,6 +188,79 @@ class RespondenteController extends Controller
         return redirect()
             ->route('avaliacoes.respondentes.show', ['avaliacao' => $avaliacao, 'chave' => $resposta->aluno_chave, 'periodo' => $resposta->periodo])
             ->with('status', "Resposta da questão {$resposta->questao_numero} atualizada — boletim recalculado.");
+    }
+
+    /**
+     * Troca o aluno vinculado a um respondente — corrige um vínculo errado
+     * (CPF/RA batido errado no import, aluno duplicado no cadastro etc.) sem
+     * precisar excluir e reimportar o período inteiro. Busca o aluno certo
+     * por CPF ou RA e reatribui aluno_id/ra/cpf de todas as linhas do grupo
+     * (respostas + métricas); aluno_chave é gerada pelo banco
+     * (COALESCE(cpf, ra)) e se ajusta sozinha, então nunca é atribuída aqui.
+     */
+    public function updateVinculo(Request $request, Avaliacao $avaliacao, ResumoResultadoService $resumos): RedirectResponse
+    {
+        $chave = (string) $request->input('chave', '');
+        $periodo = (string) $request->input('periodo', '');
+
+        abort_if($chave === '', 404);
+
+        $dados = $request->validate([
+            'cpf_ou_ra' => ['required', 'string', 'max:32'],
+        ]);
+
+        $voltar = redirect()->route('avaliacoes.respondentes.show', ['avaliacao' => $avaliacao, 'chave' => $chave, 'periodo' => $periodo]);
+
+        $valor = trim($dados['cpf_ou_ra']);
+        $somenteDigitos = preg_replace('/\D/', '', $valor);
+
+        $novoAluno = Aluno::where('ra', $valor)
+            ->orWhere('cpf', $valor)
+            ->when(
+                $somenteDigitos !== '' && $somenteDigitos !== $valor,
+                fn ($query) => $query->orWhere('ra', $somenteDigitos)->orWhere('cpf', $somenteDigitos)
+            )
+            ->first();
+
+        if (! $novoAluno) {
+            return $voltar->withErrors(['cpf_ou_ra' => 'Nenhum aluno encontrado com esse CPF/RA.'])->withInput();
+        }
+
+        $novaChave = $novoAluno->cpf ?: $novoAluno->ra;
+
+        if (! $novaChave) {
+            return $voltar->withErrors(['cpf_ou_ra' => 'Esse aluno não tem CPF nem RA cadastrado — não é possível vincular.'])->withInput();
+        }
+
+        if ($novaChave !== $chave) {
+            $conflito = $avaliacao->resultados()->where('aluno_chave', $novaChave)->where('periodo', $periodo)->exists()
+                || $avaliacao->metricas()->where('aluno_chave', $novaChave)->where('periodo', $periodo)->exists();
+
+            if ($conflito) {
+                return $voltar->withErrors(['cpf_ou_ra' => 'Já existe um respondente vinculado a esse aluno neste período.'])->withInput();
+            }
+        }
+
+        DB::transaction(function () use ($avaliacao, $chave, $periodo, $novoAluno) {
+            $avaliacao->resultados()->where('aluno_chave', $chave)->where('periodo', $periodo)
+                ->update(['aluno_id' => $novoAluno->id, 'ra' => $novoAluno->ra, 'cpf' => $novoAluno->cpf]);
+
+            $avaliacao->metricas()->where('aluno_chave', $chave)->where('periodo', $periodo)
+                ->update(['aluno_id' => $novoAluno->id, 'ra' => $novoAluno->ra, 'cpf' => $novoAluno->cpf]);
+        });
+
+        $resumos->recalcular($avaliacao->codigo);
+
+        AtividadeLogger::registrar('respondente.vinculo_alterado', 'Avaliacao', $avaliacao->codigo, [
+            'periodo' => $periodo,
+            'aluno_chave_antes' => $chave,
+            'aluno_chave_depois' => $novaChave,
+            'aluno_id_depois' => $novoAluno->id,
+        ]);
+
+        return redirect()
+            ->route('avaliacoes.respondentes.show', ['avaliacao' => $avaliacao, 'chave' => $novaChave, 'periodo' => $periodo])
+            ->with('status', "Aluno vinculado alterado para {$novoAluno->nome} — boletim recalculado.");
     }
 
     public function destroyPeriodo(Request $request, Avaliacao $avaliacao, ResumoResultadoService $resumos): RedirectResponse
