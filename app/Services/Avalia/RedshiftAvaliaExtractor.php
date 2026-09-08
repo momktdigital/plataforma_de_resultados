@@ -62,6 +62,24 @@ use RuntimeException;
  *    AvaliaSyncService::corretaVeredito() e App\Support\Anulacao. Avalia
  *    Online não tem equivalente (nem answer_status nem o texto da resposta
  *    — ver ponto 2), então fica sempre sem correção automática.
+ * 5. Uma prova AGENDADA (que ainda nem aconteceu) já aparece em
+ *    `fct_student_exam_subject_scores_avalia_pro`/`fct_student_exam_questions_avalia_pro`
+ *    assim que é gerada — muito antes da janela abrir — com nota/resposta
+ *    totalmente em branco (`final_grade`/`answer_status` NULL, não só
+ *    vazio). Sem filtrar isso, um aluno que simplesmente ainda não fez a
+ *    prova vira "ausente" no nosso sistema (confirmado com dado real: aluna
+ *    com prova agendada pra mais de uma semana no futuro já tinha essa
+ *    linha, com `dim_exams.user_is_absent_avalia_pro = false` — o Avalia
+ *    não a considera ausente, só ainda não resolveu). Por isso notasPro()/
+ *    respostasPro() só trazem uma linha quando ela tem nota/resposta real
+ *    OU quando `user_is_absent_avalia_pro` já confirma ausência — nenhuma
+ *    coluna nova foi necessária pra isso: uma vez filtrado, o aluno
+ *    confirmado ausente ainda cai no mecanismo de detecção de ausente já
+ *    existente (todas as respostas em branco, ver ResumoResultadoService),
+ *    só quem "ainda não fez" some da sincronização até resolver de verdade.
+ *    `assessment_end_date_avalia_pro`/`assessment_start_date_avalia_pro` NÃO
+ *    servem pra essa checagem — são o intervalo do semestre inteiro (ex.:
+ *    16/07 a 31/12), não da janela específica daquela prova.
  */
 class RedshiftAvaliaExtractor implements AvaliaExtractorContract
 {
@@ -116,6 +134,14 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
             ->join('dimensions.dim_users as u', 'u.user_sk', '=', 's.user_sk')
             ->where('s.tenant_sk', $this->tenantSk())
             ->whereIn('s.environment_sk', $this->environmentSks())
+            // Sem isto, um aluno cuja prova só está AGENDADA (ainda nem
+            // aconteceu) entra com nota em branco igual a uma ausência de
+            // verdade — a fato já vem pré-gerada assim que a prova é criada,
+            // muito antes da janela abrir (confirmado com dado real: uma
+            // aluna com prova agendada pra 10+ dias no futuro já tinha linha
+            // aqui, final_grade nulo, user_is_absent_avalia_pro = false).
+            // Só entra quando tem nota real OU o Avalia já confirmou ausência.
+            ->where(fn ($query) => $query->whereNotNull('s.final_grade')->orWhere('e.user_is_absent_avalia_pro', true))
             ->when($idsPermitidos !== null, fn ($query) => $query->whereIn(
                 DB::raw("e.assessment_id_avalia_pro || ':' || s.subject_sk"), $idsPermitidos
             ))
@@ -141,6 +167,10 @@ class RedshiftAvaliaExtractor implements AvaliaExtractorContract
             ->join('dimensions.dim_users as u', 'u.user_sk', '=', 'q.user_sk')
             ->where('q.tenant_sk', $this->tenantSk())
             ->whereIn('q.environment_sk', $this->environmentSks())
+            // Mesmo filtro de notasPro() — uma questão de prova agendada
+            // (ainda não aconteceu) chega pré-gerada com answer_status
+            // totalmente nulo (nem "em branco" — confirmado com dado real).
+            ->where(fn ($query) => $query->whereNotNull('q.answer_status')->orWhere('e.user_is_absent_avalia_pro', true))
             ->when($idsPermitidos !== null, fn ($query) => $query->whereIn(
                 DB::raw("e.assessment_id_avalia_pro || ':' || q.subject_sk"), $idsPermitidos
             ))
