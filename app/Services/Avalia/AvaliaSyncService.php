@@ -7,6 +7,7 @@ use App\Models\AvaliaAvaliacaoDisponivel;
 use App\Models\Avaliacao;
 use App\Models\AvaliaSyncExecucao;
 use App\Models\ConfiguracaoSistema;
+use App\Services\ResumoResultadoService;
 use App\Support\Anulacao;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -31,7 +32,10 @@ class AvaliaSyncService
 
     private const NOME_METRICA_NOTA_FINAL = 'Nota Final';
 
-    public function __construct(private readonly AvaliaExtractorContract $extractor = new RedshiftAvaliaExtractor) {}
+    public function __construct(
+        private readonly AvaliaExtractorContract $extractor = new RedshiftAvaliaExtractor,
+        private readonly ResumoResultadoService $resumos = new ResumoResultadoService,
+    ) {}
 
     public function sincronizar(string $produto, string $disparadoPor, ?int $adminId = null): AvaliaSyncExecucao
     {
@@ -60,6 +64,14 @@ class AvaliaSyncService
             $questoesGravadas = $this->upsertQuestoes($produto, $respostas, $mapaAvaliacoes);
             ['gravadas' => $respostasGravadas, 'sem_identificador' => $respostasSemId] = $this->upsertRespostas($produto, $respostas, $mapaAvaliacoes);
             $this->atualizarWatermark($produto, 'respostas', $respostas);
+
+            // Sem isto, resultado_resumos (acertos/total/ausente/percentual
+            // pré-calculados — ver ResumoResultadoService) nunca é gerado
+            // pra avaliação sincronizada do Avalia: o boletim ficava sem o
+            // badge de acertos, sem detecção de ausente e sem refletir um
+            // gabarito recém-resolvido, mesmo com respostas/questoes
+            // corretas gravadas.
+            $this->recalcularAvaliacoesAfetadas($produto, $notas, $respostas, $mapaAvaliacoes);
 
             $execucao->update([
                 'status' => AvaliaSyncExecucao::STATUS_SUCESSO,
@@ -96,6 +108,22 @@ class AvaliaSyncService
         }
 
         return $execucao;
+    }
+
+    /**
+     * Recalcula resultado_resumos (ResumoResultadoService) pra toda
+     * avaliação tocada nesta sincronização — uma por chaveAvaliacao()
+     * distinta entre $notas e $respostas, nunca a tabela toda.
+     *
+     * @param  array<string, int>  $mapaAvaliacoes
+     */
+    private function recalcularAvaliacoesAfetadas(string $produto, Collection $notas, Collection $respostas, array $mapaAvaliacoes): void
+    {
+        $notas->map(fn ($linha) => $mapaAvaliacoes[$this->chaveAvaliacao($produto, $linha)] ?? null)
+            ->merge($respostas->map(fn ($linha) => $mapaAvaliacoes[$this->chaveAvaliacao($produto, $linha)] ?? null))
+            ->filter()
+            ->unique()
+            ->each(fn (int $avaliacaoCodigo) => $this->resumos->recalcular($avaliacaoCodigo));
     }
 
     /** @return array<string, int> id_externo da avaliação => avaliacoes.codigo */

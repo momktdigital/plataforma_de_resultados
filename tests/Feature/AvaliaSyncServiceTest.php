@@ -8,6 +8,7 @@ use App\Models\Avaliacao;
 use App\Models\AvaliaSyncExecucao;
 use App\Models\ConfiguracaoSistema;
 use App\Models\ResultadoMetrica;
+use App\Models\ResultadoResumo;
 use App\Services\Avalia\AvaliaExtractorContract;
 use App\Services\Avalia\AvaliaSyncService;
 use App\Support\Anulacao;
@@ -76,6 +77,37 @@ class AvaliaSyncServiceTest extends TestCase
         $this->assertSame('Nota Final', $metrica->nome_metrica);
         $this->assertSame('8.50', $metrica->valor);
         $this->assertNotNull($metrica->aluno_id);
+    }
+
+    public function test_sincronizacao_gera_resultado_resumo_com_gabarito_derivado(): void
+    {
+        // Regressão: AvaliaSyncService nunca chamava ResumoResultadoService,
+        // então resultado_resumos (acertos/total/ausente/percentual
+        // pré-calculados, usado pelo boletim) nunca era gerado pra avaliação
+        // sincronizada do Avalia — o badge de acertos simplesmente não
+        // aparecia, mesmo com respostas/questoes gravadas corretamente.
+        $this->alunoComCpf('11122233344');
+        ConfiguracaoSistema::definir('avalia_modo_avalia_pro', 'todas');
+
+        $extractor = new FakeAvaliaExtractor(
+            notas: new Collection([$this->notaProFake(100, 7)]),
+            respostas: new Collection([
+                $this->respostaProFake(501, 'A', 'Correta'),
+                $this->respostaProFake(502, 'C', 'Correta'),
+            ]),
+        );
+
+        (new AvaliaSyncService($extractor))->sincronizar('avalia_pro', AvaliaSyncExecucao::DISPARADO_MANUAL);
+
+        $avaliacao = Avaliacao::where('origem', 'avalia_pro')->where('id_externo', '100:7')->firstOrFail();
+        $resumo = ResultadoResumo::where('avaliacao_codigo', $avaliacao->codigo)->firstOrFail();
+
+        // O aluno respondeu exatamente o que o Avalia marcou como correto
+        // pras duas questões — com o gabarito derivado por consenso, os
+        // dois acertos precisam aparecer aqui, não "0 de 2".
+        $this->assertSame(2, $resumo->acertos);
+        $this->assertSame(2, $resumo->total);
+        $this->assertFalse($resumo->ausente);
     }
 
     public function test_sincronizar_de_novo_atualiza_em_vez_de_duplicar(): void
