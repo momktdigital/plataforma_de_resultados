@@ -192,4 +192,40 @@ class RelatorioAdminServiceTest extends TestCase
 
         $this->assertSame(2, $resultado[0]['n']);
     }
+
+    public function test_ranking_completo_exclui_ausentes_por_padrao_mas_pode_incluir(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A']);
+
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2', 'questao_numero' => 1, 'resposta' => '-']);
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+
+        $semAusentes = (new RelatorioAdminService)->rankingCompleto($avaliacao);
+        $this->assertCount(1, $semAusentes);
+        $this->assertSame('1', $semAusentes[0]['ra']);
+
+        $comAusentes = (new RelatorioAdminService)->rankingCompleto($avaliacao, incluirAusentes: true);
+        $this->assertCount(2, $comAusentes);
+    }
+
+    public function test_distribuicao_por_turma_exclui_ausentes_por_padrao(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A']);
+
+        Aluno::create(['ra' => '1', 'nome' => 'Fulano', 'turma' => 'A']);
+        Aluno::create(['ra' => '2', 'nome' => 'Ciclano', 'turma' => 'A']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2', 'questao_numero' => 1, 'resposta' => '-']);
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+
+        $semAusentes = (new RelatorioAdminService)->distribuicaoPorTurma($avaliacao);
+        $this->assertSame(1, $semAusentes[0]['respondentes']);
+        $this->assertSame(100.0, $semAusentes[0]['media']);
+
+        $comAusentes = (new RelatorioAdminService)->distribuicaoPorTurma($avaliacao, incluirAusentes: true);
+        $this->assertSame(2, $comAusentes[0]['respondentes']);
+    }
 }

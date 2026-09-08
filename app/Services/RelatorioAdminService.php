@@ -30,14 +30,15 @@ class RelatorioAdminService
         private readonly AlunoVinculoResolver $alunoResolver = new AlunoVinculoResolver,
     ) {}
 
-    /** @return array<int, array{ra: ?string, cpf: ?string, periodo: string, acertos: int, total: int, percentual: ?float, aluno_nome: ?string, turma: ?string}> */
-    public function rankingCompleto(Avaliacao $avaliacao, string $periodo = ''): array
+    /** @return array<int, array{ra: ?string, cpf: ?string, periodo: string, acertos: int, total: int, percentual: ?float, ausente: bool, aluno_nome: ?string, turma: ?string}> */
+    public function rankingCompleto(Avaliacao $avaliacao, string $periodo = '', bool $incluirAusentes = false): array
     {
         $resumos = DB::table('resultado_resumos')
             ->where('avaliacao_codigo', $avaliacao->codigo)
             ->when($periodo !== '', fn ($q) => $q->where('periodo', $periodo))
+            ->when(! $incluirAusentes, fn ($q) => $q->where('ausente', false))
             ->orderByDesc('percentual')
-            ->select('aluno_chave', 'ra', 'cpf', 'periodo', 'acertos', 'total', 'percentual')
+            ->select('aluno_chave', 'ra', 'cpf', 'periodo', 'acertos', 'total', 'percentual', 'ausente')
             ->get();
 
         $alunos = $this->alunoResolver->resolver($avaliacao->codigo, $periodo);
@@ -49,6 +50,7 @@ class RelatorioAdminService
             'acertos' => (int) $r->acertos,
             'total' => (int) $r->total,
             'percentual' => $r->percentual !== null ? (float) $r->percentual : null,
+            'ausente' => (bool) $r->ausente,
             'aluno_nome' => $alunos->get($r->aluno_chave)?->nome,
             'turma' => $alunos->get($r->aluno_chave)?->turma,
         ])->all();
@@ -60,11 +62,12 @@ class RelatorioAdminService
      *
      * @return array<int, array{turma: string, respondentes: int, media: float, minimo: float, maximo: float}>
      */
-    public function distribuicaoPorTurma(Avaliacao $avaliacao, string $periodo = '', ?FiltroDemografico $filtro = null): array
+    public function distribuicaoPorTurma(Avaliacao $avaliacao, string $periodo = '', ?FiltroDemografico $filtro = null, bool $incluirAusentes = false): array
     {
         $resumos = DB::table('resultado_resumos')
             ->where('avaliacao_codigo', $avaliacao->codigo)
             ->when($periodo !== '', fn ($q) => $q->where('periodo', $periodo))
+            ->when(! $incluirAusentes, fn ($q) => $q->where('ausente', false))
             ->whereNotNull('percentual')
             ->select('aluno_chave', 'percentual')
             ->get();
@@ -433,7 +436,7 @@ class RelatorioAdminService
     }
 
     /** @return array<int, array{nome_metrica: string, n: int, correlacao: ?float}> */
-    public function correlacaoMetricas(Avaliacao $avaliacao, string $periodo = '', ?FiltroDemografico $filtro = null): array
+    public function correlacaoMetricas(Avaliacao $avaliacao, string $periodo = '', ?FiltroDemografico $filtro = null, bool $incluirAusentes = false): array
     {
         $chaves = $filtro !== null
             ? $this->alunoResolver->chavesFiltradas($avaliacao->codigo, $periodo, $filtro, $avaliacao->data_avaliacao)
@@ -443,6 +446,7 @@ class RelatorioAdminService
             ->where('avaliacao_codigo', $avaliacao->codigo)
             ->when($periodo !== '', fn ($q) => $q->where('periodo', $periodo))
             ->when($chaves !== null, fn ($q) => $q->whereIn('aluno_chave', $chaves))
+            ->when(! $incluirAusentes, fn ($q) => $q->where('ausente', false))
             ->whereNotNull('percentual')
             ->pluck('percentual', 'aluno_chave');
 
@@ -485,7 +489,7 @@ class RelatorioAdminService
     }
 
     /** @return array<int, array{codigo: int, nome: string, data: ?string, media: float, respondentes: int}> */
-    public function evolucaoCategoria(Avaliacao $avaliacao): array
+    public function evolucaoCategoria(Avaliacao $avaliacao, bool $incluirAusentes = false): array
     {
         if ($avaliacao->categoria_id === null) {
             return [];
@@ -495,6 +499,7 @@ class RelatorioAdminService
             ->join('resultado_resumos as rr', 'rr.avaliacao_codigo', '=', 'av.codigo')
             ->where('av.categoria_id', $avaliacao->categoria_id)
             ->whereNull('av.deleted_at')
+            ->when(! $incluirAusentes, fn ($q) => $q->where('rr.ausente', false))
             ->groupBy('av.codigo', 'av.nome', 'av.data_avaliacao')
             ->selectRaw('av.codigo as codigo, av.nome as nome, av.data_avaliacao as data')
             ->selectRaw('AVG(rr.percentual) as media')

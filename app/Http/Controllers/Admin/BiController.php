@@ -30,13 +30,18 @@ class BiController extends Controller
             'faixasEtarias' => FiltroDemografico::faixasEtarias(),
         ];
 
+        // Padrão: exclui quem não fez a prova das médias/estatísticas (ver
+        // ResumoResultadoService — "ausente" != "errou tudo") — quem estiver
+        // analisando pode marcar o campo pra incluir de novo.
+        $incluirAusentes = $request->boolean('incluir_ausentes');
+
         $estado = $visualizacaoConfig->estadoCompleto($avaliacao);
         $visivel = fn (string $chave) => $estado[$chave]['visivelAdmin'];
 
         // Sempre calculado (não só quando histograma/radar estão habilitados): o
         // aviso de "sem gabarito"/"sem respostas" precisa aparecer independente da
         // configuração de visuais, senão a página fica em branco sem explicar o motivo.
-        $dados = $biService->gerar($avaliacao, $periodo, $filtro);
+        $dados = $biService->gerar($avaliacao, $periodo, $filtro, $incluirAusentes);
 
         return view('admin.avaliacoes.bi', [
             'avaliacao' => $avaliacao,
@@ -44,17 +49,18 @@ class BiController extends Controller
             'periodosDisponiveis' => $periodosDisponiveis,
             'filtro' => $filtro,
             'opcoesFiltro' => $opcoesFiltro,
+            'incluirAusentes' => $incluirAusentes,
             'estado' => $estado,
             'dados' => $dados,
-            'rankingCompleto' => $visivel('ranking_completo') ? $relatorioService->rankingCompleto($avaliacao, $periodo) : null,
-            'distribuicaoTurma' => $visivel('distribuicao_turma') ? $relatorioService->distribuicaoPorTurma($avaliacao, $periodo, $filtro) : null,
+            'rankingCompleto' => $visivel('ranking_completo') ? $relatorioService->rankingCompleto($avaliacao, $periodo, $incluirAusentes) : null,
+            'distribuicaoTurma' => $visivel('distribuicao_turma') ? $relatorioService->distribuicaoPorTurma($avaliacao, $periodo, $filtro, $incluirAusentes) : null,
             'curvaDificuldade' => $visivel('curva_dificuldade') ? $relatorioService->curvaDificuldade($avaliacao) : null,
             'dispersaoTri' => $visivel('dispersao_tri') ? $relatorioService->dispersaoTri($avaliacao) : null,
             'heatmapHabilidadeTurma' => $visivel('heatmap_habilidade_turma') ? $relatorioService->heatmapHabilidadeTurma($avaliacao, $periodo, $filtro) : null,
             'perfilDemografico' => $visivel('perfil_demografico') ? $relatorioService->perfilDemografico($avaliacao) : null,
             'analiseAlternativas' => $visivel('analise_alternativas') ? $relatorioService->analiseAlternativas($avaliacao, $periodo, $filtro) : null,
-            'correlacaoMetricas' => $visivel('correlacao_metricas') ? $relatorioService->correlacaoMetricas($avaliacao, $periodo, $filtro) : null,
-            'evolucaoCategoria' => $visivel('evolucao_categoria') ? $relatorioService->evolucaoCategoria($avaliacao) : null,
+            'correlacaoMetricas' => $visivel('correlacao_metricas') ? $relatorioService->correlacaoMetricas($avaliacao, $periodo, $filtro, $incluirAusentes) : null,
+            'evolucaoCategoria' => $visivel('evolucao_categoria') ? $relatorioService->evolucaoCategoria($avaliacao, $incluirAusentes) : null,
             'mediaPorArea' => $visivel('desempenho_area') ? $relatorioService->mediaPorArea($avaliacao, $periodo) : null,
             'desempenhoPorTema' => $visivel('desempenho_tema') ? $relatorioService->desempenhoPorTema($avaliacao, $periodo) : null,
             'mediaPorBloom' => $visivel('desempenho_bloom') ? $relatorioService->mediaPorBloom($avaliacao, $periodo) : null,

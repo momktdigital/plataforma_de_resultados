@@ -7,6 +7,7 @@ use App\Models\Avaliacao;
 use App\Models\Questao;
 use App\Models\QuestaoMatriz;
 use App\Models\Resposta;
+use App\Services\BiDashboardService;
 use App\Services\ResumoResultadoService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -101,6 +102,66 @@ class BiDashboardTest extends TestCase
         $response->assertOk();
         $response->assertSee('5000 respondente');
         $this->assertLessThan(5.0, $duracao, 'Painel deve agregar em SQL, não varrer as respostas em PHP.');
+    }
+
+    public function test_exclui_ausentes_por_padrao_e_inclui_com_o_filtro(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A']);
+
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A']);
+        // Aluno 2 não respondeu nada de verdade — ausente.
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2', 'questao_numero' => 1, 'resposta' => '-']);
+
+        $admin = $this->admin();
+
+        $semAusentes = $this->actingAs($admin, 'admin')->get("/avaliacoes/{$avaliacao->codigo}/bi");
+        $semAusentes->assertSee('1 respondente');
+
+        $comAusentes = $this->actingAs($admin, 'admin')->get("/avaliacoes/{$avaliacao->codigo}/bi?incluir_ausentes=1");
+        $comAusentes->assertSee('2 respondente');
+    }
+
+    public function test_total_do_respondente_e_calculado_por_aluno_no_painel_bi(): void
+    {
+        // Mesma regressão de ResumoResultadoServiceTest, mas pro painel BI
+        // (BiDashboardService::gerar tinha o mesmo bug de total fixo pra
+        // avaliação inteira, em vez de por aluno).
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A']);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 2, 'gabarito' => 'B']);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 3, 'gabarito' => 'C']);
+
+        // Aluno 1 viu as 3 e acertou todas (100%).
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 2, 'resposta' => 'B']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 3, 'resposta' => 'C']);
+
+        // Aluno 2 só viu 1 das 3 e acertou (100% dele, não 33%).
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2', 'questao_numero' => 1, 'resposta' => 'A']);
+
+        $dados = app(BiDashboardService::class)->gerar($avaliacao);
+
+        // Ambos os alunos ficam 100% dentro do próprio total — os dois caem
+        // no bucket mais alto do histograma (90-100%), nenhum nos mais baixos.
+        $this->assertSame(2, $dados['histograma'][9]);
+        $this->assertSame(0, array_sum(array_slice($dados['histograma'], 0, 9)));
+    }
+
+    public function test_ranking_completo_mostra_badge_ausente_quando_incluido(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A']);
+
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2', 'questao_numero' => 1, 'resposta' => '-']);
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->get("/avaliacoes/{$avaliacao->codigo}/bi?incluir_ausentes=1");
+
+        $response->assertOk();
+        $response->assertSee('Ausente');
     }
 
     public function test_guest_nao_acessa_bi(): void

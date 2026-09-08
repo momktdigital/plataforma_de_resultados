@@ -55,16 +55,23 @@
             @endforeach
         </select>
     </div>
+    <div class="flex items-center gap-2 pb-2">
+        <input type="checkbox" id="filtro-incluir-ausentes" name="incluir_ausentes" value="1" {{ $incluirAusentes ? 'checked' : '' }}
+               class="rounded border-slate-300">
+        <label for="filtro-incluir-ausentes" class="text-sm text-slate-600">Incluir ausentes</label>
+    </div>
     <button type="submit" class="bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-lg px-4 py-2 text-sm">
         Filtrar
     </button>
-    @if (! $filtro->vazio() || $periodo !== '')
+    @if (! $filtro->vazio() || $periodo !== '' || $incluirAusentes)
         <a href="{{ route('avaliacoes.bi', $avaliacao) }}" class="text-sm text-slate-500 hover:underline px-1 py-2">Limpar filtros</a>
     @endif
 </form>
 <p class="text-xs text-slate-400 mb-6">
     Turma e demografia (sexo, cor/raça, faixa etária) se aplicam a: Distribuição de acertos, Distribuição por turma,
     Mapa de calor, Análise de alternativas e Correlação com métricas. Os demais visuais respeitam apenas o período.
+    Por padrão, alunos ausentes (que não responderam nada) ficam fora das médias e estatísticas — marque "Incluir
+    ausentes" pra considerá-los.
 </p>
 
 @if (! empty($dados['semGabarito']))
@@ -134,13 +141,19 @@
                             <td class="px-4 py-3 font-medium">{{ $r['aluno_nome'] ?: '—' }}</td>
                             <td class="px-4 py-3">{{ $r['ra'] ?: '—' }}</td>
                             <td class="px-4 py-3">{{ $r['turma'] ?: '—' }}</td>
-                            <td class="px-4 py-3">{{ $r['acertos'] }}/{{ $r['total'] }}</td>
-                            <td class="px-4 py-3">
-                                <div class="relative w-24">
-                                    <div class="absolute inset-y-0 left-0 bg-emerald-100 rounded" style="width: {{ $r['percentual'] }}%"></div>
-                                    <span class="relative font-bold text-emerald-800 px-1">{{ $r['percentual'] }}%</span>
-                                </div>
-                            </td>
+                            @if ($r['ausente'])
+                                <td class="px-4 py-3" colspan="2">
+                                    <span class="inline-block bg-amber-100 text-amber-700 text-xs font-bold uppercase rounded px-2 py-0.5">Ausente</span>
+                                </td>
+                            @else
+                                <td class="px-4 py-3">{{ $r['acertos'] }}/{{ $r['total'] }}</td>
+                                <td class="px-4 py-3">
+                                    <div class="relative w-24">
+                                        <div class="absolute inset-y-0 left-0 bg-emerald-100 rounded" style="width: {{ $r['percentual'] }}%"></div>
+                                        <span class="relative font-bold text-emerald-800 px-1">{{ $r['percentual'] }}%</span>
+                                    </div>
+                                </td>
+                            @endif
                         </tr>
                     @endforeach
                 </tbody>

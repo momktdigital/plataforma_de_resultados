@@ -7,6 +7,7 @@ use App\Models\Resposta;
 use App\Support\AlunoVinculoResolver;
 use App\Support\Anulacao;
 use App\Support\FiltroDemografico;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -29,7 +30,7 @@ class BiDashboardService
         private readonly AlunoVinculoResolver $alunoResolver = new AlunoVinculoResolver,
     ) {}
 
-    public function gerar(Avaliacao $avaliacao, string $periodo = '', ?FiltroDemografico $filtro = null): array
+    public function gerar(Avaliacao $avaliacao, string $periodo = '', ?FiltroDemografico $filtro = null, bool $incluirAusentes = false): array
     {
         $gabaritos = Anulacao::excluirDistribuidas(
             $avaliacao->questoes()
@@ -42,11 +43,11 @@ class BiDashboardService
             return ['semGabarito' => true];
         }
 
-        $totalQuestoes = $gabaritos->count();
-
         $chaves = $filtro !== null
             ? $this->alunoResolver->chavesFiltradas($avaliacao->codigo, $periodo, $filtro, $avaliacao->data_avaliacao)
             : null;
+
+        $semResposta = Resposta::semRespostaSql('respostas.resposta');
 
         $porRespondente = Resposta::query()
             ->join('questoes', function ($join) use ($avaliacao) {
@@ -64,7 +65,13 @@ class BiDashboardService
             ->when($chaves !== null, fn ($query) => $query->whereIn('respostas.aluno_chave', $chaves))
             ->selectRaw('respostas.aluno_chave as aluno_chave, respostas.periodo as periodo')
             ->selectRaw('MAX(respostas.ra) as ra, MAX(respostas.cpf) as cpf')
+            // Total por RESPONDENTE (não fixo pra avaliação inteira) — mesmo
+            // motivo do ResumoResultadoService: um banco de questões
+            // aleatório (Avalia Pro) dá uma quantidade de questões diferente
+            // por aluno.
+            ->selectRaw('COUNT(*) as total')
             ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('respostas.resposta', 'questoes.gabarito', 'questoes.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
+            ->selectRaw("SUM(CASE WHEN NOT {$semResposta} THEN 1 ELSE 0 END) as respondidas")
             ->groupBy('respostas.aluno_chave', 'respostas.periodo')
             ->get();
 
@@ -72,18 +79,26 @@ class BiDashboardService
             return ['semRespostas' => true];
         }
 
-        $porRespondente = $porRespondente->map(function ($linha) use ($totalQuestoes) {
-            $acertos = (int) $linha->acertos;
+        $porRespondente = $porRespondente
+            ->map(function ($linha) {
+                $total = (int) $linha->total;
+                $acertos = (int) $linha->acertos;
 
-            return [
-                'ra' => $linha->ra,
-                'cpf' => $linha->cpf,
-                'periodo' => $linha->periodo,
-                'acertos' => $acertos,
-                'total' => $totalQuestoes,
-                'percentual' => $totalQuestoes > 0 ? round($acertos / $totalQuestoes * 100, 1) : 0.0,
-            ];
-        });
+                return [
+                    'ra' => $linha->ra,
+                    'cpf' => $linha->cpf,
+                    'periodo' => $linha->periodo,
+                    'acertos' => $acertos,
+                    'total' => $total,
+                    'percentual' => $total > 0 ? round($acertos / $total * 100, 1) : 0.0,
+                    'ausente' => (int) $linha->respondidas === 0,
+                ];
+            })
+            ->when(! $incluirAusentes, fn (Collection $c) => $c->reject(fn ($r) => $r['ausente'])->values());
+
+        if ($porRespondente->isEmpty()) {
+            return ['semRespostas' => true];
+        }
 
         $histograma = array_fill(0, 10, 0);
         foreach ($porRespondente as $r) {
