@@ -7,6 +7,7 @@ use App\Models\AvaliaAvaliacaoDisponivel;
 use App\Models\Avaliacao;
 use App\Models\AvaliaSyncExecucao;
 use App\Models\ConfiguracaoSistema;
+use App\Support\Anulacao;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -364,18 +365,34 @@ class AvaliaSyncService
 
             $numeroPorIdExterno = $this->resolverNumerosQuestao($avaliacaoCodigo, $produto, $linhasDaAvaliacao);
 
+            // O gabarito/anulação já gravados (se houver) — uma sincronização
+            // incremental só vê as respostas NOVAS desde o último watermark,
+            // que podem não incluir nenhum acerto pra derivar consenso (ver
+            // derivarGabaritoAvaliaPro); sem isso, um resync incremental
+            // apagaria um gabarito já resolvido por um lote anterior.
+            $existentes = DB::table('questoes')
+                ->where('avaliacao_codigo', $avaliacaoCodigo)
+                ->whereNotNull('id_externo')
+                ->get(['id_externo', 'gabarito', 'anulada_modo'])
+                ->keyBy('id_externo');
+
+            [$gabaritos, $anuladas] = $produto === 'avalia_pro'
+                ? $this->derivarGabaritoAvaliaPro($linhasDaAvaliacao)
+                : [[], []];
+
             $registros = [];
             foreach ($linhasDaAvaliacao->unique('question_id') as $linha) {
                 $idExterno = (string) $linha->question_id;
+                $existente = $existentes->get($idExterno);
 
                 $registros[] = [
                     'avaliacao_codigo' => $avaliacaoCodigo,
                     'numero' => $numeroPorIdExterno[$idExterno],
-                    // Sem gabarito próprio: o Avalia já manda o veredito
-                    // pronto por resposta (answer_status/question_user_grade)
-                    // — ver AvaliaSyncService::upsertRespostas(). '-' é só
-                    // para satisfazer a coluna NOT NULL do schema legado.
-                    'gabarito' => '-',
+                    // '-' só quando nenhuma fonte (este lote ou um anterior)
+                    // conseguiu resolver o gabarito ainda — satisfaz a coluna
+                    // NOT NULL do schema legado sem fingir uma resposta real.
+                    'gabarito' => $gabaritos[$idExterno] ?? $existente?->gabarito ?? '-',
+                    'anulada_modo' => $anuladas[$idExterno] ?? $existente?->anulada_modo ?? null,
                     'origem' => $produto,
                     'id_externo' => $idExterno,
                     'deleted_at' => null,
@@ -388,13 +405,57 @@ class AvaliaSyncService
                 DB::table('questoes')->upsert(
                     $lote,
                     ['avaliacao_codigo', 'id_externo'],
-                    ['deleted_at', 'updated_at']
+                    ['gabarito', 'anulada_modo', 'deleted_at', 'updated_at']
                 );
                 $gravadas += count($lote);
             }
         }
 
         return $gravadas;
+    }
+
+    /**
+     * O Avalia não expõe o gabarito em nenhuma dimensão (`dim_questions` não
+     * tem campo de resposta correta — confirmado consultando o schema real)
+     * — a única fonte é o veredito que ele já calculou por resposta
+     * (`answer_status`). Deriva o gabarito de cada questão pelo CONSENSO das
+     * respostas marcadas 'Correta' (só aceita quando todo mundo que acertou
+     * marcou a MESMA alternativa — o normal pra múltipla escolha; se
+     * divergir, não arrisca um gabarito errado, deixa pra próxima sincronização).
+     *
+     * `anulada_modo`: uma questão com pelo menos uma resposta 'Anulada' é
+     * marcada distribuir_pontuacao (sai do total pra todo mundo). Modo
+     * conservador escolhido de propósito: o dado bruto não distingue, no
+     * nível da questão, "anulada com crédito pra todos" de "isenta" (só há
+     * contadores agregados annulled_questions_count/exempted_questions_count
+     * por aluno×prova×disciplina, sem apontar QUAL questão é qual) — excluir
+     * do total nunca credita nem culpa ninguém indevidamente, ao contrário de
+     * assumir dar_ponto errado.
+     *
+     * @return array{0: array<string, string>, 1: array<string, string>} [gabaritos, anuladas] por id_externo da questão
+     */
+    private function derivarGabaritoAvaliaPro(Collection $linhasDaAvaliacao): array
+    {
+        $gabaritos = [];
+        $anuladas = [];
+
+        foreach ($linhasDaAvaliacao->groupBy(fn ($linha) => (string) $linha->question_id) as $idExterno => $linhasDaQuestao) {
+            $corretas = $linhasDaQuestao
+                ->where('answer_status', 'Correta')
+                ->pluck('question_answer')
+                ->filter()
+                ->unique();
+
+            if ($corretas->count() === 1) {
+                $gabaritos[$idExterno] = $corretas->first();
+            }
+
+            if ($linhasDaQuestao->contains('answer_status', 'Anulada')) {
+                $anuladas[$idExterno] = Anulacao::MODO_DISTRIBUIR_PONTUACAO;
+            }
+        }
+
+        return [$gabaritos, $anuladas];
     }
 
     /**

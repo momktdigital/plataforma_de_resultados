@@ -10,6 +10,7 @@ use App\Models\ConfiguracaoSistema;
 use App\Models\ResultadoMetrica;
 use App\Services\Avalia\AvaliaExtractorContract;
 use App\Services\Avalia\AvaliaSyncService;
+use App\Support\Anulacao;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
 use RuntimeException;
@@ -368,6 +369,114 @@ class AvaliaSyncServiceTest extends TestCase
 
         $this->assertDatabaseCount('resultado_metricas', 0);
         $this->assertSame(1, $execucao->linhas_sem_identificador);
+    }
+
+    private function respostaProFake(int $questionId, string $resposta, string $answerStatus): object
+    {
+        return (object) [
+            'exam_sk' => 1, 'subject_sk' => 7, 'question_grade' => $answerStatus === 'Correta' ? 1 : 0, 'question_weight' => 1,
+            'question_answer' => $resposta, 'answer_status' => $answerStatus, 'watermark' => '2026-09-01 10:00:00',
+            'assessment_id_avalia_pro' => 100, 'question_id' => $questionId, 'question_text_avalia_pro' => "Questão {$questionId}",
+            'cpf' => '11122233344',
+        ];
+    }
+
+    public function test_gabarito_e_derivado_do_consenso_de_respostas_marcadas_corretas(): void
+    {
+        // dim_questions não expõe gabarito (confirmado consultando o schema
+        // real) — a única fonte é o veredito que o Avalia já calculou por
+        // resposta (answer_status = 'Correta'/'Errada'/'Anulada', valores
+        // reais confirmados via SELECT DISTINCT no Redshift desta IES).
+        $this->alunoComCpf('11122233344');
+        ConfiguracaoSistema::definir('avalia_modo_avalia_pro', 'todas');
+
+        $extractor = new FakeAvaliaExtractor(
+            notas: new Collection([$this->notaProFake(100, 7)]),
+            respostas: new Collection([
+                $this->respostaProFake(501, 'A', 'Correta'),
+                $this->respostaProFake(502, 'C', 'Errada'),
+            ]),
+        );
+
+        (new AvaliaSyncService($extractor))->sincronizar('avalia_pro', AvaliaSyncExecucao::DISPARADO_MANUAL);
+
+        // Questão 501: quem acertou marcou 'A' — vira o gabarito.
+        $this->assertDatabaseHas('questoes', ['id_externo' => '501', 'gabarito' => 'A']);
+        // Questão 502: ninguém acertou nesta leva — sem consenso ainda, fica
+        // com o placeholder até uma sincronização futura resolver.
+        $this->assertDatabaseHas('questoes', ['id_externo' => '502', 'gabarito' => '-']);
+    }
+
+    public function test_gabarito_inconsistente_entre_respondentes_nao_e_gravado(): void
+    {
+        // Duas respostas diferentes marcadas 'Correta' pra mesma questão não
+        // deveria acontecer numa prova objetiva — mas se acontecer (dado
+        // inconsistente/anomalia), não arrisca gravar um gabarito errado.
+        Aluno::create(['ra' => 'RA1', 'cpf' => '11122233344', 'nome' => 'Aluno 1']);
+        Aluno::create(['ra' => 'RA2', 'cpf' => '55566677788', 'nome' => 'Aluno 2']);
+        ConfiguracaoSistema::definir('avalia_modo_avalia_pro', 'todas');
+
+        $resposta1 = $this->respostaProFake(501, 'A', 'Correta');
+        $resposta2 = $this->respostaProFake(501, 'B', 'Correta');
+        $resposta2->cpf = '55566677788';
+
+        $extractor = new FakeAvaliaExtractor(
+            notas: new Collection([$this->notaProFake(100, 7)]),
+            respostas: new Collection([$resposta1, $resposta2]),
+        );
+
+        (new AvaliaSyncService($extractor))->sincronizar('avalia_pro', AvaliaSyncExecucao::DISPARADO_MANUAL);
+
+        $this->assertDatabaseHas('questoes', ['id_externo' => '501', 'gabarito' => '-']);
+    }
+
+    public function test_questao_anulada_e_marcada_distribuir_pontuacao(): void
+    {
+        $this->alunoComCpf('11122233344');
+        ConfiguracaoSistema::definir('avalia_modo_avalia_pro', 'todas');
+
+        $extractor = new FakeAvaliaExtractor(
+            notas: new Collection([$this->notaProFake(100, 7)]),
+            respostas: new Collection([$this->respostaProFake(501, 'A', 'Anulada')]),
+        );
+
+        (new AvaliaSyncService($extractor))->sincronizar('avalia_pro', AvaliaSyncExecucao::DISPARADO_MANUAL);
+
+        $this->assertDatabaseHas('questoes', ['id_externo' => '501', 'anulada_modo' => Anulacao::MODO_DISTRIBUIR_PONTUACAO]);
+    }
+
+    public function test_gabarito_ja_resolvido_nao_e_apagado_por_sync_incremental_sem_consenso_no_lote(): void
+    {
+        // Uma sincronização incremental só vê as respostas NOVAS desde o
+        // último watermark — sem preservar o gabarito já resolvido, um lote
+        // incremental sem nenhum acerto novo pra essa questão apagaria o
+        // gabarito de um sync anterior.
+        $this->alunoComCpf('11122233344');
+        ConfiguracaoSistema::definir('avalia_modo_avalia_pro', 'todas');
+
+        $service1 = new AvaliaSyncService(new FakeAvaliaExtractor(
+            notas: new Collection([$this->notaProFake(100, 7)]),
+            respostas: new Collection([$this->respostaProFake(501, 'A', 'Correta')]),
+        ));
+        $service1->sincronizar('avalia_pro', AvaliaSyncExecucao::DISPARADO_MANUAL);
+        $this->assertDatabaseHas('questoes', ['id_externo' => '501', 'gabarito' => 'A']);
+
+        // Segunda leva: outro aluno errando a mesma questão, sem nenhum acerto.
+        Aluno::create(['ra' => 'RA2', 'cpf' => '55566677788', 'nome' => 'Aluno 2']);
+        $notaSeguinte = $this->notaProFake(100, 7);
+        $notaSeguinte->cpf = '55566677788';
+        $notaSeguinte->watermark = '2026-09-02 10:00:00';
+        $respostaSeguinte = $this->respostaProFake(501, 'C', 'Errada');
+        $respostaSeguinte->cpf = '55566677788';
+        $respostaSeguinte->watermark = '2026-09-02 10:00:00';
+
+        $service2 = new AvaliaSyncService(new FakeAvaliaExtractor(
+            notas: new Collection([$notaSeguinte]),
+            respostas: new Collection([$respostaSeguinte]),
+        ));
+        $service2->sincronizar('avalia_pro', AvaliaSyncExecucao::DISPARADO_MANUAL);
+
+        $this->assertDatabaseHas('questoes', ['id_externo' => '501', 'gabarito' => 'A']);
     }
 
     public function test_nova_sincronizacao_autocorrige_execucao_travada_de_uma_tentativa_anterior(): void

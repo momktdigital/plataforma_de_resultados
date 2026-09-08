@@ -50,6 +50,14 @@ use RuntimeException;
  *    antes de gravar, já que `user_username_safe_a` não foi desenhado pra
  *    ser um CPF. Não usamos RA daqui porque o join entre dim_users e
  *    dim_enrollments (que tem o RA) não está confirmado.
+ * 4. `dimensions.dim_questions` não tem NENHUM campo de gabarito/resposta
+ *    correta (confirmado inspecionando as colunas reais da tabela) — por
+ *    isso `answer_status`/`question_answer` (Avalia Pro) são trazidos aqui
+ *    e AvaliaSyncService::derivarGabaritoAvaliaPro() deriva o gabarito pelo
+ *    consenso das respostas marcadas 'Correta', em vez de ler um gabarito
+ *    pronto. Avalia Online não tem equivalente (nem answer_status nem o
+ *    texto da resposta — ver ponto 2), então questões de lá ficam sem
+ *    gabarito derivável por ora.
  */
 class RedshiftAvaliaExtractor implements AvaliaExtractorContract
 {
