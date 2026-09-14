@@ -13,16 +13,28 @@ use RuntimeException;
 use Throwable;
 
 /**
- * Import de resultados no formato "longo": uma linha por resposta de um
- * respondente a uma questão. Únicos campos obrigatórios: CPF ou RA, Questão
- * e Resposta (a resposta pode ser vazia — significa que o aluno deixou em
- * branco — mas a coluna precisa existir). Período é opcional na planilha —
- * quando ausente numa linha, cai pro período cadastrado no perfil do aluno
- * (ver montarRegistros()); só fica vazio de verdade se nem a planilha nem o
+ * Import de resultados — aceita dois formatos de planilha:
+ *
+ * - "longo": uma linha por resposta de um respondente a uma questão. Únicos
+ *   campos obrigatórios: CPF ou RA, Questão e Resposta (a resposta pode ser
+ *   vazia — significa que o aluno deixou em branco — mas a coluna precisa
+ *   existir).
+ * - "largo": uma linha por respondente, uma coluna por questão (cabeçalho
+ *   "Q1", "Q2", "Questão 3"...) — comum em exportações de leitora óptica.
+ *   Cada coluna de questão vira, internamente, o mesmo registro que uma
+ *   linha do formato longo produziria — ver normalizarLinhasLargo().
+ *
+ * Período é opcional em qualquer um dos dois formatos — quando ausente numa
+ * linha, cai pro período cadastrado no perfil do aluno (ver
+ * montarRegistros()); só fica vazio de verdade se nem a planilha nem o
  * cadastro do aluno tiverem essa informação.
  */
 class ResultadoImportService
 {
+    private const FORMATO_LONGO = 'longo';
+
+    private const FORMATO_LARGO = 'largo';
+
     private const RA_PATTERNS = ['/^(ra|matricula|matriculaaluno)$/'];
 
     private const CPF_PATTERNS = ['/^cpf$/'];
@@ -32,6 +44,16 @@ class ResultadoImportService
     private const RESPOSTA_PATTERNS = ['/^(resposta|alternativa|letra|marcada)$/'];
 
     private const PERIODO_PATTERNS = ['/^(periodo|periodo letivo|perletivo)$/'];
+
+    /**
+     * Cabeçalho de coluna de questão no formato largo: "Q1", "Q 12", "Questão3",
+     * "Item 7"... — precisa terminar em número, senão colide com as colunas de
+     * identificação/Período (nenhuma delas termina em dígito).
+     */
+    private const COLUNA_QUESTAO_LARGO_PATTERN = '/^(?:q|questao|quest|item)\s*0*(\d+)$/';
+
+    /** Sinônimos de "célula em branco" usados por algumas leitoras ópticas no formato largo. */
+    private const RESPOSTA_LARGO_BRANCO = ['BLANK', 'BRANCO', 'EM BRANCO'];
 
     /**
      * Tamanho dos lotes do upsert() — grande o bastante para poucas idas ao
@@ -50,9 +72,11 @@ class ResultadoImportService
         }
 
         $header = array_keys($rows[0]);
-        $this->validarCabecalho($header);
+        $formato = $this->detectarFormato($header);
 
-        $linhas = $this->normalizarLinhas($rows, $resultado);
+        $linhas = $formato === self::FORMATO_LARGO
+            ? $this->normalizarLinhasLargo($rows, $resultado, $this->colunasDeQuestao($header))
+            : $this->normalizarLinhasLongo($rows, $resultado);
 
         if ($linhas === []) {
             return $resultado;
@@ -84,9 +108,59 @@ class ResultadoImportService
     }
 
     /**
+     * Lê só o cabeçalho do arquivo e detecta o formato + quais campos foram
+     * reconhecidos — não toca o banco nem lê linha de dado nenhuma. Usado
+     * pela pré-visualização exibida antes do usuário confirmar o import de
+     * verdade (ver QuestaoImportService::identificarColunas(), mesmo padrão).
+     *
+     * @return array{formato: string, detalhe: ?string, campos: array<int, array{chave: string, rotulo: string, obrigatorio: bool, identificado: bool}>}
+     */
+    public function identificarColunas(UploadedFile $file): array
+    {
+        $header = SpreadsheetReader::readHeader($file);
+        $formato = $this->detectarFormato($header);
+
+        $campoIdentificador = [
+            'chave' => 'identificador', 'rotulo' => 'RA ou CPF', 'obrigatorio' => true,
+            'identificado' => HeaderResolver::hasColumn($header, self::RA_PATTERNS) || HeaderResolver::hasColumn($header, self::CPF_PATTERNS),
+        ];
+        $campoPeriodo = [
+            'chave' => 'periodo', 'rotulo' => 'Período', 'obrigatorio' => false,
+            'identificado' => HeaderResolver::hasColumn($header, self::PERIODO_PATTERNS),
+        ];
+
+        if ($formato === self::FORMATO_LARGO) {
+            $numeros = array_keys($this->colunasDeQuestao($header));
+
+            return [
+                'formato' => self::FORMATO_LARGO,
+                'detalhe' => count($numeros).' coluna(s) de questão identificada(s)'
+                    .($numeros !== [] ? ' (Q'.min($numeros).' a Q'.max($numeros).').' : '.'),
+                'campos' => [$campoIdentificador, $campoPeriodo],
+            ];
+        }
+
+        return [
+            'formato' => self::FORMATO_LONGO,
+            'detalhe' => null,
+            'campos' => [
+                $campoIdentificador,
+                ['chave' => 'questao', 'rotulo' => 'Questão', 'obrigatorio' => true, 'identificado' => HeaderResolver::hasColumn($header, self::NUMERO_PATTERNS)],
+                ['chave' => 'resposta', 'rotulo' => 'Resposta', 'obrigatorio' => true, 'identificado' => HeaderResolver::hasColumn($header, self::RESPOSTA_PATTERNS)],
+                $campoPeriodo,
+            ],
+        ];
+    }
+
+    /**
+     * Formato "longo" exige colunas próprias de Questão E Resposta; na
+     * ausência delas, formato "largo" exige ao menos uma coluna de questão
+     * (cabeçalho terminado em número — ver colunasDeQuestao()). Uma coluna
+     * de CPF ou RA é obrigatória nos dois formatos.
+     *
      * @param  array<int, string>  $header
      */
-    private function validarCabecalho(array $header): void
+    private function detectarFormato(array $header): string
     {
         $temIdentificador = HeaderResolver::hasColumn($header, self::RA_PATTERNS)
             || HeaderResolver::hasColumn($header, self::CPF_PATTERNS);
@@ -95,23 +169,92 @@ class ResultadoImportService
             throw new RuntimeException('O arquivo precisa ter uma coluna de CPF ou de RA.');
         }
 
-        if (! HeaderResolver::hasColumn($header, self::NUMERO_PATTERNS)) {
-            throw new RuntimeException('O arquivo precisa ter uma coluna de Questão.');
+        $formatoLongo = HeaderResolver::hasColumn($header, self::NUMERO_PATTERNS)
+            && HeaderResolver::hasColumn($header, self::RESPOSTA_PATTERNS);
+
+        if ($formatoLongo) {
+            return self::FORMATO_LONGO;
         }
 
-        if (! HeaderResolver::hasColumn($header, self::RESPOSTA_PATTERNS)) {
-            throw new RuntimeException('O arquivo precisa ter uma coluna de Resposta.');
+        if ($this->colunasDeQuestao($header) !== []) {
+            return self::FORMATO_LARGO;
         }
+
+        throw new RuntimeException(
+            'Não foi possível identificar o formato do arquivo — ele precisa ter colunas de Questão e '
+            .'Resposta (formato longo) ou uma coluna por questão, tipo "Q1", "Q2"... (formato largo).'
+        );
     }
 
     /**
-     * Valida e normaliza cada linha da planilha, sem tocar o banco — as
-     * linhas inválidas já são registradas como ignoradas aqui.
+     * Colunas de questão do formato largo — cabeçalho terminado em número
+     * ("Q1", "Questão 12"...) — na ordem crescente do número.
+     *
+     * @param  array<int, string>  $header
+     * @return array<int, string> número da questão => nome original da coluna
+     */
+    private function colunasDeQuestao(array $header): array
+    {
+        $colunas = [];
+
+        foreach ($header as $coluna) {
+            $normalizado = HeaderResolver::normalize((string) $coluna);
+
+            if (preg_match(self::COLUNA_QUESTAO_LARGO_PATTERN, $normalizado, $matches) === 1) {
+                $colunas[(int) $matches[1]] = $coluna;
+            }
+        }
+
+        ksort($colunas);
+
+        return $colunas;
+    }
+
+    /**
+     * RA/CPF de uma linha, comuns aos dois formatos — retorna null (já
+     * registrando o motivo em $resultado) quando a linha não tem
+     * identificador válido nenhum.
+     *
+     * @return array{ra: ?string, cpf: ?string}|null
+     */
+    private function resolverIdentificador(array $row, int $linha, ImportResult $resultado): ?array
+    {
+        $ra = HeaderResolver::findValue($row, self::RA_PATTERNS);
+        $cpf = HeaderResolver::findValue($row, self::CPF_PATTERNS);
+
+        if ($ra === null && $cpf === null) {
+            $resultado->ignorarLinha($linha, 'CPF e RA ausentes — ao menos um é obrigatório.');
+
+            return null;
+        }
+
+        $cpfLimpo = $cpf !== null ? preg_replace('/\D/', '', $cpf) : null;
+
+        // Igual AlunoRequest/ConsultaResultadoRequest (digits:11) — um CPF
+        // malformado aqui não é só descartado com fallback pro RA: como
+        // respostas.aluno_chave prioriza CPF (COALESCE(cpf, ra)), gravá-lo
+        // do jeito que veio criaria um agrupamento que nunca casa com
+        // nenhum aluno real, mesmo com um RA válido na mesma linha.
+        if ($cpf !== null && strlen($cpfLimpo) !== 11) {
+            $resultado->ignorarLinha($linha, "CPF inválido: '{$cpf}' — precisa ter 11 dígitos.");
+
+            return null;
+        }
+
+        return [
+            'ra' => $ra !== null ? trim($ra) : null,
+            'cpf' => $cpfLimpo,
+        ];
+    }
+
+    /**
+     * Valida e normaliza cada linha da planilha no formato longo, sem tocar
+     * o banco — as linhas inválidas já são registradas como ignoradas aqui.
      *
      * @param  array<int, array<string, mixed>>  $rows
      * @return array<int, array{linha: int, ra: ?string, cpf: ?string, numero: int, resposta: ?string, periodo: string}>
      */
-    private function normalizarLinhas(array $rows, ImportResult $resultado): array
+    private function normalizarLinhasLongo(array $rows, ImportResult $resultado): array
     {
         $linhas = [];
 
@@ -119,41 +262,25 @@ class ResultadoImportService
             $resultado->registrarLinha();
             $linha = $index + 2;
 
-            $ra = HeaderResolver::findValue($row, self::RA_PATTERNS);
-            $cpf = HeaderResolver::findValue($row, self::CPF_PATTERNS);
+            $identificador = $this->resolverIdentificador($row, $linha, $resultado);
+            if ($identificador === null) {
+                continue;
+            }
+
             $numeroBruto = HeaderResolver::findValue($row, self::NUMERO_PATTERNS);
-            $resposta = HeaderResolver::findValue($row, self::RESPOSTA_PATTERNS);
-            $periodo = HeaderResolver::findValue($row, self::PERIODO_PATTERNS) ?? '';
-
-            if ($ra === null && $cpf === null) {
-                $resultado->ignorarLinha($linha, 'CPF e RA ausentes — ao menos um é obrigatório.');
-
-                continue;
-            }
-
-            $cpfLimpo = $cpf !== null ? preg_replace('/\D/', '', $cpf) : null;
-
-            // Igual AlunoRequest/ConsultaResultadoRequest (digits:11) — um CPF
-            // malformado aqui não é só descartado com fallback pro RA: como
-            // respostas.aluno_chave prioriza CPF (COALESCE(cpf, ra)), gravá-lo
-            // do jeito que veio criaria um agrupamento que nunca casa com
-            // nenhum aluno real, mesmo com um RA válido na mesma linha.
-            if ($cpf !== null && strlen($cpfLimpo) !== 11) {
-                $resultado->ignorarLinha($linha, "CPF inválido: '{$cpf}' — precisa ter 11 dígitos.");
-
-                continue;
-            }
-
             if ($numeroBruto === null || ! preg_match('/\d+/', $numeroBruto, $matches)) {
                 $resultado->ignorarLinha($linha, 'Coluna de Questão ausente ou sem número.');
 
                 continue;
             }
 
+            $resposta = HeaderResolver::findValue($row, self::RESPOSTA_PATTERNS);
+            $periodo = HeaderResolver::findValue($row, self::PERIODO_PATTERNS) ?? '';
+
             $linhas[] = [
                 'linha' => $linha,
-                'ra' => $ra !== null ? trim($ra) : null,
-                'cpf' => $cpfLimpo,
+                'ra' => $identificador['ra'],
+                'cpf' => $identificador['cpf'],
                 'numero' => (int) $matches[0],
                 'resposta' => $resposta !== null ? mb_strtoupper($resposta, 'UTF-8') : null,
                 'periodo' => $periodo,
@@ -161,6 +288,72 @@ class ResultadoImportService
         }
 
         return $linhas;
+    }
+
+    /**
+     * Mesma ideia de normalizarLinhasLongo(), mas no formato largo: cada
+     * linha do arquivo (um respondente) vira N entradas — uma por coluna de
+     * questão — reaproveitando o resto do pipeline (resolverAlunoIds(),
+     * montarRegistros(), salvarLote()) sem nenhuma mudança, já que o formato
+     * intermediário é o mesmo dos dois parsers.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @param  array<int, string>  $colunasDeQuestao  número da questão => nome da coluna, ver colunasDeQuestao()
+     * @return array<int, array{linha: int, ra: ?string, cpf: ?string, numero: int, resposta: ?string, periodo: string}>
+     */
+    private function normalizarLinhasLargo(array $rows, ImportResult $resultado, array $colunasDeQuestao): array
+    {
+        $linhas = [];
+
+        foreach ($rows as $index => $row) {
+            $resultado->registrarLinha();
+            $linha = $index + 2;
+
+            $identificador = $this->resolverIdentificador($row, $linha, $resultado);
+            if ($identificador === null) {
+                continue;
+            }
+
+            $periodo = HeaderResolver::findValue($row, self::PERIODO_PATTERNS) ?? '';
+
+            foreach ($colunasDeQuestao as $numero => $coluna) {
+                $linhas[] = [
+                    'linha' => $linha,
+                    'ra' => $identificador['ra'],
+                    'cpf' => $identificador['cpf'],
+                    'numero' => $numero,
+                    'resposta' => $this->normalizarRespostaLargo($row[$coluna] ?? null),
+                    'periodo' => $periodo,
+                ];
+            }
+        }
+
+        return $linhas;
+    }
+
+    /**
+     * Normaliza uma célula de resposta do formato largo: célula vazia ou um
+     * dos sinônimos de "em branco" usados por leitoras ópticas (ver
+     * RESPOSTA_LARGO_BRANCO) viram null — mesmo significado de uma célula de
+     * Resposta vazia no formato longo (aluno deixou a questão em branco).
+     * Qualquer outro texto (ex.: "MULT" ou "(A,C)" de leitoras que marcam
+     * múltiplas respostas) é gravado como veio, maiusculizado — nunca bate
+     * com um gabarito de uma letra só, então já conta como erro sozinho.
+     */
+    private function normalizarRespostaLargo(mixed $valor): ?string
+    {
+        if ($valor === null) {
+            return null;
+        }
+
+        $texto = trim((string) $valor);
+        if ($texto === '') {
+            return null;
+        }
+
+        $texto = mb_strtoupper($texto, 'UTF-8');
+
+        return in_array($texto, self::RESPOSTA_LARGO_BRANCO, true) ? null : $texto;
     }
 
     /**

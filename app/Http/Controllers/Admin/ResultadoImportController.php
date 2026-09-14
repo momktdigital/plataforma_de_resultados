@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\ImportArquivoRequest;
 use App\Jobs\ImportarResultadosJob;
 use App\Models\Avaliacao;
+use App\Services\ResultadoImportService;
 use App\Support\ImportStatusTracker;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -22,6 +24,23 @@ class ResultadoImportController extends Controller
             'avaliacao' => $avaliacao,
             'importStatus' => ImportStatusTracker::status('resultados', (string) $avaliacao->codigo),
         ]);
+    }
+
+    /**
+     * Pré-visualização síncrona (sem fila, sem tocar o banco): lê só o
+     * cabeçalho do arquivo enviado, detecta o formato (longo ou largo) e
+     * devolve quais campos o import reconheceria — ver
+     * QuestaoImportController::preview(), mesmo padrão.
+     */
+    public function preview(ImportArquivoRequest $request, Avaliacao $avaliacao, ResultadoImportService $service): JsonResponse
+    {
+        try {
+            $info = $service->identificarColunas($request->file('arquivo'));
+        } catch (Throwable $e) {
+            return response()->json(['erro' => 'Não foi possível ler o arquivo: '.$e->getMessage()], 422);
+        }
+
+        return response()->json($info);
     }
 
     public function store(ImportArquivoRequest $request, Avaliacao $avaliacao): RedirectResponse

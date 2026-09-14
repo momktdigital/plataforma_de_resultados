@@ -143,6 +143,8 @@ Route::middleware('instalado')->group(function () {
 
         Route::get('/avaliacoes/{avaliacao}/resultados/import', [ResultadoImportController::class, 'create'])
             ->name('avaliacoes.resultados.import');
+        Route::post('/avaliacoes/{avaliacao}/resultados/import/preview', [ResultadoImportController::class, 'preview'])
+            ->name('avaliacoes.resultados.import.preview');
         Route::post('/avaliacoes/{avaliacao}/resultados/import', [ResultadoImportController::class, 'store'])
             ->name('avaliacoes.resultados.import.store');
 
