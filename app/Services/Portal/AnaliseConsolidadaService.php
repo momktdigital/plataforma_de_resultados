@@ -4,6 +4,7 @@ namespace App\Services\Portal;
 
 use App\Models\Aluno;
 use App\Support\Anulacao;
+use App\Support\Dificuldade;
 use Illuminate\Contracts\Database\Query\Builder as BuilderContract;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -31,7 +32,7 @@ class AnaliseConsolidadaService
      */
     public function curvaDificuldadePedagogica(Aluno $aluno, array $avaliacaoCodigos): array
     {
-        $ordem = ['facil' => 'Fácil', 'medio' => 'Médio', 'dificil' => 'Difícil'];
+        $ordem = Dificuldade::rotulos();
         $linhas = $this->mediaPorCampoAgregado($aluno, $avaliacaoCodigos, 'dificuldade_pedagogica')->keyBy('campo');
 
         $resultado = [];

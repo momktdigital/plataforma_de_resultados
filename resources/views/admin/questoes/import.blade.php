@@ -213,6 +213,7 @@
     <ul class="mt-4 space-y-1.5 text-sm text-slate-600 list-disc list-inside">
         <li><strong>Área</strong>, <strong>Tema</strong> e <strong>Habilidade</strong> descrevem o conteúdo da questão — um valor só por questão, igual Bloom/Miller/Dificuldade.</li>
         <li><strong>Bloom (verbo)</strong> também aceita o cabeçalho <strong>Taxonomia</strong> — se sua planilha já chama essa coluna assim (com os verbos Lembrar/Aplicar/Analisar/Avaliar...), não precisa renomear.</li>
+        <li><strong>Dificuldade Pedagógica</strong> aceita Muito fácil, Fácil, Médio (ou "Moderada", sinônimo aceito) e Difícil.</li>
         <li><strong>Matriz (período/disciplina/código)</strong> aceitam vários valores na mesma célula, separados por vírgula, ponto-e-vírgula ou "|" (ver linha 1 do exemplo acima).</li>
         <li><strong>Matriz Prova, DCN, Portaria INEP e PPC</strong> guardam vários valores usando uma coluna por letra (A, B, C...) — deixe em branco as letras que não usar.</li>
         <li>Reimportar o mesmo número de questão desta avaliação <strong>atualiza</strong> os dados em vez de duplicar.</li>

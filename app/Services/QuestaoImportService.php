@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Avaliacao;
 use App\Models\Questao;
+use App\Support\Dificuldade;
 use App\Support\HeaderResolver;
 use App\Support\ImportResult;
 use App\Support\SpreadsheetReader;
@@ -350,10 +351,16 @@ class QuestaoImportService
 
         $valor = HeaderResolver::normalize($valor);
 
+        // "muito facil" precisa vir ANTES de "facil" — senão o prefixo mais
+        // genérico casaria primeiro e "muito fácil" nunca seria reconhecido.
+        // "moderad[ao]" é sinônimo aceito de "médio" (coordenadores usam os
+        // dois termos pra classificar a mesma dificuldade intermediária).
         return match (true) {
-            str_starts_with($valor, 'facil') => 'facil',
-            str_starts_with($valor, 'medi') => 'medio',
-            str_starts_with($valor, 'dific') => 'dificil',
+            str_starts_with($valor, 'muito facil') => Dificuldade::MUITO_FACIL,
+            str_starts_with($valor, 'facil') => Dificuldade::FACIL,
+            str_starts_with($valor, 'moder') => Dificuldade::MEDIO,
+            str_starts_with($valor, 'medi') => Dificuldade::MEDIO,
+            str_starts_with($valor, 'dific') => Dificuldade::DIFICIL,
             default => null,
         };
     }

@@ -95,6 +95,36 @@ class QuestaoImportTest extends TestCase
         $this->assertSame('dificil', Questao::where('numero', 3)->firstOrFail()->dificuldade_pedagogica);
     }
 
+    public function test_dificuldade_moderada_e_gravada_como_medio(): void
+    {
+        // "Moderada" é sinônimo de "Médio" usado por alguns coordenadores —
+        // precisa continuar aceitando "Médio" também.
+        $avaliacao = Avaliacao::create([]);
+
+        $csv = "Questão,Gabarito,Dificuldade\n1,A,Moderada\n2,A,Médio\n";
+        $arquivo = UploadedFile::fake()->createWithContent('gabarito.csv', $csv);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/questoes/import", ['arquivo' => $arquivo]);
+
+        $this->assertSame('medio', Questao::where('numero', 1)->firstOrFail()->dificuldade_pedagogica);
+        $this->assertSame('medio', Questao::where('numero', 2)->firstOrFail()->dificuldade_pedagogica);
+    }
+
+    public function test_dificuldade_muito_facil_e_gravada_em_bucket_proprio(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+
+        $csv = "Questão,Gabarito,Dificuldade\n1,A,Muito Fácil\n2,A,Fácil\n";
+        $arquivo = UploadedFile::fake()->createWithContent('gabarito.csv', $csv);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/questoes/import", ['arquivo' => $arquivo]);
+
+        $this->assertSame('muito_facil', Questao::where('numero', 1)->firstOrFail()->dificuldade_pedagogica);
+        $this->assertSame('facil', Questao::where('numero', 2)->firstOrFail()->dificuldade_pedagogica);
+    }
+
     public function test_coluna_dificuldade_tri_nao_e_confundida_com_a_pedagogica(): void
     {
         $avaliacao = Avaliacao::create([]);

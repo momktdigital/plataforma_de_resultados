@@ -6,6 +6,7 @@ use App\Models\Avaliacao;
 use App\Models\Resposta;
 use App\Support\AlunoVinculoResolver;
 use App\Support\Anulacao;
+use App\Support\Dificuldade;
 use App\Support\FiltroDemografico;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -103,12 +104,12 @@ class RelatorioAdminService
         return $resultado;
     }
 
-    /** @return array<string, array{esperado: string, observado: float, questoes: int}> facil/medio/dificil */
+    /** @return array<string, array{esperado: string, observado: float, questoes: int}> ver App\Support\Dificuldade */
     public function curvaDificuldade(Avaliacao $avaliacao): array
     {
         $porQuestao = $this->acertosPorQuestaoComCampo($avaliacao, 'dificuldade_pedagogica');
 
-        $ordem = ['facil' => 'Fácil', 'medio' => 'Médio', 'dificil' => 'Difícil'];
+        $ordem = Dificuldade::rotulos();
         $acumulado = [];
 
         foreach ($porQuestao as $linha) {
