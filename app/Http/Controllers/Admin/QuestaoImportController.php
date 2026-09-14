@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\ImportArquivoRequest;
 use App\Jobs\ImportarQuestoesJob;
 use App\Models\Avaliacao;
+use App\Services\QuestaoImportService;
 use App\Support\ImportStatusTracker;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -22,6 +24,23 @@ class QuestaoImportController extends Controller
             'avaliacao' => $avaliacao,
             'importStatus' => ImportStatusTracker::status('questoes', (string) $avaliacao->codigo),
         ]);
+    }
+
+    /**
+     * Pré-visualização síncrona (sem fila, sem tocar o banco): lê só o
+     * cabeçalho do arquivo enviado e devolve quais campos o import
+     * reconheceria. Consumido via AJAX pela tela antes do usuário confirmar
+     * o import de verdade.
+     */
+    public function preview(ImportArquivoRequest $request, Avaliacao $avaliacao, QuestaoImportService $service): JsonResponse
+    {
+        try {
+            $campos = $service->identificarColunas($request->file('arquivo'));
+        } catch (Throwable $e) {
+            return response()->json(['erro' => 'Não foi possível ler o arquivo: '.$e->getMessage()], 422);
+        }
+
+        return response()->json(['campos' => $campos]);
     }
 
     public function store(ImportArquivoRequest $request, Avaliacao $avaliacao): RedirectResponse

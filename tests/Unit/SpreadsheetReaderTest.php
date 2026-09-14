@@ -140,6 +140,25 @@ class SpreadsheetReaderTest extends TestCase
         $this->assertSame(['coluna_a' => 'x', 'coluna_c' => 'z'], $linhas[0]);
     }
 
+    public function test_le_apenas_o_cabecalho_de_um_csv(): void
+    {
+        $header = SpreadsheetReader::readHeader($this->csvComConteudo("coluna_a,coluna_b\nx,y\n"));
+
+        $this->assertSame(['coluna_a', 'coluna_b'], $header);
+    }
+
+    public function test_le_apenas_o_cabecalho_de_um_xlsx(): void
+    {
+        $header = SpreadsheetReader::readHeader($this->xlsxComLinhasEColunas(3, 2));
+
+        $this->assertSame(['coluna1', 'coluna2'], $header);
+    }
+
+    public function test_cabecalho_csv_vazio_retorna_lista_vazia(): void
+    {
+        $this->assertSame([], SpreadsheetReader::readHeader($this->csvComConteudo('')));
+    }
+
     private function csvComConteudo(string $conteudo): UploadedFile
     {
         $caminho = tempnam(sys_get_temp_dir(), 'csv_reader_test_').'.csv';

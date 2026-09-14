@@ -14,7 +14,7 @@
 @include('admin.imports._status', ['status' => $importStatus, 'voltar' => route('avaliacoes.show', $avaliacao)])
 
 <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 max-w-2xl">
-    <form method="POST" action="{{ route('avaliacoes.questoes.import.store', $avaliacao) }}" enctype="multipart/form-data" class="space-y-4">
+    <form id="import-form" method="POST" action="{{ route('avaliacoes.questoes.import.store', $avaliacao) }}" enctype="multipart/form-data" class="space-y-4">
         @csrf
         <div>
             <label class="block text-sm font-medium mb-1" for="arquivo">Arquivo (.csv, .xlsx ou .xls)</label>
@@ -22,15 +22,136 @@
                    class="w-full text-sm">
         </div>
         <label class="flex items-center gap-2 text-sm text-slate-600">
-            <input type="checkbox" name="dry_run" value="1">
-            Simular (mostra os números sem gravar nada)
+            <input type="checkbox" name="dry_run" id="dry_run" value="1" checked>
+            Simular (mostra o que foi identificado antes de gravar)
         </label>
-        <button type="submit" @disabled($importStatus['status'] === 'processando')
+        <button type="submit" id="botao-importar" @disabled($importStatus['status'] === 'processando')
                 class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-5 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed">
             Importar
         </button>
     </form>
+
+    <div id="preview-painel" class="hidden mt-4"></div>
 </div>
+
+<script>
+(function () {
+    var form = document.getElementById('import-form');
+    var dryRunCheckbox = document.getElementById('dry_run');
+    var arquivoInput = document.getElementById('arquivo');
+    var painel = document.getElementById('preview-painel');
+    var botaoImportar = document.getElementById('botao-importar');
+
+    form.addEventListener('submit', function (event) {
+        if (! dryRunCheckbox.checked) {
+            return; // envio normal — sem simulação, importa direto.
+        }
+
+        event.preventDefault();
+        simular();
+    });
+
+    function simular() {
+        if (! arquivoInput.files.length) {
+            return;
+        }
+
+        painel.classList.remove('hidden');
+        painel.innerHTML = '<p class="text-sm text-slate-500">Lendo arquivo&hellip;</p>';
+        botaoImportar.disabled = true;
+
+        var dados = new FormData();
+        dados.append('arquivo', arquivoInput.files[0]);
+
+        fetch('{{ route('avaliacoes.questoes.import.preview', $avaliacao) }}', {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
+            body: dados,
+        })
+            .then(function (res) {
+                return res.json().then(function (json) { return { ok: res.ok, json: json }; });
+            })
+            .then(function (resultado) {
+                botaoImportar.disabled = false;
+
+                if (! resultado.ok) {
+                    painel.innerHTML = '<p class="text-sm text-red-700">'
+                        + escapeHtml(resultado.json.erro || 'Não foi possível ler o arquivo.') + '</p>';
+                    return;
+                }
+
+                renderizarPreview(resultado.json.campos);
+            })
+            .catch(function () {
+                botaoImportar.disabled = false;
+                painel.innerHTML = '<p class="text-sm text-red-700">Não foi possível ler o arquivo. Tente novamente.</p>';
+            });
+    }
+
+    function renderizarPreview(campos) {
+        var linhas = campos.map(function (campo) {
+            var status, classe;
+
+            if (campo.identificado) {
+                status = 'Identificado';
+                classe = 'bg-white text-slate-700';
+            } else if (campo.obrigatorio) {
+                status = 'Não identificado — obrigatório';
+                classe = 'bg-red-50 text-red-800';
+            } else {
+                status = 'Não identificado — opcional';
+                classe = 'bg-amber-50 text-amber-800';
+            }
+
+            return '<tr class="' + classe + '">'
+                + '<td class="px-3 py-1.5 border-b border-slate-100 font-medium">' + escapeHtml(campo.rotulo) + '</td>'
+                + '<td class="px-3 py-1.5 border-b border-slate-100">' + status + '</td>'
+                + '</tr>';
+        }).join('');
+
+        var faltaObrigatorio = campos.some(function (campo) { return campo.obrigatorio && ! campo.identificado; });
+
+        painel.innerHTML =
+            '<div class="border border-slate-200 rounded-lg overflow-hidden">'
+            + '<div class="px-3 py-2 bg-slate-50 border-b border-slate-200 text-sm font-semibold text-slate-700">O que foi identificado no arquivo</div>'
+            + '<div class="overflow-x-auto">'
+            + '<table class="w-full text-sm border-collapse">'
+            + '<thead><tr class="text-left text-xs uppercase text-slate-500">'
+            + '<th class="px-3 py-1.5">Campo</th><th class="px-3 py-1.5">Status</th>'
+            + '</tr></thead>'
+            + '<tbody>' + linhas + '</tbody>'
+            + '</table>'
+            + '</div>'
+            + '<div class="px-3 py-3 border-t border-slate-200 bg-slate-50">'
+            + (faltaObrigatorio
+                ? '<p class="text-sm text-red-700 mb-2">Faltam colunas obrigatórias — linhas sem elas serão ignoradas no import.</p>'
+                : '')
+            + '<p class="text-sm text-slate-700 mb-2">Pode continuar e importar de verdade?</p>'
+            + '<div class="flex gap-2">'
+            + '<button type="button" id="preview-confirmar" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg px-4 py-1.5">Sim, importar</button>'
+            + '<button type="button" id="preview-cancelar" class="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-lg px-4 py-1.5">Cancelar</button>'
+            + '</div>'
+            + '</div>'
+            + '</div>';
+
+        document.getElementById('preview-confirmar').addEventListener('click', function () {
+            dryRunCheckbox.checked = false;
+            form.submit();
+        });
+
+        document.getElementById('preview-cancelar').addEventListener('click', function () {
+            painel.classList.add('hidden');
+            painel.innerHTML = '';
+        });
+    }
+
+    function escapeHtml(texto) {
+        var div = document.createElement('div');
+        div.textContent = texto;
+        return div.innerHTML;
+    }
+})();
+</script>
 
 <div class="mt-8 max-w-5xl">
     <h2 class="font-semibold text-slate-800 mb-1">Como sua planilha deve ficar</h2>

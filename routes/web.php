@@ -125,6 +125,8 @@ Route::middleware('instalado')->group(function () {
 
         Route::get('/avaliacoes/{avaliacao}/questoes/import', [QuestaoImportController::class, 'create'])
             ->name('avaliacoes.questoes.import');
+        Route::post('/avaliacoes/{avaliacao}/questoes/import/preview', [QuestaoImportController::class, 'preview'])
+            ->name('avaliacoes.questoes.import.preview');
         Route::post('/avaliacoes/{avaliacao}/questoes/import', [QuestaoImportController::class, 'store'])
             ->name('avaliacoes.questoes.import.store');
 
