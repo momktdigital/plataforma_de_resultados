@@ -114,12 +114,54 @@ window.Viz = (function () {
         botao.textContent = aberta ? 'Ver como tabela' : 'Ocultar tabela';
     }
 
+    /**
+     * Popover "o que isso significa" (ver _explicacao.blade.php). Listener
+     * delegado num lugar só: o parcial se repete dezenas de vezes por página,
+     * e tanto o BI quanto o boletim do aluno usam o mesmo markup.
+     */
+    function posicionarExplicacao(botao, conteudo) {
+        var rect = botao.getBoundingClientRect();
+        var largura = conteudo.offsetWidth;
+        var left = Math.max(8, Math.min(rect.right - largura, window.innerWidth - largura - 8));
+        conteudo.style.top = (rect.bottom + 4) + 'px';
+        conteudo.style.left = left + 'px';
+    }
+
+    function fecharExplicacoes() {
+        document.querySelectorAll('.explicacao-conteudo').forEach(function (c) { c.hidden = true; });
+    }
+
     document.addEventListener('click', function (evento) {
         var botao = evento.target.closest('[data-tabela]');
         if (botao) {
             alternarTabela(botao);
+
+            return;
+        }
+
+        var toggle = evento.target.closest('.explicacao-toggle');
+        if (toggle) {
+            var conteudo = toggle.nextElementSibling;
+            var estavaAberto = !conteudo.hidden;
+            fecharExplicacoes();
+            if (!estavaAberto) {
+                conteudo.hidden = false;
+                posicionarExplicacao(toggle, conteudo);
+            }
+            evento.stopPropagation();
+
+            return;
+        }
+
+        if (!evento.target.closest('.explicacao-conteudo')) {
+            fecharExplicacoes();
         }
     });
+
+    // position:fixed é relativo à VIEWPORT: sem isto o popover ficaria
+    // "grudado" na tela depois que o botão já rolou para outro lugar.
+    // capture=true para pegar rolagem de containers internos também.
+    document.addEventListener('scroll', fecharExplicacoes, true);
 
     return {
         cores: cores,

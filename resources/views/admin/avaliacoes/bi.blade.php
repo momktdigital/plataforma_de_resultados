@@ -94,6 +94,10 @@
         $kr20Bom = $kr20 !== null && $kr20 >= 0.80;
         $kr20Aceitavel = $kr20 !== null && $kr20 >= 0.70;
     @endphp
+    <div class="flex items-center gap-2 mb-3">
+        <h2 class="text-lg font-bold">Números da prova</h2>
+        @include('_explicacao', ['explicacao' => $explicacoes['estatisticas_gerais'] ?? null])
+    </div>
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Média da turma</p>
@@ -131,7 +135,10 @@
 @if ($estado['mapa_itens']['visivelAdmin'] && $psicometria !== null && ! empty($psicometria['itens']))
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
         <div class="flex items-start justify-between gap-4 flex-wrap mb-1">
-            <h2 class="font-semibold">Mapa de qualidade dos itens</h2>
+            <span class="flex items-center gap-2 mr-auto">
+                <h2 class="font-semibold">Mapa de qualidade dos itens</h2>
+                @include('_explicacao', ['explicacao' => $explicacoes['mapa_itens'] ?? null])
+            </span>
             <button type="button" data-tabela="tabela-mapa-itens" aria-expanded="false"
                     class="text-xs text-slate-500 hover:text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1">
                 Ver como tabela
@@ -215,7 +222,10 @@
 @if ($estado['histograma']['visivelAdmin'])
     @if (empty($dados['semGabarito']) && empty($dados['semRespostas']) && ! empty($dados))
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-            <h2 class="font-semibold mb-4">Distribuição de acertos ({{ $dados['totalRespondentes'] }} respondente(s))</h2>
+            <div class="flex items-center gap-2 mb-4">
+            <h2 class="font-semibold">Distribuição de acertos ({{ $dados['totalRespondentes'] }} respondente(s))</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['histograma'] ?? null])
+        </div>
             <canvas id="grafico-histograma" height="100"></canvas>
         </div>
     @endif
@@ -224,7 +234,10 @@
 @if ($estado['radar_disciplina']['visivelAdmin'])
     @if (empty($dados['semGabarito']) && empty($dados['semRespostas']) && ! empty($dados))
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-            <h2 class="font-semibold mb-4">Desempenho médio por disciplina</h2>
+            <div class="flex items-center gap-2 mb-4">
+            <h2 class="font-semibold">Desempenho médio por disciplina</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['radar_disciplina'] ?? null])
+        </div>
             @if (empty($dados['radar']))
                 <p class="text-sm text-slate-400">Nenhuma questão desta avaliação tem disciplina cadastrada na matriz.</p>
             @else
@@ -238,7 +251,10 @@
 
 @if ($estado['ranking_completo']['visivelAdmin'] && $rankingCompleto !== null)
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mb-6">
-        <div class="px-6 py-4 border-b border-slate-100 font-semibold">Ranking completo ({{ count($rankingCompleto) }} respondente(s))</div>
+        <div class="px-6 py-4 border-b border-slate-100 font-semibold flex items-center gap-2">
+            <span>Ranking completo ({{ count($rankingCompleto) }} respondente(s))</span>
+            @include('_explicacao', ['explicacao' => $explicacoes['ranking_completo'] ?? null])
+        </div>
         <div class="max-h-96 overflow-y-auto">
             <table class="w-full text-sm">
                 <thead class="bg-slate-50 text-slate-500 text-left sticky top-0">
@@ -275,7 +291,10 @@
 
 @if ($estado['distribuicao_turma']['visivelAdmin'] && $distribuicaoTurma !== null)
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-        <h2 class="font-semibold mb-4">Distribuição de notas por turma</h2>
+        <div class="flex items-center gap-2 mb-4">
+            <h2 class="font-semibold">Distribuição de notas por turma</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['distribuicao_turma'] ?? null])
+        </div>
         @if (empty($distribuicaoTurma))
             <p class="text-sm text-slate-400">Sem dados suficientes.</p>
         @else
@@ -286,7 +305,10 @@
 
 @if ($estado['curva_dificuldade']['visivelAdmin'] && $curvaDificuldade !== null)
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-        <h2 class="font-semibold mb-1">Dificuldade pedagógica: esperado x observado</h2>
+        <div class="flex items-center gap-2 mb-1">
+            <h2 class="font-semibold">Dificuldade pedagógica: esperado x observado</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['curva_dificuldade'] ?? null])
+        </div>
         <p class="text-sm text-slate-500 mb-4">% de acerto observado por nível de dificuldade cadastrado nas questões.</p>
         @if (empty($curvaDificuldade))
             <p class="text-sm text-slate-400">Sem dados suficientes.</p>
@@ -311,7 +333,10 @@
 
 @if ($estado['dispersao_tri']['visivelAdmin'] && $dispersaoTri !== null)
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-        <h2 class="font-semibold mb-1">Dispersão TRI x taxa de acerto observada</h2>
+        <div class="flex items-center gap-2 mb-1">
+            <h2 class="font-semibold">Dispersão TRI x taxa de acerto observada</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['dispersao_tri'] ?? null])
+        </div>
         <p class="text-sm text-slate-500 mb-4">Cada ponto é uma questão — eixo X: dificuldade TRI cadastrada, eixo Y: % de acerto observado.</p>
         @if (empty($dispersaoTri))
             <p class="text-sm text-slate-400">Sem dados suficientes.</p>
@@ -323,7 +348,10 @@
 
 @if ($estado['heatmap_habilidade_turma']['visivelAdmin'] && $heatmapHabilidadeTurma !== null)
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6 overflow-x-auto">
-        <h2 class="font-semibold mb-4">Mapa de calor: habilidade x turma (% de acerto)</h2>
+        <div class="flex items-center gap-2 mb-4">
+            <h2 class="font-semibold">Mapa de calor: habilidade x turma (% de acerto)</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['heatmap_habilidade_turma'] ?? null])
+        </div>
         @if (empty($heatmapHabilidadeTurma))
             <p class="text-sm text-slate-400">Sem dados suficientes.</p>
         @else
@@ -356,10 +384,26 @@
     </div>
 @endif
 
-@if ($estado['perfil_demografico']['visivelAdmin'] && $perfilDemografico !== null)
-    <div class="grid lg:grid-cols-3 gap-6 mb-6">
+@php
+    $temPerfil = $estado['perfil_demografico']['visivelAdmin'] && $perfilDemografico !== null;
+    $temEquidade = $estado['equidade_demografica']['visivelAdmin'] && ! empty($equidade);
+@endphp
+
+@if ($temPerfil || $temEquidade)
+        <div class="mb-6">
+        <div class="flex items-center gap-2 mb-1">
+            <h2 class="text-lg font-bold">Análise demográfica</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['perfil_demografico'] ?? null])
+        </div>
+        <p class="text-sm text-slate-500 mb-4">
+            Quem fez esta avaliação e como cada recorte se saiu. O perfil descreve a composição do grupo;
+            a equidade logo abaixo mostra o desempenho de cada um desses mesmos recortes.
+        </p>
+
+        @if ($temPerfil)
+        <div class="grid lg:grid-cols-3 gap-6 mb-6">
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-            <h2 class="font-semibold mb-3">Sexo</h2>
+            <h3 class="font-semibold mb-3">Sexo</h3>
             @if (empty($perfilDemografico['sexo']))
                 <p class="text-sm text-slate-400">Sem dados.</p>
             @else
@@ -368,7 +412,7 @@
         </div>
 
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-            <h2 class="font-semibold mb-3">Cor/raça</h2>
+            <h3 class="font-semibold mb-3">Cor/raça</h3>
             @if (empty($perfilDemografico['cor_raca']))
                 <p class="text-sm text-slate-400">Sem dados.</p>
             @else
@@ -377,7 +421,7 @@
         </div>
 
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-            <h2 class="font-semibold mb-3">UF</h2>
+            <h3 class="font-semibold mb-3">UF</h3>
             @if (empty($perfilDemografico['uf']))
                 <p class="text-sm text-slate-400">Sem dados.</p>
             @else
@@ -404,11 +448,65 @@
             @endif
         </div>
     </div>
+        @endif
+
+        @if ($temEquidade)
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
+        <div class="flex items-center gap-2 mb-1">
+            <h3 class="font-semibold">Equidade: desempenho por recorte</h3>
+            @include('_explicacao', ['explicacao' => $explicacoes['equidade_demografica'] ?? null])
+        </div>
+        <p class="text-sm text-slate-500 mb-5">
+            Monitoramento institucional, não avaliação de indivíduo. Grupos com menos de 10 respondentes
+            são omitidos — num grupo pequeno, a média do grupo identifica a pessoa.
+        </p>
+
+        <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            @foreach ($equidade as $recorte)
+                @php
+                    $maior = collect($recorte['grupos'])->max('media');
+                    $menor = collect($recorte['grupos'])->min('media');
+                @endphp
+                <div>
+                    <div class="flex items-baseline justify-between gap-2 mb-2">
+                        <h3 class="text-sm font-semibold text-slate-700">{{ $recorte['rotulo'] }}</h3>
+                        <span class="text-xs tabular-nums {{ ($maior - $menor) >= 10 ? 'text-amber-700 font-semibold' : 'text-slate-400' }}">
+                            {{ number_format($maior - $menor, 1, ',', '.') }} pp de diferença
+                        </span>
+                    </div>
+                    <div class="space-y-2">
+                        @foreach ($recorte['grupos'] as $grupo)
+                            <div class="text-sm">
+                                <div class="flex items-baseline justify-between gap-2">
+                                    <span class="truncate" title="{{ $grupo['valor'] }}">{{ $grupo['valor'] }}</span>
+                                    <span class="tabular-nums font-semibold">{{ number_format($grupo['media'], 1, ',', '.') }}%</span>
+                                </div>
+                                <div class="h-2 rounded-full bg-slate-100 mt-1">
+                                    <div class="h-full rounded-full" style="width: {{ min(100, $grupo['media']) }}%; background-color: #2a78d6"></div>
+                                </div>
+                                <span class="text-[11px] text-slate-400">{{ $grupo['respondentes'] }} respondente(s)</span>
+                            </div>
+                        @endforeach
+                    </div>
+                    @if ($recorte['suprimidos'] > 0)
+                        <p class="text-[11px] text-slate-400 mt-2">
+                            {{ $recorte['suprimidos'] }} grupo(s) omitido(s) por terem menos de 10 respondentes.
+                        </p>
+                    @endif
+                </div>
+            @endforeach
+        </div>
+    </div>
+        @endif
+    </div>
 @endif
 
 @if ($estado['desempenho_area']['visivelAdmin'] && $mediaPorArea !== null)
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-        <h2 class="font-semibold mb-4">Desempenho por área</h2>
+        <div class="flex items-center gap-2 mb-4">
+            <h2 class="font-semibold">Desempenho por área</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['desempenho_area'] ?? null])
+        </div>
         @if (empty($mediaPorArea))
             <p class="text-sm text-slate-400">Sem dados suficientes.</p>
         @else
@@ -437,7 +535,10 @@
 
 @if ($estado['desempenho_tema']['visivelAdmin'] && $desempenhoPorTema !== null)
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-        <h2 class="font-semibold mb-4">Desempenho por tema</h2>
+        <div class="flex items-center gap-2 mb-4">
+            <h2 class="font-semibold">Desempenho por tema</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['desempenho_tema'] ?? null])
+        </div>
         @if (empty($desempenhoPorTema))
             <p class="text-sm text-slate-400">Sem dados suficientes.</p>
         @else
@@ -483,7 +584,10 @@
     <div class="grid lg:grid-cols-2 gap-6 mb-6">
         @if ($estado['desempenho_bloom']['visivelAdmin'] && $mediaPorBloom !== null)
             <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-                <h2 class="font-semibold mb-4">Desempenho médio por nível de Bloom</h2>
+                <div class="flex items-center gap-2 mb-4">
+            <h2 class="font-semibold">Desempenho médio por nível de Bloom</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['desempenho_bloom'] ?? null])
+        </div>
                 @if (empty($mediaPorBloom))
                     <p class="text-sm text-slate-400">Sem dados suficientes.</p>
                 @else
@@ -493,7 +597,10 @@
         @endif
         @if ($estado['desempenho_miller']['visivelAdmin'] && $mediaPorMiller !== null)
             <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-                <h2 class="font-semibold mb-4">Desempenho médio por nível de Miller</h2>
+                <div class="flex items-center gap-2 mb-4">
+            <h2 class="font-semibold">Desempenho médio por nível de Miller</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['desempenho_miller'] ?? null])
+        </div>
                 @if (empty($mediaPorMiller))
                     <p class="text-sm text-slate-400">Sem dados suficientes.</p>
                 @else
@@ -506,7 +613,10 @@
 
 @if ($estado['analise_alternativas']['visivelAdmin'] && $analiseAlternativas !== null)
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-        <h2 class="font-semibold mb-1">Análise de alternativas por questão <span id="alternativas-ordenacao-label" class="font-normal text-slate-400 text-sm">(ordenado por % de acerto)</span></h2>
+        <div class="flex items-center gap-2 mb-1">
+            <h2 class="font-semibold">Análise de alternativas por questão <span id="alternativas-ordenacao-label" class="font-normal text-slate-400 text-sm">(ordenado por % de acerto)</span></h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['analise_alternativas'] ?? null])
+        </div>
         @if (empty($analiseAlternativas))
             <p class="text-sm text-slate-400">Sem dados suficientes.</p>
         @else
@@ -567,7 +677,10 @@
 
 @if ($estado['correlacao_metricas']['visivelAdmin'] && $correlacaoMetricas !== null)
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-        <h2 class="font-semibold mb-1">Correlação entre nota total e métricas nomeadas</h2>
+        <div class="flex items-center gap-2 mb-1">
+            <h2 class="font-semibold">Correlação entre nota total e métricas nomeadas</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['correlacao_metricas'] ?? null])
+        </div>
         <p class="text-sm text-slate-500 mb-4">Coeficiente de Pearson entre o percentual de acerto e cada métrica (ex.: nota de redação). Próximo de 1 ou -1 = correlação forte.</p>
         @if (empty($correlacaoMetricas))
             <p class="text-sm text-slate-400">Sem dados suficientes.</p>
@@ -597,7 +710,10 @@
 
 @if ($estado['evolucao_categoria']['visivelAdmin'] && $evolucaoCategoria !== null)
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-        <h2 class="font-semibold mb-4">Evolução da média da turma na categoria</h2>
+        <div class="flex items-center gap-2 mb-4">
+            <h2 class="font-semibold">Evolução da média da turma na categoria</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['evolucao_categoria'] ?? null])
+        </div>
         @if (count($evolucaoCategoria) < 2)
             <p class="text-sm text-slate-400">Sem dados suficientes.</p>
         @else
@@ -617,7 +733,10 @@
         $abaixo = fn (float $p) => $limiteAlerta !== null && $p < $limiteAlerta;
     @endphp
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-        <h2 class="font-semibold mb-1">Alinhamento curricular e regulatório</h2>
+        <div class="flex items-center gap-2 mb-1">
+            <h2 class="font-semibold">Alinhamento curricular e regulatório</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['alinhamento_referencias'] ?? null])
+        </div>
         <p class="text-sm text-slate-500 mb-5">
             O que a prova cobriu e como foi o desempenho em cada eixo. A contagem de questões é a cobertura:
             um eixo com poucas questões diz muito menos sobre o curso que um com muitas.
@@ -656,52 +775,6 @@
                 que ficaram 10 pontos ou mais abaixo dela
             </p>
         @endif
-    </div>
-@endif
-
-@if ($estado['equidade_demografica']['visivelAdmin'] && ! empty($equidade))
-    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-        <h2 class="font-semibold mb-1">Equidade: desempenho por recorte</h2>
-        <p class="text-sm text-slate-500 mb-5">
-            Monitoramento institucional, não avaliação de indivíduo. Grupos com menos de 10 respondentes
-            são omitidos — num grupo pequeno, a média do grupo identifica a pessoa.
-        </p>
-
-        <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            @foreach ($equidade as $recorte)
-                @php
-                    $maior = collect($recorte['grupos'])->max('media');
-                    $menor = collect($recorte['grupos'])->min('media');
-                @endphp
-                <div>
-                    <div class="flex items-baseline justify-between gap-2 mb-2">
-                        <h3 class="text-sm font-semibold text-slate-700">{{ $recorte['rotulo'] }}</h3>
-                        <span class="text-xs tabular-nums {{ ($maior - $menor) >= 10 ? 'text-amber-700 font-semibold' : 'text-slate-400' }}">
-                            {{ number_format($maior - $menor, 1, ',', '.') }} pp de diferença
-                        </span>
-                    </div>
-                    <div class="space-y-2">
-                        @foreach ($recorte['grupos'] as $grupo)
-                            <div class="text-sm">
-                                <div class="flex items-baseline justify-between gap-2">
-                                    <span class="truncate" title="{{ $grupo['valor'] }}">{{ $grupo['valor'] }}</span>
-                                    <span class="tabular-nums font-semibold">{{ number_format($grupo['media'], 1, ',', '.') }}%</span>
-                                </div>
-                                <div class="h-2 rounded-full bg-slate-100 mt-1">
-                                    <div class="h-full rounded-full" style="width: {{ min(100, $grupo['media']) }}%; background-color: #2a78d6"></div>
-                                </div>
-                                <span class="text-[11px] text-slate-400">{{ $grupo['respondentes'] }} respondente(s)</span>
-                            </div>
-                        @endforeach
-                    </div>
-                    @if ($recorte['suprimidos'] > 0)
-                        <p class="text-[11px] text-slate-400 mt-2">
-                            {{ $recorte['suprimidos'] }} grupo(s) omitido(s) por terem menos de 10 respondentes.
-                        </p>
-                    @endif
-                </div>
-            @endforeach
-        </div>
     </div>
 @endif
 

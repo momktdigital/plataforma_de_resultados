@@ -146,6 +146,35 @@ class BiVisuaisAnaliseTest extends TestCase
         $response->assertDontSee('Confiabilidade (KR-20)');
     }
 
+    public function test_cada_visual_tem_o_botao_de_explicacao_com_leitura_do_dado_atual(): void
+    {
+        $avaliacao = $this->cenario();
+
+        $response = $this->actingAs($this->admin(), 'admin')->get("/avaliacoes/{$avaliacao->codigo}/bi");
+
+        $response->assertOk();
+        $response->assertSee('explicacao-toggle', false);
+        $response->assertSee('O que este visual significa e como analisá-lo', false);
+        // O popover traz a leitura do resultado que está na tela, não só o texto fixo.
+        $response->assertSee('Nesta avaliação:', false);
+    }
+
+    public function test_perfil_demografico_e_equidade_ficam_na_mesma_secao(): void
+    {
+        $avaliacao = $this->cenario();
+
+        $response = $this->actingAs($this->admin(), 'admin')->get("/avaliacoes/{$avaliacao->codigo}/bi");
+
+        $response->assertOk();
+        $response->assertSeeInOrder([
+            'Análise demográfica',
+            'Sexo',
+            'Cor/raça',
+            'UF',
+            'Equidade: desempenho por recorte',
+        ]);
+    }
+
     public function test_alinhamento_some_quando_nenhuma_questao_tem_referencia(): void
     {
         $avaliacao = Avaliacao::create([]);

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Avaliacao;
 use App\Services\BiDashboardService;
+use App\Services\ExplicacaoBiService;
 use App\Services\PsicometriaService;
 use App\Services\RelatorioAdminService;
 use App\Services\Visualizacoes\VisualizacaoConfigService;
@@ -23,6 +24,7 @@ class BiController extends Controller
         VisualizacaoConfigService $visualizacaoConfig,
         AlunoVinculoResolver $alunoResolver,
         PsicometriaService $psicometriaService,
+        ExplicacaoBiService $explicacaoService,
     ): View {
         $periodo = trim((string) $request->query('periodo', ''));
         $periodosDisponiveis = $avaliacao->resultados()->select('periodo')->distinct()->pluck('periodo');
@@ -46,19 +48,14 @@ class BiController extends Controller
             ? $psicometriaService->analisar($avaliacao, $periodo)
             : null;
 
-        return view('admin.avaliacoes.bi', [
-            'avaliacao' => $avaliacao,
-            'periodo' => $periodo,
-            'periodosDisponiveis' => $periodosDisponiveis,
-            'filtro' => $filtro,
-            'opcoesFiltro' => $opcoesFiltro,
-            'estado' => $estado,
-            'dados' => $dados,
-            'rankingCompleto' => $visivel('ranking_completo') ? $relatorioService->rankingCompleto($avaliacao, $periodo) : null,
+        $painel = [
+            'psicometria' => $psicometria,
+            'bi' => $dados,
+            'ranking' => $visivel('ranking_completo') ? $relatorioService->rankingCompleto($avaliacao, $periodo) : null,
             'distribuicaoTurma' => $visivel('distribuicao_turma') ? $relatorioService->distribuicaoPorTurma($avaliacao, $periodo, $filtro) : null,
             'curvaDificuldade' => $visivel('curva_dificuldade') ? $relatorioService->curvaDificuldade($avaliacao) : null,
             'dispersaoTri' => $visivel('dispersao_tri') ? $relatorioService->dispersaoTri($avaliacao) : null,
-            'heatmapHabilidadeTurma' => $visivel('heatmap_habilidade_turma') ? $relatorioService->heatmapHabilidadeTurma($avaliacao, $periodo, $filtro) : null,
+            'heatmap' => $visivel('heatmap_habilidade_turma') ? $relatorioService->heatmapHabilidadeTurma($avaliacao, $periodo, $filtro) : null,
             'perfilDemografico' => $visivel('perfil_demografico') ? $relatorioService->perfilDemografico($avaliacao) : null,
             'analiseAlternativas' => $visivel('analise_alternativas') ? $relatorioService->analiseAlternativas($avaliacao, $periodo, $filtro) : null,
             'correlacaoMetricas' => $visivel('correlacao_metricas') ? $relatorioService->correlacaoMetricas($avaliacao, $periodo, $filtro) : null,
@@ -67,16 +64,40 @@ class BiController extends Controller
             'desempenhoPorTema' => $visivel('desempenho_tema') ? $relatorioService->desempenhoPorTema($avaliacao, $periodo) : null,
             'mediaPorBloom' => $visivel('desempenho_bloom') ? $relatorioService->mediaPorBloom($avaliacao, $periodo) : null,
             'mediaPorMiller' => $visivel('desempenho_miller') ? $relatorioService->mediaPorMiller($avaliacao, $periodo) : null,
+            'alinhamento' => $visivel('alinhamento_referencias') ? $relatorioService->desempenhoPorReferencia($avaliacao, $periodo) : null,
+            'equidade' => $visivel('equidade_demografica') ? $relatorioService->equidadeDemografica($avaliacao, $periodo) : null,
+        ];
+
+        return view('admin.avaliacoes.bi', [
+            'avaliacao' => $avaliacao,
+            'periodo' => $periodo,
+            'periodosDisponiveis' => $periodosDisponiveis,
+            'filtro' => $filtro,
+            'opcoesFiltro' => $opcoesFiltro,
+            'estado' => $estado,
+            'dados' => $dados,
+            'rankingCompleto' => $painel['ranking'],
+            'distribuicaoTurma' => $painel['distribuicaoTurma'],
+            'curvaDificuldade' => $painel['curvaDificuldade'],
+            'dispersaoTri' => $painel['dispersaoTri'],
+            'heatmapHabilidadeTurma' => $painel['heatmap'],
+            'perfilDemografico' => $painel['perfilDemografico'],
+            'analiseAlternativas' => $painel['analiseAlternativas'],
+            'correlacaoMetricas' => $painel['correlacaoMetricas'],
+            'evolucaoCategoria' => $painel['evolucaoCategoria'],
+            'mediaPorArea' => $painel['mediaPorArea'],
+            'desempenhoPorTema' => $painel['desempenhoPorTema'],
+            'mediaPorBloom' => $painel['mediaPorBloom'],
+            'mediaPorMiller' => $painel['mediaPorMiller'],
             'psicometria' => $psicometria,
             'curvasItens' => ($visivel('mapa_itens') && $psicometria !== null)
                 ? $psicometriaService->curvasCaracteristicas($avaliacao, $periodo)
                 : null,
-            'alinhamentoReferencias' => $visivel('alinhamento_referencias')
-                ? $relatorioService->desempenhoPorReferencia($avaliacao, $periodo)
-                : null,
-            'equidade' => $visivel('equidade_demografica')
-                ? $relatorioService->equidadeDemografica($avaliacao, $periodo)
-                : null,
+            'alinhamentoReferencias' => $painel['alinhamento'],
+            'equidade' => $painel['equidade'],
+            // Redigido por cima dos agregados já calculados acima — nenhuma
+            // consulta a mais só para explicar os gráficos.
+            'explicacoes' => $explicacaoService->gerar($painel),
         ]);
     }
 }
