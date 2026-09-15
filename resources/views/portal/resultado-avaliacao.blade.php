@@ -291,6 +291,40 @@
             </div>
         @endif
 
+        @if ($estado['trilha_estudo']['visivelAluno'] && ! empty($trilhaEstudo))
+            <div class="bg-white border border-slate-200 rounded-xl p-4 mb-6">
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                    <i class="ph-bold ph-list-checks text-primary"></i> Trilha de estudo
+                </p>
+                <p class="text-xs text-slate-500 mb-3">
+                    Por onde começar, na ordem de quanto cada tema vale na sua nota.
+                    O ganho é quanto você subiria nesta prova se tivesse acertado essas questões.
+                </p>
+                <ol class="space-y-2">
+                    @foreach ($trilhaEstudo as $passo)
+                        <li class="flex items-start gap-3 border border-slate-100 rounded-lg px-3 py-2.5">
+                            <span class="text-[11px] font-bold text-slate-400 tabular-nums pt-0.5 w-5 shrink-0">{{ str_pad((string) $loop->iteration, 2, '0', STR_PAD_LEFT) }}</span>
+                            <span class="flex-1 min-w-0">
+                                <span class="block text-sm font-bold text-slate-700">{{ $passo['tema'] }}</span>
+                                <span class="block text-xs text-slate-500">
+                                    {{ $passo['erros'] }} questão(ões) sem acerto · {{ $passo['area'] }}
+                                </span>
+                            </span>
+                            <span class="text-xs font-bold tabular-nums whitespace-nowrap pt-0.5" style="color: #0a8f72">
+                                +{{ number_format($passo['ganho'], 1, ',', '.') }} pp
+                            </span>
+                        </li>
+                    @endforeach
+                </ol>
+                @if ($r['avaliacao']->link_comentado)
+                    <a href="{{ $r['avaliacao']->link_comentado }}" target="_blank" rel="noopener"
+                       class="inline-flex items-center gap-1.5 mt-3 text-xs font-semibold text-primary hover:underline">
+                        <i class="ph-bold ph-arrow-square-out"></i> Ver o gabarito comentado desta prova
+                    </a>
+                @endif
+            </div>
+        @endif
+
         @if ($estado['comparativo_questao']['visivelAluno'] && ! empty($comparativoQuestao))
             <div>
                 <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">

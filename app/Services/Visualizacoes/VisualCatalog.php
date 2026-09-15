@@ -201,12 +201,11 @@ final class VisualCatalog
                 'admin' => false,
                 'aluno' => true,
             ],
-            'mapa_dominio' => [
-                'label' => 'Mapa de domínio por área ao longo das avaliações',
-                'grupo' => self::GRUPO_ALUNO,
-                'admin' => false,
-                'aluno' => true,
-            ],
+            // O mapa de domínio (área x avaliação) NÃO entra aqui de
+            // propósito: ele vive nos painéis por categoria do boletim, que
+            // não são configuráveis por avaliação — mesmo caso de
+            // 'evolucao_categoria' acima. Uma chave aqui criaria um toggle
+            // que não desliga nada.
         ];
     }
 

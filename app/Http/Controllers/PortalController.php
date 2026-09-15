@@ -274,6 +274,7 @@ class PortalController extends Controller
             'desempenhoArea' => $visivel('desempenho_area') ? $relatorioService->desempenhoPorArea($respostas, $gabaritos, $avaliacao) : null,
             'desempenhoAreaContagem' => $visivel('desempenho_area') ? $relatorioService->desempenhoPorAreaComContagem($respostas, $gabaritos, $avaliacao) : null,
             'lacunasConsolidados' => $visivel('lacunas_conhecimentos') ? $relatorioService->lacunasEConsolidados($respostas, $gabaritos, $avaliacao) : null,
+            'trilhaEstudo' => $visivel('trilha_estudo') ? $relatorioService->trilhaDeEstudo($respostas, $gabaritos, $avaliacao) : null,
             'desempenhoBloom' => $visivel('desempenho_bloom') ? $relatorioService->desempenhoPorBloom($respostas, $gabaritos, $avaliacao) : null,
             'desempenhoMiller' => $visivel('desempenho_miller') ? $relatorioService->desempenhoPorMiller($respostas, $gabaritos, $avaliacao) : null,
             'comparativoQuestao' => $visivel('comparativo_questao') ? $relatorioService->comparativoQuestao($avaliacao, $periodo, $respostas, $gabaritos) : null,
@@ -414,6 +415,11 @@ class PortalController extends Controller
         foreach ($nos as &$no) {
             $avaliacaoCodigos = collect($no['resultados'])->pluck('avaliacao.codigo')->unique()->values()->all();
 
+            // null (e não a estrutura vazia) quando não há área nenhuma: o
+            // ['avaliacoes' => [], 'areas' => []] passaria pelo ! empty()
+            // logo abaixo e ligaria a seção de análise sem nada dentro.
+            $mapaDominio = $analiseService->mapaDominio($aluno, $avaliacaoCodigos);
+
             $no['analise'] = [
                 'evolucaoHistorica' => $evolucaoPorCategoriaPorId[$no['categoria']->id] ?? [],
                 'comparativoTurma' => $relatorioService->comparativoTurmaConsolidado($aluno, $no['resultados']),
@@ -423,6 +429,7 @@ class PortalController extends Controller
                 'bloom' => $analiseService->desempenhoBloomConsolidado($aluno, $avaliacaoCodigos),
                 'miller' => $analiseService->desempenhoMillerConsolidado($aluno, $avaliacaoCodigos),
                 'divergentes' => $analiseService->areasDivergentesDaTurma($aluno, $avaliacaoCodigos),
+                'mapaDominio' => $mapaDominio['areas'] === [] ? null : $mapaDominio,
             ];
 
             $no['explicacoes'] = $explicacaoService->gerar($no['analise']);

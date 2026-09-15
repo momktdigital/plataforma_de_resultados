@@ -13,6 +13,13 @@ namespace App\Services\Portal;
 class ExplicacaoVisualService
 {
     /**
+     * Variação mínima (em pontos percentuais) para o texto afirmar que houve
+     * consolidação ou queda numa área. Abaixo disso é ruído de uma prova para
+     * outra, e afirmar padrão em cima de ruído é pior que não dizer nada.
+     */
+    private const VARIACAO_RELEVANTE = 10.0;
+
+    /**
      * @param  array<string, mixed>  $analise  $no['analise'] de PortalController::anexarAnaliseNaArvore()
      * @return array<string, array{generico: string, pessoal: ?string}>
      */
@@ -27,7 +34,70 @@ class ExplicacaoVisualService
             'bloom' => $this->nivelCognitivo($analise['bloom'], 'bloom'),
             'miller' => $this->nivelCognitivo($analise['miller'], 'miller'),
             'divergentes' => $this->divergentes($analise['divergentes']),
+            'mapaDominio' => $this->mapaDominio($analise['mapaDominio'] ?? null),
         ];
+    }
+
+    /**
+     * @param  array{avaliacoes: array<int, array{codigo: int, nome: ?string}>, areas: array<int, array{area: string, valores: array<int, ?float>}>}|null  $mapa
+     * @return array{generico: string, pessoal: ?string}
+     */
+    private function mapaDominio(?array $mapa): array
+    {
+        $generico = 'Cada linha é uma área e cada coluna é uma avaliação desta categoria, na ordem em que aconteceram. '
+            .'A cor mostra quanto você acertou: quanto mais escura, melhor. Ler a linha da esquerda para a direita mostra '
+            .'se você está consolidando aquele conteúdo ou esquecendo ele. Célula vazia é avaliação que não tinha questão daquela área.';
+
+        if ($mapa === null || count($mapa['avaliacoes']) < 2) {
+            return ['generico' => $generico, 'pessoal' => null];
+        }
+
+        $primeiroCodigo = $mapa['avaliacoes'][0]['codigo'];
+        $ultimoCodigo = $mapa['avaliacoes'][count($mapa['avaliacoes']) - 1]['codigo'];
+
+        $maiorAlta = null;
+        $maiorQueda = null;
+
+        foreach ($mapa['areas'] as $linha) {
+            $inicio = $linha['valores'][$primeiroCodigo] ?? null;
+            $fim = $linha['valores'][$ultimoCodigo] ?? null;
+
+            // Só compara quem tem as duas pontas: uma área que só apareceu no
+            // meio não tem "evolução" para afirmar.
+            if ($inicio === null || $fim === null) {
+                continue;
+            }
+
+            $delta = round($fim - $inicio, 1);
+
+            if ($maiorAlta === null || $delta > $maiorAlta['delta']) {
+                $maiorAlta = ['area' => $linha['area'], 'delta' => $delta];
+            }
+            if ($maiorQueda === null || $delta < $maiorQueda['delta']) {
+                $maiorQueda = ['area' => $linha['area'], 'delta' => $delta];
+            }
+        }
+
+        if ($maiorAlta === null) {
+            return ['generico' => $generico, 'pessoal' => null];
+        }
+
+        $partes = [];
+
+        if ($maiorAlta['delta'] >= self::VARIACAO_RELEVANTE) {
+            $partes[] = "Sua maior evolução foi em {$maiorAlta['area']}: +{$maiorAlta['delta']} pontos percentuais da primeira à última avaliação.";
+        }
+
+        if ($maiorQueda !== null && $maiorQueda['delta'] <= -self::VARIACAO_RELEVANTE) {
+            $partes[] = "Atenção a {$maiorQueda['area']}, que caiu {$maiorQueda['delta']} pontos percentuais no mesmo período — "
+                .'conteúdo que você já dominou costuma voltar rápido com uma revisão curta.';
+        }
+
+        if ($partes === []) {
+            $partes[] = 'Seu desempenho por área ficou estável ao longo das avaliações desta categoria, sem consolidação nem queda marcante.';
+        }
+
+        return ['generico' => $generico, 'pessoal' => implode(' ', $partes)];
     }
 
     /** @param  array<int, array{nome: string, data: string, percentual: float}>  $pontos

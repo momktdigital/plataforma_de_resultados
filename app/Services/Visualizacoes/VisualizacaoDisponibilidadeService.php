@@ -254,12 +254,6 @@ class VisualizacaoDisponibilidadeService
             'trilha_estudo' => $baseComRespostas() ?? (
                 ($temArea && $temTema) ? null : 'Nenhuma questão tem área e tema cadastrados.'
             ),
-
-            'mapa_dominio' => $baseComRespostas() ?? (
-                ! $temArea
-                    ? 'Nenhuma questão tem área cadastrada.'
-                    : ($temEvolucaoCategoria ? null : 'É necessário pelo menos 2 avaliações da mesma categoria com resultados importados.')
-            ),
         ];
 
         $resultado = [];
