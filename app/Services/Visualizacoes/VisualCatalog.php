@@ -167,6 +167,46 @@ final class VisualCatalog
                 'admin' => false,
                 'aluno' => true,
             ],
+
+            // Chaves novas sempre no fim: a ordem aqui não afeta o agrupamento
+            // na tela de configuração (que usa `grupo`), mas mexer na posição
+            // de uma chave já salva é que é proibido — ver o topo da classe.
+            'estatisticas_gerais' => [
+                'label' => 'Números gerais da prova (média, mediana, desvio, confiabilidade)',
+                'grupo' => self::GRUPO_ADMIN,
+                'admin' => true,
+                'aluno' => false,
+            ],
+            'mapa_itens' => [
+                'label' => 'Mapa de qualidade dos itens (dificuldade x discriminação)',
+                'grupo' => self::GRUPO_ADMIN,
+                'admin' => true,
+                'aluno' => false,
+            ],
+            'alinhamento_referencias' => [
+                'label' => 'Alinhamento curricular (DCN, PPC, Portaria INEP, matriz de prova)',
+                'grupo' => self::GRUPO_ADMIN,
+                'admin' => true,
+                'aluno' => false,
+            ],
+            'equidade_demografica' => [
+                'label' => 'Equidade: desempenho por recorte demográfico',
+                'grupo' => self::GRUPO_ADMIN,
+                'admin' => true,
+                'aluno' => false,
+            ],
+            'trilha_estudo' => [
+                'label' => 'Trilha de estudo priorizada',
+                'grupo' => self::GRUPO_ALUNO,
+                'admin' => false,
+                'aluno' => true,
+            ],
+            'mapa_dominio' => [
+                'label' => 'Mapa de domínio por área ao longo das avaliações',
+                'grupo' => self::GRUPO_ALUNO,
+                'admin' => false,
+                'aluno' => true,
+            ],
         ];
     }
 

@@ -33,8 +33,12 @@ use Illuminate\Support\Facades\DB;
  */
 class PsicometriaService
 {
-    /** Abaixo disto os cortes de 27% viram grupos minúsculos e o D não significa nada. */
-    private const MINIMO_RESPONDENTES = 10;
+    /**
+     * Abaixo disto os cortes de 27% viram grupos minúsculos e o D não
+     * significa nada. Público porque VisualizacaoDisponibilidadeService usa o
+     * mesmo número para decidir se o visual sequer aparece.
+     */
+    public const MINIMO_RESPONDENTES = 10;
 
     /**
      * @return array{

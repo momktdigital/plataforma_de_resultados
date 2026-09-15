@@ -3,6 +3,7 @@
 namespace App\Services\Visualizacoes;
 
 use App\Models\Avaliacao;
+use App\Services\PsicometriaService;
 use App\Support\AlunoVinculoResolver;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -103,6 +104,18 @@ class VisualizacaoDisponibilidadeService
             ->where('avaliacao_codigo', $codigo)
             ->whereNull('deleted_at')
             ->exists();
+
+        $temReferencias = DB::table('questao_referencias as qr')
+            ->join('questoes as q', 'q.id', '=', 'qr.questao_id')
+            ->where('q.avaliacao_codigo', $codigo)
+            ->whereNull('q.deleted_at')
+            ->whereNotNull('qr.valor')
+            ->where('qr.valor', '!=', '')
+            ->exists();
+
+        // Psicometria precisa de gente suficiente para os grupos extremos de
+        // 27% significarem alguma coisa — ver PsicometriaService.
+        $temRespondentesParaPsicometria = $qtdResumos >= PsicometriaService::MINIMO_RESPONDENTES;
 
         $alunosVinculados = $this->alunoResolver->resolver($codigo);
         $temTurmaVinculada = $alunosVinculados->contains(fn ($a) => ! empty($a->turma));
@@ -216,6 +229,36 @@ class VisualizacaoDisponibilidadeService
 
             'ranking_percentil' => $baseComRespostas() ?? (
                 $qtdResumos >= 2 ? null : 'É necessário pelo menos 2 respondentes para calcular percentil.'
+            ),
+
+            'estatisticas_gerais' => $baseComRespostas() ?? (
+                $temRespondentesParaPsicometria
+                    ? null
+                    : 'São necessários pelo menos '.PsicometriaService::MINIMO_RESPONDENTES.' respondentes para calcular a confiabilidade da prova.'
+            ),
+
+            'mapa_itens' => $baseComRespostas() ?? (
+                $temRespondentesParaPsicometria
+                    ? null
+                    : 'São necessários pelo menos '.PsicometriaService::MINIMO_RESPONDENTES.' respondentes para medir a discriminação de cada questão.'
+            ),
+
+            'alinhamento_referencias' => $baseComRespostas() ?? (
+                $temReferencias ? null : 'Nenhuma questão tem referência de DCN, PPC, Portaria INEP ou matriz de prova cadastrada.'
+            ),
+
+            'equidade_demografica' => $baseComResumos() ?? (
+                $temDadosDemograficos ? null : 'Nenhum aluno vinculado tem dados pessoais (sexo, cor/raça ou data de nascimento) cadastrados.'
+            ),
+
+            'trilha_estudo' => $baseComRespostas() ?? (
+                ($temArea && $temTema) ? null : 'Nenhuma questão tem área e tema cadastrados.'
+            ),
+
+            'mapa_dominio' => $baseComRespostas() ?? (
+                ! $temArea
+                    ? 'Nenhuma questão tem área cadastrada.'
+                    : ($temEvolucaoCategoria ? null : 'É necessário pelo menos 2 avaliações da mesma categoria com resultados importados.')
             ),
         ];
 
