@@ -115,6 +115,42 @@ window.Viz = (function () {
     }
 
     /**
+     * Reescreve a LEITURA de uma explicação sem recarregar a página — para os
+     * visuais que mudam com clique ou filtro (ver $id em _explicacao.blade.php).
+     * Os rótulos/classes aqui têm que bater com o mapa $tons do parcial.
+     */
+    var tons = {
+        bom: { rotulo: 'Bom sinal', classe: 'text-emerald-700 bg-emerald-50' },
+        atencao: { rotulo: 'Atenção', classe: 'text-amber-700 bg-amber-50' },
+        ruim: { rotulo: 'Precisa de ação', classe: 'text-red-700 bg-red-50' },
+    };
+
+    function escreverLeitura(id, texto, tom) {
+        var wrapper = document.getElementById(id + '-leitura');
+        var badge = document.getElementById(id + '-tom');
+        var paragrafo = document.getElementById(id + '-texto');
+        if (!wrapper || !badge || !paragrafo) {
+            return;
+        }
+
+        if (!texto) {
+            wrapper.classList.add('hidden');
+
+            return;
+        }
+
+        wrapper.classList.remove('hidden');
+        paragrafo.textContent = texto;
+
+        badge.className = 'explicacao-tom inline-block text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded '
+            + ((tons[tom] && tons[tom].classe) || 'text-slate-600 bg-slate-100');
+        badge.textContent = (tons[tom] && tons[tom].rotulo) || '';
+        if (!tons[tom]) {
+            badge.classList.add('hidden');
+        }
+    }
+
+    /**
      * Popover "o que isso significa" (ver _explicacao.blade.php). Listener
      * delegado num lugar só: o parcial se repete dezenas de vezes por página,
      * e tanto o BI quanto o boletim do aluno usam o mesmo markup.
@@ -169,6 +205,7 @@ window.Viz = (function () {
         corSequencial: corSequencial,
         tintaSobreSequencial: tintaSobreSequencial,
         semMovimento: semMovimento,
+        escreverLeitura: escreverLeitura,
     };
 })();
 </script>

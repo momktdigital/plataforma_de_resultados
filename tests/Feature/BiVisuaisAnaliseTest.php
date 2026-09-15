@@ -159,6 +159,38 @@ class BiVisuaisAnaliseTest extends TestCase
         $response->assertSee('Nesta avaliação:', false);
     }
 
+    /**
+     * A explicação é POR VISUAL, não por área: o mapa de itens e a curva
+     * característica do item selecionado ficam lado a lado e dizem coisas
+     * diferentes, então cada um tem o seu popover — e o da curva é reescrito
+     * pelo JS a cada clique, senão continuaria falando da questão anterior.
+     */
+    public function test_mapa_de_itens_e_curva_do_item_tem_explicacoes_separadas(): void
+    {
+        $avaliacao = $this->cenario();
+
+        $response = $this->actingAs($this->admin(), 'admin')->get("/avaliacoes/{$avaliacao->codigo}/bi");
+
+        $response->assertOk();
+        $response->assertSee('id="expl-mapa-texto"', false);
+        $response->assertSee('id="expl-cci-texto"', false);
+        $response->assertSee('escreverExplicacaoCci', false);
+        $response->assertSee('escreverExplicacaoMapa', false);
+    }
+
+    /** Cada número do cabeçalho tem a sua leitura, não uma só para a seção. */
+    public function test_cada_card_de_numero_tem_o_proprio_botao_de_explicacao(): void
+    {
+        $avaliacao = $this->cenario();
+
+        $response = $this->actingAs($this->admin(), 'admin')->get("/avaliacoes/{$avaliacao->codigo}/bi");
+
+        $response->assertOk();
+        $this->assertGreaterThanOrEqual(4, substr_count($response->getContent(), 'explicacao-toggle'));
+        // O tom diz de cara se o número é bom ou é problema.
+        $response->assertSee('explicacao-tom', false);
+    }
+
     public function test_perfil_demografico_e_equidade_ficam_na_mesma_secao(): void
     {
         $avaliacao = $this->cenario();

@@ -36,33 +36,70 @@ class ExplicacaoBiServiceTest extends TestCase
         $chaves = array_keys($this->service->gerar([]));
 
         foreach ([
-            'estatisticas_gerais', 'mapa_itens', 'histograma', 'radar_disciplina', 'desempenho_area',
+            'kpi_media', 'kpi_mediana', 'kpi_desvio', 'kpi_kr20',
+            'mapa_itens', 'curva_caracteristica', 'histograma', 'radar_disciplina', 'desempenho_area',
             'desempenho_bloom', 'desempenho_miller', 'desempenho_tema', 'ranking_completo',
             'distribuicao_turma', 'curva_dificuldade', 'dispersao_tri', 'heatmap_habilidade_turma',
-            'perfil_demografico', 'analise_alternativas', 'correlacao_metricas', 'evolucao_categoria',
+            'perfil_sexo', 'perfil_cor_raca', 'perfil_uf', 'analise_alternativas', 'correlacao_metricas', 'evolucao_categoria',
             'alinhamento_referencias', 'equidade_demografica',
         ] as $esperada) {
             $this->assertContains($esperada, $chaves);
         }
     }
 
-    public function test_numeros_gerais_avisam_quando_a_confiabilidade_e_baixa(): void
+    /**
+     * Um card por número: KR-20 baixo é problema do card de confiabilidade, e
+     * não pode "contaminar" a leitura do card de média — são visuais distintos.
+     */
+    public function test_cada_kpi_tem_a_sua_propria_leitura(): void
     {
-        $leitura = $this->service->gerar([
+        $painel = $this->service->gerar([
             'psicometria' => ['media' => 60.0, 'mediana' => 61.0, 'desvio' => 10.0, 'kr20' => 0.45, 'itens' => [], 'simulacao' => null],
-        ])['estatisticas_gerais']['leitura'];
+        ]);
 
-        $this->assertStringContainsString('0,45', $leitura);
-        $this->assertStringContainsString('acaso', $leitura);
+        $this->assertStringContainsString('0,45', $painel['kpi_kr20']['leitura']);
+        $this->assertStringContainsString('acaso', $painel['kpi_kr20']['leitura']);
+        $this->assertSame('ruim', $painel['kpi_kr20']['tom']);
+
+        $this->assertStringNotContainsString('0,45', $painel['kpi_media']['leitura']);
     }
 
-    public function test_numeros_gerais_apontam_cauda_de_notas_baixas(): void
+    public function test_kpi_de_mediana_aponta_cauda_de_notas_baixas(): void
     {
-        $leitura = $this->service->gerar([
+        $entrada = $this->service->gerar([
             'psicometria' => ['media' => 50.0, 'mediana' => 62.0, 'desvio' => 15.0, 'kr20' => 0.85, 'itens' => [], 'simulacao' => null],
-        ])['estatisticas_gerais']['leitura'];
+        ])['kpi_mediana'];
 
-        $this->assertStringContainsString('abaixo da mediana', $leitura);
+        $this->assertStringContainsString('ACIMA da média', $entrada['leitura']);
+        $this->assertSame('atencao', $entrada['tom']);
+    }
+
+    /**
+     * O tom é o que diz, em um segundo, se o número é bom ou é problema — sem
+     * ele o card obriga a pessoa a interpretar a frase inteira.
+     */
+    public function test_kpi_marca_como_bom_sinal_uma_confiabilidade_alta(): void
+    {
+        $entrada = $this->service->gerar([
+            'psicometria' => ['media' => 65.0, 'mediana' => 65.0, 'desvio' => 12.0, 'kr20' => 0.88, 'itens' => [], 'simulacao' => null],
+        ])['kpi_kr20'];
+
+        $this->assertSame('bom', $entrada['tom']);
+    }
+
+    /**
+     * A curva característica muda a cada clique no mapa de itens, então quem
+     * escreve a leitura dela é o JS (ver escreverExplicacaoCci em
+     * bi.blade.php) — o PHP só entrega o texto fixo.
+     */
+    public function test_curva_caracteristica_deixa_a_leitura_para_o_javascript(): void
+    {
+        $entrada = $this->service->gerar([
+            'psicometria' => ['media' => 65.0, 'mediana' => 65.0, 'desvio' => 12.0, 'kr20' => 0.88, 'itens' => [], 'simulacao' => null],
+        ])['curva_caracteristica'];
+
+        $this->assertNotSame('', $entrada['generico']);
+        $this->assertNull($entrada['leitura']);
     }
 
     public function test_mapa_de_itens_destaca_discriminacao_negativa(): void

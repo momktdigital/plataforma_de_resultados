@@ -94,28 +94,37 @@
         $kr20Bom = $kr20 !== null && $kr20 >= 0.80;
         $kr20Aceitavel = $kr20 !== null && $kr20 >= 0.70;
     @endphp
-    <div class="flex items-center gap-2 mb-3">
-        <h2 class="text-lg font-bold">Números da prova</h2>
-        @include('_explicacao', ['explicacao' => $explicacoes['estatisticas_gerais'] ?? null])
-    </div>
+    <h2 class="text-lg font-bold mb-3">Números da prova</h2>
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Média da turma</p>
+            <div class="flex items-center gap-2">
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Média da turma</p>
+                @include('_explicacao', ['explicacao' => $explicacoes['kpi_media'] ?? null])
+            </div>
             <p class="text-3xl font-bold mt-2 tracking-tight">{{ number_format($psicometria['media'], 1, ',', '.') }}<span class="text-lg font-medium text-slate-500">%</span></p>
             <p class="text-xs text-slate-500 mt-1">{{ $psicometria['respondentes'] }} respondente(s) · {{ $psicometria['questoes'] }} questão(ões)</p>
         </div>
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Mediana</p>
+            <div class="flex items-center gap-2">
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Mediana</p>
+                @include('_explicacao', ['explicacao' => $explicacoes['kpi_mediana'] ?? null])
+            </div>
             <p class="text-3xl font-bold mt-2 tracking-tight">{{ number_format($psicometria['mediana'], 1, ',', '.') }}<span class="text-lg font-medium text-slate-500">%</span></p>
             <p class="text-xs text-slate-500 mt-1">metade da turma ficou acima disto</p>
         </div>
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Desvio-padrão</p>
+            <div class="flex items-center gap-2">
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Desvio-padrão</p>
+                @include('_explicacao', ['explicacao' => $explicacoes['kpi_desvio'] ?? null])
+            </div>
             <p class="text-3xl font-bold mt-2 tracking-tight">{{ number_format($psicometria['desvio'], 1, ',', '.') }}<span class="text-lg font-medium text-slate-500">pp</span></p>
             <p class="text-xs text-slate-500 mt-1">o quanto as notas se espalham</p>
         </div>
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Confiabilidade (KR-20)</p>
+            <div class="flex items-center gap-2">
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Confiabilidade (KR-20)</p>
+                @include('_explicacao', ['explicacao' => $explicacoes['kpi_kr20'] ?? null])
+            </div>
             @if ($kr20 === null)
                 <p class="text-3xl font-bold mt-2 tracking-tight text-slate-300">—</p>
                 <p class="text-xs text-slate-500 mt-1">sem variação de notas suficiente para calcular</p>
@@ -137,7 +146,7 @@
         <div class="flex items-start justify-between gap-4 flex-wrap mb-1">
             <span class="flex items-center gap-2 mr-auto">
                 <h2 class="font-semibold">Mapa de qualidade dos itens</h2>
-                @include('_explicacao', ['explicacao' => $explicacoes['mapa_itens'] ?? null])
+                @include('_explicacao', ['explicacao' => $explicacoes['mapa_itens'] ?? null, 'id' => 'expl-mapa'])
             </span>
             <button type="button" data-tabela="tabela-mapa-itens" aria-expanded="false"
                     class="text-xs text-slate-500 hover:text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1">
@@ -158,6 +167,10 @@
                 <div class="flex items-center gap-2 flex-wrap">
                     <span id="item-numero" class="text-xl font-bold tracking-tight">—</span>
                     <span id="item-faixa" class="text-xs font-semibold px-2 py-0.5 rounded"></span>
+                    @include('_explicacao', [
+                        'explicacao' => $explicacoes['curva_caracteristica'] ?? null,
+                        'id' => 'expl-cci',
+                    ])
                 </div>
                 <p id="item-contexto" class="text-xs text-slate-500 mt-0.5">Clique num ponto do gráfico</p>
 
@@ -391,10 +404,7 @@
 
 @if ($temPerfil || $temEquidade)
         <div class="mb-6">
-        <div class="flex items-center gap-2 mb-1">
-            <h2 class="text-lg font-bold">Análise demográfica</h2>
-            @include('_explicacao', ['explicacao' => $explicacoes['perfil_demografico'] ?? null])
-        </div>
+        <h2 class="text-lg font-bold mb-1">Análise demográfica</h2>
         <p class="text-sm text-slate-500 mb-4">
             Quem fez esta avaliação e como cada recorte se saiu. O perfil descreve a composição do grupo;
             a equidade logo abaixo mostra o desempenho de cada um desses mesmos recortes.
@@ -403,7 +413,10 @@
         @if ($temPerfil)
         <div class="grid lg:grid-cols-3 gap-6 mb-6">
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-            <h3 class="font-semibold mb-3">Sexo</h3>
+            <div class="flex items-center gap-2 mb-3">
+                <h3 class="font-semibold">Sexo</h3>
+                @include('_explicacao', ['explicacao' => $explicacoes['perfil_sexo'] ?? null])
+            </div>
             @if (empty($perfilDemografico['sexo']))
                 <p class="text-sm text-slate-400">Sem dados.</p>
             @else
@@ -412,7 +425,10 @@
         </div>
 
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-            <h3 class="font-semibold mb-3">Cor/raça</h3>
+            <div class="flex items-center gap-2 mb-3">
+                <h3 class="font-semibold">Cor/raça</h3>
+                @include('_explicacao', ['explicacao' => $explicacoes['perfil_cor_raca'] ?? null])
+            </div>
             @if (empty($perfilDemografico['cor_raca']))
                 <p class="text-sm text-slate-400">Sem dados.</p>
             @else
@@ -421,7 +437,10 @@
         </div>
 
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-            <h3 class="font-semibold mb-3">UF</h3>
+            <div class="flex items-center gap-2 mb-3">
+                <h3 class="font-semibold">UF</h3>
+                @include('_explicacao', ['explicacao' => $explicacoes['perfil_uf'] ?? null])
+            </div>
             @if (empty($perfilDemografico['uf']))
                 <p class="text-sm text-slate-400">Sem dados.</p>
             @else
@@ -851,6 +870,12 @@
                 },
             },
             plugins: {
+                legend: {
+                    onClick: function (evento, item, legenda) {
+                        Chart.defaults.plugins.legend.onClick.call(this, evento, item, legenda);
+                        escreverExplicacaoMapa();
+                    },
+                },
                 tooltip: {
                     callbacks: {
                         label: function (contexto) {
@@ -920,6 +945,94 @@
             return curva[quinto] === undefined ? null : curva[quinto];
         });
         graficoCci.update();
+        escreverExplicacaoCci(item, curva);
+    }
+
+    function numeroBr(valor, casas) {
+        return valor.toFixed(casas).replace('.', ',');
+    }
+
+    /**
+     * Leitura da curva característica do item SELECIONADO. Sem isto o popover
+     * continuaria mostrando a leitura da questão anterior — cada visual tem a
+     * sua, e a deste muda a cada clique no mapa.
+     *
+     * O que decide o tom é a direção da curva: um bom item é acertado mais
+     * pelos quintos de cima do que pelos de baixo.
+     */
+    function escreverExplicacaoCci(item, curva) {
+        var primeiro = curva[1];
+        var ultimo = curva[5];
+        var rotulo = 'Q' + item.numero;
+
+        if (primeiro === undefined || ultimo === undefined) {
+            Viz.escreverLeitura('expl-cci', 'Nesta avaliação: a ' + rotulo + ' não tem respostas suficientes em todos os quintos para desenhar a curva.', null);
+
+            return;
+        }
+
+        var delta = ultimo - primeiro;
+        var texto;
+        var tom;
+
+        if (delta >= 12) {
+            tom = 'bom';
+            texto = 'Nesta avaliação: a curva da ' + rotulo + ' sobe — o quinto mais forte acerta '
+                + numeroBr(ultimo, 0) + '% contra ' + numeroBr(primeiro, 0) + '% do mais fraco ('
+                + numeroBr(delta, 0) + ' pontos de diferença). É o comportamento esperado: a questão separa quem sabe de quem não sabe, e pode ser reaproveitada.';
+        } else if (delta > 0) {
+            tom = 'atencao';
+            texto = 'Nesta avaliação: a curva da ' + rotulo + ' sobe pouco (' + numeroBr(delta, 0)
+                + ' pontos entre o quinto mais fraco e o mais forte). A questão quase não diferencia os alunos — vale revisar o enunciado e as alternativas antes de reutilizá-la.';
+        } else {
+            tom = 'ruim';
+            texto = 'Nesta avaliação: a curva da ' + rotulo + ' é plana ou invertida — quem foi bem na prova acertou '
+                + numeroBr(Math.abs(delta), 0) + ' pontos a MENOS que quem foi mal. Isso costuma indicar gabarito errado, enunciado ambíguo ou distrator mais defensável que a resposta oficial. Confira o item antes de divulgar a nota.';
+        }
+
+        Viz.escreverLeitura('expl-cci', texto, tom);
+    }
+
+    /**
+     * Leitura do mapa considerando só as faixas VISÍVEIS: ao filtrar pela
+     * legenda, a frase tem que falar do recorte que está na tela.
+     */
+    function escreverExplicacaoMapa() {
+        var visiveis = faixas.filter(function (faixa, indice) {
+            return grafico.isDatasetVisible(indice);
+        }).map(function (faixa) { return faixa.chave; });
+
+        var mostrados = itens.filter(function (item) { return visiveis.indexOf(item.faixa) !== -1; });
+        var filtrado = visiveis.length !== faixas.length;
+        var prefixo = filtrado ? 'Com este filtro: ' : 'Nesta avaliação: ';
+
+        if (!mostrados.length) {
+            Viz.escreverLeitura('expl-mapa', prefixo + 'nenhuma questão está nas faixas selecionadas.', null);
+
+            return;
+        }
+
+        var revisar = mostrados.filter(function (item) { return item.faixa === 'revisar'; }).length;
+        var negativos = mostrados.filter(function (item) { return item.discriminacao !== null && item.discriminacao < 0; });
+        var texto = prefixo + mostrados.length + (mostrados.length === 1 ? ' questão exibida' : ' questões exibidas') + '. ';
+        var tom;
+
+        if (negativos.length) {
+            tom = 'ruim';
+            texto += negativos.length === 1
+                ? 'A Q' + negativos[0].numero + ' tem discriminação negativa: quem foi bem na prova errou mais que quem foi mal — confira o gabarito.'
+                : negativos.length + ' delas têm discriminação negativa (quem foi bem na prova errou mais que quem foi mal) — confira o gabarito dessas questões.';
+        } else if (revisar) {
+            tom = 'atencao';
+            texto += revisar === 1
+                ? '1 está na faixa de revisão (D < 0,20): mede pouco e deve ser reescrita antes de reaproveitada.'
+                : revisar + ' estão na faixa de revisão (D < 0,20): medem pouco e devem ser reescritas antes de reaproveitadas.';
+        } else {
+            tom = 'bom';
+            texto += 'Nenhuma está na faixa de revisão — todas separam quem sabe de quem não sabe em grau aceitável.';
+        }
+
+        Viz.escreverLeitura('expl-mapa', texto, tom);
     }
 
     // Abre já no item mais problemático: é o que o coordenador veio ver.

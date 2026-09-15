@@ -23,13 +23,31 @@ class ExplicacaoBiService
 
     /**
      * @param  array<string, mixed>  $ctx  os mesmos dados que o BiController manda pra view
-     * @return array<string, array{generico: string, leitura: ?string}>
+     * @return array<string, array{generico: string, leitura: ?string, tom: ?string}>
      */
     public function gerar(array $ctx): array
     {
+        $psicometria = $ctx['psicometria'] ?? null;
+
         return [
-            'estatisticas_gerais' => $this->estatisticasGerais($ctx['psicometria'] ?? null),
-            'mapa_itens' => $this->mapaItens($ctx['psicometria'] ?? null),
+            // Um cartão de KPI é um visual: cada número tem leitura própria.
+            'kpi_media' => $this->kpiMedia($psicometria),
+            'kpi_mediana' => $this->kpiMediana($psicometria),
+            'kpi_desvio' => $this->kpiDesvio($psicometria),
+            'kpi_kr20' => $this->kpiKr20($psicometria),
+
+            'mapa_itens' => $this->mapaItens($psicometria),
+            // A leitura sai daqui vazia de propósito: ela fala da questão
+            // selecionada, que muda a cada clique, então quem a escreve é o JS
+            // do painel (ver explicacaoDoItem() em bi.blade.php).
+            'curva_caracteristica' => $this->entrada(
+                'A curva mostra o percentual de acerto da questão selecionada em cada quinto de desempenho geral: '
+                .'à esquerda os respondentes que foram pior na prova inteira, à direita os que foram melhor. '
+                .'Uma questão saudável tem curva SUBINDO — quem sabe mais acerta mais. Curva plana significa que a '
+                .'questão não distingue ninguém; curva DESCENDO é o pior caso, porque quem domina o conteúdo está '
+                .'errando justamente ela, o que quase sempre é gabarito errado ou enunciado ambíguo.',
+                null,
+            ),
             'histograma' => $this->histograma($ctx['bi'] ?? []),
             'radar_disciplina' => $this->porCampo(
                 $ctx['bi']['radar'] ?? [],
@@ -66,7 +84,9 @@ class ExplicacaoBiService
             'curva_dificuldade' => $this->curvaDificuldade($ctx['curvaDificuldade'] ?? []),
             'dispersao_tri' => $this->dispersaoTri($ctx['dispersaoTri'] ?? []),
             'heatmap_habilidade_turma' => $this->heatmap($ctx['heatmap'] ?? []),
-            'perfil_demografico' => $this->perfilDemografico($ctx['perfilDemografico'] ?? null),
+            'perfil_sexo' => $this->perfilComposicao($ctx['perfilDemografico']['sexo'] ?? [], 'sexo'),
+            'perfil_cor_raca' => $this->perfilComposicao($ctx['perfilDemografico']['cor_raca'] ?? [], 'cor/raça'),
+            'perfil_uf' => $this->perfilUf($ctx['perfilDemografico']['uf'] ?? []),
             'analise_alternativas' => $this->analiseAlternativas($ctx['analiseAlternativas'] ?? []),
             'correlacao_metricas' => $this->correlacaoMetricas($ctx['correlacaoMetricas'] ?? []),
             'evolucao_categoria' => $this->evolucaoCategoria($ctx['evolucaoCategoria'] ?? []),
@@ -76,39 +96,121 @@ class ExplicacaoBiService
     }
 
     /** @param array<string, mixed>|null $psicometria */
-    private function estatisticasGerais(?array $psicometria): array
+    private function kpiMedia(?array $psicometria): array
     {
-        $generico = 'Os quatro números que resumem a prova. Média e mediana devem ficar próximas: se a média for bem '
-            .'menor que a mediana, um grupo pequeno de notas muito baixas está puxando o resultado. O desvio-padrão diz '
-            .'o quanto as notas se espalham — desvio baixo significa turma homogênea, desvio alto significa que a média '
-            .'não representa quase ninguém. O KR-20 mede se as questões estão medindo a mesma coisa: abaixo de 0,70 a '
-            .'prova acerta muito por acaso e não serve para ranquear aluno.';
+        $generico = 'O percentual médio de acerto de todos os respondentes. Sozinha, a média engana: ela é puxada por '
+            .'notas extremas, então sempre compare com a mediana logo ao lado. Não existe média "certa" — o que se '
+            .'espera depende do tipo de prova. Numa avaliação diagnóstica, média baixa é esperada e informativa; numa '
+            .'prova de aprovação, média baixa é sinal de conteúdo não aprendido ou de prova mal calibrada.';
 
         if ($psicometria === null) {
             return $this->entrada($generico, null);
         }
 
-        $partes = [];
-        $distancia = abs($psicometria['media'] - $psicometria['mediana']);
+        $media = $psicometria['media'];
+        $questoes = $psicometria['questoes'] ?? null;
+        $respondentes = $psicometria['respondentes'] ?? null;
+        $leitura = 'A turma acertou em média '.$this->num($media).'%'
+            .($questoes === null ? '' : ' das '.$questoes.' questões válidas')
+            .($respondentes === null ? '' : ' ('.$respondentes.' respondentes)').'. ';
 
-        if ($distancia >= 5) {
-            $partes[] = $psicometria['media'] < $psicometria['mediana']
-                ? 'A média ('.$this->num($psicometria['media']).'%) está abaixo da mediana ('.$this->num($psicometria['mediana']).'%): há uma cauda de notas baixas puxando o resultado para baixo.'
-                : 'A média ('.$this->num($psicometria['media']).'%) está acima da mediana ('.$this->num($psicometria['mediana']).'%): poucos respondentes com notas muito altas estão levantando o resultado.';
-        } else {
-            $partes[] = 'Média ('.$this->num($psicometria['media']).'%) e mediana ('.$this->num($psicometria['mediana']).'%) estão próximas, então a média representa bem a turma.';
+        [$complemento, $tom] = match (true) {
+            $media < 40 => ['É um resultado baixo: vale conferir se o conteúdo cobrado foi de fato trabalhado antes da prova.', 'ruim'],
+            $media < 60 => ['Fica na faixa intermediária — normal em avaliação diagnóstica, preocupante em prova de aprovação.', 'atencao'],
+            $media > 85 => ['É um resultado alto: a prova pode ter sido fácil demais para distinguir os respondentes entre si.', 'atencao'],
+            default => ['É um patamar saudável para uma prova que precisa diferenciar quem domina o conteúdo de quem não domina.', 'bom'],
+        };
+
+        return $this->entrada($generico, $leitura.$complemento, $tom);
+    }
+
+    /** @param array<string, mixed>|null $psicometria */
+    private function kpiMediana(?array $psicometria): array
+    {
+        $generico = 'O valor que divide a turma ao meio: metade ficou acima, metade abaixo. Diferente da média, a '
+            .'mediana não se mexe por causa de poucas notas extremas. A comparação entre as duas é que informa: se a '
+            .'média está bem ABAIXO da mediana, existe um grupo de notas muito baixas puxando o resultado; se está bem '
+            .'ACIMA, poucos respondentes muito bons estão levantando a média do grupo.';
+
+        if ($psicometria === null) {
+            return $this->entrada($generico, null);
         }
 
-        if ($psicometria['kr20'] !== null) {
-            $kr = $psicometria['kr20'];
-            $partes[] = match (true) {
-                $kr >= 0.80 => 'Com KR-20 de '.$this->num($kr, 2).', a prova tem consistência interna adequada.',
-                $kr >= 0.70 => 'O KR-20 de '.$this->num($kr, 2).' é aceitável, mas dá para melhorar trocando os itens que não discriminam.',
-                default => 'O KR-20 de '.$this->num($kr, 2).' é baixo: boa parte do resultado desta prova é acaso, então evite usá-la sozinha para classificar aluno.',
-            };
+        $distancia = $psicometria['media'] - $psicometria['mediana'];
+
+        if (abs($distancia) < 5) {
+            return $this->entrada(
+                $generico,
+                'Mediana de '.$this->num($psicometria['mediana']).'%, praticamente colada na média ('
+                .$this->num($psicometria['media']).'%): a distribuição é equilibrada e a média representa bem a turma.',
+                'bom',
+            );
         }
 
-        return $this->entrada($generico, implode(' ', $partes));
+        return $this->entrada(
+            $generico,
+            $distancia < 0
+                ? 'A mediana ('.$this->num($psicometria['mediana']).'%) está '.$this->num(abs($distancia)).' pontos ACIMA da média: há um grupo de notas muito baixas puxando a média para baixo. Olhe o fim do ranking para achar quem precisa de acompanhamento.'
+                : 'A mediana ('.$this->num($psicometria['mediana']).'%) está '.$this->num($distancia).' pontos ABAIXO da média: poucos respondentes com notas altas estão levantando a média, que portanto não representa o respondente típico.',
+            'atencao',
+        );
+    }
+
+    /** @param array<string, mixed>|null $psicometria */
+    private function kpiDesvio(?array $psicometria): array
+    {
+        $generico = 'O quanto as notas se espalham em torno da média, em pontos percentuais. Desvio pequeno significa '
+            .'turma homogênea — todo mundo perto da média. Desvio grande significa turma dividida, e aí a média deixa '
+            .'de descrever alguém de verdade. Atenção: desvio muito baixo numa prova longa costuma indicar que ela não '
+            .'está conseguindo diferenciar os respondentes, o que também aparece num KR-20 baixo.';
+
+        if ($psicometria === null) {
+            return $this->entrada($generico, null);
+        }
+
+        $desvio = $psicometria['desvio'];
+        $media = $psicometria['media'];
+
+        [$complemento, $tom] = match (true) {
+            $desvio < 8 => ['A turma está muito homogênea: quase todo mundo tirou perto de '.$this->num($media).'%. Confira o KR-20 — prova que não espalha notas costuma não discriminar.', 'atencao'],
+            $desvio > 20 => ['A turma está bastante dividida: a média de '.$this->num($media).'% não descreve o respondente típico, e vale olhar a distribuição de acertos para ver se há dois grupos distintos.', 'atencao'],
+            default => ['É uma dispersão saudável: a prova separou os respondentes sem partir a turma em dois extremos.', 'bom'],
+        };
+
+        return $this->entrada($generico, 'Desvio-padrão de '.$this->num($desvio).' pontos percentuais. '.$complemento, $tom);
+    }
+
+    /** @param array<string, mixed>|null $psicometria */
+    private function kpiKr20(?array $psicometria): array
+    {
+        $generico = 'A confiabilidade da prova, de 0 a 1: o quanto as questões estão medindo a mesma coisa. Se as '
+            .'questões concordam entre si, quem sabe acerta em várias e quem não sabe erra em várias — e aí a nota '
+            .'reflete conhecimento, não sorte. A referência usual: acima de 0,80 é adequado para decisões sobre o '
+            .'aluno; entre 0,70 e 0,80 dá para usar com cautela; abaixo de 0,70 boa parte do resultado é acaso. '
+            .'Prova curta tende a ter KR-20 menor, então leia junto com o número de questões.';
+
+        if ($psicometria === null) {
+            return $this->entrada($generico, null);
+        }
+
+        if ($psicometria['kr20'] === null) {
+            return $this->entrada(
+                $generico,
+                'Não dá para calcular: as notas praticamente não variam entre os respondentes, e sem variação o coeficiente é indefinido.',
+                'atencao',
+            );
+        }
+
+        $kr = $psicometria['kr20'];
+        $valor = $this->num($kr, 2);
+
+        [$leitura, $tom] = match (true) {
+            $kr >= 0.80 => ["KR-20 de {$valor}: a prova tem consistência interna adequada e pode embasar decisões sobre o aluno.", 'bom'],
+            $kr >= 0.70 => ["KR-20 de {$valor}: aceitável, mas dá para melhorar. Veja no mapa de itens quais questões não estão discriminando — trocá-las é o caminho mais curto para subir esse número.", 'atencao'],
+            default => ["KR-20 de {$valor}: baixo. Boa parte do resultado desta prova é acaso, então evite usá-la sozinha para aprovar, reprovar ou classificar aluno. O mapa de itens mostra por onde começar a correção.", 'ruim'],
+        };
+
+        return $this->entrada($generico, $leitura, $tom);
     }
 
     /** @param array<string, mixed>|null $psicometria */
@@ -130,7 +232,7 @@ class ExplicacaoBiService
         $negativas = $itens->filter(fn ($i) => $i['discriminacao'] !== null && $i['discriminacao'] < 0);
 
         if ($revisar->isEmpty()) {
-            return $this->entrada($generico, 'Nenhuma questão caiu na faixa de revisão — todos os itens desta prova separam quem sabe de quem não sabe.');
+            return $this->entrada($generico, 'Nenhuma questão caiu na faixa de revisão — todos os itens desta prova separam quem sabe de quem não sabe.', 'bom');
         }
 
         $partes = [$revisar->count() === 1
@@ -148,7 +250,9 @@ class ExplicacaoBiService
             $partes[] = 'Removendo os itens fracos, a confiabilidade subiria para '.$this->num($psicometria['simulacao']['kr20'], 2).'.';
         }
 
-        return $this->entrada($generico, implode(' ', $partes));
+        // Discriminação negativa é erro de gabarito até prova em contrário —
+        // é a única situação aqui que pede ação imediata.
+        return $this->entrada($generico, implode(' ', $partes), $negativas->isNotEmpty() ? 'ruim' : 'atencao');
     }
 
     /** @param array<string, mixed> $bi */
@@ -170,11 +274,12 @@ class ExplicacaoBiService
         $abaixoDaMetade = array_sum(array_slice($histograma, 0, 5));
 
         $leitura = 'A maior concentração está na faixa de '.($faixa * 10).'–'.($faixa * 10 + 9).'%, com '.$maior.' respondente(s). ';
-        $leitura .= $abaixoDaMetade / $total >= 0.5
+        $maioriaAbaixo = $abaixoDaMetade / $total >= 0.5;
+        $leitura .= $maioriaAbaixo
             ? $this->num($abaixoDaMetade / $total * 100).'% da turma ficou abaixo de 50% de acerto — vale checar se o conteúdo foi coberto antes da prova.'
             : $this->num((1 - $abaixoDaMetade / $total) * 100).'% da turma ficou em 50% ou mais de acerto.';
 
-        return $this->entrada($generico, $leitura);
+        return $this->entrada($generico, $leitura, $maioriaAbaixo ? 'atencao' : 'bom');
     }
 
     /** @param array<string, float> $valores */
@@ -189,11 +294,12 @@ class ExplicacaoBiService
         $diferenca = max($valores) - min($valores);
 
         $leitura = "O melhor desempenho é em {$melhor} (".$this->num(max($valores)).'%) e o pior em '."{$pior} (".$this->num(min($valores)).'%). ';
-        $leitura .= $diferenca >= self::VARIACAO_RELEVANTE
+        $desequilibrado = $diferenca >= self::VARIACAO_RELEVANTE;
+        $leitura .= $desequilibrado
             ? 'São '.$this->num($diferenca).' pontos de diferença — uma distância grande o suficiente para tratar '."{$pior} como prioridade."
             : 'A diferença de '.$this->num($diferenca).' pontos é pequena: o desempenho está parelho entre as opções de '."{$substantivo}.";
 
-        return $this->entrada($generico, $leitura);
+        return $this->entrada($generico, $leitura, $desequilibrado ? 'atencao' : 'bom');
     }
 
     /** @param array<int, array<string, mixed>> $temas */
@@ -216,7 +322,7 @@ class ExplicacaoBiService
         $leitura .= $pior['area'] ? ', da área de '.$pior['area'].'.' : '.';
         $leitura .= ' No outro extremo, '.$melhor['tema'].' com '.$this->num($melhor['percentual']).'%.';
 
-        return $this->entrada($generico, $leitura);
+        return $this->entrada($generico, $leitura, $pior['percentual'] < 50 ? 'atencao' : 'bom');
     }
 
     /** @param array<int, array<string, mixed>> $ranking */
@@ -239,10 +345,10 @@ class ExplicacaoBiService
 
         $leitura = count($ranking).' respondente(s), do primeiro com '.$this->num(max($percentuais)).'% ao último com '.$this->num(min($percentuais)).'%.';
         if ($abaixoDe40 > 0) {
-            $leitura .= ' '.$abaixoDe40.' ficou(aram) abaixo de 40% de acerto.';
+            $leitura .= ' '.$abaixoDe40.' ficou(aram) abaixo de 40% de acerto e merece(m) acompanhamento individual.';
         }
 
-        return $this->entrada($generico, $leitura);
+        return $this->entrada($generico, $leitura, $abaixoDe40 > 0 ? 'atencao' : 'bom');
     }
 
     /** @param array<int, array<string, mixed>> $turmas */
@@ -262,11 +368,12 @@ class ExplicacaoBiService
 
         $leitura = $primeira['turma'].' lidera com '.$this->num($primeira['media']).'% ('.$primeira['respondentes'].' respondentes) e '
             .$ultima['turma'].' fecha com '.$this->num($ultima['media']).'% ('.$ultima['respondentes'].'). ';
-        $leitura .= $diferenca >= self::VARIACAO_RELEVANTE
+        $relevante = $diferenca >= self::VARIACAO_RELEVANTE;
+        $leitura .= $relevante
             ? 'São '.$this->num($diferenca).' pontos entre elas — diferença grande o bastante para investigar o que mudou entre as turmas.'
             : 'A diferença de '.$this->num($diferenca).' pontos é pequena e pode ser só variação normal entre turmas.';
 
-        return $this->entrada($generico, $leitura);
+        return $this->entrada($generico, $leitura, $relevante ? 'atencao' : 'bom');
     }
 
     /** @param array<string, array<string, mixed>> $curva */
@@ -296,6 +403,7 @@ class ExplicacaoBiService
             $leitura.'. '.($coerente
                 ? 'A ordem bate com o esperado: quanto mais difícil a questão foi classificada, menor o acerto.'
                 : 'A ordem não bate com o esperado — há nível marcado como mais difícil com acerto maior que um nível mais fácil, sinal de que a classificação das questões precisa de revisão.'),
+            $coerente ? 'bom' : 'atencao',
         );
     }
 
@@ -359,43 +467,66 @@ class ExplicacaoBiService
             $generico,
             'A habilidade com menor acerto médio entre as turmas é "'.$pior.'" ('.$this->num(min($medias)).'%). '
             .'Se ela estiver baixa em todas as colunas, o ponto de atenção é o currículo, não uma turma específica.',
+            min($medias) < 50 ? 'atencao' : 'bom',
         );
     }
 
-    /** @param array<string, array<string, int>>|null $perfil */
-    private function perfilDemografico(?array $perfil): array
+    /**
+     * Composição por sexo ou cor/raça. Deliberadamente SEM tom: a distribuição
+     * demográfica de quem fez a prova não é "boa" nem "ruim" — quem responde
+     * por bom ou ruim é o bloco de equidade, que cruza esses mesmos recortes
+     * com desempenho.
+     *
+     * @param  array<string, int>  $dados
+     */
+    private function perfilComposicao(array $dados, string $rotulo): array
     {
-        $generico = 'Quem são os respondentes desta avaliação, por sexo, cor/raça e UF de origem. Este bloco descreve a '
-            .'composição do grupo — não o desempenho dele. Serve para dois usos: conferir se a amostra que fez a prova '
-            .'representa o curso, e dar contexto ao bloco de equidade logo abaixo, que mostra como cada um desses '
-            .'recortes se saiu.';
+        $generico = 'Como os respondentes desta avaliação se distribuem por '.$rotulo.'. Este gráfico descreve a '
+            .'COMPOSIÇÃO do grupo, não o desempenho dele — um grupo ser maior que o outro não é bom nem ruim. '
+            .'Ele serve para duas coisas: conferir se quem fez a prova representa o curso (se um grupo some aqui mas '
+            .'existe no curso, o resultado da avaliação não fala por ele) e dar contexto ao bloco de equidade, que '
+            .'mostra como cada um destes mesmos grupos se saiu.';
 
-        if ($perfil === null) {
+        $dados = array_filter($dados);
+        $total = array_sum($dados);
+
+        if ($total === 0) {
             return $this->entrada($generico, null);
         }
 
-        $partes = [];
+        $maior = array_search(max($dados), $dados, true);
+        $fatia = max($dados) / $total * 100;
 
-        foreach (['sexo' => 'sexo', 'cor_raca' => 'cor/raça'] as $chave => $rotulo) {
-            $dados = array_filter($perfil[$chave] ?? []);
-            $total = array_sum($dados);
-            if ($total === 0) {
-                continue;
-            }
-            $maior = array_search(max($dados), $dados, true);
-            $partes[] = 'Em '.$rotulo.', o grupo mais numeroso é "'.$maior.'" ('.$this->num(max($dados) / $total * 100).'% dos respondentes).';
+        $leitura = 'O grupo mais numeroso é "'.$maior.'", com '.$this->num($fatia).'% dos '.$total.' respondentes que têm '.$rotulo.' cadastrado(a)';
+        $leitura .= count($dados) === 1
+            ? '. É o único grupo com dados preenchidos, então não há comparação possível aqui.'
+            : ', entre '.count($dados).' grupos.';
+
+        return $this->entrada($generico, $leitura);
+    }
+
+    /** @param array<string, int> $ufs */
+    private function perfilUf(array $ufs): array
+    {
+        $generico = 'De quais estados vêm os respondentes: quanto mais escuro no mapa, mais gente daquela UF. Como os '
+            .'outros recortes demográficos, descreve a composição do grupo e não o desempenho. É útil principalmente '
+            .'para cursos que recebem alunos de fora da região — concentração muito alta numa UF só significa que '
+            .'qualquer leitura "por origem" vale pouco, porque não há com quem comparar.';
+
+        $ufs = array_filter($ufs);
+        if ($ufs === []) {
+            return $this->entrada($generico, null);
         }
 
-        $ufs = array_filter($perfil['uf'] ?? []);
-        if ($ufs !== []) {
-            $totalUf = array_sum($ufs);
-            $maiorUf = array_search(max($ufs), $ufs, true);
-            $partes[] = count($ufs) === 1
-                ? 'Todos os respondentes com UF cadastrada vêm de '.$maiorUf.'.'
-                : $this->num(max($ufs) / $totalUf * 100).'% vêm de '.$maiorUf.', em '.count($ufs).' UFs no total.';
-        }
+        $total = array_sum($ufs);
+        $maiorUf = array_search(max($ufs), $ufs, true);
+        $fatia = max($ufs) / $total * 100;
 
-        return $this->entrada($generico, $partes === [] ? null : implode(' ', $partes));
+        $leitura = count($ufs) === 1
+            ? 'Todos os '.$total.' respondentes com UF cadastrada vêm de '.$maiorUf.'.'
+            : $this->num($fatia).'% dos respondentes vêm de '.$maiorUf.', num total de '.count($ufs).' UFs.';
+
+        return $this->entrada($generico, $leitura);
     }
 
     /** @param array<int, array<string, mixed>> $questoes */
@@ -415,7 +546,7 @@ class ExplicacaoBiService
         );
 
         if ($comDistrator->isEmpty()) {
-            return $this->entrada($generico, 'Em nenhuma questão um distrator atraiu mais respostas que o gabarito.');
+            return $this->entrada($generico, 'Em nenhuma questão um distrator atraiu mais respostas que o gabarito.', 'bom');
         }
 
         $exemplos = $comDistrator->take(3)->map(fn ($q) => 'Q'.$q['numero'])->implode(', ');
@@ -424,6 +555,7 @@ class ExplicacaoBiService
             $generico,
             $comDistrator->count().' questão(ões) tem um distrator mais marcado que o gabarito ('.$exemplos.
             ($comDistrator->count() > 3 ? '…' : '').'). Comece a revisão do enunciado por elas.',
+            'atencao',
         );
     }
 
@@ -508,11 +640,13 @@ class ExplicacaoBiService
             $leitura .= '.';
         }
 
+        $abaixoDaMedia = $mediaGeral !== null && ($mediaGeral - $pior['percentual']) >= self::VARIACAO_RELEVANTE;
+
         if ($pior['totalQuestoes'] <= 2) {
             $leitura .= ' Atenção: com tão poucas questões, esse percentual é instável.';
         }
 
-        return $this->entrada($generico, $leitura);
+        return $this->entrada($generico, $leitura, $abaixoDaMedia ? 'atencao' : 'bom');
     }
 
     /** @param array<string, array<string, mixed>> $equidade */
@@ -554,11 +688,12 @@ class ExplicacaoBiService
             .$this->num($maiorDiferenca['melhor']['media']).'%) e "'.$maiorDiferenca['pior']['valor'].'" ('
             .$this->num($maiorDiferenca['pior']['media']).'%). ';
 
-        $leitura .= $maiorDiferenca['amplitude'] >= self::VARIACAO_RELEVANTE
+        $relevante = $maiorDiferenca['amplitude'] >= self::VARIACAO_RELEVANTE;
+        $leitura .= $relevante
             ? 'É uma distância relevante: vale acompanhar se ela se repete nas próximas avaliações antes de concluir qualquer coisa.'
             : 'É uma distância pequena, dentro do que se espera por variação normal entre grupos.';
 
-        return $this->entrada($generico, $leitura);
+        return $this->entrada($generico, $leitura, $relevante ? 'atencao' : 'bom');
     }
 
     /**
@@ -596,10 +731,16 @@ class ExplicacaoBiService
         return round($numerador / sqrt($varX * $varY), 4);
     }
 
-    /** @return array{generico: string, leitura: ?string} */
-    private function entrada(string $generico, ?string $leitura): array
+    /**
+     * $tom é o que responde "isso é bom ou ruim?" sem a pessoa precisar
+     * interpretar o número: bom | atencao | ruim, ou null quando o dado é
+     * puramente descritivo (um perfil demográfico não é bom nem ruim).
+     *
+     * @return array{generico: string, leitura: ?string, tom: ?string}
+     */
+    private function entrada(string $generico, ?string $leitura, ?string $tom = null): array
     {
-        return ['generico' => $generico, 'leitura' => $leitura];
+        return ['generico' => $generico, 'leitura' => $leitura, 'tom' => $leitura === null ? null : $tom];
     }
 
     private function num(float $valor, int $casas = 1): string
