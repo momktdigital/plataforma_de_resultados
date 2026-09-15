@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Avaliacao;
 use App\Services\BiDashboardService;
+use App\Services\PsicometriaService;
 use App\Services\RelatorioAdminService;
 use App\Services\Visualizacoes\VisualizacaoConfigService;
 use App\Support\AlunoVinculoResolver;
@@ -21,6 +22,7 @@ class BiController extends Controller
         RelatorioAdminService $relatorioService,
         VisualizacaoConfigService $visualizacaoConfig,
         AlunoVinculoResolver $alunoResolver,
+        PsicometriaService $psicometriaService,
     ): View {
         $periodo = trim((string) $request->query('periodo', ''));
         $periodosDisponiveis = $avaliacao->resultados()->select('periodo')->distinct()->pluck('periodo');
@@ -37,6 +39,12 @@ class BiController extends Controller
         // aviso de "sem gabarito"/"sem respostas" precisa aparecer independente da
         // configuração de visuais, senão a página fica em branco sem explicar o motivo.
         $dados = $biService->gerar($avaliacao, $periodo, $filtro);
+
+        // Uma análise só alimenta os dois visuais psicométricos — o cabeçalho
+        // de números e o mapa de itens saem da mesma varredura de `respostas`.
+        $psicometria = ($visivel('estatisticas_gerais') || $visivel('mapa_itens'))
+            ? $psicometriaService->analisar($avaliacao, $periodo)
+            : null;
 
         return view('admin.avaliacoes.bi', [
             'avaliacao' => $avaliacao,
@@ -59,6 +67,16 @@ class BiController extends Controller
             'desempenhoPorTema' => $visivel('desempenho_tema') ? $relatorioService->desempenhoPorTema($avaliacao, $periodo) : null,
             'mediaPorBloom' => $visivel('desempenho_bloom') ? $relatorioService->mediaPorBloom($avaliacao, $periodo) : null,
             'mediaPorMiller' => $visivel('desempenho_miller') ? $relatorioService->mediaPorMiller($avaliacao, $periodo) : null,
+            'psicometria' => $psicometria,
+            'curvasItens' => ($visivel('mapa_itens') && $psicometria !== null)
+                ? $psicometriaService->curvasCaracteristicas($avaliacao, $periodo)
+                : null,
+            'alinhamentoReferencias' => $visivel('alinhamento_referencias')
+                ? $relatorioService->desempenhoPorReferencia($avaliacao, $periodo)
+                : null,
+            'equidade' => $visivel('equidade_demografica')
+                ? $relatorioService->equidadeDemografica($avaliacao, $periodo)
+                : null,
         ]);
     }
 }

@@ -353,6 +353,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"></script>
+@include('_viz')
 <script>
 @if ($estado['comparativo_turma']['visivelAluno'] && $comparativoTurma)
 new Chart(document.getElementById('grafico-comparativo-turma'), {

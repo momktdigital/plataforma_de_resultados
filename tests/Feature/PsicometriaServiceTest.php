@@ -105,14 +105,20 @@ class PsicometriaServiceTest extends TestCase
 
     public function test_curva_caracteristica_sobe_num_item_que_discrimina(): void
     {
-        $avaliacao = $this->cenario();
-        $curva = app(PsicometriaService::class)->curvaCaracteristica($avaliacao, 1);
+        $curvas = app(PsicometriaService::class)->curvasCaracteristicas($this->cenario());
 
-        $this->assertNotEmpty($curva);
+        $this->assertArrayHasKey(1, $curvas);
 
-        $primeiro = $curva[0]['percentual'];
-        $ultimo = $curva[count($curva) - 1]['percentual'];
-        $this->assertGreaterThan($primeiro, $ultimo, 'quem foi melhor na prova deveria acertar mais a Q1');
+        $curvaQ1 = array_values($curvas[1]);
+        $this->assertGreaterThan(
+            $curvaQ1[0],
+            $curvaQ1[count($curvaQ1) - 1],
+            'quem foi melhor na prova deveria acertar mais a Q1',
+        );
+
+        // Q3 todo mundo acertou: a curva é plana no topo, o retrato de um
+        // item que não distingue ninguém.
+        $this->assertSame([100.0], array_unique(array_values($curvas[3])));
     }
 
     public function test_questao_anulada_fica_fora_da_analise(): void

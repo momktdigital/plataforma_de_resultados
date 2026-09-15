@@ -88,14 +88,18 @@ class PsicometriaService
     }
 
     /**
-     * % de acerto de UMA questão por quinto de desempenho geral — a curva
-     * característica do item. Uma questão saudável sobe da esquerda para a
-     * direita; uma curva plana ou invertida é o retrato de um item que não
-     * mede o que a prova mede.
+     * % de acerto por quinto de desempenho geral, de TODAS as questões de uma
+     * vez — a curva característica de cada item. Uma questão saudável sobe da
+     * esquerda para a direita; uma curva plana ou invertida é o retrato de um
+     * item que não mede o que a prova mede.
      *
-     * @return array<int, array{quinto: int, respondentes: int, percentual: float}>
+     * Tudo numa consulta só (agrupada por questão E por quinto) de propósito:
+     * a tela deixa o usuário clicar de item em item, e uma consulta por clique
+     * seria uma varredura de `respostas` por curiosidade do coordenador.
+     *
+     * @return array<int, array<int, float>> número da questão => [quinto => % de acerto]
      */
-    public function curvaCaracteristica(Avaliacao $avaliacao, int $numero, string $periodo = ''): array
+    public function curvasCaracteristicas(Avaliacao $avaliacao, string $periodo = ''): array
     {
         $escores = $this->escores($avaliacao, $periodo);
 
@@ -118,26 +122,30 @@ class PsicometriaService
         }
         $quinto .= ' ELSE 5 END';
 
-        return $this->baseItens($avaliacao, $periodo)
+        $linhas = $this->baseItens($avaliacao, $periodo)
             ->joinSub($this->consultaEscores($avaliacao, $periodo), 'sc', function ($join) {
                 $join->on('sc.aluno_chave', '=', 'r.aluno_chave')
                     ->on('sc.periodo', '=', 'r.periodo');
             })
-            ->where('r.questao_numero', $numero)
-            ->groupByRaw($quinto)
+            ->groupByRaw('r.questao_numero, '.$quinto)
+            ->selectRaw('r.questao_numero as numero')
             ->selectRaw($quinto.' as quinto')
             ->selectRaw('COUNT(*) as respondentes')
             ->selectRaw('SUM(CASE WHEN '.$this->condicaoAcerto().' THEN 1 ELSE 0 END) as acertos')
-            ->orderByRaw($quinto)
-            ->get()
-            ->map(fn ($l) => [
-                'quinto' => (int) $l->quinto,
-                'respondentes' => (int) $l->respondentes,
-                'percentual' => (int) $l->respondentes > 0
-                    ? round((int) $l->acertos / (int) $l->respondentes * 100, 1)
-                    : 0.0,
-            ])
-            ->all();
+            ->get();
+
+        $curvas = [];
+        foreach ($linhas as $linha) {
+            $curvas[(int) $linha->numero][(int) $linha->quinto] = (int) $linha->respondentes > 0
+                ? round((int) $linha->acertos / (int) $linha->respondentes * 100, 1)
+                : 0.0;
+        }
+
+        foreach ($curvas as &$curva) {
+            ksort($curva);
+        }
+
+        return $curvas;
     }
 
     /**

@@ -88,6 +88,130 @@
     </div>
 @endif
 
+@if ($estado['estatisticas_gerais']['visivelAdmin'] && $psicometria !== null)
+    @php
+        $kr20 = $psicometria['kr20'];
+        $kr20Bom = $kr20 !== null && $kr20 >= 0.80;
+        $kr20Aceitavel = $kr20 !== null && $kr20 >= 0.70;
+    @endphp
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Média da turma</p>
+            <p class="text-3xl font-bold mt-2 tracking-tight">{{ number_format($psicometria['media'], 1, ',', '.') }}<span class="text-lg font-medium text-slate-500">%</span></p>
+            <p class="text-xs text-slate-500 mt-1">{{ $psicometria['respondentes'] }} respondente(s) · {{ $psicometria['questoes'] }} questão(ões)</p>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Mediana</p>
+            <p class="text-3xl font-bold mt-2 tracking-tight">{{ number_format($psicometria['mediana'], 1, ',', '.') }}<span class="text-lg font-medium text-slate-500">%</span></p>
+            <p class="text-xs text-slate-500 mt-1">metade da turma ficou acima disto</p>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Desvio-padrão</p>
+            <p class="text-3xl font-bold mt-2 tracking-tight">{{ number_format($psicometria['desvio'], 1, ',', '.') }}<span class="text-lg font-medium text-slate-500">pp</span></p>
+            <p class="text-xs text-slate-500 mt-1">o quanto as notas se espalham</p>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Confiabilidade (KR-20)</p>
+            @if ($kr20 === null)
+                <p class="text-3xl font-bold mt-2 tracking-tight text-slate-300">—</p>
+                <p class="text-xs text-slate-500 mt-1">sem variação de notas suficiente para calcular</p>
+            @else
+                <p class="text-3xl font-bold mt-2 tracking-tight">{{ number_format($kr20, 2, ',', '.') }}</p>
+                <div class="h-1.5 rounded-full bg-slate-100 mt-3 overflow-hidden">
+                    <div class="h-full rounded-full" style="width: {{ round($kr20 * 100) }}%; background-color: {{ $kr20Aceitavel ? '#12a37f' : '#d03b3b' }}"></div>
+                </div>
+                <p class="text-xs mt-2 font-medium {{ $kr20Bom ? 'text-emerald-700' : ($kr20Aceitavel ? 'text-amber-700' : 'text-red-700') }}">
+                    {{ $kr20Bom ? 'Consistência adequada' : ($kr20Aceitavel ? 'Aceitável — dá para melhorar' : 'Baixa: a prova mede muito ao acaso') }}
+                </p>
+            @endif
+        </div>
+    </div>
+@endif
+
+@if ($estado['mapa_itens']['visivelAdmin'] && $psicometria !== null && ! empty($psicometria['itens']))
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
+        <div class="flex items-start justify-between gap-4 flex-wrap mb-1">
+            <h2 class="font-semibold">Mapa de qualidade dos itens</h2>
+            <button type="button" data-tabela="tabela-mapa-itens" aria-expanded="false"
+                    class="text-xs text-slate-500 hover:text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1">
+                Ver como tabela
+            </button>
+        </div>
+        <p class="text-sm text-slate-500 mb-4">
+            Cada ponto é uma questão. O eixo horizontal é quanto a turma acertou; o vertical é o quanto a questão
+            separa quem foi bem de quem foi mal (faixas de Ebel). Clique num ponto para ver a curva característica dele.
+            Questões anuladas ficam de fora.
+        </p>
+
+        <div class="grid lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-2">
+                <canvas id="grafico-mapa-itens" height="260"></canvas>
+            </div>
+            <div class="border border-slate-200 rounded-xl p-4">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span id="item-numero" class="text-xl font-bold tracking-tight">—</span>
+                    <span id="item-faixa" class="text-xs font-semibold px-2 py-0.5 rounded"></span>
+                </div>
+                <p id="item-contexto" class="text-xs text-slate-500 mt-0.5">Clique num ponto do gráfico</p>
+
+                <div class="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-100">
+                    <div>
+                        <span class="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Acerto</span>
+                        <b id="item-p" class="text-base font-bold tabular-nums">—</b>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Discrim.</span>
+                        <b id="item-d" class="text-base font-bold tabular-nums">—</b>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Em branco</span>
+                        <b id="item-branco" class="text-base font-bold tabular-nums">—</b>
+                    </div>
+                </div>
+
+                <p class="text-xs font-medium text-slate-500 mt-4 mb-1">Curva característica</p>
+                <canvas id="grafico-cci" height="150"></canvas>
+                <p id="item-acao" class="text-xs text-slate-600 mt-3"></p>
+            </div>
+        </div>
+
+        @if ($psicometria['simulacao'] !== null)
+            <div class="mt-5 bg-slate-50 border-l-4 rounded-r-lg px-4 py-3 text-sm text-slate-600" style="border-color: #eb6834">
+                <b class="text-slate-800">E se…</b>
+                removendo {{ count($psicometria['simulacao']['removidos']) }} questão(ões) com discriminação abaixo de 0,20
+                ({{ collect($psicometria['simulacao']['removidos'])->take(3)->map(fn ($n) => 'Q'.$n)->implode(', ') }}{{ count($psicometria['simulacao']['removidos']) > 3 ? '…' : '' }}),
+                o KR-20 da prova
+                @if ($psicometria['simulacao']['ganho'] > 0)
+                    sobe para <b class="text-slate-800">{{ number_format($psicometria['simulacao']['kr20'], 2, ',', '.') }}</b>
+                    (+{{ number_format($psicometria['simulacao']['ganho'], 2, ',', '.') }}).
+                @else
+                    não melhora — o problema desta prova não está concentrado nesses itens.
+                @endif
+            </div>
+        @endif
+
+        <div id="tabela-mapa-itens" hidden class="mt-5 overflow-x-auto">
+            <table class="w-full text-sm">
+                <caption class="text-left text-xs text-slate-500 pb-2">Questões com discriminação abaixo de 0,20</caption>
+                <thead class="bg-slate-50 text-slate-500 text-left text-xs uppercase">
+                    <tr><th class="px-3 py-2">Questão</th><th class="px-3 py-2">Acerto</th><th class="px-3 py-2">Discriminação</th><th class="px-3 py-2">Faixa</th><th class="px-3 py-2">O que fazer</th></tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    @foreach (collect($psicometria['itens'])->filter(fn ($i) => $i['discriminacao'] === null || $i['discriminacao'] < 0.20)->sortBy('discriminacao') as $item)
+                        <tr>
+                            <td class="px-3 py-2 font-medium">Q{{ $item['numero'] }}</td>
+                            <td class="px-3 py-2 tabular-nums">{{ number_format($item['dificuldade'], 1, ',', '.') }}%</td>
+                            <td class="px-3 py-2 tabular-nums">{{ $item['discriminacao'] === null ? '—' : number_format($item['discriminacao'], 2, ',', '.') }}</td>
+                            <td class="px-3 py-2">{{ $item['rotulo'] }}</td>
+                            <td class="px-3 py-2 text-slate-500">{{ $item['acao'] }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+@endif
+
 @if ($estado['histograma']['visivelAdmin'])
     @if (empty($dados['semGabarito']) && empty($dados['semRespostas']) && ! empty($dados))
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
@@ -220,7 +344,7 @@
                             @foreach ($todasTurmas as $turma)
                                 @php $valor = $porTurma[$turma] ?? null; @endphp
                                 <td class="px-3 py-2 text-center text-white font-semibold"
-                                    style="background-color: {{ $valor === null ? '#e2e8f0' : 'rgba(16,185,129,'.max(0.15, $valor / 100).')' }}; color: {{ $valor === null ? '#94a3b8' : '#0f172a' }}">
+                                    style="background-color: {{ $valor === null ? '#e2e8f0' : 'rgba(18,163,127,'.max(0.15, $valor / 100).')' }}; color: {{ $valor === null ? '#94a3b8' : '#0f172a' }}">
                                     {{ $valor !== null ? $valor.'%' : '—' }}
                                 </td>
                             @endforeach
@@ -457,7 +581,7 @@
                             $intensidade = $r !== null ? min(1, max(0, (abs($r) - 0.3) / 0.7)) : 0;
                             $corFundo = $r === null || abs($r) < 0.3
                                 ? null
-                                : ($r > 0 ? 'rgba(16,185,129,'.round(0.1 + 0.35 * $intensidade, 2).')' : 'rgba(239,68,68,'.round(0.1 + 0.35 * $intensidade, 2).')');
+                                : ($r > 0 ? 'rgba(18,163,127,'.round(0.1 + 0.35 * $intensidade, 2).')' : 'rgba(239,68,68,'.round(0.1 + 0.35 * $intensidade, 2).')');
                         @endphp
                         <tr>
                             <td class="px-4 py-2">{{ $m['nome_metrica'] }}</td>
@@ -482,7 +606,250 @@
     </div>
 @endif
 
+@if ($estado['alinhamento_referencias']['visivelAdmin'] && ! empty($alinhamentoReferencias))
+    @php $mediaGeral = $psicometria['media'] ?? null; @endphp
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
+        <h2 class="font-semibold mb-1">Alinhamento curricular e regulatório</h2>
+        <p class="text-sm text-slate-500 mb-5">
+            O que a prova cobriu e como foi o desempenho em cada eixo. A contagem de questões é a cobertura:
+            um eixo com poucas questões diz muito menos sobre o curso que um com muitas.
+        </p>
+
+        @foreach ($alinhamentoReferencias as $tipo => $bloco)
+            <div class="{{ ! $loop->last ? 'mb-6' : '' }}">
+                <h3 class="text-sm font-semibold text-slate-700 mb-2">{{ $bloco['rotulo'] }}</h3>
+                <div class="divide-y divide-slate-100">
+                    @foreach ($bloco['itens'] as $item)
+                        <div class="grid grid-cols-[minmax(110px,1.4fr)_minmax(0,3fr)_auto_auto] gap-3 items-center py-2 text-sm">
+                            <span class="font-medium truncate" title="{{ $item['valor'] }}">{{ $item['valor'] }}</span>
+                            <div class="relative h-2.5 rounded-full bg-slate-100">
+                                <div class="absolute inset-y-0 left-0 rounded-full"
+                                     style="width: {{ min(100, $item['percentual']) }}%; background-color: {{ $item['percentual'] < 60 ? '#d03b3b' : '#12a37f' }}"></div>
+                                @if ($mediaGeral !== null)
+                                    <span class="absolute -top-0.5 -bottom-0.5 w-0.5 rounded bg-slate-400"
+                                          style="left: {{ min(100, $mediaGeral) }}%"
+                                          title="Média geral da avaliação: {{ number_format($mediaGeral, 1, ',', '.') }}%"></span>
+                                @endif
+                            </div>
+                            <span class="tabular-nums font-semibold text-right w-14 {{ $item['percentual'] < 60 ? 'text-red-600' : '' }}">
+                                {{ number_format($item['percentual'], 1, ',', '.') }}%
+                            </span>
+                            <span class="text-xs text-slate-400 tabular-nums text-right w-20">{{ $item['totalQuestoes'] }} quest.</span>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        @endforeach
+
+        @if ($mediaGeral !== null)
+            <p class="text-xs text-slate-400 mt-4 flex items-center gap-2">
+                <span class="inline-block w-0.5 h-3 bg-slate-400 rounded"></span>
+                marca a média geral da avaliação ({{ number_format($mediaGeral, 1, ',', '.') }}%)
+            </p>
+        @endif
+    </div>
+@endif
+
+@if ($estado['equidade_demografica']['visivelAdmin'] && ! empty($equidade))
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
+        <h2 class="font-semibold mb-1">Equidade: desempenho por recorte</h2>
+        <p class="text-sm text-slate-500 mb-5">
+            Monitoramento institucional, não avaliação de indivíduo. Grupos com menos de 10 respondentes
+            são omitidos — num grupo pequeno, a média do grupo identifica a pessoa.
+        </p>
+
+        <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            @foreach ($equidade as $recorte)
+                @php
+                    $maior = collect($recorte['grupos'])->max('media');
+                    $menor = collect($recorte['grupos'])->min('media');
+                @endphp
+                <div>
+                    <div class="flex items-baseline justify-between gap-2 mb-2">
+                        <h3 class="text-sm font-semibold text-slate-700">{{ $recorte['rotulo'] }}</h3>
+                        <span class="text-xs tabular-nums {{ ($maior - $menor) >= 10 ? 'text-amber-700 font-semibold' : 'text-slate-400' }}">
+                            {{ number_format($maior - $menor, 1, ',', '.') }} pp de diferença
+                        </span>
+                    </div>
+                    <div class="space-y-2">
+                        @foreach ($recorte['grupos'] as $grupo)
+                            <div class="text-sm">
+                                <div class="flex items-baseline justify-between gap-2">
+                                    <span class="truncate" title="{{ $grupo['valor'] }}">{{ $grupo['valor'] }}</span>
+                                    <span class="tabular-nums font-semibold">{{ number_format($grupo['media'], 1, ',', '.') }}%</span>
+                                </div>
+                                <div class="h-2 rounded-full bg-slate-100 mt-1">
+                                    <div class="h-full rounded-full" style="width: {{ min(100, $grupo['media']) }}%; background-color: #2a78d6"></div>
+                                </div>
+                                <span class="text-[11px] text-slate-400">{{ $grupo['respondentes'] }} respondente(s)</span>
+                            </div>
+                        @endforeach
+                    </div>
+                    @if ($recorte['suprimidos'] > 0)
+                        <p class="text-[11px] text-slate-400 mt-2">
+                            {{ $recorte['suprimidos'] }} grupo(s) omitido(s) por terem menos de 10 respondentes.
+                        </p>
+                    @endif
+                </div>
+            @endforeach
+        </div>
+    </div>
+@endif
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"></script>
+@include('_viz')
+
+@if ($estado['mapa_itens']['visivelAdmin'] && $psicometria !== null && ! empty($psicometria['itens']))
+<script>
+(function () {
+    'use strict';
+
+    var itens = {{ Js::from($psicometria['itens']) }};
+    var curvas = {{ Js::from($curvasItens ?? []) }};
+
+    // Faixas de Ebel: a posição vertical já diz em qual faixa o item caiu, então
+    // a cor é reforço, nunca o único canal de leitura.
+    var faixas = [
+        { chave: 'otimo', rotulo: 'Ótimo (D ≥ 0,40)', cor: Viz.cores.bom, de: 0.40, ate: 1.0 },
+        { chave: 'bom', rotulo: 'Bom (0,30–0,39)', cor: Viz.cores.serie1, de: 0.30, ate: 0.40 },
+        { chave: 'marginal', rotulo: 'Marginal (0,20–0,29)', cor: Viz.cores.atencao, de: 0.20, ate: 0.30 },
+        { chave: 'revisar', rotulo: 'Revisar (< 0,20)', cor: Viz.cores.critico, de: -1.0, ate: 0.20 },
+    ];
+
+    var fundoFaixas = {
+        id: 'fundoFaixas',
+        beforeDatasetsDraw: function (chart) {
+            var ctx = chart.ctx;
+            var eixoY = chart.scales.y;
+            var area = chart.chartArea;
+
+            ctx.save();
+            faixas.forEach(function (faixa) {
+                var topo = eixoY.getPixelForValue(Math.min(faixa.ate, eixoY.max));
+                var base = eixoY.getPixelForValue(Math.max(faixa.de, eixoY.min));
+                if (base <= topo) {
+                    return;
+                }
+                ctx.fillStyle = faixa.cor;
+                ctx.globalAlpha = faixa.chave === 'revisar' ? 0.08 : 0.05;
+                ctx.fillRect(area.left, topo, area.right - area.left, base - topo);
+            });
+            ctx.restore();
+        },
+    };
+
+    var grafico = new Chart(document.getElementById('grafico-mapa-itens'), {
+        type: 'scatter',
+        data: {
+            datasets: faixas.map(function (faixa) {
+                return {
+                    label: faixa.rotulo,
+                    backgroundColor: faixa.cor,
+                    borderColor: Viz.cores.superficie,
+                    borderWidth: 1.5,
+                    pointRadius: 5,
+                    pointHoverRadius: 8,
+                    data: itens
+                        .filter(function (item) { return item.faixa === faixa.chave; })
+                        .map(function (item) {
+                            return { x: item.dificuldade, y: item.discriminacao === null ? 0 : item.discriminacao, item: item };
+                        }),
+                };
+            }),
+        },
+        options: {
+            scales: {
+                x: {
+                    min: 0, max: 100,
+                    title: { display: true, text: 'Acertaram a questão (%)' },
+                },
+                y: {
+                    suggestedMin: -0.2, suggestedMax: 0.8,
+                    title: { display: true, text: 'Índice de discriminação' },
+                },
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function (contexto) {
+                            var item = contexto.raw.item;
+                            var linhas = [
+                                'Acerto: ' + item.dificuldade.toFixed(1).replace('.', ',') + '%',
+                                'Discriminação: ' + (item.discriminacao === null ? '—' : item.discriminacao.toFixed(2).replace('.', ',')),
+                            ];
+                            if (item.area) {
+                                linhas.push(item.area);
+                            }
+
+                            return linhas;
+                        },
+                        title: function (contexto) {
+                            return 'Questão ' + contexto[0].raw.item.numero;
+                        },
+                    },
+                },
+            },
+            onClick: function (evento, elementos) {
+                if (elementos.length) {
+                    var ponto = grafico.data.datasets[elementos[0].datasetIndex].data[elementos[0].index];
+                    selecionar(ponto.item);
+                }
+            },
+        },
+        plugins: [fundoFaixas],
+    });
+
+    var graficoCci = new Chart(document.getElementById('grafico-cci'), {
+        type: 'line',
+        data: {
+            labels: ['1º', '2º', '3º', '4º', '5º'],
+            datasets: [{ label: '% de acerto', data: [], borderColor: Viz.cores.serie2, backgroundColor: Viz.cores.serie2, fill: false }],
+        },
+        options: {
+            scales: {
+                y: { min: 0, max: 100, title: { display: true, text: '% de acerto' } },
+                x: { title: { display: true, text: 'quinto de desempenho geral →' } },
+            },
+            plugins: { legend: { display: false } },
+        },
+    });
+
+    var coresFaixa = {};
+    faixas.forEach(function (faixa) { coresFaixa[faixa.chave] = faixa.cor; });
+
+    function selecionar(item) {
+        document.getElementById('item-numero').textContent = 'Q' + item.numero;
+        document.getElementById('item-contexto').textContent = [item.area, item.tema].filter(Boolean).join(' · ') || 'sem área cadastrada';
+
+        var faixa = document.getElementById('item-faixa');
+        faixa.textContent = item.rotulo;
+        faixa.style.color = coresFaixa[item.faixa];
+        faixa.style.backgroundColor = coresFaixa[item.faixa] + '22';
+
+        document.getElementById('item-p').textContent = item.dificuldade.toFixed(1).replace('.', ',') + '%';
+        document.getElementById('item-d').textContent = item.discriminacao === null ? '—' : item.discriminacao.toFixed(2).replace('.', ',');
+        document.getElementById('item-branco').textContent = item.respostas > 0
+            ? (item.emBranco / item.respostas * 100).toFixed(1).replace('.', ',') + '%'
+            : '—';
+        document.getElementById('item-acao').textContent = item.acao;
+
+        var curva = curvas[item.numero] || {};
+        graficoCci.data.datasets[0].data = [1, 2, 3, 4, 5].map(function (quinto) {
+            return curva[quinto] === undefined ? null : curva[quinto];
+        });
+        graficoCci.update();
+    }
+
+    // Abre já no item mais problemático: é o que o coordenador veio ver.
+    var pior = itens.slice().sort(function (a, b) {
+        return (a.discriminacao === null ? -99 : a.discriminacao) - (b.discriminacao === null ? -99 : b.discriminacao);
+    })[0];
+    if (pior) {
+        selecionar(pior);
+    }
+})();
+</script>
+@endif
 <script>
 @if (! empty($dados) && empty($dados['semGabarito']) && empty($dados['semRespostas']))
     @if ($estado['histograma']['visivelAdmin'])
@@ -490,7 +857,7 @@
         type: 'bar',
         data: {
             labels: [@foreach($dados['histograma'] as $i => $c) '{{ $i * 10 }}-{{ $i * 10 + 9 }}%', @endforeach],
-            datasets: [{ label: 'Respondentes', data: {{ Js::from($dados['histograma']) }}, backgroundColor: '#10b981' }],
+            datasets: [{ label: 'Respondentes', data: {{ Js::from($dados['histograma']) }}, backgroundColor: Viz.cores.serie1 }],
         },
         options: { scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }, plugins: { legend: { display: false } } },
     });
@@ -501,7 +868,7 @@
         type: 'radar',
         data: {
             labels: {{ Js::from(array_keys($dados['radar'])) }},
-            datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($dados['radar'])) }}, backgroundColor: 'rgba(16,185,129,0.2)', borderColor: '#10b981' }],
+            datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($dados['radar'])) }}, backgroundColor: 'rgba(18,163,127,0.2)', borderColor: Viz.cores.serie1 }],
         },
         options: { scales: { r: { beginAtZero: true, max: 100 } } },
     });
@@ -513,7 +880,7 @@ new Chart(document.getElementById('grafico-area'), {
     type: 'radar',
     data: {
         labels: {{ Js::from(array_keys($mediaPorArea)) }},
-        datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($mediaPorArea)) }}, backgroundColor: 'rgba(16,185,129,0.2)', borderColor: '#10b981' }],
+        datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($mediaPorArea)) }}, backgroundColor: 'rgba(18,163,127,0.2)', borderColor: Viz.cores.serie1 }],
     },
     options: { scales: { r: { beginAtZero: true, max: 100 } } },
 });
@@ -524,7 +891,7 @@ new Chart(document.getElementById('grafico-turma'), {
     type: 'bar',
     data: {
         labels: {{ Js::from(array_column($distribuicaoTurma, 'turma')) }},
-        datasets: [{ label: 'Média (%)', data: {{ Js::from(array_column($distribuicaoTurma, 'media')) }}, backgroundColor: '#10b981' }],
+        datasets: [{ label: 'Média (%)', data: {{ Js::from(array_column($distribuicaoTurma, 'media')) }}, backgroundColor: Viz.cores.serie1 }],
     },
     options: { scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
 });
@@ -537,7 +904,7 @@ new Chart(document.getElementById('grafico-tri'), {
         datasets: [{
             label: 'Questões',
             data: {{ Js::from(array_map(fn ($p) => ['x' => $p['dificuldade_tri'], 'y' => $p['taxa_acerto']], $dispersaoTri)) }},
-            backgroundColor: '#10b981',
+            backgroundColor: Viz.cores.serie1,
         }],
     },
     options: {
@@ -554,7 +921,7 @@ new Chart(document.getElementById('grafico-bloom'), {
     type: 'bar',
     data: {
         labels: {{ Js::from(array_keys($mediaPorBloom)) }},
-        datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($mediaPorBloom)) }}, backgroundColor: '#10b981' }],
+        datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($mediaPorBloom)) }}, backgroundColor: Viz.cores.serie1 }],
     },
     options: { indexAxis: 'y', scales: { x: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
 });
@@ -565,7 +932,7 @@ new Chart(document.getElementById('grafico-miller'), {
     type: 'bar',
     data: {
         labels: {{ Js::from(array_keys($mediaPorMiller)) }},
-        datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($mediaPorMiller)) }}, backgroundColor: '#10b981' }],
+        datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($mediaPorMiller)) }}, backgroundColor: Viz.cores.serie1 }],
     },
     options: { indexAxis: 'y', scales: { x: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
 });
@@ -576,7 +943,7 @@ new Chart(document.getElementById('grafico-sexo'), {
     type: 'doughnut',
     data: {
         labels: {{ Js::from(array_keys($perfilDemografico['sexo'])) }},
-        datasets: [{ data: {{ Js::from(array_values($perfilDemografico['sexo'])) }}, backgroundColor: ['#10b981', '#94a3b8', '#f59e0b', '#6366f1'] }],
+        datasets: [{ data: {{ Js::from(array_values($perfilDemografico['sexo'])) }}, backgroundColor: [Viz.cores.serie1, Viz.cores.serie2, Viz.cores.serie3, Viz.cores.tinta3] }],
     },
     options: { plugins: { legend: { position: 'bottom' } } },
 });
@@ -587,7 +954,7 @@ new Chart(document.getElementById('grafico-cor-raca'), {
     type: 'bar',
     data: {
         labels: {{ Js::from(array_keys($perfilDemografico['cor_raca'])) }},
-        datasets: [{ data: {{ Js::from(array_values($perfilDemografico['cor_raca'])) }}, backgroundColor: '#10b981', borderRadius: 4, maxBarThickness: 22 }],
+        datasets: [{ data: {{ Js::from(array_values($perfilDemografico['cor_raca'])) }}, backgroundColor: Viz.cores.serie1, borderRadius: 4, maxBarThickness: 22 }],
     },
     options: { indexAxis: 'y', scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }, plugins: { legend: { display: false } } },
 });
@@ -598,7 +965,7 @@ new Chart(document.getElementById('grafico-evolucao'), {
     type: 'line',
     data: {
         labels: {{ Js::from(array_column($evolucaoCategoria, 'nome')) }},
-        datasets: [{ label: 'Média (%)', data: {{ Js::from(array_column($evolucaoCategoria, 'media')) }}, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.2)', tension: 0.2 }],
+        datasets: [{ label: 'Média (%)', data: {{ Js::from(array_column($evolucaoCategoria, 'media')) }}, borderColor: Viz.cores.serie1, backgroundColor: 'rgba(18,163,127,0.2)', tension: 0.2 }],
     },
     options: { scales: { y: { beginAtZero: true, max: 100 } } },
 });

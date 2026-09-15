@@ -81,6 +81,7 @@
 
 @if ($temAnaliseNaArvore)
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"></script>
+@include('_viz')
 @endif
 
 @if (! empty($resumoPorCategoria))
