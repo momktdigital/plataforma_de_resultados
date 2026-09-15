@@ -141,6 +141,170 @@
     </div>
 @endif
 
+@if ($estado['comparacao_avaliacoes']['visivelAdmin'])
+    @php
+        // avaliação base = sempre serie1; a ordem de $comparacaoAvaliacoes['avaliacoes']
+        // (base primeiro, depois as escolhidas na ordem do seletor) é o que define
+        // qual cor cada uma leva — nunca reordenar por valor/rank.
+        $paletaComparacao = ['#12a37f', '#2a78d6', '#eb6834'];
+    @endphp
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
+        <div class="flex items-center gap-2 mb-4">
+            <h2 class="font-semibold">Comparação entre avaliações</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['comparacao_avaliacoes'] ?? null])
+        </div>
+
+        <form method="GET" action="{{ route('avaliacoes.bi', $avaliacao) }}" class="flex flex-wrap items-end gap-3 mb-5">
+            <input type="hidden" name="periodo" value="{{ $periodo }}">
+            <input type="hidden" name="turma" value="{{ $filtro->turma }}">
+            <input type="hidden" name="sexo" value="{{ $filtro->sexo }}">
+            <input type="hidden" name="cor_raca" value="{{ $filtro->corRaca }}">
+            <input type="hidden" name="faixa_etaria" value="{{ $filtro->faixaEtaria }}">
+            <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1">
+                    Comparar com (até {{ \App\Services\ComparacaoAvaliacoesService::MAX_COMPARACOES }})
+                </label>
+                <div id="lista-comparar" class="border border-slate-300 rounded-lg max-h-40 overflow-y-auto divide-y divide-slate-100 w-72 max-w-full">
+                    @forelse ($opcoesComparacao as $opcao)
+                        <label class="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-slate-50 cursor-pointer">
+                            <input type="checkbox" name="comparar[]" value="{{ $opcao['codigo'] }}"
+                                   class="check-comparar rounded border-slate-300"
+                                   {{ in_array($opcao['codigo'], $comparacaoSelecionada) ? 'checked' : '' }}>
+                            <span class="flex-1">{{ $opcao['nome'] }}</span>
+                            @if ($opcao['data'])
+                                <span class="text-xs text-slate-400">{{ \Illuminate\Support\Carbon::parse($opcao['data'])->format('d/m/Y') }}</span>
+                            @endif
+                        </label>
+                    @empty
+                        <p class="text-xs text-slate-400 px-3 py-2">Nenhuma outra avaliação com resultado ainda.</p>
+                    @endforelse
+                </div>
+            </div>
+            <button type="submit" class="bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-lg px-4 py-2 text-sm">
+                Comparar
+            </button>
+            @if (! empty($comparacaoSelecionada))
+                <a href="{{ route('avaliacoes.bi', array_merge(['avaliacao' => $avaliacao->codigo], request()->except('comparar'))) }}"
+                   class="text-sm text-slate-500 hover:underline px-1 py-2">Limpar comparação</a>
+            @endif
+        </form>
+
+        @if ($comparacaoAvaliacoes === null)
+            <p class="text-sm text-slate-400">Selecione ao menos uma avaliação acima para comparar.</p>
+        @else
+            @php
+                $listaComparacao = $comparacaoAvaliacoes['avaliacoes'];
+                $areasComparacao = $comparacaoAvaliacoes['areas'];
+            @endphp
+            <div class="flex flex-wrap gap-x-5 gap-y-1.5 mb-5 pb-4 border-b border-slate-100">
+                @foreach ($listaComparacao as $i => $av)
+                    <span class="flex items-center gap-1.5 text-sm">
+                        <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: {{ $paletaComparacao[$i] }}"></span>
+                        <span class="font-medium text-slate-700">{{ $av['nome'] }}</span>
+                        @if ($i === 0)<span class="text-xs text-slate-400">(esta)</span>@endif
+                    </span>
+                @endforeach
+            </div>
+
+            <div class="grid lg:grid-cols-2 gap-6">
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-sm font-semibold text-slate-600">Média geral</h3>
+                        <button type="button" data-tabela="tabela-comparacao-kpi" aria-expanded="false"
+                                class="text-xs text-slate-500 hover:text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1">
+                            Ver como tabela
+                        </button>
+                    </div>
+                    <canvas id="grafico-comparacao-media" height="220"></canvas>
+                    <div id="tabela-comparacao-kpi" hidden class="mt-4 overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-slate-50 text-slate-500 text-left text-xs uppercase">
+                                <tr>
+                                    <th class="px-3 py-2">Avaliação</th>
+                                    <th class="px-3 py-2">Respondentes</th>
+                                    <th class="px-3 py-2">Média</th>
+                                    <th class="px-3 py-2">Mediana</th>
+                                    <th class="px-3 py-2">Desvio</th>
+                                    <th class="px-3 py-2">KR-20</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @foreach ($listaComparacao as $av)
+                                    <tr>
+                                        <td class="px-3 py-2 font-medium">{{ $av['nome'] }}</td>
+                                        @if ($av['resumo'] === null)
+                                            <td class="px-3 py-2 text-slate-400" colspan="5">respondentes insuficientes</td>
+                                        @else
+                                            <td class="px-3 py-2 tabular-nums">{{ $av['resumo']['respondentes'] }}</td>
+                                            <td class="px-3 py-2 tabular-nums">{{ number_format($av['resumo']['media'], 1, ',', '.') }}%</td>
+                                            <td class="px-3 py-2 tabular-nums">{{ number_format($av['resumo']['mediana'], 1, ',', '.') }}%</td>
+                                            <td class="px-3 py-2 tabular-nums">{{ number_format($av['resumo']['desvio'], 1, ',', '.') }}pp</td>
+                                            <td class="px-3 py-2 tabular-nums">{{ $av['resumo']['kr20'] === null ? '—' : number_format($av['resumo']['kr20'], 2, ',', '.') }}</td>
+                                        @endif
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-sm font-semibold text-slate-600">Desempenho por área</h3>
+                        <button type="button" data-tabela="tabela-comparacao-area" aria-expanded="false"
+                                class="text-xs text-slate-500 hover:text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1">
+                            Ver como tabela
+                        </button>
+                    </div>
+                    @if (empty($areasComparacao))
+                        <p class="text-sm text-slate-400">Nenhuma área em comum entre as avaliações comparadas.</p>
+                    @else
+                        <canvas id="grafico-comparacao-area" height="{{ max(220, count($areasComparacao) * 40) }}"></canvas>
+                        <div id="tabela-comparacao-area" hidden class="mt-4 overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-slate-50 text-slate-500 text-left text-xs uppercase">
+                                    <tr>
+                                        <th class="px-3 py-2">Área</th>
+                                        @foreach ($listaComparacao as $av)
+                                            <th class="px-3 py-2">{{ $av['nome'] }}</th>
+                                        @endforeach
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    @foreach ($areasComparacao as $area)
+                                        <tr>
+                                            <td class="px-3 py-2 font-medium">{{ $area }}</td>
+                                            @foreach ($listaComparacao as $av)
+                                                <td class="px-3 py-2 tabular-nums">
+                                                    {{ isset($av['mediaPorArea'][$area]) ? number_format($av['mediaPorArea'][$area], 1, ',', '.').'%' : '—' }}
+                                                </td>
+                                            @endforeach
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @endif
+                </div>
+            </div>
+        @endif
+    </div>
+
+    <script>
+    // Não depende do Chart.js (só desabilita checkboxes extras), então fica
+    // aqui — não precisa esperar a biblioteca carregar lá embaixo.
+    document.querySelectorAll('#lista-comparar .check-comparar').forEach(function (caixa) {
+        caixa.addEventListener('change', function () {
+            var marcadas = document.querySelectorAll('#lista-comparar .check-comparar:checked');
+            var limite = marcadas.length >= {{ \App\Services\ComparacaoAvaliacoesService::MAX_COMPARACOES }};
+            document.querySelectorAll('#lista-comparar .check-comparar').forEach(function (outra) {
+                outra.disabled = limite && !outra.checked;
+            });
+        });
+    });
+    </script>
+@endif
+
 @if ($estado['mapa_itens']['visivelAdmin'] && $psicometria !== null && ! empty($psicometria['itens']))
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
         <div class="flex items-start justify-between gap-4 flex-wrap mb-1">
@@ -1046,6 +1210,98 @@
 </script>
 @endif
 <script>
+@if ($comparacaoAvaliacoes !== null)
+(function () {
+    'use strict';
+
+    // Mesma ordem de $comparacaoAvaliacoes['avaliacoes'] (base primeiro) e
+    // mesma paleta usada nos pontinhos coloridos da legenda em HTML — a cor
+    // de cada avaliação tem que ser igual nos dois lugares.
+    var paleta = ['#12a37f', '#2a78d6', '#eb6834'];
+    var avaliacoes = {{ Js::from(collect($comparacaoAvaliacoes['avaliacoes'])->map(fn ($a) => ['nome' => $a['nome'], 'media' => $a['resumo']['media'] ?? null])) }};
+    var areas = {{ Js::from($comparacaoAvaliacoes['areas']) }};
+    var porAreaESerie = {{ Js::from(collect($comparacaoAvaliacoes['avaliacoes'])->map(fn ($a) => $a['mediaPorArea'])) }};
+
+    // Rótulo direto no fim de cada barra: com só 2-3 categorias o valor exato
+    // importa mais do que em um gráfico com dezenas delas (ver dataviz:
+    // "selective direct labels" — aqui elas não competem por espaço).
+    var rotuloNaBarra = {
+        id: 'rotuloNaBarra',
+        afterDatasetsDraw: function (chart) {
+            var ctx = chart.ctx;
+            var meta = chart.getDatasetMeta(0);
+            ctx.save();
+            ctx.fillStyle = Viz.cores.tinta;
+            ctx.font = '600 12px ui-sans-serif, system-ui, sans-serif';
+            ctx.textBaseline = 'middle';
+            meta.data.forEach(function (barra, i) {
+                var valor = chart.data.datasets[0].data[i];
+                if (valor === null || valor === undefined) {
+                    return;
+                }
+                var texto = valor.toFixed(1).replace('.', ',') + '%';
+                ctx.fillText(texto, barra.x + 8, barra.y);
+            });
+            ctx.restore();
+        },
+    };
+
+    new Chart(document.getElementById('grafico-comparacao-media'), {
+        type: 'bar',
+        data: {
+            labels: avaliacoes.map(function (a) { return a.nome; }),
+            datasets: [{
+                data: avaliacoes.map(function (a) { return a.media; }),
+                backgroundColor: avaliacoes.map(function (a, i) { return paleta[i]; }),
+                borderRadius: 4,
+                maxBarThickness: 48,
+            }],
+        },
+        options: {
+            indexAxis: 'y',
+            layout: { padding: { right: 36 } },
+            scales: { x: { beginAtZero: true, max: 100, title: { display: true, text: '% de acerto' } } },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function (c) { return c.raw === null ? 'Respondentes insuficientes' : c.raw.toFixed(1).replace('.', ',') + '%'; },
+                    },
+                },
+            },
+        },
+        plugins: [rotuloNaBarra],
+    });
+
+    @if (! empty($comparacaoAvaliacoes['areas']))
+    new Chart(document.getElementById('grafico-comparacao-area'), {
+        type: 'bar',
+        data: {
+            labels: areas,
+            datasets: avaliacoes.map(function (a, i) {
+                return {
+                    label: a.nome,
+                    backgroundColor: paleta[i],
+                    borderRadius: 4,
+                    maxBarThickness: 28,
+                    data: areas.map(function (area) {
+                        var valor = porAreaESerie[i][area];
+
+                        return valor === undefined ? null : valor;
+                    }),
+                };
+            }),
+        },
+        options: {
+            indexAxis: 'y',
+            scales: { x: { beginAtZero: true, max: 100, title: { display: true, text: '% de acerto' } } },
+            plugins: { legend: { position: 'bottom' } },
+        },
+    });
+    @endif
+})();
+@endif
+
 @if (! empty($dados) && empty($dados['semGabarito']) && empty($dados['semRespostas']))
     @if ($estado['histograma']['visivelAdmin'])
     new Chart(document.getElementById('grafico-histograma'), {

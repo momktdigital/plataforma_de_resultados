@@ -41,7 +41,7 @@ class ExplicacaoBiServiceTest extends TestCase
             'desempenho_bloom', 'desempenho_miller', 'desempenho_tema', 'ranking_completo',
             'distribuicao_turma', 'curva_dificuldade', 'dispersao_tri', 'heatmap_habilidade_turma',
             'perfil_sexo', 'perfil_cor_raca', 'perfil_uf', 'analise_alternativas', 'correlacao_metricas', 'evolucao_categoria',
-            'alinhamento_referencias', 'equidade_demografica',
+            'alinhamento_referencias', 'equidade_demografica', 'comparacao_avaliacoes',
         ] as $esperada) {
             $this->assertContains($esperada, $chaves);
         }
@@ -212,6 +212,57 @@ class ExplicacaoBiServiceTest extends TestCase
         ]])['evolucao_categoria']['leitura'];
 
         $this->assertStringContainsString('estável', $leitura);
+    }
+
+    public function test_comparacao_de_avaliacoes_aponta_diferenca_relevante_para_pior(): void
+    {
+        $entrada = $this->service->gerar(['comparacao' => [
+            'avaliacoes' => [
+                ['codigo' => 1, 'nome' => 'Esta', 'data' => null, 'resumo' => ['respondentes' => 20, 'media' => 45.0, 'mediana' => 45.0, 'desvio' => 10.0, 'kr20' => 0.7], 'mediaPorArea' => []],
+                ['codigo' => 2, 'nome' => 'Outra', 'data' => null, 'resumo' => ['respondentes' => 20, 'media' => 70.0, 'mediana' => 70.0, 'desvio' => 10.0, 'kr20' => 0.7], 'mediaPorArea' => []],
+            ],
+            'areas' => [],
+        ]])['comparacao_avaliacoes'];
+
+        $this->assertStringContainsString('ABAIXO', $entrada['leitura']);
+        $this->assertStringContainsString('Outra', $entrada['leitura']);
+        $this->assertSame('ruim', $entrada['tom']);
+    }
+
+    public function test_comparacao_de_avaliacoes_reconhece_desempenho_parelho(): void
+    {
+        $entrada = $this->service->gerar(['comparacao' => [
+            'avaliacoes' => [
+                ['codigo' => 1, 'nome' => 'Esta', 'data' => null, 'resumo' => ['respondentes' => 20, 'media' => 62.0, 'mediana' => 62.0, 'desvio' => 10.0, 'kr20' => 0.7], 'mediaPorArea' => []],
+                ['codigo' => 2, 'nome' => 'Outra', 'data' => null, 'resumo' => ['respondentes' => 20, 'media' => 60.0, 'mediana' => 60.0, 'desvio' => 10.0, 'kr20' => 0.7], 'mediaPorArea' => []],
+            ],
+            'areas' => [],
+        ]])['comparacao_avaliacoes'];
+
+        $this->assertStringContainsString('parelho', $entrada['leitura']);
+        $this->assertSame('bom', $entrada['tom']);
+    }
+
+    public function test_comparacao_de_avaliacoes_avisa_quando_a_base_nao_tem_respondentes_suficientes(): void
+    {
+        $entrada = $this->service->gerar(['comparacao' => [
+            'avaliacoes' => [
+                ['codigo' => 1, 'nome' => 'Esta', 'data' => null, 'resumo' => null, 'mediaPorArea' => []],
+                ['codigo' => 2, 'nome' => 'Outra', 'data' => null, 'resumo' => ['respondentes' => 20, 'media' => 60.0, 'mediana' => 60.0, 'desvio' => 10.0, 'kr20' => 0.7], 'mediaPorArea' => []],
+            ],
+            'areas' => [],
+        ]])['comparacao_avaliacoes'];
+
+        $this->assertStringContainsString('não tem respondentes suficientes', $entrada['leitura']);
+        $this->assertSame('atencao', $entrada['tom']);
+    }
+
+    public function test_comparacao_de_avaliacoes_sem_selecao_nao_afirma_nada(): void
+    {
+        $entrada = $this->service->gerar([])['comparacao_avaliacoes'];
+
+        $this->assertNull($entrada['leitura']);
+        $this->assertNull($entrada['tom']);
     }
 
     public function test_histograma_le_a_concentracao_da_turma(): void

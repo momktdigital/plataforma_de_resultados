@@ -139,6 +139,15 @@ class VisualizacaoDisponibilidadeService
             $temEvolucaoCategoria = $qtdAvaliacoesComResumo >= 2;
         }
 
+        // Diferente de evolucao_categoria, a comparação não exige a mesma
+        // categoria — o coordenador pode querer comparar com qualquer outra
+        // avaliação que já tenha resultado.
+        $temOutraAvaliacaoComparavel = DB::table('avaliacoes as av')
+            ->join('resultado_resumos as rr', 'rr.avaliacao_codigo', '=', 'av.codigo')
+            ->where('av.codigo', '!=', $codigo)
+            ->whereNull('av.deleted_at')
+            ->exists();
+
         $base = fn (string $semGabaritoMsg = 'Cadastre o gabarito das questões desta avaliação.') => $temGabarito
             ? null
             : $semGabaritoMsg;
@@ -253,6 +262,10 @@ class VisualizacaoDisponibilidadeService
 
             'trilha_estudo' => $baseComRespostas() ?? (
                 ($temArea && $temTema) ? null : 'Nenhuma questão tem área e tema cadastrados.'
+            ),
+
+            'comparacao_avaliacoes' => $baseComResumos() ?? (
+                $temOutraAvaliacaoComparavel ? null : 'Nenhuma outra avaliação com resultados importados para comparar.'
             ),
         ];
 

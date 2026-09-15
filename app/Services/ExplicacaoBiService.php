@@ -39,7 +39,7 @@ class ExplicacaoBiService
             'mapa_itens' => $this->mapaItens($psicometria),
             // A leitura sai daqui vazia de propósito: ela fala da questão
             // selecionada, que muda a cada clique, então quem a escreve é o JS
-            // do painel (ver explicacaoDoItem() em bi.blade.php).
+            // do painel (ver escreverExplicacaoCci() em bi.blade.php).
             'curva_caracteristica' => $this->entrada(
                 'A curva mostra o percentual de acerto da questão selecionada em cada quinto de desempenho geral: '
                 .'à esquerda os respondentes que foram pior na prova inteira, à direita os que foram melhor. '
@@ -92,6 +92,7 @@ class ExplicacaoBiService
             'evolucao_categoria' => $this->evolucaoCategoria($ctx['evolucaoCategoria'] ?? []),
             'alinhamento_referencias' => $this->alinhamento($ctx['alinhamento'] ?? [], $ctx['psicometria']['media'] ?? null),
             'equidade_demografica' => $this->equidade($ctx['equidade'] ?? []),
+            'comparacao_avaliacoes' => $this->comparacaoAvaliacoes($ctx['comparacao'] ?? null),
         ];
     }
 
@@ -694,6 +695,70 @@ class ExplicacaoBiService
             : 'É uma distância pequena, dentro do que se espera por variação normal entre grupos.';
 
         return $this->entrada($generico, $leitura, $relevante ? 'atencao' : 'bom');
+    }
+
+    /**
+     * @param  array{avaliacoes: array<int, array{codigo: int, nome: string, data: ?string, resumo: ?array, mediaPorArea: array<string, float>}>, areas: array<int, string>}|null  $comparacao
+     */
+    private function comparacaoAvaliacoes(?array $comparacao): array
+    {
+        $generico = 'Compara a média geral e o desempenho por área desta avaliação com a(s) outra(s) escolhida(s) ao '
+            .'lado — cada avaliação mantém a mesma cor em todo gráfico deste painel. Serve para saber se a turma foi '
+            .'melhor ou pior nesta prova do que em outra, e em quais áreas a diferença está concentrada. Avaliações '
+            .'diferentes podem ter dificuldades diferentes, então uma diferença pequena não significa muita coisa — '
+            .'o que pede atenção é uma diferença grande.';
+
+        if ($comparacao === null) {
+            return $this->entrada($generico, null);
+        }
+
+        $base = $comparacao['avaliacoes'][0] ?? null;
+        $outras = array_slice($comparacao['avaliacoes'], 1);
+
+        if ($base === null || $outras === []) {
+            return $this->entrada($generico, null);
+        }
+
+        if ($base['resumo'] === null) {
+            return $this->entrada(
+                $generico,
+                'Esta avaliação ainda não tem respondentes suficientes para comparar a média — o desempenho por área abaixo já pode ser lido.',
+                'atencao',
+            );
+        }
+
+        $comparaveis = array_values(array_filter($outras, fn ($o) => $o['resumo'] !== null));
+
+        if ($comparaveis === []) {
+            return $this->entrada(
+                $generico,
+                'Nenhuma das avaliações escolhidas tem respondentes suficientes para comparar a média — só dá para comparar o desempenho por área.',
+                'atencao',
+            );
+        }
+
+        $diferencas = array_map(fn ($o) => [
+            'nome' => $o['nome'],
+            'delta' => round($base['resumo']['media'] - $o['resumo']['media'], 1),
+        ], $comparaveis);
+
+        usort($diferencas, fn ($a, $b) => abs($b['delta']) <=> abs($a['delta']));
+        $maior = $diferencas[0];
+
+        $leitura = 'Média desta avaliação: '.$this->num($base['resumo']['media']).'%. Contra "'.$maior['nome'].'": ';
+
+        if (abs($maior['delta']) < self::VARIACAO_RELEVANTE) {
+            $leitura .= 'desempenho parelho (diferença de '.$this->num(abs($maior['delta'])).' ponto(s)).';
+            $tom = 'bom';
+        } elseif ($maior['delta'] > 0) {
+            $leitura .= $this->num($maior['delta']).' pontos ACIMA.';
+            $tom = 'bom';
+        } else {
+            $leitura .= $this->num(abs($maior['delta'])).' pontos ABAIXO — vale olhar o desempenho por área para achar onde a diferença está concentrada.';
+            $tom = 'ruim';
+        }
+
+        return $this->entrada($generico, $leitura, $tom);
     }
 
     /**

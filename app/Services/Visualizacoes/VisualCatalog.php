@@ -201,6 +201,12 @@ final class VisualCatalog
                 'admin' => false,
                 'aluno' => true,
             ],
+            'comparacao_avaliacoes' => [
+                'label' => 'Comparação com outras avaliações',
+                'grupo' => self::GRUPO_ADMIN,
+                'admin' => true,
+                'aluno' => false,
+            ],
             // O mapa de domínio (área x avaliação) NÃO entra aqui de
             // propósito: ele vive nos painéis por categoria do boletim, que
             // não são configuráveis por avaliação — mesmo caso de

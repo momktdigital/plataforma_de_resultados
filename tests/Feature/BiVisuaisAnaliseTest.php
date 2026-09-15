@@ -207,6 +207,55 @@ class BiVisuaisAnaliseTest extends TestCase
         ]);
     }
 
+    /** A seção sempre aparece (com o seletor) quando há outra avaliação para comparar, mesmo sem seleção. */
+    public function test_secao_de_comparacao_aparece_com_o_seletor_mesmo_sem_selecao(): void
+    {
+        $avaliacao = $this->cenario();
+        $this->outraAvaliacaoComparavel();
+
+        $response = $this->actingAs($this->admin(), 'admin')->get("/avaliacoes/{$avaliacao->codigo}/bi");
+
+        $response->assertOk();
+        $response->assertSee('Comparação entre avaliações');
+        $response->assertSee('Selecione ao menos uma avaliação acima para comparar.');
+    }
+
+    public function test_comparacao_de_avaliacoes_mostra_media_e_area_das_duas_provas(): void
+    {
+        $avaliacao = $this->cenario();
+        $outra = $this->outraAvaliacaoComparavel();
+
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->get("/avaliacoes/{$avaliacao->codigo}/bi?comparar[]={$outra->codigo}");
+
+        $response->assertOk();
+        $response->assertSee('Comparação entre avaliações');
+        $response->assertSee($outra->nome);
+        $response->assertSee('grafico-comparacao-media', false);
+        $response->assertSee('grafico-comparacao-area', false);
+        $response->assertSee('Clínica Médica');
+    }
+
+    /** Cria uma segunda avaliação com resultado importado, elegível para comparação. */
+    private function outraAvaliacaoComparavel(): Avaliacao
+    {
+        $outra = Avaliacao::create(['nome' => 'Diagnóstica anterior']);
+        Questao::create(['avaliacao_codigo' => $outra->codigo, 'numero' => 1, 'gabarito' => 'A', 'area' => 'Clínica Médica']);
+
+        for ($i = 1; $i <= 12; $i++) {
+            Resposta::create([
+                'avaliacao_codigo' => $outra->codigo,
+                'ra' => 'outra-'.$i,
+                'periodo' => '',
+                'questao_numero' => 1,
+                'resposta' => $i <= 6 ? 'A' : 'B',
+            ]);
+        }
+        app(ResumoResultadoService::class)->recalcular($outra->codigo);
+
+        return $outra;
+    }
+
     public function test_alinhamento_some_quando_nenhuma_questao_tem_referencia(): void
     {
         $avaliacao = Avaliacao::create([]);

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Avaliacao;
 use App\Services\BiDashboardService;
+use App\Services\ComparacaoAvaliacoesService;
 use App\Services\ExplicacaoBiService;
 use App\Services\PsicometriaService;
 use App\Services\RelatorioAdminService;
@@ -25,6 +26,7 @@ class BiController extends Controller
         AlunoVinculoResolver $alunoResolver,
         PsicometriaService $psicometriaService,
         ExplicacaoBiService $explicacaoService,
+        ComparacaoAvaliacoesService $comparacaoService,
     ): View {
         $periodo = trim((string) $request->query('periodo', ''));
         $periodosDisponiveis = $avaliacao->resultados()->select('periodo')->distinct()->pluck('periodo');
@@ -48,6 +50,13 @@ class BiController extends Controller
             ? $psicometriaService->analisar($avaliacao, $periodo)
             : null;
 
+        // Códigos vêm da query string (?comparar[]=123) — a validação de
+        // quantidade/existência é responsabilidade do serviço, não da rota.
+        $codigosComparar = array_map('intval', (array) $request->query('comparar', []));
+        $comparacaoAvaliacoes = $visivel('comparacao_avaliacoes')
+            ? $comparacaoService->comparar($avaliacao, $codigosComparar)
+            : null;
+
         $painel = [
             'psicometria' => $psicometria,
             'bi' => $dados,
@@ -66,6 +75,7 @@ class BiController extends Controller
             'mediaPorMiller' => $visivel('desempenho_miller') ? $relatorioService->mediaPorMiller($avaliacao, $periodo) : null,
             'alinhamento' => $visivel('alinhamento_referencias') ? $relatorioService->desempenhoPorReferencia($avaliacao, $periodo) : null,
             'equidade' => $visivel('equidade_demografica') ? $relatorioService->equidadeDemografica($avaliacao, $periodo) : null,
+            'comparacao' => $comparacaoAvaliacoes,
         ];
 
         return view('admin.avaliacoes.bi', [
@@ -95,6 +105,9 @@ class BiController extends Controller
                 : null,
             'alinhamentoReferencias' => $painel['alinhamento'],
             'equidade' => $painel['equidade'],
+            'opcoesComparacao' => $visivel('comparacao_avaliacoes') ? $comparacaoService->opcoesDisponiveis($avaliacao) : collect(),
+            'comparacaoSelecionada' => $codigosComparar,
+            'comparacaoAvaliacoes' => $comparacaoAvaliacoes,
             // Redigido por cima dos agregados já calculados acima — nenhuma
             // consulta a mais só para explicar os gráficos.
             'explicacoes' => $explicacaoService->gerar($painel),
