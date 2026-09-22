@@ -61,6 +61,69 @@ class SpreadsheetReader
         };
     }
 
+    /**
+     * Só os nomes de coluna (linha 1), sem ler as linhas de dado — usado pela
+     * pré-visualização do import (mostra quais campos o sistema reconheceu
+     * antes do usuário confirmar), que não precisa materializar o arquivo
+     * inteiro pra responder isso.
+     *
+     * @return array<int, string>
+     */
+    public static function readHeader(UploadedFile $file): array
+    {
+        $extension = strtolower($file->getClientOriginalExtension());
+
+        return match ($extension) {
+            'csv', 'txt' => self::readHeaderCsv($file->getRealPath()),
+            'xlsx', 'xls' => self::readHeaderSpreadsheet($file->getRealPath()),
+            default => throw new RuntimeException("Formato de arquivo não suportado: .{$extension}"),
+        };
+    }
+
+    /** @return array<int, string> */
+    private static function readHeaderCsv(string $path): array
+    {
+        $raw = file_get_contents($path);
+
+        if ($raw === false) {
+            throw new RuntimeException('Não foi possível ler o arquivo enviado.');
+        }
+
+        $raw = preg_replace('/^\xEF\xBB\xBF/', '', $raw);
+
+        if (! mb_check_encoding($raw, 'UTF-8')) {
+            $raw = mb_convert_encoding($raw, 'UTF-8', 'Windows-1252');
+        }
+
+        $delimiter = self::detectDelimiter($raw);
+        $firstLine = strtok($raw, "\r\n");
+
+        if ($firstLine === false) {
+            return [];
+        }
+
+        $header = str_getcsv($firstLine, $delimiter, '"', '\\');
+
+        return array_values(array_filter(
+            array_map(fn ($h) => trim((string) $h), $header),
+            fn ($h) => $h !== ''
+        ));
+    }
+
+    /** @return array<int, string> */
+    private static function readHeaderSpreadsheet(string $path): array
+    {
+        $spreadsheet = IOFactory::load($path);
+        $sheet = $spreadsheet->getActiveSheet();
+        $highestColumn = $sheet->getHighestDataColumn();
+        $linha = $sheet->rangeToArray("A1:{$highestColumn}1", null, true, true, false)[0] ?? [];
+
+        return array_values(array_filter(
+            array_map(fn ($h) => trim((string) $h), $linha),
+            fn ($h) => $h !== ''
+        ));
+    }
+
     private static function readCsv(string $path): array
     {
         $raw = file_get_contents($path);

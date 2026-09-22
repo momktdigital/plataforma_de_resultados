@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Avaliacao;
 use App\Models\Questao;
+use App\Support\Dificuldade;
 use App\Support\HeaderResolver;
 use App\Support\ImportResult;
 use App\Support\SpreadsheetReader;
@@ -48,6 +49,35 @@ class QuestaoImportService
 
     /** Tamanho dos lotes do upsert() — ver ResultadoImportService::TAMANHO_LOTE. */
     private const TAMANHO_LOTE = 500;
+
+    /**
+     * Campos de valor único usados pela pré-visualização do import (ver
+     * identificarColunas()) — mesmos padrões de extrairMetadados(), só que
+     * checados contra o cabeçalho, não linha a linha.
+     */
+    private const CAMPOS_PREVIEW = [
+        ['chave' => 'numero', 'rotulo' => 'Questão', 'obrigatorio' => true, 'patterns' => self::NUMERO_PATTERNS],
+        ['chave' => 'gabarito', 'rotulo' => 'Gabarito', 'obrigatorio' => true, 'patterns' => self::GABARITO_PATTERNS],
+        ['chave' => 'area', 'rotulo' => 'Área', 'obrigatorio' => false, 'patterns' => ['/\barea\b/']],
+        ['chave' => 'tema', 'rotulo' => 'Tema', 'obrigatorio' => false, 'patterns' => ['/\btema\b/']],
+        ['chave' => 'habilidade', 'rotulo' => 'Habilidade', 'obrigatorio' => false, 'patterns' => ['/\bhabilidade\b/']],
+        ['chave' => 'bloom_nivel', 'rotulo' => 'Bloom (nível)', 'obrigatorio' => false, 'patterns' => ['/(?=.*bloom)(?=.*nivel)/']],
+        ['chave' => 'bloom_verbo', 'rotulo' => 'Bloom (verbo)', 'obrigatorio' => false, 'patterns' => ['/(?=.*bloom)(?=.*verbo)/', '/\btaxonomia\b/']],
+        ['chave' => 'miller_nivel', 'rotulo' => 'Miller (nível)', 'obrigatorio' => false, 'patterns' => ['/miller/']],
+        ['chave' => 'dificuldade_pedagogica', 'rotulo' => 'Dificuldade Pedagógica', 'obrigatorio' => false, 'patterns' => ['/(?=.*dificuldade)(?!.*tri)/']],
+        ['chave' => 'dificuldade_tri', 'rotulo' => 'Dificuldade TRI', 'obrigatorio' => false, 'patterns' => ['/(?=.*dificuldade)(?=.*tri)/']],
+        ['chave' => 'matriz_periodo', 'rotulo' => 'Matriz (período)', 'obrigatorio' => false, 'patterns' => ['/(?=.*matriz)(?=.*period)/']],
+        ['chave' => 'matriz_disciplina', 'rotulo' => 'Matriz (disciplina)', 'obrigatorio' => false, 'patterns' => ['/(?=.*matriz)(?=.*disciplina)/']],
+        ['chave' => 'matriz_codigo', 'rotulo' => 'Matriz (código)', 'obrigatorio' => false, 'patterns' => ['/(?=.*matriz)(?=.*codigo)/']],
+    ];
+
+    /** Rótulo de exibição de cada grupo de REFERENCIA_LETRAS na pré-visualização. */
+    private const REFERENCIA_ROTULOS = [
+        'matriz_prova' => 'Matriz Prova',
+        'dcn' => 'DCN',
+        'portaria_inep' => 'Portaria INEP',
+        'ppc' => 'PPC',
+    ];
 
     public function importar(Avaliacao $avaliacao, UploadedFile $file, bool $dryRun = false): ImportResult
     {
@@ -112,6 +142,43 @@ class QuestaoImportService
         $dryRun ? DB::rollBack() : DB::commit();
 
         return $resultado;
+    }
+
+    /**
+     * Lê só o cabeçalho do arquivo e classifica cada campo esperado como
+     * identificado ou não — não toca o banco nem lê linha de dado nenhuma.
+     * Usado pela pré-visualização exibida antes do usuário confirmar o
+     * import de verdade (tabela "o que foi identificado", vermelho pro que
+     * falta de obrigatório e amarelo pro que falta de opcional).
+     *
+     * @return array<int, array{chave: string, rotulo: string, obrigatorio: bool, identificado: bool}>
+     */
+    public function identificarColunas(UploadedFile $file): array
+    {
+        $header = SpreadsheetReader::readHeader($file);
+        $campos = [];
+
+        foreach (self::CAMPOS_PREVIEW as $campo) {
+            $campos[] = [
+                'chave' => $campo['chave'],
+                'rotulo' => $campo['rotulo'],
+                'obrigatorio' => $campo['obrigatorio'],
+                'identificado' => HeaderResolver::hasColumn($header, $campo['patterns']),
+            ];
+        }
+
+        foreach (self::REFERENCIA_LETRAS as $tipo => $letras) {
+            foreach ($letras as $letra) {
+                $campos[] = [
+                    'chave' => $tipo.'_'.$letra,
+                    'rotulo' => self::REFERENCIA_ROTULOS[$tipo].' '.mb_strtoupper($letra, 'UTF-8'),
+                    'obrigatorio' => false,
+                    'identificado' => HeaderResolver::findCampoColumn($header, self::REFERENCIA_LABEL_TOKENS[$tipo], $letra) !== null,
+                ];
+            }
+        }
+
+        return $campos;
     }
 
     /**
@@ -284,10 +351,16 @@ class QuestaoImportService
 
         $valor = HeaderResolver::normalize($valor);
 
+        // "muito facil" precisa vir ANTES de "facil" — senão o prefixo mais
+        // genérico casaria primeiro e "muito fácil" nunca seria reconhecido.
+        // "moderad[ao]" é sinônimo aceito de "médio" (coordenadores usam os
+        // dois termos pra classificar a mesma dificuldade intermediária).
         return match (true) {
-            str_starts_with($valor, 'facil') => 'facil',
-            str_starts_with($valor, 'medi') => 'medio',
-            str_starts_with($valor, 'dific') => 'dificil',
+            str_starts_with($valor, 'muito facil') => Dificuldade::MUITO_FACIL,
+            str_starts_with($valor, 'facil') => Dificuldade::FACIL,
+            str_starts_with($valor, 'moder') => Dificuldade::MEDIO,
+            str_starts_with($valor, 'medi') => Dificuldade::MEDIO,
+            str_starts_with($valor, 'dific') => Dificuldade::DIFICIL,
             default => null,
         };
     }

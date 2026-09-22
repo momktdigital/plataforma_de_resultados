@@ -218,9 +218,9 @@
                 <label class="block text-sm font-medium mb-1" for="dificuldade_pedagogica">Dificuldade Pedagógica</label>
                 <select id="dificuldade_pedagogica" name="dificuldade_pedagogica" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
                     <option value="">—</option>
-                    <option value="facil">Fácil</option>
-                    <option value="medio">Médio</option>
-                    <option value="dificil">Difícil</option>
+                    @foreach (\App\Support\Dificuldade::rotulos() as $valor => $rotulo)
+                        <option value="{{ $valor }}">{{ $rotulo }}</option>
+                    @endforeach
                 </select>
             </div>
             <div>

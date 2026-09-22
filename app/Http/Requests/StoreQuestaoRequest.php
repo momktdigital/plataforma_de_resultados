@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Support\Anulacao;
+use App\Support\Dificuldade;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -29,7 +30,7 @@ class StoreQuestaoRequest extends FormRequest
             'bloom_nivel' => ['nullable', 'string', 'max:255'],
             'bloom_verbo' => ['nullable', 'string', 'max:255'],
             'miller_nivel' => ['nullable', 'string', 'max:255'],
-            'dificuldade_pedagogica' => ['nullable', Rule::in(['facil', 'medio', 'dificil'])],
+            'dificuldade_pedagogica' => ['nullable', Rule::in(Dificuldade::valores())],
             'dificuldade_tri' => ['nullable', 'numeric'],
 
             // Campos de múltiplos valores (editor exibe como "chips") — ver

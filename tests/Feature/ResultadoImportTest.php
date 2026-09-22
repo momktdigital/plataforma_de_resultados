@@ -137,6 +137,96 @@ class ResultadoImportTest extends TestCase
         $this->assertDatabaseCount('respostas', 0);
     }
 
+    public function test_importa_formato_largo_uma_coluna_por_questao(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+
+        $csv = "RA,Q1,Q2,Q3\n2026001,B,A,C\n2026002,D,A,\n";
+        $arquivo = UploadedFile::fake()->createWithContent('resultados.csv', $csv);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", ['arquivo' => $arquivo]);
+
+        // 2 alunos x 3 questões = 6 respostas, uma por (aluno, questão).
+        $this->assertDatabaseCount('respostas', 6);
+        $this->assertDatabaseHas('respostas', ['ra' => '2026001', 'questao_numero' => 1, 'resposta' => 'B']);
+        $this->assertDatabaseHas('respostas', ['ra' => '2026001', 'questao_numero' => 3, 'resposta' => 'C']);
+        $this->assertDatabaseHas('respostas', ['ra' => '2026002', 'questao_numero' => 3, 'resposta' => null]);
+    }
+
+    public function test_formato_largo_trata_blank_e_texto_de_multipla_marcacao(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+
+        $csv = "RA,Q1,Q2,Q3\n2026001,BLANK,MULT,\"(A,C)\"\n";
+        $arquivo = UploadedFile::fake()->createWithContent('resultados.csv', $csv);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/resultados/import", ['arquivo' => $arquivo]);
+
+        // "BLANK" (sinônimo de célula vazia) vira null, igual o formato
+        // longo — as demais leitoras de múltipla marcação são gravadas como
+        // vieram (nunca batem com um gabarito de uma letra só).
+        $this->assertDatabaseHas('respostas', ['ra' => '2026001', 'questao_numero' => 1, 'resposta' => null]);
+        $this->assertDatabaseHas('respostas', ['ra' => '2026001', 'questao_numero' => 2, 'resposta' => 'MULT']);
+        $this->assertDatabaseHas('respostas', ['ra' => '2026001', 'questao_numero' => 3, 'resposta' => '(A,C)']);
+    }
+
+    public function test_preview_identifica_formato_longo(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+
+        $csv = "RA,Questão,Resposta\n2026001,1,B\n";
+        $arquivo = UploadedFile::fake()->createWithContent('resultados.csv', $csv);
+
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->postJson("/avaliacoes/{$avaliacao->codigo}/resultados/import/preview", ['arquivo' => $arquivo]);
+
+        $response->assertOk();
+        $response->assertJson(['formato' => 'longo']);
+        $campos = collect($response->json('campos'))->keyBy('chave');
+        $this->assertTrue($campos['identificador']['identificado']);
+        $this->assertTrue($campos['questao']['identificado']);
+        $this->assertTrue($campos['resposta']['identificado']);
+        $this->assertFalse($campos['periodo']['identificado']);
+
+        $this->assertDatabaseCount('respostas', 0);
+    }
+
+    public function test_preview_identifica_formato_largo_e_conta_colunas_de_questao(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+
+        $csv = "RA,Q1,Q2,Q3\n2026001,B,A,C\n";
+        $arquivo = UploadedFile::fake()->createWithContent('resultados.csv', $csv);
+
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->postJson("/avaliacoes/{$avaliacao->codigo}/resultados/import/preview", ['arquivo' => $arquivo]);
+
+        $response->assertOk();
+        $response->assertJson(['formato' => 'largo']);
+        $this->assertStringContainsString('3', $response->json('detalhe'));
+        $campos = collect($response->json('campos'))->keyBy('chave');
+        $this->assertTrue($campos['identificador']['identificado']);
+
+        $this->assertDatabaseCount('respostas', 0);
+    }
+
+    public function test_preview_nao_dispara_job_nem_grava_nada(): void
+    {
+        Queue::fake();
+
+        $avaliacao = Avaliacao::create([]);
+        $csv = "RA,Q1\n2026001,B\n";
+        $arquivo = UploadedFile::fake()->createWithContent('resultados.csv', $csv);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->postJson("/avaliacoes/{$avaliacao->codigo}/resultados/import/preview", ['arquivo' => $arquivo]);
+
+        Queue::assertNothingPushed();
+        $this->assertDatabaseCount('respostas', 0);
+    }
+
     public function test_reimportar_atualiza_em_vez_de_duplicar(): void
     {
         $avaliacao = Avaliacao::create([]);

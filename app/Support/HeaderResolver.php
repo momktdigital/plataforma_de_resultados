@@ -32,10 +32,31 @@ class HeaderResolver
      */
     public static function findCampoValue(array $row, array $labelTokens, string $letra): ?string
     {
+        $columnName = self::findCampoColumn(array_keys($row), $labelTokens, $letra);
+
+        if ($columnName === null) {
+            return null;
+        }
+
+        $value = is_null($row[$columnName]) ? null : trim((string) $row[$columnName]);
+
+        return $value === '' ? null : $value;
+    }
+
+    /**
+     * Mesmo casamento de findCampoValue(), mas só sobre os nomes de coluna —
+     * usado pela pré-visualização do import, que precisa saber se a coluna
+     * existe antes de qualquer linha de dado estar disponível.
+     *
+     * @param  array<int, string>  $header
+     * @param  array<int, string>  $labelTokens  Palavras (já normalizadas) que precisam aparecer no cabeçalho.
+     */
+    public static function findCampoColumn(array $header, array $labelTokens, string $letra): ?string
+    {
         $letra = self::normalize($letra);
 
-        foreach ($row as $key => $value) {
-            $normalizedKey = self::normalize((string) $key);
+        foreach ($header as $columnName) {
+            $normalizedKey = self::normalize((string) $columnName);
 
             foreach ($labelTokens as $token) {
                 if (! str_contains($normalizedKey, $token)) {
@@ -44,9 +65,7 @@ class HeaderResolver
             }
 
             if (preg_match('/(?:^|\s)(?:campo\s+)?'.preg_quote($letra, '/').'$/', $normalizedKey) === 1) {
-                $value = is_null($value) ? null : trim((string) $value);
-
-                return $value === '' ? null : $value;
+                return (string) $columnName;
             }
         }
 

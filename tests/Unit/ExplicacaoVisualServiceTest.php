@@ -21,7 +21,7 @@ class ExplicacaoVisualServiceTest extends TestCase
         $resultado = $this->service->gerar($this->analiseVazia());
 
         $this->assertSame(
-            ['evolucaoHistorica', 'comparativoTurma', 'curvaDificuldade', 'dispersaoTri', 'coberturaHabilidade', 'bloom', 'miller', 'divergentes'],
+            ['evolucaoHistorica', 'comparativoTurma', 'curvaDificuldade', 'dispersaoTri', 'coberturaHabilidade', 'bloom', 'miller', 'divergentes', 'mapaDominio'],
             array_keys($resultado)
         );
         foreach ($resultado as $chave => $entrada) {
@@ -293,6 +293,56 @@ class ExplicacaoVisualServiceTest extends TestCase
         $this->assertStringContainsString('75', $pessoal);
     }
 
+    public function test_mapa_dominio_aponta_consolidacao_e_queda(): void
+    {
+        $analise = $this->analiseVazia();
+        $analise['mapaDominio'] = [
+            'avaliacoes' => [['codigo' => 1, 'nome' => 'Diag. 1'], ['codigo' => 2, 'nome' => 'Diag. 2']],
+            'areas' => [
+                ['area' => 'Cardiologia', 'valores' => [1 => 40.0, 2 => 85.0]],
+                ['area' => 'Saúde Coletiva', 'valores' => [1 => 80.0, 2 => 50.0]],
+            ],
+        ];
+
+        $pessoal = $this->service->gerar($analise)['mapaDominio']['pessoal'];
+
+        $this->assertStringContainsString('Cardiologia', $pessoal);
+        $this->assertStringContainsString('45', $pessoal, 'a alta de 40 para 85 são 45 pp');
+        $this->assertStringContainsString('Saúde Coletiva', $pessoal);
+    }
+
+    public function test_mapa_dominio_nao_afirma_padrao_com_variacao_pequena(): void
+    {
+        $analise = $this->analiseVazia();
+        $analise['mapaDominio'] = [
+            'avaliacoes' => [['codigo' => 1, 'nome' => 'Diag. 1'], ['codigo' => 2, 'nome' => 'Diag. 2']],
+            'areas' => [['area' => 'Pediatria', 'valores' => [1 => 70.0, 2 => 73.0]]],
+        ];
+
+        $pessoal = $this->service->gerar($analise)['mapaDominio']['pessoal'];
+
+        // 3 pp de um exame para outro é ruído — o texto tem que dizer
+        // "estável", nunca "você melhorou".
+        $this->assertStringContainsString('estável', $pessoal);
+    }
+
+    public function test_mapa_dominio_ignora_area_que_nao_tem_as_duas_pontas(): void
+    {
+        $analise = $this->analiseVazia();
+        $analise['mapaDominio'] = [
+            'avaliacoes' => [['codigo' => 1, 'nome' => 'Diag. 1'], ['codigo' => 2, 'nome' => 'Diag. 2']],
+            // Só apareceu na segunda prova: não há evolução a afirmar.
+            'areas' => [['area' => 'Cirurgia', 'valores' => [1 => null, 2 => 90.0]]],
+        ];
+
+        $this->assertNull($this->service->gerar($analise)['mapaDominio']['pessoal']);
+    }
+
+    public function test_mapa_dominio_sem_dado_nao_tem_leitura_pessoal(): void
+    {
+        $this->assertNull($this->service->gerar($this->analiseVazia())['mapaDominio']['pessoal']);
+    }
+
     /** @return array<string, mixed> */
     private function analiseVazia(): array
     {
@@ -305,6 +355,7 @@ class ExplicacaoVisualServiceTest extends TestCase
             'bloom' => [],
             'miller' => [],
             'divergentes' => [],
+            'mapaDominio' => null,
         ];
     }
 }

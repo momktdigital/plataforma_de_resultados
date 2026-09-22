@@ -125,6 +125,8 @@ Route::middleware('instalado')->group(function () {
 
         Route::get('/avaliacoes/{avaliacao}/questoes/import', [QuestaoImportController::class, 'create'])
             ->name('avaliacoes.questoes.import');
+        Route::post('/avaliacoes/{avaliacao}/questoes/import/preview', [QuestaoImportController::class, 'preview'])
+            ->name('avaliacoes.questoes.import.preview');
         Route::post('/avaliacoes/{avaliacao}/questoes/import', [QuestaoImportController::class, 'store'])
             ->name('avaliacoes.questoes.import.store');
 
@@ -141,12 +143,16 @@ Route::middleware('instalado')->group(function () {
 
         Route::get('/avaliacoes/{avaliacao}/resultados/import', [ResultadoImportController::class, 'create'])
             ->name('avaliacoes.resultados.import');
+        Route::post('/avaliacoes/{avaliacao}/resultados/import/preview', [ResultadoImportController::class, 'preview'])
+            ->name('avaliacoes.resultados.import.preview');
         Route::post('/avaliacoes/{avaliacao}/resultados/import', [ResultadoImportController::class, 'store'])
             ->name('avaliacoes.resultados.import.store');
 
         Route::get('/avaliacoes/{avaliacao}/respondentes', [RespondenteController::class, 'index'])->name('avaliacoes.respondentes.index');
         Route::get('/avaliacoes/{avaliacao}/respondentes/show', [RespondenteController::class, 'show'])->name('avaliacoes.respondentes.show');
         Route::put('/avaliacoes/{avaliacao}/respondentes/respostas/{resposta}', [RespondenteController::class, 'updateResposta'])->name('avaliacoes.respondentes.respostas.update');
+        Route::put('/avaliacoes/{avaliacao}/respondentes/vinculo', [RespondenteController::class, 'updateVinculo'])->name('avaliacoes.respondentes.vinculo.update');
+        Route::delete('/avaliacoes/{avaliacao}/respondentes', [RespondenteController::class, 'destroyRespondente'])->name('avaliacoes.respondentes.destroy');
         Route::delete('/avaliacoes/{avaliacao}/periodos', [RespondenteController::class, 'destroyPeriodo'])->name('avaliacoes.periodos.destroy');
         Route::post('/avaliacoes/{avaliacao}/periodos/restaurar', [RespondenteController::class, 'restorePeriodo'])->name('avaliacoes.periodos.restore');
 

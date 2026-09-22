@@ -81,6 +81,7 @@
 
 @if ($temAnaliseNaArvore)
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"></script>
+@include('_viz')
 @endif
 
 @if (! empty($resumoPorCategoria))
@@ -194,45 +195,8 @@ function portalRedimensionarGraficos(conteudo) {
     });
 }
 
-// Botão "lâmpada" de cada gráfico (_explicacao_visual.blade.php) — um único
-// listener delegado no documento, em vez de um por botão, já que esse
-// parcial se repete várias vezes na página (um por painel x categoria).
-document.addEventListener('click', function (evento) {
-    const toggle = evento.target.closest('.explicacao-toggle');
-    if (toggle) {
-        const conteudo = toggle.nextElementSibling;
-        const estavaAberto = !conteudo.hidden;
-        document.querySelectorAll('.explicacao-conteudo').forEach(function (c) { c.hidden = true; });
-        if (estavaAberto) {
-            conteudo.hidden = true;
-        } else {
-            conteudo.hidden = false;
-            portalPosicionarExplicacao(toggle, conteudo);
-        }
-        evento.stopPropagation();
-        return;
-    }
-
-    if (!evento.target.closest('.explicacao-conteudo')) {
-        document.querySelectorAll('.explicacao-conteudo').forEach(function (c) { c.hidden = true; });
-    }
-});
-
-// position:fixed é relativo à VIEWPORT, não rola junto com a página — sem
-// isso, o popover ficaria "grudado" na tela depois que o botão já rolou pra
-// outro lugar. true (capture) pra pegar rolagem de containers internos também.
-document.addEventListener('scroll', function () {
-    document.querySelectorAll('.explicacao-conteudo:not([hidden])').forEach(function (c) { c.hidden = true; });
-}, true);
-
-function portalPosicionarExplicacao(botao, conteudo) {
-    const rect = botao.getBoundingClientRect();
-    const largura = conteudo.offsetWidth;
-    let left = rect.right - largura;
-    left = Math.max(8, Math.min(left, window.innerWidth - largura - 8));
-    conteudo.style.top = (rect.bottom + 4) + 'px';
-    conteudo.style.left = left + 'px';
-}
+// O botão "lâmpada" de cada gráfico é tratado pelo listener delegado em
+// _viz.blade.php, compartilhado com o painel BI — não duplicar aqui.
 
 function portalAplicarFiltro() {
     const inicio = document.getElementById('filtro-data-inicio').value;

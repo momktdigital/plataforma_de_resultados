@@ -153,4 +153,29 @@ class VisualizacaoDisponibilidadeServiceTest extends TestCase
         $estado = $this->service()->calcular($avaliacao1);
         $this->assertTrue($estado['evolucao_categoria']['disponivel']);
     }
+
+    /**
+     * Diferente de evolucao_categoria, comparacao_avaliacoes NÃO exige a
+     * mesma categoria — qualquer outra avaliação com resultado serve.
+     */
+    public function test_comparacao_de_avaliacoes_exige_pelo_menos_outra_avaliacao_com_resumo(): void
+    {
+        $avaliacao1 = Avaliacao::create(['categoria_id' => null]);
+        Questao::create(['avaliacao_codigo' => $avaliacao1->codigo, 'numero' => 1, 'gabarito' => 'A']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao1->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A']);
+        app(ResumoResultadoService::class)->recalcular($avaliacao1->codigo);
+
+        $estado = $this->service()->calcular($avaliacao1);
+        $this->assertFalse($estado['comparacao_avaliacoes']['disponivel']);
+
+        // Categoria diferente da primeira — a comparação não se importa com isso.
+        $categoria = Categoria::create(['nome' => 'Outra categoria']);
+        $avaliacao2 = Avaliacao::create(['categoria_id' => $categoria->id]);
+        Questao::create(['avaliacao_codigo' => $avaliacao2->codigo, 'numero' => 1, 'gabarito' => 'A']);
+        Resposta::create(['avaliacao_codigo' => $avaliacao2->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A']);
+        app(ResumoResultadoService::class)->recalcular($avaliacao2->codigo);
+
+        $estado = $this->service()->calcular($avaliacao1);
+        $this->assertTrue($estado['comparacao_avaliacoes']['disponivel']);
+    }
 }

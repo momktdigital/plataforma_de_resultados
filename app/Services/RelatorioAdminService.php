@@ -6,6 +6,7 @@ use App\Models\Avaliacao;
 use App\Models\Resposta;
 use App\Support\AlunoVinculoResolver;
 use App\Support\Anulacao;
+use App\Support\Dificuldade;
 use App\Support\FiltroDemografico;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -26,6 +27,24 @@ use Illuminate\Support\Facades\DB;
  */
 class RelatorioAdminService
 {
+    /**
+     * Rótulo de exibição de cada `tipo` de App\Models\QuestaoReferencia — a
+     * ordem aqui é a ordem em que os blocos aparecem na tela. Os tipos são
+     * gravados por QuestaoImportService (ver REFERENCIA_LETRAS lá).
+     */
+    private const ROTULOS_REFERENCIA = [
+        'dcn' => 'DCN — Diretrizes Curriculares Nacionais',
+        'ppc' => 'PPC — Projeto Pedagógico do Curso',
+        'portaria_inep' => 'Portaria INEP',
+        'matriz_prova' => 'Matriz da prova',
+    ];
+
+    /**
+     * Piso de respondentes para um grupo demográfico aparecer na análise de
+     * equidade. Abaixo disso a "média do grupo" vira dado individual.
+     */
+    private const MINIMO_POR_GRUPO = 10;
+
     public function __construct(
         private readonly AlunoVinculoResolver $alunoResolver = new AlunoVinculoResolver,
     ) {}
@@ -103,12 +122,12 @@ class RelatorioAdminService
         return $resultado;
     }
 
-    /** @return array<string, array{esperado: string, observado: float, questoes: int}> facil/medio/dificil */
+    /** @return array<string, array{esperado: string, observado: float, questoes: int}> ver App\Support\Dificuldade */
     public function curvaDificuldade(Avaliacao $avaliacao): array
     {
         $porQuestao = $this->acertosPorQuestaoComCampo($avaliacao, 'dificuldade_pedagogica');
 
-        $ordem = ['facil' => 'Fácil', 'medio' => 'Médio', 'dificil' => 'Difícil'];
+        $ordem = Dificuldade::rotulos();
         $acumulado = [];
 
         foreach ($porQuestao as $linha) {
@@ -509,6 +528,163 @@ class RelatorioAdminService
                 'respondentes' => (int) $l->respondentes,
             ])
             ->all();
+    }
+
+    /**
+     * Cobertura e desempenho por referência externa da questão — DCN, PPC,
+     * Portaria INEP e matriz de prova (ver App\Models\QuestaoReferencia).
+     * Esses valores já eram importados e guardados por questão, mas até aqui
+     * só apareciam no cadastro e na exportação: é o recorte que o colegiado e
+     * a avaliação externa (MEC/INEP) pedem — o que a prova cobriu e como foi
+     * o desempenho em cada eixo.
+     *
+     * `questoes` mede a cobertura: um eixo com 3 questões e 90% de acerto diz
+     * muito menos que um com 38 questões e 74%, e a tela precisa mostrar os
+     * dois números lado a lado.
+     *
+     * @return array<string, array{rotulo: string, itens: array<int, array{valor: string, totalQuestoes: int, percentual: float}>}>
+     */
+    public function desempenhoPorReferencia(Avaliacao $avaliacao, string $periodo = ''): array
+    {
+        $linhas = DB::table('respostas as r')
+            ->join('questoes as q', function ($join) use ($avaliacao) {
+                Anulacao::excluirDistribuidas(
+                    $join->on('q.numero', '=', 'r.questao_numero')
+                        ->where('q.avaliacao_codigo', $avaliacao->codigo)
+                        ->whereNull('q.deleted_at')
+                        ->whereNotNull('q.gabarito')
+                        ->where('q.gabarito', '!=', ''),
+                    'q.anulada_modo',
+                );
+            })
+            ->join('questao_referencias as qr', function ($join) {
+                $join->on('qr.questao_id', '=', 'q.id')
+                    ->whereNotNull('qr.valor')
+                    ->where('qr.valor', '!=', '');
+            })
+            ->where('r.avaliacao_codigo', $avaliacao->codigo)
+            ->whereNull('r.deleted_at')
+            ->when($periodo !== '', fn ($q) => $q->where('r.periodo', $periodo))
+            ->groupBy('qr.tipo', 'qr.valor')
+            ->selectRaw('qr.tipo as tipo, qr.valor as valor')
+            ->selectRaw('COUNT(DISTINCT q.numero) as total_questoes')
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
+            ->get();
+
+        $porTipo = [];
+        foreach ($linhas as $linha) {
+            $porTipo[$linha->tipo][] = [
+                'valor' => (string) $linha->valor,
+                'totalQuestoes' => (int) $linha->total_questoes,
+                'percentual' => (int) $linha->total > 0
+                    ? round((int) $linha->acertos / (int) $linha->total * 100, 1)
+                    : 0.0,
+            ];
+        }
+
+        $resultado = [];
+        foreach (self::ROTULOS_REFERENCIA as $tipo => $rotulo) {
+            if (! isset($porTipo[$tipo])) {
+                continue;
+            }
+
+            $itens = $porTipo[$tipo];
+            usort($itens, fn ($a, $b) => $a['percentual'] <=> $b['percentual']);
+
+            $resultado[$tipo] = ['rotulo' => $rotulo, 'itens' => $itens];
+        }
+
+        return $resultado;
+    }
+
+    /**
+     * Desempenho médio por recorte demográfico (sexo, cor/raça, faixa etária)
+     * — monitoramento institucional de equidade, não análise de indivíduo.
+     *
+     * Dois cuidados deliberados: grupos com menos de MINIMO_POR_GRUPO
+     * respondentes são SUPRIMIDOS (num recorte pequeno, "a média do grupo"
+     * identifica a pessoa), e a contagem de suprimidos é devolvida junto para
+     * a tela poder dizer que eles existem em vez de fingir que o recorte está
+     * completo. Um recorte que sobra com menos de 2 grupos visíveis não é
+     * devolvido: sem comparação não há o que ler.
+     *
+     * @return array<string, array{rotulo: string, grupos: array<int, array{valor: string, respondentes: int, media: float}>, suprimidos: int}>
+     */
+    public function equidadeDemografica(Avaliacao $avaliacao, string $periodo = ''): array
+    {
+        $resumos = DB::table('resultado_resumos')
+            ->where('avaliacao_codigo', $avaliacao->codigo)
+            ->when($periodo !== '', fn ($q) => $q->where('periodo', $periodo))
+            ->whereNotNull('percentual')
+            ->select('aluno_chave', 'percentual')
+            ->get();
+
+        if ($resumos->isEmpty()) {
+            return [];
+        }
+
+        $alunos = $this->alunoResolver->resolver($avaliacao->codigo, $periodo);
+        $dataReferencia = $avaliacao->data_avaliacao ?? now();
+
+        $recortes = [
+            'sexo' => ['rotulo' => 'Sexo', 'valor' => fn ($aluno) => $aluno->sexo],
+            'cor_raca' => ['rotulo' => 'Cor/raça', 'valor' => fn ($aluno) => $aluno->cor_raca],
+            'faixa_etaria' => [
+                'rotulo' => 'Faixa etária',
+                'valor' => fn ($aluno) => FiltroDemografico::faixaEtariaDoAluno($aluno, $dataReferencia),
+            ],
+        ];
+
+        $acumulado = [];
+        foreach ($resumos as $resumo) {
+            $aluno = $alunos->get($resumo->aluno_chave);
+            if ($aluno === null) {
+                continue;
+            }
+
+            foreach ($recortes as $chave => $recorte) {
+                $valor = ($recorte['valor'])($aluno);
+                if (empty($valor)) {
+                    continue;
+                }
+                $acumulado[$chave][$valor][] = (float) $resumo->percentual;
+            }
+        }
+
+        $resultado = [];
+        foreach ($recortes as $chave => $recorte) {
+            if (! isset($acumulado[$chave])) {
+                continue;
+            }
+
+            $grupos = [];
+            $suprimidos = 0;
+
+            foreach ($acumulado[$chave] as $valor => $percentuais) {
+                if (count($percentuais) < self::MINIMO_POR_GRUPO) {
+                    $suprimidos++;
+
+                    continue;
+                }
+
+                $grupos[] = [
+                    'valor' => (string) $valor,
+                    'respondentes' => count($percentuais),
+                    'media' => round(array_sum($percentuais) / count($percentuais), 1),
+                ];
+            }
+
+            if (count($grupos) < 2) {
+                continue;
+            }
+
+            usort($grupos, fn ($a, $b) => $b['media'] <=> $a['media']);
+
+            $resultado[$chave] = ['rotulo' => $recorte['rotulo'], 'grupos' => $grupos, 'suprimidos' => $suprimidos];
+        }
+
+        return $resultado;
     }
 
     /** @return array<string, float> */
