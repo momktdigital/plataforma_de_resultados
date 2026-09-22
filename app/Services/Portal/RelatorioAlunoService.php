@@ -384,6 +384,72 @@ class RelatorioAlunoService
         ];
     }
 
+    /**
+     * As mesmas lacunas de lacunasEConsolidados(), só que por TEMA e viradas
+     * para a ação: o que estudar primeiro e quanto isso vale.
+     *
+     * O "ganho" é deliberadamente uma conta que o aluno consegue conferir —
+     * quantos pontos percentuais a nota dele subiria se acertasse aquelas
+     * questões (erros do tema ÷ total de questões válidas da prova). Nada de
+     * estimativa opaca: se ele errou 6 de 100, fechar aquele tema vale 6 pp, e
+     * a ordem da trilha é simplesmente a ordem desse ganho.
+     *
+     * @param  Collection<int, \App\Models\Resposta>  $respostas
+     * @param  Collection<int, string>  $gabaritos
+     * @return array<int, array{area: string, tema: string, erros: int, ganho: float}>
+     */
+    public function trilhaDeEstudo(Collection $respostas, Collection $gabaritos, Avaliacao $avaliacao, int $limite = 6): array
+    {
+        $metaPorNumero = DB::table('questoes')
+            ->where('avaliacao_codigo', $avaliacao->codigo)
+            ->whereNull('deleted_at')
+            ->whereNotNull('area')->where('area', '!=', '')
+            ->whereNotNull('tema')->where('tema', '!=', '')
+            ->select('numero', 'area', 'tema', 'anulada_modo')
+            ->get()
+            ->keyBy('numero');
+
+        $errosPorTema = [];
+        $consideradas = 0;
+
+        foreach ($respostas as $resposta) {
+            $meta = $metaPorNumero->get($resposta->questao_numero);
+            $gabarito = $gabaritos->get($resposta->questao_numero);
+            if ($meta === null || $gabarito === null || $gabarito === '') {
+                continue;
+            }
+
+            // Mesma regra de lacunasEConsolidados(): questão distribuir_pontuacao
+            // saiu da prova, não entra nem como lacuna nem no denominador.
+            if (Anulacao::distribuida($meta->anulada_modo)) {
+                continue;
+            }
+
+            $consideradas++;
+
+            if (! Anulacao::acertou($resposta->resposta, $gabarito, $meta->anulada_modo)) {
+                $chave = $meta->area.'|'.$meta->tema;
+                $errosPorTema[$chave] ??= ['area' => $meta->area, 'tema' => $meta->tema, 'erros' => 0];
+                $errosPorTema[$chave]['erros']++;
+            }
+        }
+
+        if ($consideradas === 0) {
+            return [];
+        }
+
+        $trilha = array_map(fn ($item) => [
+            'area' => $item['area'],
+            'tema' => $item['tema'],
+            'erros' => $item['erros'],
+            'ganho' => round($item['erros'] / $consideradas * 100, 1),
+        ], array_values($errosPorTema));
+
+        usort($trilha, fn ($a, $b) => [$b['erros'], $a['tema']] <=> [$a['erros'], $b['tema']]);
+
+        return array_slice($trilha, 0, $limite);
+    }
+
     private const TEMPLATES_LACUNA = [
         'Foram %d questão(ões) sem acerto, envolvendo %s. Retomar esses conteúdos com revisão dirigida e questões comentadas tende a consolidar a compreensão.',
         'Área com %d ponto(s) a recuperar — em especial %s. Vale priorizar a base conceitual antes dos exercícios de fixação.',

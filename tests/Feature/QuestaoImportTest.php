@@ -95,6 +95,36 @@ class QuestaoImportTest extends TestCase
         $this->assertSame('dificil', Questao::where('numero', 3)->firstOrFail()->dificuldade_pedagogica);
     }
 
+    public function test_dificuldade_moderada_e_gravada_como_medio(): void
+    {
+        // "Moderada" é sinônimo de "Médio" usado por alguns coordenadores —
+        // precisa continuar aceitando "Médio" também.
+        $avaliacao = Avaliacao::create([]);
+
+        $csv = "Questão,Gabarito,Dificuldade\n1,A,Moderada\n2,A,Médio\n";
+        $arquivo = UploadedFile::fake()->createWithContent('gabarito.csv', $csv);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/questoes/import", ['arquivo' => $arquivo]);
+
+        $this->assertSame('medio', Questao::where('numero', 1)->firstOrFail()->dificuldade_pedagogica);
+        $this->assertSame('medio', Questao::where('numero', 2)->firstOrFail()->dificuldade_pedagogica);
+    }
+
+    public function test_dificuldade_muito_facil_e_gravada_em_bucket_proprio(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+
+        $csv = "Questão,Gabarito,Dificuldade\n1,A,Muito Fácil\n2,A,Fácil\n";
+        $arquivo = UploadedFile::fake()->createWithContent('gabarito.csv', $csv);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/questoes/import", ['arquivo' => $arquivo]);
+
+        $this->assertSame('muito_facil', Questao::where('numero', 1)->firstOrFail()->dificuldade_pedagogica);
+        $this->assertSame('facil', Questao::where('numero', 2)->firstOrFail()->dificuldade_pedagogica);
+    }
+
     public function test_coluna_dificuldade_tri_nao_e_confundida_com_a_pedagogica(): void
     {
         $avaliacao = Avaliacao::create([]);
@@ -347,6 +377,78 @@ class QuestaoImportTest extends TestCase
         $this->assertStringContainsString('2', $status['resumo']);
 
         $this->assertDatabaseMissing('atividades', ['acao' => 'import.questoes']);
+    }
+
+    public function test_preview_identifica_colunas_presentes_e_ausentes(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+
+        $csv = "Questão,Gabarito,Área\n1,B,Clínica\n";
+        $arquivo = UploadedFile::fake()->createWithContent('gabarito.csv', $csv);
+
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->postJson("/avaliacoes/{$avaliacao->codigo}/questoes/import/preview", ['arquivo' => $arquivo]);
+
+        $response->assertOk();
+        $campos = collect($response->json('campos'))->keyBy('chave');
+
+        $this->assertTrue($campos['numero']['identificado']);
+        $this->assertTrue($campos['gabarito']['identificado']);
+        $this->assertTrue($campos['area']['identificado']);
+        $this->assertFalse($campos['tema']['identificado']);
+        $this->assertTrue($campos['numero']['obrigatorio']);
+        $this->assertFalse($campos['area']['obrigatorio']);
+
+        $this->assertDatabaseCount('questoes', 0);
+    }
+
+    public function test_preview_marca_gabarito_ausente_como_obrigatorio_nao_identificado(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+
+        $csv = "Questão,Área\n1,Clínica\n";
+        $arquivo = UploadedFile::fake()->createWithContent('gabarito.csv', $csv);
+
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->postJson("/avaliacoes/{$avaliacao->codigo}/questoes/import/preview", ['arquivo' => $arquivo]);
+
+        $response->assertOk();
+        $campos = collect($response->json('campos'))->keyBy('chave');
+
+        $this->assertFalse($campos['gabarito']['identificado']);
+        $this->assertTrue($campos['gabarito']['obrigatorio']);
+    }
+
+    public function test_preview_identifica_coluna_de_referencia_por_letra(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+
+        $csv = "Questão,Gabarito,PPC A\n1,B,Item 1\n";
+        $arquivo = UploadedFile::fake()->createWithContent('gabarito.csv', $csv);
+
+        $response = $this->actingAs($this->admin(), 'admin')
+            ->postJson("/avaliacoes/{$avaliacao->codigo}/questoes/import/preview", ['arquivo' => $arquivo]);
+
+        $response->assertOk();
+        $campos = collect($response->json('campos'))->keyBy('chave');
+
+        $this->assertTrue($campos['ppc_a']['identificado']);
+        $this->assertFalse($campos['ppc_b']['identificado']);
+    }
+
+    public function test_preview_nao_dispara_job_nem_grava_nada(): void
+    {
+        Queue::fake();
+
+        $avaliacao = Avaliacao::create([]);
+        $csv = "Questão,Gabarito\n1,B\n";
+        $arquivo = UploadedFile::fake()->createWithContent('gabarito.csv', $csv);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->postJson("/avaliacoes/{$avaliacao->codigo}/questoes/import/preview", ['arquivo' => $arquivo]);
+
+        Queue::assertNothingPushed();
+        $this->assertDatabaseCount('questoes', 0);
     }
 
     public function test_job_de_import_de_questoes_registra_status_erro_quando_falha(): void

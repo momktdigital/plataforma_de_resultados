@@ -5,6 +5,9 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Avaliacao;
 use App\Services\BiDashboardService;
+use App\Services\ComparacaoAvaliacoesService;
+use App\Services\ExplicacaoBiService;
+use App\Services\PsicometriaService;
 use App\Services\RelatorioAdminService;
 use App\Services\Visualizacoes\VisualizacaoConfigService;
 use App\Support\AlunoVinculoResolver;
@@ -21,6 +24,9 @@ class BiController extends Controller
         RelatorioAdminService $relatorioService,
         VisualizacaoConfigService $visualizacaoConfig,
         AlunoVinculoResolver $alunoResolver,
+        PsicometriaService $psicometriaService,
+        ExplicacaoBiService $explicacaoService,
+        ComparacaoAvaliacoesService $comparacaoService,
     ): View {
         $periodo = trim((string) $request->query('periodo', ''));
         $periodosDisponiveis = $avaliacao->resultados()->select('periodo')->distinct()->pluck('periodo');
@@ -38,19 +44,27 @@ class BiController extends Controller
         // configuração de visuais, senão a página fica em branco sem explicar o motivo.
         $dados = $biService->gerar($avaliacao, $periodo, $filtro);
 
-        return view('admin.avaliacoes.bi', [
-            'avaliacao' => $avaliacao,
-            'periodo' => $periodo,
-            'periodosDisponiveis' => $periodosDisponiveis,
-            'filtro' => $filtro,
-            'opcoesFiltro' => $opcoesFiltro,
-            'estado' => $estado,
-            'dados' => $dados,
-            'rankingCompleto' => $visivel('ranking_completo') ? $relatorioService->rankingCompleto($avaliacao, $periodo) : null,
+        // Uma análise só alimenta os dois visuais psicométricos — o cabeçalho
+        // de números e o mapa de itens saem da mesma varredura de `respostas`.
+        $psicometria = ($visivel('estatisticas_gerais') || $visivel('mapa_itens'))
+            ? $psicometriaService->analisar($avaliacao, $periodo)
+            : null;
+
+        // Códigos vêm da query string (?comparar[]=123) — a validação de
+        // quantidade/existência é responsabilidade do serviço, não da rota.
+        $codigosComparar = array_map('intval', (array) $request->query('comparar', []));
+        $comparacaoAvaliacoes = $visivel('comparacao_avaliacoes')
+            ? $comparacaoService->comparar($avaliacao, $codigosComparar)
+            : null;
+
+        $painel = [
+            'psicometria' => $psicometria,
+            'bi' => $dados,
+            'ranking' => $visivel('ranking_completo') ? $relatorioService->rankingCompleto($avaliacao, $periodo) : null,
             'distribuicaoTurma' => $visivel('distribuicao_turma') ? $relatorioService->distribuicaoPorTurma($avaliacao, $periodo, $filtro) : null,
             'curvaDificuldade' => $visivel('curva_dificuldade') ? $relatorioService->curvaDificuldade($avaliacao) : null,
             'dispersaoTri' => $visivel('dispersao_tri') ? $relatorioService->dispersaoTri($avaliacao) : null,
-            'heatmapHabilidadeTurma' => $visivel('heatmap_habilidade_turma') ? $relatorioService->heatmapHabilidadeTurma($avaliacao, $periodo, $filtro) : null,
+            'heatmap' => $visivel('heatmap_habilidade_turma') ? $relatorioService->heatmapHabilidadeTurma($avaliacao, $periodo, $filtro) : null,
             'perfilDemografico' => $visivel('perfil_demografico') ? $relatorioService->perfilDemografico($avaliacao) : null,
             'analiseAlternativas' => $visivel('analise_alternativas') ? $relatorioService->analiseAlternativas($avaliacao, $periodo, $filtro) : null,
             'correlacaoMetricas' => $visivel('correlacao_metricas') ? $relatorioService->correlacaoMetricas($avaliacao, $periodo, $filtro) : null,
@@ -59,6 +73,44 @@ class BiController extends Controller
             'desempenhoPorTema' => $visivel('desempenho_tema') ? $relatorioService->desempenhoPorTema($avaliacao, $periodo) : null,
             'mediaPorBloom' => $visivel('desempenho_bloom') ? $relatorioService->mediaPorBloom($avaliacao, $periodo) : null,
             'mediaPorMiller' => $visivel('desempenho_miller') ? $relatorioService->mediaPorMiller($avaliacao, $periodo) : null,
+            'alinhamento' => $visivel('alinhamento_referencias') ? $relatorioService->desempenhoPorReferencia($avaliacao, $periodo) : null,
+            'equidade' => $visivel('equidade_demografica') ? $relatorioService->equidadeDemografica($avaliacao, $periodo) : null,
+            'comparacao' => $comparacaoAvaliacoes,
+        ];
+
+        return view('admin.avaliacoes.bi', [
+            'avaliacao' => $avaliacao,
+            'periodo' => $periodo,
+            'periodosDisponiveis' => $periodosDisponiveis,
+            'filtro' => $filtro,
+            'opcoesFiltro' => $opcoesFiltro,
+            'estado' => $estado,
+            'dados' => $dados,
+            'rankingCompleto' => $painel['ranking'],
+            'distribuicaoTurma' => $painel['distribuicaoTurma'],
+            'curvaDificuldade' => $painel['curvaDificuldade'],
+            'dispersaoTri' => $painel['dispersaoTri'],
+            'heatmapHabilidadeTurma' => $painel['heatmap'],
+            'perfilDemografico' => $painel['perfilDemografico'],
+            'analiseAlternativas' => $painel['analiseAlternativas'],
+            'correlacaoMetricas' => $painel['correlacaoMetricas'],
+            'evolucaoCategoria' => $painel['evolucaoCategoria'],
+            'mediaPorArea' => $painel['mediaPorArea'],
+            'desempenhoPorTema' => $painel['desempenhoPorTema'],
+            'mediaPorBloom' => $painel['mediaPorBloom'],
+            'mediaPorMiller' => $painel['mediaPorMiller'],
+            'psicometria' => $psicometria,
+            'curvasItens' => ($visivel('mapa_itens') && $psicometria !== null)
+                ? $psicometriaService->curvasCaracteristicas($avaliacao, $periodo)
+                : null,
+            'alinhamentoReferencias' => $painel['alinhamento'],
+            'equidade' => $painel['equidade'],
+            'opcoesComparacao' => $visivel('comparacao_avaliacoes') ? $comparacaoService->opcoesDisponiveis($avaliacao) : collect(),
+            'comparacaoSelecionada' => $codigosComparar,
+            'comparacaoAvaliacoes' => $comparacaoAvaliacoes,
+            // Redigido por cima dos agregados já calculados acima — nenhuma
+            // consulta a mais só para explicar os gráficos.
+            'explicacoes' => $explicacaoService->gerar($painel),
         ]);
     }
 }

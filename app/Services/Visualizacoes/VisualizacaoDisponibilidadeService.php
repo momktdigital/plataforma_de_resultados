@@ -3,6 +3,7 @@
 namespace App\Services\Visualizacoes;
 
 use App\Models\Avaliacao;
+use App\Services\PsicometriaService;
 use App\Support\AlunoVinculoResolver;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -104,6 +105,18 @@ class VisualizacaoDisponibilidadeService
             ->whereNull('deleted_at')
             ->exists();
 
+        $temReferencias = DB::table('questao_referencias as qr')
+            ->join('questoes as q', 'q.id', '=', 'qr.questao_id')
+            ->where('q.avaliacao_codigo', $codigo)
+            ->whereNull('q.deleted_at')
+            ->whereNotNull('qr.valor')
+            ->where('qr.valor', '!=', '')
+            ->exists();
+
+        // Psicometria precisa de gente suficiente para os grupos extremos de
+        // 27% significarem alguma coisa — ver PsicometriaService.
+        $temRespondentesParaPsicometria = $qtdResumos >= PsicometriaService::MINIMO_RESPONDENTES;
+
         $alunosVinculados = $this->alunoResolver->resolver($codigo);
         $temTurmaVinculada = $alunosVinculados->contains(fn ($a) => ! empty($a->turma));
         $temDadosDemograficos = $alunosVinculados->contains(
@@ -125,6 +138,15 @@ class VisualizacaoDisponibilidadeService
 
             $temEvolucaoCategoria = $qtdAvaliacoesComResumo >= 2;
         }
+
+        // Diferente de evolucao_categoria, a comparação não exige a mesma
+        // categoria — o coordenador pode querer comparar com qualquer outra
+        // avaliação que já tenha resultado.
+        $temOutraAvaliacaoComparavel = DB::table('avaliacoes as av')
+            ->join('resultado_resumos as rr', 'rr.avaliacao_codigo', '=', 'av.codigo')
+            ->where('av.codigo', '!=', $codigo)
+            ->whereNull('av.deleted_at')
+            ->exists();
 
         $base = fn (string $semGabaritoMsg = 'Cadastre o gabarito das questões desta avaliação.') => $temGabarito
             ? null
@@ -216,6 +238,34 @@ class VisualizacaoDisponibilidadeService
 
             'ranking_percentil' => $baseComRespostas() ?? (
                 $qtdResumos >= 2 ? null : 'É necessário pelo menos 2 respondentes para calcular percentil.'
+            ),
+
+            'estatisticas_gerais' => $baseComRespostas() ?? (
+                $temRespondentesParaPsicometria
+                    ? null
+                    : 'São necessários pelo menos '.PsicometriaService::MINIMO_RESPONDENTES.' respondentes para calcular a confiabilidade da prova.'
+            ),
+
+            'mapa_itens' => $baseComRespostas() ?? (
+                $temRespondentesParaPsicometria
+                    ? null
+                    : 'São necessários pelo menos '.PsicometriaService::MINIMO_RESPONDENTES.' respondentes para medir a discriminação de cada questão.'
+            ),
+
+            'alinhamento_referencias' => $baseComRespostas() ?? (
+                $temReferencias ? null : 'Nenhuma questão tem referência de DCN, PPC, Portaria INEP ou matriz de prova cadastrada.'
+            ),
+
+            'equidade_demografica' => $baseComResumos() ?? (
+                $temDadosDemograficos ? null : 'Nenhum aluno vinculado tem dados pessoais (sexo, cor/raça ou data de nascimento) cadastrados.'
+            ),
+
+            'trilha_estudo' => $baseComRespostas() ?? (
+                ($temArea && $temTema) ? null : 'Nenhuma questão tem área e tema cadastrados.'
+            ),
+
+            'comparacao_avaliacoes' => $baseComResumos() ?? (
+                $temOutraAvaliacaoComparavel ? null : 'Nenhuma outra avaliação com resultados importados para comparar.'
             ),
         ];
 

@@ -115,6 +115,65 @@
             </div>
         @endif
 
+        @if (! empty($analise['mapaDominio']))
+            @php
+                $mapa = $analise['mapaDominio'];
+                $rampa = ['#e2f4ee', '#b9e5d7', '#7ed2b9', '#3fb99b', '#12a37f', '#0a7159'];
+                $corDominio = function (?float $v) use ($rampa) {
+                    if ($v === null) {
+                        return '#f1f5f9';
+                    }
+
+                    return $rampa[max(0, min(count($rampa) - 1, (int) floor($v / 100 * count($rampa))))];
+                };
+            @endphp
+            <div class="bg-white border border-slate-200 rounded-lg p-3">
+                <div class="flex items-center justify-between gap-2 mb-2">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                        <i class="ph-bold ph-grid-nine text-primary"></i> Mapa de domínio por área
+                    </p>
+                    @include('portal._explicacao_visual', ['no' => $no, 'chave' => 'mapaDominio'])
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm border-separate" style="border-spacing: 2px; min-width: {{ 160 + count($mapa['avaliacoes']) * 86 }}px">
+                        <thead>
+                            <tr>
+                                <th class="text-left text-[11px] font-medium text-slate-400 px-1 pb-1">Área</th>
+                                @foreach ($mapa['avaliacoes'] as $av)
+                                    <th class="text-[11px] font-medium text-slate-400 px-1 pb-1 text-center">
+                                        {{ \Illuminate\Support\Str::limit($av['nome'] ?: 'Avaliação '.$av['codigo'], 14) }}
+                                    </th>
+                                @endforeach
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($mapa['areas'] as $linha)
+                                <tr>
+                                    <th scope="row" class="text-left text-xs font-medium text-slate-700 pr-2 whitespace-nowrap">{{ $linha['area'] }}</th>
+                                    @foreach ($mapa['avaliacoes'] as $av)
+                                        @php $valor = $linha['valores'][$av['codigo']] ?? null; @endphp
+                                        <td class="text-center rounded-md py-2 text-xs font-bold tabular-nums"
+                                            style="background-color: {{ $corDominio($valor) }}; color: {{ $valor !== null && $valor >= 66 ? '#ffffff' : ($valor === null ? '#94a3b8' : '#0f1720') }}"
+                                            title="{{ $linha['area'] }} — {{ $av['nome'] ?: 'Avaliação '.$av['codigo'] }}: {{ $valor === null ? 'sem questão desta área' : $valor.'% de acerto' }}">
+                                            {{ $valor === null ? '—' : round($valor).'%' }}
+                                        </td>
+                                    @endforeach
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                <div class="flex items-center gap-1.5 mt-2 text-[11px] text-slate-400">
+                    <span>menor acerto</span>
+                    @foreach ($rampa as $tom)
+                        <span class="inline-block w-5 h-2 rounded-sm" style="background-color: {{ $tom }}"></span>
+                    @endforeach
+                    <span>maior</span>
+                    <span class="ml-2">— vazio: a avaliação não tinha questão dessa área</span>
+                </div>
+            </div>
+        @endif
+
         @if (! empty($analise['divergentes']))
             <div class="bg-white border border-slate-200 rounded-lg p-3">
                 <div class="flex items-center justify-between gap-2 mb-2">

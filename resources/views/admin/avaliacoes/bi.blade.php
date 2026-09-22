@@ -88,10 +88,389 @@
     </div>
 @endif
 
+@if ($estado['estatisticas_gerais']['visivelAdmin'] && $psicometria !== null)
+    @php
+        $kr20 = $psicometria['kr20'];
+        $kr20Bom = $kr20 !== null && $kr20 >= 0.80;
+        $kr20Aceitavel = $kr20 !== null && $kr20 >= 0.70;
+    @endphp
+    <h2 class="text-lg font-bold mb-3">Números da prova</h2>
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+            <div class="flex items-center gap-2">
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Média da turma</p>
+                @include('_explicacao', ['explicacao' => $explicacoes['kpi_media'] ?? null])
+            </div>
+            <p class="text-3xl font-bold mt-2 tracking-tight">{{ number_format($psicometria['media'], 1, ',', '.') }}<span class="text-lg font-medium text-slate-500">%</span></p>
+            <p class="text-xs text-slate-500 mt-1">{{ $psicometria['respondentes'] }} respondente(s) · {{ $psicometria['questoes'] }} questão(ões)</p>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+            <div class="flex items-center gap-2">
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Mediana</p>
+                @include('_explicacao', ['explicacao' => $explicacoes['kpi_mediana'] ?? null])
+            </div>
+            <p class="text-3xl font-bold mt-2 tracking-tight">{{ number_format($psicometria['mediana'], 1, ',', '.') }}<span class="text-lg font-medium text-slate-500">%</span></p>
+            <p class="text-xs text-slate-500 mt-1">metade da turma ficou acima disto</p>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+            <div class="flex items-center gap-2">
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Desvio-padrão</p>
+                @include('_explicacao', ['explicacao' => $explicacoes['kpi_desvio'] ?? null])
+            </div>
+            <p class="text-3xl font-bold mt-2 tracking-tight">{{ number_format($psicometria['desvio'], 1, ',', '.') }}<span class="text-lg font-medium text-slate-500">pp</span></p>
+            <p class="text-xs text-slate-500 mt-1">o quanto as notas se espalham</p>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+            <div class="flex items-center gap-2">
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Confiabilidade (KR-20)</p>
+                @include('_explicacao', ['explicacao' => $explicacoes['kpi_kr20'] ?? null])
+            </div>
+            @if ($kr20 === null)
+                <p class="text-3xl font-bold mt-2 tracking-tight text-slate-300">—</p>
+                <p class="text-xs text-slate-500 mt-1">sem variação de notas suficiente para calcular</p>
+            @else
+                <p class="text-3xl font-bold mt-2 tracking-tight">{{ number_format($kr20, 2, ',', '.') }}</p>
+                <div class="h-1.5 rounded-full bg-slate-100 mt-3 overflow-hidden">
+                    <div class="h-full rounded-full" style="width: {{ round($kr20 * 100) }}%; background-color: {{ $kr20Aceitavel ? '#12a37f' : '#d03b3b' }}"></div>
+                </div>
+                <p class="text-xs mt-2 font-medium {{ $kr20Bom ? 'text-emerald-700' : ($kr20Aceitavel ? 'text-amber-700' : 'text-red-700') }}">
+                    {{ $kr20Bom ? 'Consistência adequada' : ($kr20Aceitavel ? 'Aceitável — dá para melhorar' : 'Baixa: a prova mede muito ao acaso') }}
+                </p>
+            @endif
+        </div>
+    </div>
+@endif
+
+@if ($estado['comparacao_avaliacoes']['visivelAdmin'])
+    @php
+        // avaliação base = sempre serie1; a ordem de $comparacaoAvaliacoes['avaliacoes']
+        // (base primeiro, depois as escolhidas na ordem do seletor) é o que define
+        // qual cor cada uma leva — nunca reordenar por valor/rank.
+        $paletaComparacao = ['#12a37f', '#2a78d6', '#eb6834'];
+    @endphp
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
+        <div class="flex items-center gap-2 mb-4">
+            <h2 class="font-semibold">Comparação entre avaliações</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['comparacao_avaliacoes'] ?? null])
+        </div>
+
+        <form method="GET" action="{{ route('avaliacoes.bi', $avaliacao) }}" class="flex flex-wrap items-end gap-3 mb-5">
+            <input type="hidden" name="periodo" value="{{ $periodo }}">
+            <input type="hidden" name="turma" value="{{ $filtro->turma }}">
+            <input type="hidden" name="sexo" value="{{ $filtro->sexo }}">
+            <input type="hidden" name="cor_raca" value="{{ $filtro->corRaca }}">
+            <input type="hidden" name="faixa_etaria" value="{{ $filtro->faixaEtaria }}">
+            <div>
+                <div class="flex items-center justify-between mb-1">
+                    <label for="busca-comparar" class="block text-xs font-medium text-slate-500">
+                        Comparar com (até {{ \App\Services\ComparacaoAvaliacoesService::MAX_COMPARACOES }})
+                    </label>
+                    <span id="contagem-comparar" class="text-xs text-slate-400"></span>
+                </div>
+                <div class="border border-slate-300 rounded-lg w-80 max-w-full overflow-hidden">
+                    @if ($opcoesComparacao->isNotEmpty())
+                        <div class="relative border-b border-slate-200">
+                            <i class="ph ph-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                            <input type="text" id="busca-comparar" autocomplete="off" placeholder="Buscar avaliação pelo nome…"
+                                   class="w-full pl-8 pr-2.5 py-2 text-sm border-0 focus:ring-0">
+                        </div>
+                    @endif
+                    <div id="lista-comparar" class="max-h-48 overflow-y-auto divide-y divide-slate-100">
+                        @forelse ($opcoesComparacao as $opcao)
+                            <label class="linha-comparar flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-slate-50 cursor-pointer" data-busca="{{ \Illuminate\Support\Str::ascii(mb_strtolower($opcao['nome'])) }}">
+                                <input type="checkbox" name="comparar[]" value="{{ $opcao['codigo'] }}"
+                                       class="check-comparar rounded border-slate-300"
+                                       {{ in_array($opcao['codigo'], $comparacaoSelecionada) ? 'checked' : '' }}>
+                                <span class="flex-1">{{ $opcao['nome'] }}</span>
+                                @if ($opcao['data'])
+                                    <span class="text-xs text-slate-400">{{ \Illuminate\Support\Carbon::parse($opcao['data'])->format('d/m/Y') }}</span>
+                                @endif
+                            </label>
+                        @empty
+                            <p class="text-xs text-slate-400 px-3 py-2">Nenhuma outra avaliação com resultado ainda.</p>
+                        @endforelse
+                        <p id="sem-resultado-comparar" hidden class="text-xs text-slate-400 px-3 py-2">Nenhuma avaliação encontrada.</p>
+                    </div>
+                </div>
+            </div>
+            <button type="submit" class="bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-lg px-4 py-2 text-sm">
+                Comparar
+            </button>
+            @if (! empty($comparacaoSelecionada))
+                <a href="{{ route('avaliacoes.bi', array_merge(['avaliacao' => $avaliacao->codigo], request()->except('comparar'))) }}"
+                   class="text-sm text-slate-500 hover:underline px-1 py-2">Limpar comparação</a>
+            @endif
+        </form>
+
+        @if ($comparacaoAvaliacoes === null)
+            <p class="text-sm text-slate-400">Selecione ao menos uma avaliação acima para comparar.</p>
+        @else
+            @php
+                $listaComparacao = $comparacaoAvaliacoes['avaliacoes'];
+                $areasComparacao = $comparacaoAvaliacoes['areas'];
+            @endphp
+            <div class="flex flex-wrap gap-x-5 gap-y-1.5 mb-5 pb-4 border-b border-slate-100">
+                @foreach ($listaComparacao as $i => $av)
+                    <span class="flex items-center gap-1.5 text-sm">
+                        <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: {{ $paletaComparacao[$i] }}"></span>
+                        <span class="font-medium text-slate-700">{{ $av['nome'] }}</span>
+                        @if ($i === 0)<span class="text-xs text-slate-400">(esta)</span>@endif
+                    </span>
+                @endforeach
+            </div>
+
+            <div class="grid lg:grid-cols-2 gap-6">
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-sm font-semibold text-slate-600">Média geral</h3>
+                        <button type="button" data-tabela="tabela-comparacao-kpi" aria-expanded="false"
+                                class="text-xs text-slate-500 hover:text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1">
+                            Ver como tabela
+                        </button>
+                    </div>
+                    <canvas id="grafico-comparacao-media" height="220"></canvas>
+                    <div id="tabela-comparacao-kpi" hidden class="mt-4 overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-slate-50 text-slate-500 text-left text-xs uppercase">
+                                <tr>
+                                    <th class="px-3 py-2">Avaliação</th>
+                                    <th class="px-3 py-2">Respondentes</th>
+                                    <th class="px-3 py-2">Média</th>
+                                    <th class="px-3 py-2">Mediana</th>
+                                    <th class="px-3 py-2">Desvio</th>
+                                    <th class="px-3 py-2">KR-20</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @foreach ($listaComparacao as $av)
+                                    <tr>
+                                        <td class="px-3 py-2 font-medium">{{ $av['nome'] }}</td>
+                                        @if ($av['resumo'] === null)
+                                            <td class="px-3 py-2 text-slate-400" colspan="5">respondentes insuficientes</td>
+                                        @else
+                                            <td class="px-3 py-2 tabular-nums">{{ $av['resumo']['respondentes'] }}</td>
+                                            <td class="px-3 py-2 tabular-nums">{{ number_format($av['resumo']['media'], 1, ',', '.') }}%</td>
+                                            <td class="px-3 py-2 tabular-nums">{{ number_format($av['resumo']['mediana'], 1, ',', '.') }}%</td>
+                                            <td class="px-3 py-2 tabular-nums">{{ number_format($av['resumo']['desvio'], 1, ',', '.') }}pp</td>
+                                            <td class="px-3 py-2 tabular-nums">{{ $av['resumo']['kr20'] === null ? '—' : number_format($av['resumo']['kr20'], 2, ',', '.') }}</td>
+                                        @endif
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-sm font-semibold text-slate-600">Desempenho por área</h3>
+                        <button type="button" data-tabela="tabela-comparacao-area" aria-expanded="false"
+                                class="text-xs text-slate-500 hover:text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1">
+                            Ver como tabela
+                        </button>
+                    </div>
+                    @if (empty($areasComparacao))
+                        <p class="text-sm text-slate-400">Nenhuma área em comum entre as avaliações comparadas.</p>
+                    @else
+                        <canvas id="grafico-comparacao-area" height="{{ max(220, count($areasComparacao) * 40) }}"></canvas>
+                        <div id="tabela-comparacao-area" hidden class="mt-4 overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-slate-50 text-slate-500 text-left text-xs uppercase">
+                                    <tr>
+                                        <th class="px-3 py-2">Área</th>
+                                        @foreach ($listaComparacao as $av)
+                                            <th class="px-3 py-2">{{ $av['nome'] }}</th>
+                                        @endforeach
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    @foreach ($areasComparacao as $area)
+                                        <tr>
+                                            <td class="px-3 py-2 font-medium">{{ $area }}</td>
+                                            @foreach ($listaComparacao as $av)
+                                                <td class="px-3 py-2 tabular-nums">
+                                                    {{ isset($av['mediaPorArea'][$area]) ? number_format($av['mediaPorArea'][$area], 1, ',', '.').'%' : '—' }}
+                                                </td>
+                                            @endforeach
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @endif
+                </div>
+            </div>
+        @endif
+    </div>
+
+    <script>
+    // Não depende do Chart.js (busca e limite de seleção são só DOM), então
+    // fica aqui — não precisa esperar a biblioteca carregar lá embaixo.
+    (function () {
+        'use strict';
+
+        var caixas = document.querySelectorAll('#lista-comparar .check-comparar');
+        var contagem = document.getElementById('contagem-comparar');
+
+        function atualizarContagem() {
+            if (!contagem) {
+                return;
+            }
+            var n = document.querySelectorAll('#lista-comparar .check-comparar:checked').length;
+            contagem.textContent = n > 0 ? (n + ' selecionada' + (n > 1 ? 's' : '')) : '';
+        }
+
+        function atualizarLimite() {
+            var marcadas = document.querySelectorAll('#lista-comparar .check-comparar:checked');
+            var limite = marcadas.length >= {{ \App\Services\ComparacaoAvaliacoesService::MAX_COMPARACOES }};
+            caixas.forEach(function (outra) {
+                outra.disabled = limite && !outra.checked;
+            });
+            atualizarContagem();
+        }
+
+        caixas.forEach(function (caixa) {
+            caixa.addEventListener('change', atualizarLimite);
+        });
+        atualizarLimite();
+
+        // Busca client-side: a lista já vem inteira do servidor (não pagina),
+        // então filtrar aqui não custa consulta nenhuma — só esconder linhas.
+        // Uma avaliação já marcada nunca some da lista ao filtrar, senão o
+        // usuário perde de vista o que já escolheu.
+        var busca = document.getElementById('busca-comparar');
+        if (busca) {
+            busca.addEventListener('input', function () {
+                // data-busca já vem sem acento (Str::ascii no servidor) —
+                // dobra o termo digitado do mesmo jeito pra "médica" achar
+                // "medica" e vice-versa.
+                var termo = busca.value.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+                var linhas = document.querySelectorAll('#lista-comparar .linha-comparar');
+                var visiveis = 0;
+
+                linhas.forEach(function (linha) {
+                    var marcada = linha.querySelector('.check-comparar').checked;
+                    var bate = termo === '' || linha.dataset.busca.indexOf(termo) !== -1;
+                    var mostrar = marcada || bate;
+                    // NUNCA a propriedade `hidden` aqui: a linha tem a classe
+                    // Tailwind `flex` (mesma especificidade de [hidden] no
+                    // CSS), e o `display:flex` da classe vence o `display:
+                    // none` do atributo — clica em "esconder" e nada some.
+                    // style.display sempre ganha de qualquer classe.
+                    linha.style.display = mostrar ? '' : 'none';
+                    if (mostrar) {
+                        visiveis++;
+                    }
+                });
+
+                var semResultado = document.getElementById('sem-resultado-comparar');
+                if (semResultado) {
+                    semResultado.hidden = visiveis > 0;
+                }
+            });
+        }
+    })();
+    </script>
+@endif
+
+@if ($estado['mapa_itens']['visivelAdmin'] && $psicometria !== null && ! empty($psicometria['itens']))
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
+        <div class="flex items-start justify-between gap-4 flex-wrap mb-1">
+            <span class="flex items-center gap-2 mr-auto">
+                <h2 class="font-semibold">Mapa de qualidade dos itens</h2>
+                @include('_explicacao', ['explicacao' => $explicacoes['mapa_itens'] ?? null, 'id' => 'expl-mapa'])
+            </span>
+            <button type="button" data-tabela="tabela-mapa-itens" aria-expanded="false"
+                    class="text-xs text-slate-500 hover:text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1">
+                Ver como tabela
+            </button>
+        </div>
+        <p class="text-sm text-slate-500 mb-4">
+            Cada ponto é uma questão. O eixo horizontal é quanto a turma acertou; o vertical é o quanto a questão
+            separa quem foi bem de quem foi mal (faixas de Ebel). Clique num ponto para ver a curva característica dele.
+            Questões anuladas ficam de fora.
+        </p>
+
+        <div class="grid lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-2">
+                <canvas id="grafico-mapa-itens" height="260"></canvas>
+            </div>
+            <div class="border border-slate-200 rounded-xl p-4">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span id="item-numero" class="text-xl font-bold tracking-tight">—</span>
+                    <span id="item-faixa" class="text-xs font-semibold px-2 py-0.5 rounded"></span>
+                    @include('_explicacao', [
+                        'explicacao' => $explicacoes['curva_caracteristica'] ?? null,
+                        'id' => 'expl-cci',
+                    ])
+                </div>
+                <p id="item-contexto" class="text-xs text-slate-500 mt-0.5">Clique num ponto do gráfico</p>
+
+                <div class="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-100">
+                    <div>
+                        <span class="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Acerto</span>
+                        <b id="item-p" class="text-base font-bold tabular-nums">—</b>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Discrim.</span>
+                        <b id="item-d" class="text-base font-bold tabular-nums">—</b>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Em branco</span>
+                        <b id="item-branco" class="text-base font-bold tabular-nums">—</b>
+                    </div>
+                </div>
+
+                <p class="text-xs font-medium text-slate-500 mt-4 mb-1">Curva característica</p>
+                <canvas id="grafico-cci" height="150"></canvas>
+                <p id="item-acao" class="text-xs text-slate-600 mt-3"></p>
+            </div>
+        </div>
+
+        @if ($psicometria['simulacao'] !== null)
+            <div class="mt-5 bg-slate-50 border-l-4 rounded-r-lg px-4 py-3 text-sm text-slate-600" style="border-color: #eb6834">
+                <b class="text-slate-800">E se…</b>
+                removendo {{ count($psicometria['simulacao']['removidos']) }} questão(ões) com discriminação abaixo de 0,20
+                ({{ collect($psicometria['simulacao']['removidos'])->take(3)->map(fn ($n) => 'Q'.$n)->implode(', ') }}{{ count($psicometria['simulacao']['removidos']) > 3 ? '…' : '' }}),
+                o KR-20 da prova
+                @if ($psicometria['simulacao']['ganho'] > 0)
+                    sobe para <b class="text-slate-800">{{ number_format($psicometria['simulacao']['kr20'], 2, ',', '.') }}</b>
+                    (+{{ number_format($psicometria['simulacao']['ganho'], 2, ',', '.') }}).
+                @else
+                    não melhora — o problema desta prova não está concentrado nesses itens.
+                @endif
+            </div>
+        @endif
+
+        <div id="tabela-mapa-itens" hidden class="mt-5 overflow-x-auto">
+            <table class="w-full text-sm">
+                <caption class="text-left text-xs text-slate-500 pb-2">Questões com discriminação abaixo de 0,20</caption>
+                <thead class="bg-slate-50 text-slate-500 text-left text-xs uppercase">
+                    <tr><th class="px-3 py-2">Questão</th><th class="px-3 py-2">Acerto</th><th class="px-3 py-2">Discriminação</th><th class="px-3 py-2">Faixa</th><th class="px-3 py-2">O que fazer</th></tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    @foreach (collect($psicometria['itens'])->filter(fn ($i) => $i['discriminacao'] === null || $i['discriminacao'] < 0.20)->sortBy('discriminacao') as $item)
+                        <tr>
+                            <td class="px-3 py-2 font-medium">Q{{ $item['numero'] }}</td>
+                            <td class="px-3 py-2 tabular-nums">{{ number_format($item['dificuldade'], 1, ',', '.') }}%</td>
+                            <td class="px-3 py-2 tabular-nums">{{ $item['discriminacao'] === null ? '—' : number_format($item['discriminacao'], 2, ',', '.') }}</td>
+                            <td class="px-3 py-2">{{ $item['rotulo'] }}</td>
+                            <td class="px-3 py-2 text-slate-500">{{ $item['acao'] }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+@endif
+
 @if ($estado['histograma']['visivelAdmin'])
     @if (empty($dados['semGabarito']) && empty($dados['semRespostas']) && ! empty($dados))
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-            <h2 class="font-semibold mb-4">Distribuição de acertos ({{ $dados['totalRespondentes'] }} respondente(s))</h2>
+            <div class="flex items-center gap-2 mb-4">
+            <h2 class="font-semibold">Distribuição de acertos ({{ $dados['totalRespondentes'] }} respondente(s))</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['histograma'] ?? null])
+        </div>
             <canvas id="grafico-histograma" height="100"></canvas>
         </div>
     @endif
@@ -100,7 +479,10 @@
 @if ($estado['radar_disciplina']['visivelAdmin'])
     @if (empty($dados['semGabarito']) && empty($dados['semRespostas']) && ! empty($dados))
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-            <h2 class="font-semibold mb-4">Desempenho médio por disciplina</h2>
+            <div class="flex items-center gap-2 mb-4">
+            <h2 class="font-semibold">Desempenho médio por disciplina</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['radar_disciplina'] ?? null])
+        </div>
             @if (empty($dados['radar']))
                 <p class="text-sm text-slate-400">Nenhuma questão desta avaliação tem disciplina cadastrada na matriz.</p>
             @else
@@ -114,7 +496,10 @@
 
 @if ($estado['ranking_completo']['visivelAdmin'] && $rankingCompleto !== null)
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mb-6">
-        <div class="px-6 py-4 border-b border-slate-100 font-semibold">Ranking completo ({{ count($rankingCompleto) }} respondente(s))</div>
+        <div class="px-6 py-4 border-b border-slate-100 font-semibold flex items-center gap-2">
+            <span>Ranking completo ({{ count($rankingCompleto) }} respondente(s))</span>
+            @include('_explicacao', ['explicacao' => $explicacoes['ranking_completo'] ?? null])
+        </div>
         <div class="max-h-96 overflow-y-auto">
             <table class="w-full text-sm">
                 <thead class="bg-slate-50 text-slate-500 text-left sticky top-0">
@@ -151,7 +536,10 @@
 
 @if ($estado['distribuicao_turma']['visivelAdmin'] && $distribuicaoTurma !== null)
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-        <h2 class="font-semibold mb-4">Distribuição de notas por turma</h2>
+        <div class="flex items-center gap-2 mb-4">
+            <h2 class="font-semibold">Distribuição de notas por turma</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['distribuicao_turma'] ?? null])
+        </div>
         @if (empty($distribuicaoTurma))
             <p class="text-sm text-slate-400">Sem dados suficientes.</p>
         @else
@@ -162,7 +550,10 @@
 
 @if ($estado['curva_dificuldade']['visivelAdmin'] && $curvaDificuldade !== null)
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-        <h2 class="font-semibold mb-1">Dificuldade pedagógica: esperado x observado</h2>
+        <div class="flex items-center gap-2 mb-1">
+            <h2 class="font-semibold">Dificuldade pedagógica: esperado x observado</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['curva_dificuldade'] ?? null])
+        </div>
         <p class="text-sm text-slate-500 mb-4">% de acerto observado por nível de dificuldade cadastrado nas questões.</p>
         @if (empty($curvaDificuldade))
             <p class="text-sm text-slate-400">Sem dados suficientes.</p>
@@ -187,7 +578,10 @@
 
 @if ($estado['dispersao_tri']['visivelAdmin'] && $dispersaoTri !== null)
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-        <h2 class="font-semibold mb-1">Dispersão TRI x taxa de acerto observada</h2>
+        <div class="flex items-center gap-2 mb-1">
+            <h2 class="font-semibold">Dispersão TRI x taxa de acerto observada</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['dispersao_tri'] ?? null])
+        </div>
         <p class="text-sm text-slate-500 mb-4">Cada ponto é uma questão — eixo X: dificuldade TRI cadastrada, eixo Y: % de acerto observado.</p>
         @if (empty($dispersaoTri))
             <p class="text-sm text-slate-400">Sem dados suficientes.</p>
@@ -199,7 +593,10 @@
 
 @if ($estado['heatmap_habilidade_turma']['visivelAdmin'] && $heatmapHabilidadeTurma !== null)
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6 overflow-x-auto">
-        <h2 class="font-semibold mb-4">Mapa de calor: habilidade x turma (% de acerto)</h2>
+        <div class="flex items-center gap-2 mb-4">
+            <h2 class="font-semibold">Mapa de calor: habilidade x turma (% de acerto)</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['heatmap_habilidade_turma'] ?? null])
+        </div>
         @if (empty($heatmapHabilidadeTurma))
             <p class="text-sm text-slate-400">Sem dados suficientes.</p>
         @else
@@ -220,7 +617,7 @@
                             @foreach ($todasTurmas as $turma)
                                 @php $valor = $porTurma[$turma] ?? null; @endphp
                                 <td class="px-3 py-2 text-center text-white font-semibold"
-                                    style="background-color: {{ $valor === null ? '#e2e8f0' : 'rgba(16,185,129,'.max(0.15, $valor / 100).')' }}; color: {{ $valor === null ? '#94a3b8' : '#0f172a' }}">
+                                    style="background-color: {{ $valor === null ? '#e2e8f0' : 'rgba(18,163,127,'.max(0.15, $valor / 100).')' }}; color: {{ $valor === null ? '#94a3b8' : '#0f172a' }}">
                                     {{ $valor !== null ? $valor.'%' : '—' }}
                                 </td>
                             @endforeach
@@ -232,10 +629,26 @@
     </div>
 @endif
 
-@if ($estado['perfil_demografico']['visivelAdmin'] && $perfilDemografico !== null)
-    <div class="grid lg:grid-cols-3 gap-6 mb-6">
+@php
+    $temPerfil = $estado['perfil_demografico']['visivelAdmin'] && $perfilDemografico !== null;
+    $temEquidade = $estado['equidade_demografica']['visivelAdmin'] && ! empty($equidade);
+@endphp
+
+@if ($temPerfil || $temEquidade)
+        <div class="mb-6">
+        <h2 class="text-lg font-bold mb-1">Análise demográfica</h2>
+        <p class="text-sm text-slate-500 mb-4">
+            Quem fez esta avaliação e como cada recorte se saiu. O perfil descreve a composição do grupo;
+            a equidade logo abaixo mostra o desempenho de cada um desses mesmos recortes.
+        </p>
+
+        @if ($temPerfil)
+        <div class="grid lg:grid-cols-3 gap-6 mb-6">
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-            <h2 class="font-semibold mb-3">Sexo</h2>
+            <div class="flex items-center gap-2 mb-3">
+                <h3 class="font-semibold">Sexo</h3>
+                @include('_explicacao', ['explicacao' => $explicacoes['perfil_sexo'] ?? null])
+            </div>
             @if (empty($perfilDemografico['sexo']))
                 <p class="text-sm text-slate-400">Sem dados.</p>
             @else
@@ -244,7 +657,10 @@
         </div>
 
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-            <h2 class="font-semibold mb-3">Cor/raça</h2>
+            <div class="flex items-center gap-2 mb-3">
+                <h3 class="font-semibold">Cor/raça</h3>
+                @include('_explicacao', ['explicacao' => $explicacoes['perfil_cor_raca'] ?? null])
+            </div>
             @if (empty($perfilDemografico['cor_raca']))
                 <p class="text-sm text-slate-400">Sem dados.</p>
             @else
@@ -253,7 +669,10 @@
         </div>
 
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-            <h2 class="font-semibold mb-3">UF</h2>
+            <div class="flex items-center gap-2 mb-3">
+                <h3 class="font-semibold">UF</h3>
+                @include('_explicacao', ['explicacao' => $explicacoes['perfil_uf'] ?? null])
+            </div>
             @if (empty($perfilDemografico['uf']))
                 <p class="text-sm text-slate-400">Sem dados.</p>
             @else
@@ -280,11 +699,65 @@
             @endif
         </div>
     </div>
+        @endif
+
+        @if ($temEquidade)
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
+        <div class="flex items-center gap-2 mb-1">
+            <h3 class="font-semibold">Equidade: desempenho por recorte</h3>
+            @include('_explicacao', ['explicacao' => $explicacoes['equidade_demografica'] ?? null])
+        </div>
+        <p class="text-sm text-slate-500 mb-5">
+            Monitoramento institucional, não avaliação de indivíduo. Grupos com menos de 10 respondentes
+            são omitidos — num grupo pequeno, a média do grupo identifica a pessoa.
+        </p>
+
+        <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            @foreach ($equidade as $recorte)
+                @php
+                    $maior = collect($recorte['grupos'])->max('media');
+                    $menor = collect($recorte['grupos'])->min('media');
+                @endphp
+                <div>
+                    <div class="flex items-baseline justify-between gap-2 mb-2">
+                        <h3 class="text-sm font-semibold text-slate-700">{{ $recorte['rotulo'] }}</h3>
+                        <span class="text-xs tabular-nums {{ ($maior - $menor) >= 10 ? 'text-amber-700 font-semibold' : 'text-slate-400' }}">
+                            {{ number_format($maior - $menor, 1, ',', '.') }} pp de diferença
+                        </span>
+                    </div>
+                    <div class="space-y-2">
+                        @foreach ($recorte['grupos'] as $grupo)
+                            <div class="text-sm">
+                                <div class="flex items-baseline justify-between gap-2">
+                                    <span class="truncate" title="{{ $grupo['valor'] }}">{{ $grupo['valor'] }}</span>
+                                    <span class="tabular-nums font-semibold">{{ number_format($grupo['media'], 1, ',', '.') }}%</span>
+                                </div>
+                                <div class="h-2 rounded-full bg-slate-100 mt-1">
+                                    <div class="h-full rounded-full" style="width: {{ min(100, $grupo['media']) }}%; background-color: #2a78d6"></div>
+                                </div>
+                                <span class="text-[11px] text-slate-400">{{ $grupo['respondentes'] }} respondente(s)</span>
+                            </div>
+                        @endforeach
+                    </div>
+                    @if ($recorte['suprimidos'] > 0)
+                        <p class="text-[11px] text-slate-400 mt-2">
+                            {{ $recorte['suprimidos'] }} grupo(s) omitido(s) por terem menos de 10 respondentes.
+                        </p>
+                    @endif
+                </div>
+            @endforeach
+        </div>
+    </div>
+        @endif
+    </div>
 @endif
 
 @if ($estado['desempenho_area']['visivelAdmin'] && $mediaPorArea !== null)
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-        <h2 class="font-semibold mb-4">Desempenho por área</h2>
+        <div class="flex items-center gap-2 mb-4">
+            <h2 class="font-semibold">Desempenho por área</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['desempenho_area'] ?? null])
+        </div>
         @if (empty($mediaPorArea))
             <p class="text-sm text-slate-400">Sem dados suficientes.</p>
         @else
@@ -313,7 +786,10 @@
 
 @if ($estado['desempenho_tema']['visivelAdmin'] && $desempenhoPorTema !== null)
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-        <h2 class="font-semibold mb-4">Desempenho por tema</h2>
+        <div class="flex items-center gap-2 mb-4">
+            <h2 class="font-semibold">Desempenho por tema</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['desempenho_tema'] ?? null])
+        </div>
         @if (empty($desempenhoPorTema))
             <p class="text-sm text-slate-400">Sem dados suficientes.</p>
         @else
@@ -359,7 +835,10 @@
     <div class="grid lg:grid-cols-2 gap-6 mb-6">
         @if ($estado['desempenho_bloom']['visivelAdmin'] && $mediaPorBloom !== null)
             <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-                <h2 class="font-semibold mb-4">Desempenho médio por nível de Bloom</h2>
+                <div class="flex items-center gap-2 mb-4">
+            <h2 class="font-semibold">Desempenho médio por nível de Bloom</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['desempenho_bloom'] ?? null])
+        </div>
                 @if (empty($mediaPorBloom))
                     <p class="text-sm text-slate-400">Sem dados suficientes.</p>
                 @else
@@ -369,7 +848,10 @@
         @endif
         @if ($estado['desempenho_miller']['visivelAdmin'] && $mediaPorMiller !== null)
             <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-                <h2 class="font-semibold mb-4">Desempenho médio por nível de Miller</h2>
+                <div class="flex items-center gap-2 mb-4">
+            <h2 class="font-semibold">Desempenho médio por nível de Miller</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['desempenho_miller'] ?? null])
+        </div>
                 @if (empty($mediaPorMiller))
                     <p class="text-sm text-slate-400">Sem dados suficientes.</p>
                 @else
@@ -382,7 +864,10 @@
 
 @if ($estado['analise_alternativas']['visivelAdmin'] && $analiseAlternativas !== null)
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-        <h2 class="font-semibold mb-1">Análise de alternativas por questão <span id="alternativas-ordenacao-label" class="font-normal text-slate-400 text-sm">(ordenado por % de acerto)</span></h2>
+        <div class="flex items-center gap-2 mb-1">
+            <h2 class="font-semibold">Análise de alternativas por questão <span id="alternativas-ordenacao-label" class="font-normal text-slate-400 text-sm">(ordenado por % de acerto)</span></h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['analise_alternativas'] ?? null])
+        </div>
         @if (empty($analiseAlternativas))
             <p class="text-sm text-slate-400">Sem dados suficientes.</p>
         @else
@@ -443,7 +928,10 @@
 
 @if ($estado['correlacao_metricas']['visivelAdmin'] && $correlacaoMetricas !== null)
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-        <h2 class="font-semibold mb-1">Correlação entre nota total e métricas nomeadas</h2>
+        <div class="flex items-center gap-2 mb-1">
+            <h2 class="font-semibold">Correlação entre nota total e métricas nomeadas</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['correlacao_metricas'] ?? null])
+        </div>
         <p class="text-sm text-slate-500 mb-4">Coeficiente de Pearson entre o percentual de acerto e cada métrica (ex.: nota de redação). Próximo de 1 ou -1 = correlação forte.</p>
         @if (empty($correlacaoMetricas))
             <p class="text-sm text-slate-400">Sem dados suficientes.</p>
@@ -457,7 +945,7 @@
                             $intensidade = $r !== null ? min(1, max(0, (abs($r) - 0.3) / 0.7)) : 0;
                             $corFundo = $r === null || abs($r) < 0.3
                                 ? null
-                                : ($r > 0 ? 'rgba(16,185,129,'.round(0.1 + 0.35 * $intensidade, 2).')' : 'rgba(239,68,68,'.round(0.1 + 0.35 * $intensidade, 2).')');
+                                : ($r > 0 ? 'rgba(18,163,127,'.round(0.1 + 0.35 * $intensidade, 2).')' : 'rgba(239,68,68,'.round(0.1 + 0.35 * $intensidade, 2).')');
                         @endphp
                         <tr>
                             <td class="px-4 py-2">{{ $m['nome_metrica'] }}</td>
@@ -473,7 +961,10 @@
 
 @if ($estado['evolucao_categoria']['visivelAdmin'] && $evolucaoCategoria !== null)
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-        <h2 class="font-semibold mb-4">Evolução da média da turma na categoria</h2>
+        <div class="flex items-center gap-2 mb-4">
+            <h2 class="font-semibold">Evolução da média da turma na categoria</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['evolucao_categoria'] ?? null])
+        </div>
         @if (count($evolucaoCategoria) < 2)
             <p class="text-sm text-slate-400">Sem dados suficientes.</p>
         @else
@@ -482,15 +973,410 @@
     </div>
 @endif
 
+@if ($estado['alinhamento_referencias']['visivelAdmin'] && ! empty($alinhamentoReferencias))
+    @php
+        $mediaGeral = $psicometria['media'] ?? null;
+        // Alerta relativo à média DESTA prova, não a um corte fixo: numa
+        // avaliação difícil (média 50%) um corte de 60% pintaria tudo de
+        // vermelho e não apontaria nada. O que interessa é o eixo que ficou
+        // bem abaixo do resto da prova.
+        $limiteAlerta = $mediaGeral !== null ? $mediaGeral - 10 : null;
+        $abaixo = fn (float $p) => $limiteAlerta !== null && $p < $limiteAlerta;
+    @endphp
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
+        <div class="flex items-center gap-2 mb-1">
+            <h2 class="font-semibold">Alinhamento curricular e regulatório</h2>
+            @include('_explicacao', ['explicacao' => $explicacoes['alinhamento_referencias'] ?? null])
+        </div>
+        <p class="text-sm text-slate-500 mb-5">
+            O que a prova cobriu e como foi o desempenho em cada eixo. A contagem de questões é a cobertura:
+            um eixo com poucas questões diz muito menos sobre o curso que um com muitas.
+        </p>
+
+        @foreach ($alinhamentoReferencias as $tipo => $bloco)
+            <div class="{{ ! $loop->last ? 'mb-6' : '' }}">
+                <h3 class="text-sm font-semibold text-slate-700 mb-2">{{ $bloco['rotulo'] }}</h3>
+                <div class="divide-y divide-slate-100">
+                    @foreach ($bloco['itens'] as $item)
+                        <div class="grid grid-cols-[minmax(110px,1.4fr)_minmax(0,3fr)_auto_auto] gap-3 items-center py-2 text-sm">
+                            <span class="font-medium truncate" title="{{ $item['valor'] }}">{{ $item['valor'] }}</span>
+                            <div class="relative h-2.5 rounded-full bg-slate-100">
+                                <div class="absolute inset-y-0 left-0 rounded-full"
+                                     style="width: {{ min(100, $item['percentual']) }}%; background-color: {{ $abaixo($item['percentual']) ? '#d03b3b' : '#12a37f' }}"></div>
+                                @if ($mediaGeral !== null)
+                                    <span class="absolute -top-0.5 -bottom-0.5 w-0.5 rounded bg-slate-400"
+                                          style="left: {{ min(100, $mediaGeral) }}%"
+                                          title="Média geral da avaliação: {{ number_format($mediaGeral, 1, ',', '.') }}%"></span>
+                                @endif
+                            </div>
+                            <span class="tabular-nums font-semibold text-right w-14 {{ $abaixo($item['percentual']) ? 'text-red-600' : '' }}">
+                                {{ number_format($item['percentual'], 1, ',', '.') }}%
+                            </span>
+                            <span class="text-xs text-slate-400 tabular-nums text-right w-20">{{ $item['totalQuestoes'] }} quest.</span>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        @endforeach
+
+        @if ($mediaGeral !== null)
+            <p class="text-xs text-slate-400 mt-4 flex items-center gap-2">
+                <span class="inline-block w-0.5 h-3 bg-slate-400 rounded"></span>
+                marca a média geral da avaliação ({{ number_format($mediaGeral, 1, ',', '.') }}%) — em vermelho, os eixos
+                que ficaram 10 pontos ou mais abaixo dela
+            </p>
+        @endif
+    </div>
+@endif
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"></script>
+@include('_viz')
+
+@if ($estado['mapa_itens']['visivelAdmin'] && $psicometria !== null && ! empty($psicometria['itens']))
 <script>
+(function () {
+    'use strict';
+
+    var itens = {{ Js::from($psicometria['itens']) }};
+    var curvas = {{ Js::from($curvasItens ?? []) }};
+
+    // Faixas de Ebel: a posição vertical já diz em qual faixa o item caiu, então
+    // a cor é reforço, nunca o único canal de leitura.
+    var faixas = [
+        { chave: 'otimo', rotulo: 'Ótimo (D ≥ 0,40)', cor: Viz.cores.bom, de: 0.40, ate: 1.0 },
+        { chave: 'bom', rotulo: 'Bom (0,30–0,39)', cor: Viz.cores.serie1, de: 0.30, ate: 0.40 },
+        { chave: 'marginal', rotulo: 'Marginal (0,20–0,29)', cor: Viz.cores.atencao, de: 0.20, ate: 0.30 },
+        { chave: 'revisar', rotulo: 'Revisar (< 0,20)', cor: Viz.cores.critico, de: -1.0, ate: 0.20 },
+    ];
+
+    var fundoFaixas = {
+        id: 'fundoFaixas',
+        beforeDatasetsDraw: function (chart) {
+            var ctx = chart.ctx;
+            var eixoY = chart.scales.y;
+            var area = chart.chartArea;
+
+            ctx.save();
+            faixas.forEach(function (faixa) {
+                var topo = eixoY.getPixelForValue(Math.min(faixa.ate, eixoY.max));
+                var base = eixoY.getPixelForValue(Math.max(faixa.de, eixoY.min));
+                if (base <= topo) {
+                    return;
+                }
+                ctx.fillStyle = faixa.cor;
+                ctx.globalAlpha = faixa.chave === 'revisar' ? 0.08 : 0.05;
+                ctx.fillRect(area.left, topo, area.right - area.left, base - topo);
+            });
+            ctx.restore();
+        },
+    };
+
+    var grafico = new Chart(document.getElementById('grafico-mapa-itens'), {
+        type: 'scatter',
+        data: {
+            datasets: faixas.map(function (faixa) {
+                return {
+                    label: faixa.rotulo,
+                    backgroundColor: faixa.cor,
+                    borderColor: Viz.cores.superficie,
+                    borderWidth: 1.5,
+                    pointRadius: 5,
+                    pointHoverRadius: 8,
+                    data: itens
+                        .filter(function (item) { return item.faixa === faixa.chave; })
+                        .map(function (item) {
+                            return { x: item.dificuldade, y: item.discriminacao === null ? 0 : item.discriminacao, item: item };
+                        }),
+                };
+            }),
+        },
+        options: {
+            scales: {
+                x: {
+                    min: 0, max: 100,
+                    title: { display: true, text: 'Acertaram a questão (%)' },
+                },
+                y: {
+                    suggestedMin: -0.2, suggestedMax: 0.8,
+                    title: { display: true, text: 'Índice de discriminação' },
+                },
+            },
+            plugins: {
+                legend: {
+                    onClick: function (evento, item, legenda) {
+                        Chart.defaults.plugins.legend.onClick.call(this, evento, item, legenda);
+                        escreverExplicacaoMapa();
+                    },
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function (contexto) {
+                            var item = contexto.raw.item;
+                            var linhas = [
+                                'Acerto: ' + item.dificuldade.toFixed(1).replace('.', ',') + '%',
+                                'Discriminação: ' + (item.discriminacao === null ? '—' : item.discriminacao.toFixed(2).replace('.', ',')),
+                            ];
+                            if (item.area) {
+                                linhas.push(item.area);
+                            }
+
+                            return linhas;
+                        },
+                        title: function (contexto) {
+                            return 'Questão ' + contexto[0].raw.item.numero;
+                        },
+                    },
+                },
+            },
+            onClick: function (evento, elementos) {
+                if (elementos.length) {
+                    var ponto = grafico.data.datasets[elementos[0].datasetIndex].data[elementos[0].index];
+                    selecionar(ponto.item);
+                }
+            },
+        },
+        plugins: [fundoFaixas],
+    });
+
+    var graficoCci = new Chart(document.getElementById('grafico-cci'), {
+        type: 'line',
+        data: {
+            labels: ['1º', '2º', '3º', '4º', '5º'],
+            datasets: [{ label: '% de acerto', data: [], borderColor: Viz.cores.serie2, backgroundColor: Viz.cores.serie2, fill: false }],
+        },
+        options: {
+            scales: {
+                y: { min: 0, max: 100, title: { display: true, text: '% de acerto' } },
+                x: { title: { display: true, text: 'quinto de desempenho geral →' } },
+            },
+            plugins: { legend: { display: false } },
+        },
+    });
+
+    var coresFaixa = {};
+    faixas.forEach(function (faixa) { coresFaixa[faixa.chave] = faixa.cor; });
+
+    function selecionar(item) {
+        document.getElementById('item-numero').textContent = 'Q' + item.numero;
+        document.getElementById('item-contexto').textContent = [item.area, item.tema].filter(Boolean).join(' · ') || 'sem área cadastrada';
+
+        var faixa = document.getElementById('item-faixa');
+        faixa.textContent = item.rotulo;
+        faixa.style.color = coresFaixa[item.faixa];
+        faixa.style.backgroundColor = coresFaixa[item.faixa] + '22';
+
+        document.getElementById('item-p').textContent = item.dificuldade.toFixed(1).replace('.', ',') + '%';
+        document.getElementById('item-d').textContent = item.discriminacao === null ? '—' : item.discriminacao.toFixed(2).replace('.', ',');
+        document.getElementById('item-branco').textContent = item.respostas > 0
+            ? (item.emBranco / item.respostas * 100).toFixed(1).replace('.', ',') + '%'
+            : '—';
+        document.getElementById('item-acao').textContent = item.acao;
+
+        var curva = curvas[item.numero] || {};
+        graficoCci.data.datasets[0].data = [1, 2, 3, 4, 5].map(function (quinto) {
+            return curva[quinto] === undefined ? null : curva[quinto];
+        });
+        graficoCci.update();
+        escreverExplicacaoCci(item, curva);
+    }
+
+    function numeroBr(valor, casas) {
+        return valor.toFixed(casas).replace('.', ',');
+    }
+
+    /**
+     * Leitura da curva característica do item SELECIONADO. Sem isto o popover
+     * continuaria mostrando a leitura da questão anterior — cada visual tem a
+     * sua, e a deste muda a cada clique no mapa.
+     *
+     * O que decide o tom é a direção da curva: um bom item é acertado mais
+     * pelos quintos de cima do que pelos de baixo.
+     */
+    function escreverExplicacaoCci(item, curva) {
+        var primeiro = curva[1];
+        var ultimo = curva[5];
+        var rotulo = 'Q' + item.numero;
+
+        if (primeiro === undefined || ultimo === undefined) {
+            Viz.escreverLeitura('expl-cci', 'Nesta avaliação: a ' + rotulo + ' não tem respostas suficientes em todos os quintos para desenhar a curva.', null);
+
+            return;
+        }
+
+        var delta = ultimo - primeiro;
+        var texto;
+        var tom;
+
+        if (delta >= 12) {
+            tom = 'bom';
+            texto = 'Nesta avaliação: a curva da ' + rotulo + ' sobe — o quinto mais forte acerta '
+                + numeroBr(ultimo, 0) + '% contra ' + numeroBr(primeiro, 0) + '% do mais fraco ('
+                + numeroBr(delta, 0) + ' pontos de diferença). É o comportamento esperado: a questão separa quem sabe de quem não sabe, e pode ser reaproveitada.';
+        } else if (delta > 0) {
+            tom = 'atencao';
+            texto = 'Nesta avaliação: a curva da ' + rotulo + ' sobe pouco (' + numeroBr(delta, 0)
+                + ' pontos entre o quinto mais fraco e o mais forte). A questão quase não diferencia os alunos — vale revisar o enunciado e as alternativas antes de reutilizá-la.';
+        } else {
+            tom = 'ruim';
+            texto = 'Nesta avaliação: a curva da ' + rotulo + ' é plana ou invertida — quem foi bem na prova acertou '
+                + numeroBr(Math.abs(delta), 0) + ' pontos a MENOS que quem foi mal. Isso costuma indicar gabarito errado, enunciado ambíguo ou distrator mais defensável que a resposta oficial. Confira o item antes de divulgar a nota.';
+        }
+
+        Viz.escreverLeitura('expl-cci', texto, tom);
+    }
+
+    /**
+     * Leitura do mapa considerando só as faixas VISÍVEIS: ao filtrar pela
+     * legenda, a frase tem que falar do recorte que está na tela.
+     */
+    function escreverExplicacaoMapa() {
+        var visiveis = faixas.filter(function (faixa, indice) {
+            return grafico.isDatasetVisible(indice);
+        }).map(function (faixa) { return faixa.chave; });
+
+        var mostrados = itens.filter(function (item) { return visiveis.indexOf(item.faixa) !== -1; });
+        var filtrado = visiveis.length !== faixas.length;
+        var prefixo = filtrado ? 'Com este filtro: ' : 'Nesta avaliação: ';
+
+        if (!mostrados.length) {
+            Viz.escreverLeitura('expl-mapa', prefixo + 'nenhuma questão está nas faixas selecionadas.', null);
+
+            return;
+        }
+
+        var revisar = mostrados.filter(function (item) { return item.faixa === 'revisar'; }).length;
+        var negativos = mostrados.filter(function (item) { return item.discriminacao !== null && item.discriminacao < 0; });
+        var texto = prefixo + mostrados.length + (mostrados.length === 1 ? ' questão exibida' : ' questões exibidas') + '. ';
+        var tom;
+
+        if (negativos.length) {
+            tom = 'ruim';
+            texto += negativos.length === 1
+                ? 'A Q' + negativos[0].numero + ' tem discriminação negativa: quem foi bem na prova errou mais que quem foi mal — confira o gabarito.'
+                : negativos.length + ' delas têm discriminação negativa (quem foi bem na prova errou mais que quem foi mal) — confira o gabarito dessas questões.';
+        } else if (revisar) {
+            tom = 'atencao';
+            texto += revisar === 1
+                ? '1 está na faixa de revisão (D < 0,20): mede pouco e deve ser reescrita antes de reaproveitada.'
+                : revisar + ' estão na faixa de revisão (D < 0,20): medem pouco e devem ser reescritas antes de reaproveitadas.';
+        } else {
+            tom = 'bom';
+            texto += 'Nenhuma está na faixa de revisão — todas separam quem sabe de quem não sabe em grau aceitável.';
+        }
+
+        Viz.escreverLeitura('expl-mapa', texto, tom);
+    }
+
+    // Abre já no item mais problemático: é o que o coordenador veio ver.
+    var pior = itens.slice().sort(function (a, b) {
+        return (a.discriminacao === null ? -99 : a.discriminacao) - (b.discriminacao === null ? -99 : b.discriminacao);
+    })[0];
+    if (pior) {
+        selecionar(pior);
+    }
+})();
+</script>
+@endif
+<script>
+@if ($comparacaoAvaliacoes !== null)
+(function () {
+    'use strict';
+
+    // Mesma ordem de $comparacaoAvaliacoes['avaliacoes'] (base primeiro) e
+    // mesma paleta usada nos pontinhos coloridos da legenda em HTML — a cor
+    // de cada avaliação tem que ser igual nos dois lugares.
+    var paleta = ['#12a37f', '#2a78d6', '#eb6834'];
+    var avaliacoes = {{ Js::from(collect($comparacaoAvaliacoes['avaliacoes'])->map(fn ($a) => ['nome' => $a['nome'], 'media' => $a['resumo']['media'] ?? null])) }};
+    var areas = {{ Js::from($comparacaoAvaliacoes['areas']) }};
+    var porAreaESerie = {{ Js::from(collect($comparacaoAvaliacoes['avaliacoes'])->map(fn ($a) => $a['mediaPorArea'])) }};
+
+    // Rótulo direto no fim de cada barra: com só 2-3 categorias o valor exato
+    // importa mais do que em um gráfico com dezenas delas (ver dataviz:
+    // "selective direct labels" — aqui elas não competem por espaço).
+    var rotuloNaBarra = {
+        id: 'rotuloNaBarra',
+        afterDatasetsDraw: function (chart) {
+            var ctx = chart.ctx;
+            var meta = chart.getDatasetMeta(0);
+            ctx.save();
+            ctx.fillStyle = Viz.cores.tinta;
+            ctx.font = '600 12px ui-sans-serif, system-ui, sans-serif';
+            ctx.textBaseline = 'middle';
+            meta.data.forEach(function (barra, i) {
+                var valor = chart.data.datasets[0].data[i];
+                if (valor === null || valor === undefined) {
+                    return;
+                }
+                var texto = valor.toFixed(1).replace('.', ',') + '%';
+                ctx.fillText(texto, barra.x + 8, barra.y);
+            });
+            ctx.restore();
+        },
+    };
+
+    new Chart(document.getElementById('grafico-comparacao-media'), {
+        type: 'bar',
+        data: {
+            labels: avaliacoes.map(function (a) { return a.nome; }),
+            datasets: [{
+                data: avaliacoes.map(function (a) { return a.media; }),
+                backgroundColor: avaliacoes.map(function (a, i) { return paleta[i]; }),
+                borderRadius: 4,
+                maxBarThickness: 48,
+            }],
+        },
+        options: {
+            indexAxis: 'y',
+            layout: { padding: { right: 36 } },
+            scales: { x: { beginAtZero: true, max: 100, title: { display: true, text: '% de acerto' } } },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function (c) { return c.raw === null ? 'Respondentes insuficientes' : c.raw.toFixed(1).replace('.', ',') + '%'; },
+                    },
+                },
+            },
+        },
+        plugins: [rotuloNaBarra],
+    });
+
+    @if (! empty($comparacaoAvaliacoes['areas']))
+    new Chart(document.getElementById('grafico-comparacao-area'), {
+        type: 'bar',
+        data: {
+            labels: areas,
+            datasets: avaliacoes.map(function (a, i) {
+                return {
+                    label: a.nome,
+                    backgroundColor: paleta[i],
+                    borderRadius: 4,
+                    maxBarThickness: 28,
+                    data: areas.map(function (area) {
+                        var valor = porAreaESerie[i][area];
+
+                        return valor === undefined ? null : valor;
+                    }),
+                };
+            }),
+        },
+        options: {
+            indexAxis: 'y',
+            scales: { x: { beginAtZero: true, max: 100, title: { display: true, text: '% de acerto' } } },
+            plugins: { legend: { position: 'bottom' } },
+        },
+    });
+    @endif
+})();
+@endif
+
 @if (! empty($dados) && empty($dados['semGabarito']) && empty($dados['semRespostas']))
     @if ($estado['histograma']['visivelAdmin'])
     new Chart(document.getElementById('grafico-histograma'), {
         type: 'bar',
         data: {
             labels: [@foreach($dados['histograma'] as $i => $c) '{{ $i * 10 }}-{{ $i * 10 + 9 }}%', @endforeach],
-            datasets: [{ label: 'Respondentes', data: {{ Js::from($dados['histograma']) }}, backgroundColor: '#10b981' }],
+            datasets: [{ label: 'Respondentes', data: {{ Js::from($dados['histograma']) }}, backgroundColor: Viz.cores.serie1 }],
         },
         options: { scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }, plugins: { legend: { display: false } } },
     });
@@ -501,7 +1387,7 @@
         type: 'radar',
         data: {
             labels: {{ Js::from(array_keys($dados['radar'])) }},
-            datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($dados['radar'])) }}, backgroundColor: 'rgba(16,185,129,0.2)', borderColor: '#10b981' }],
+            datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($dados['radar'])) }}, backgroundColor: 'rgba(18,163,127,0.2)', borderColor: Viz.cores.serie1 }],
         },
         options: { scales: { r: { beginAtZero: true, max: 100 } } },
     });
@@ -513,7 +1399,7 @@ new Chart(document.getElementById('grafico-area'), {
     type: 'radar',
     data: {
         labels: {{ Js::from(array_keys($mediaPorArea)) }},
-        datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($mediaPorArea)) }}, backgroundColor: 'rgba(16,185,129,0.2)', borderColor: '#10b981' }],
+        datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($mediaPorArea)) }}, backgroundColor: 'rgba(18,163,127,0.2)', borderColor: Viz.cores.serie1 }],
     },
     options: { scales: { r: { beginAtZero: true, max: 100 } } },
 });
@@ -524,7 +1410,7 @@ new Chart(document.getElementById('grafico-turma'), {
     type: 'bar',
     data: {
         labels: {{ Js::from(array_column($distribuicaoTurma, 'turma')) }},
-        datasets: [{ label: 'Média (%)', data: {{ Js::from(array_column($distribuicaoTurma, 'media')) }}, backgroundColor: '#10b981' }],
+        datasets: [{ label: 'Média (%)', data: {{ Js::from(array_column($distribuicaoTurma, 'media')) }}, backgroundColor: Viz.cores.serie1 }],
     },
     options: { scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
 });
@@ -537,7 +1423,7 @@ new Chart(document.getElementById('grafico-tri'), {
         datasets: [{
             label: 'Questões',
             data: {{ Js::from(array_map(fn ($p) => ['x' => $p['dificuldade_tri'], 'y' => $p['taxa_acerto']], $dispersaoTri)) }},
-            backgroundColor: '#10b981',
+            backgroundColor: Viz.cores.serie1,
         }],
     },
     options: {
@@ -554,7 +1440,7 @@ new Chart(document.getElementById('grafico-bloom'), {
     type: 'bar',
     data: {
         labels: {{ Js::from(array_keys($mediaPorBloom)) }},
-        datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($mediaPorBloom)) }}, backgroundColor: '#10b981' }],
+        datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($mediaPorBloom)) }}, backgroundColor: Viz.cores.serie1 }],
     },
     options: { indexAxis: 'y', scales: { x: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
 });
@@ -565,7 +1451,7 @@ new Chart(document.getElementById('grafico-miller'), {
     type: 'bar',
     data: {
         labels: {{ Js::from(array_keys($mediaPorMiller)) }},
-        datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($mediaPorMiller)) }}, backgroundColor: '#10b981' }],
+        datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($mediaPorMiller)) }}, backgroundColor: Viz.cores.serie1 }],
     },
     options: { indexAxis: 'y', scales: { x: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
 });
@@ -576,7 +1462,7 @@ new Chart(document.getElementById('grafico-sexo'), {
     type: 'doughnut',
     data: {
         labels: {{ Js::from(array_keys($perfilDemografico['sexo'])) }},
-        datasets: [{ data: {{ Js::from(array_values($perfilDemografico['sexo'])) }}, backgroundColor: ['#10b981', '#94a3b8', '#f59e0b', '#6366f1'] }],
+        datasets: [{ data: {{ Js::from(array_values($perfilDemografico['sexo'])) }}, backgroundColor: [Viz.cores.serie1, Viz.cores.serie2, Viz.cores.serie3, Viz.cores.tinta3] }],
     },
     options: { plugins: { legend: { position: 'bottom' } } },
 });
@@ -587,7 +1473,7 @@ new Chart(document.getElementById('grafico-cor-raca'), {
     type: 'bar',
     data: {
         labels: {{ Js::from(array_keys($perfilDemografico['cor_raca'])) }},
-        datasets: [{ data: {{ Js::from(array_values($perfilDemografico['cor_raca'])) }}, backgroundColor: '#10b981', borderRadius: 4, maxBarThickness: 22 }],
+        datasets: [{ data: {{ Js::from(array_values($perfilDemografico['cor_raca'])) }}, backgroundColor: Viz.cores.serie1, borderRadius: 4, maxBarThickness: 22 }],
     },
     options: { indexAxis: 'y', scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }, plugins: { legend: { display: false } } },
 });
@@ -598,7 +1484,7 @@ new Chart(document.getElementById('grafico-evolucao'), {
     type: 'line',
     data: {
         labels: {{ Js::from(array_column($evolucaoCategoria, 'nome')) }},
-        datasets: [{ label: 'Média (%)', data: {{ Js::from(array_column($evolucaoCategoria, 'media')) }}, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.2)', tension: 0.2 }],
+        datasets: [{ label: 'Média (%)', data: {{ Js::from(array_column($evolucaoCategoria, 'media')) }}, borderColor: Viz.cores.serie1, backgroundColor: 'rgba(18,163,127,0.2)', tension: 0.2 }],
     },
     options: { scales: { y: { beginAtZero: true, max: 100 } } },
 });

@@ -141,4 +141,40 @@ class AnaliseConsolidadaServiceTest extends TestCase
         $this->assertSame(80.0, $comLimiarReduzido[0]['percentualTurma']);
         $this->assertSame(5.0, $comLimiarReduzido[0]['diferenca']);
     }
+
+    public function test_mapa_dominio_cruza_area_com_avaliacao_em_ordem_cronologica(): void
+    {
+        $aluno = $this->aluno();
+
+        $primeira = Avaliacao::create(['nome' => 'Diagnóstica 1', 'data_avaliacao' => '2026-03-01']);
+        Questao::create(['avaliacao_codigo' => $primeira->codigo, 'numero' => 1, 'gabarito' => 'A', 'area' => 'Cardiologia']);
+        Questao::create(['avaliacao_codigo' => $primeira->codigo, 'numero' => 2, 'gabarito' => 'A', 'area' => 'Pediatria']);
+        Resposta::create(['avaliacao_codigo' => $primeira->codigo, 'ra' => $aluno->ra, 'periodo' => '', 'questao_numero' => 1, 'resposta' => 'X']);
+        Resposta::create(['avaliacao_codigo' => $primeira->codigo, 'ra' => $aluno->ra, 'periodo' => '', 'questao_numero' => 2, 'resposta' => 'A']);
+
+        // Segunda prova (mais recente) só tem Cardiologia — e o aluno acertou:
+        // consolidou. Pediatria fica sem célula, que é diferente de ir mal.
+        $segunda = Avaliacao::create(['nome' => 'Diagnóstica 2', 'data_avaliacao' => '2026-06-01']);
+        Questao::create(['avaliacao_codigo' => $segunda->codigo, 'numero' => 1, 'gabarito' => 'A', 'area' => 'Cardiologia']);
+        Resposta::create(['avaliacao_codigo' => $segunda->codigo, 'ra' => $aluno->ra, 'periodo' => '', 'questao_numero' => 1, 'resposta' => 'A']);
+
+        $mapa = app(AnaliseConsolidadaService::class)->mapaDominio($aluno, [$primeira->codigo, $segunda->codigo]);
+
+        $this->assertSame(['Diagnóstica 1', 'Diagnóstica 2'], array_column($mapa['avaliacoes'], 'nome'));
+
+        $areas = collect($mapa['areas'])->keyBy('area');
+        $this->assertSame(0.0, $areas['Cardiologia']['valores'][$primeira->codigo]);
+        $this->assertSame(100.0, $areas['Cardiologia']['valores'][$segunda->codigo]);
+
+        $this->assertSame(100.0, $areas['Pediatria']['valores'][$primeira->codigo]);
+        $this->assertNull($areas['Pediatria']['valores'][$segunda->codigo], 'a prova 2 não tinha questão de Pediatria');
+    }
+
+    public function test_mapa_dominio_sem_avaliacoes_retorna_estrutura_vazia(): void
+    {
+        $mapa = app(AnaliseConsolidadaService::class)->mapaDominio($this->aluno(), []);
+
+        $this->assertSame([], $mapa['avaliacoes']);
+        $this->assertSame([], $mapa['areas']);
+    }
 }

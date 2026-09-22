@@ -4,6 +4,7 @@ namespace App\Services\Portal;
 
 use App\Models\Aluno;
 use App\Support\Anulacao;
+use App\Support\Dificuldade;
 use Illuminate\Contracts\Database\Query\Builder as BuilderContract;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -31,7 +32,7 @@ class AnaliseConsolidadaService
      */
     public function curvaDificuldadePedagogica(Aluno $aluno, array $avaliacaoCodigos): array
     {
-        $ordem = ['facil' => 'Fácil', 'medio' => 'Médio', 'dificil' => 'Difícil'];
+        $ordem = Dificuldade::rotulos();
         $linhas = $this->mediaPorCampoAgregado($aluno, $avaliacaoCodigos, 'dificuldade_pedagogica')->keyBy('campo');
 
         $resultado = [];
@@ -226,6 +227,84 @@ class AnaliseConsolidadaService
             ->selectRaw('COUNT(*) as total')
             ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
             ->get();
+    }
+
+    /**
+     * Acerto por ÁREA em cada avaliação da categoria, em ordem cronológica —
+     * o mapa de domínio do aluno.
+     *
+     * A evolução que já existia é uma linha de média geral: ela mostra que a
+     * nota subiu, mas não que Cardiologia consolidou enquanto Saúde Coletiva
+     * despencou depois de um pico. É exatamente essa leitura (consolidação x
+     * esquecimento por conteúdo) que a média esconde e que este mapa expõe.
+     *
+     * Uma célula vazia (null) significa que aquela avaliação não tinha questão
+     * da área — diferente de "foi mal", e a tela precisa distinguir os dois.
+     *
+     * @param  array<int, int>  $avaliacaoCodigos
+     * @return array{avaliacoes: array<int, array{codigo: int, nome: ?string}>, areas: array<int, array{area: string, valores: array<int, ?float>}>}
+     */
+    public function mapaDominio(Aluno $aluno, array $avaliacaoCodigos): array
+    {
+        if (empty($avaliacaoCodigos)) {
+            return ['avaliacoes' => [], 'areas' => []];
+        }
+
+        $linhas = DB::table('respostas as r')
+            ->join('questoes as q', function ($join) use ($avaliacaoCodigos) {
+                Anulacao::excluirDistribuidas(
+                    $join->on('q.numero', '=', 'r.questao_numero')
+                        ->on('q.avaliacao_codigo', '=', 'r.avaliacao_codigo')
+                        ->whereIn('q.avaliacao_codigo', $avaliacaoCodigos)
+                        ->whereNull('q.deleted_at')
+                        ->whereNotNull('q.gabarito')->where('q.gabarito', '!=', '')
+                        ->whereNotNull('q.area')->where('q.area', '!=', ''),
+                    'q.anulada_modo',
+                );
+            })
+            ->whereIn('r.avaliacao_codigo', $avaliacaoCodigos)
+            ->where(fn ($q) => $this->porAluno($q, $aluno))
+            ->groupBy('r.avaliacao_codigo', 'q.area')
+            ->selectRaw('r.avaliacao_codigo as codigo, q.area as area')
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
+            ->get();
+
+        if ($linhas->isEmpty()) {
+            return ['avaliacoes' => [], 'areas' => []];
+        }
+
+        $codigosComDado = $linhas->pluck('codigo')->unique()->all();
+
+        $avaliacoes = DB::table('avaliacoes')
+            ->whereIn('codigo', $codigosComDado)
+            ->whereNull('deleted_at')
+            ->orderBy('data_avaliacao')
+            ->orderBy('codigo')
+            ->select('codigo', 'nome')
+            ->get()
+            ->map(fn ($a) => ['codigo' => (int) $a->codigo, 'nome' => $a->nome])
+            ->all();
+
+        $porArea = [];
+        foreach ($linhas as $linha) {
+            $porArea[$linha->area][(int) $linha->codigo] = (int) $linha->total > 0
+                ? round((int) $linha->acertos / (int) $linha->total * 100, 1)
+                : null;
+        }
+
+        ksort($porArea);
+
+        $areas = [];
+        foreach ($porArea as $area => $valoresPorCodigo) {
+            $valores = [];
+            foreach ($avaliacoes as $avaliacao) {
+                $valores[$avaliacao['codigo']] = $valoresPorCodigo[$avaliacao['codigo']] ?? null;
+            }
+            $areas[] = ['area' => (string) $area, 'valores' => $valores];
+        }
+
+        return ['avaliacoes' => $avaliacoes, 'areas' => $areas];
     }
 
     /** Mesmo critério de identidade usado em ResultadoConsultaService::porAluno() — nunca casar por RA/CPF vazios. */
