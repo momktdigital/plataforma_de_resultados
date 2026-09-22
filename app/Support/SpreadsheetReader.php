@@ -22,14 +22,18 @@ class SpreadsheetReader
     // aqui em vez de confiar só no tamanho do arquivo.
     //
     // Em CÉLULAS (linhas x colunas), não só linhas: o custo de memória do
-    // PhpSpreadsheet escala com o total de células — uma planilha de import
-    // de questões (~20 colunas: área/tema/habilidade/bloom/matriz/DCN/
-    // portaria/PPC) pesa proporcionalmente mais por linha que uma planilha
-    // de resultados no formato "longo" (3-5 colunas: CPF/RA, Questão,
-    // Resposta, Período). Medido neste projeto: 150.000 linhas x 3 colunas
-    // (450.000 células) ~= 720MB de pico pra rodar o import inteiro
-    // (PermiteImportacaoLonga eleva o memory_limit do worker pra 1G — dá
-    // margem confortável nesse teto).
+    // PhpSpreadsheet escala com o total de células. Medido neste projeto
+    // rodando o import inteiro (não só a leitura), com o memory_limit do
+    // worker em 1536M (PermiteImportacaoLonga):
+    //   - matrícula (planilha larga: ~101 colunas, pouca lógica por linha)
+    //     a 800.000 células (7.921 linhas) ficou em ~1164MB de pico;
+    //   - resultados (planilha "longa": 4 colunas, mais lógica por linha —
+    //     resolução de aluno, upsert em lote) a 800.000 células (200.000
+    //     linhas) ficou em ~1076MB de pico.
+    // 800.000 foi escolhido por deixar ~370MB de margem no pior dos dois
+    // formatos dentro do teto de 1536M. Uma planilha de matrícula real de
+    // 4.784 alunos x 101 colunas (483.184 células — o caso que motivou subir
+    // este limite de 450.000) fica bem dentro dessa margem (~700MB).
     //
     // Isso ainda não cobre o pior caso citado no CLAUDE.md (uma avaliação de
     // 100 questões x 10.000 respondentes = 1 milhão de linhas): carregar uma
@@ -41,7 +45,7 @@ class SpreadsheetReader
     // protected (não private): SpreadsheetReaderTest sobrescreve isso numa
     // subclasse pra testar a lógica de limite sem precisar gerar centenas de
     // milhares de células de verdade a cada rodada da suíte.
-    protected const MAX_CELULAS_XLSX = 450_000;
+    protected const MAX_CELULAS_XLSX = 800_000;
 
     /**
      * @return array<int, array<string, mixed>>

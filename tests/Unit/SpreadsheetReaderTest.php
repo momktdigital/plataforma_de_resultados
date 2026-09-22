@@ -21,13 +21,13 @@ class SpreadsheetReaderTest extends TestCase
         $this->assertSame('valor-1', $linhas[0]['coluna']);
     }
 
-    public function test_limite_real_de_producao_e_450_mil_celulas(): void
+    public function test_limite_real_de_producao_e_800_mil_celulas(): void
     {
         // Congela o valor de produção pra qualquer mudança futura ser
-        // deliberada — sem gerar as 450.000 células de verdade (lento demais
+        // deliberada — sem gerar as 800.000 células de verdade (lento demais
         // pra rodar em toda execução da suíte; os testes de comportamento
         // abaixo usam FakeSpreadsheetReader com um limite pequeno).
-        $this->assertSame(450_000, (new \ReflectionClass(SpreadsheetReader::class))->getConstant('MAX_CELULAS_XLSX'));
+        $this->assertSame(800_000, (new \ReflectionClass(SpreadsheetReader::class))->getConstant('MAX_CELULAS_XLSX'));
     }
 
     public function test_rejeita_xlsx_acima_do_limite_de_celulas(): void
