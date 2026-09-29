@@ -49,7 +49,7 @@ class PsicometriaService
      *   desvio: float,
      *   kr20: ?float,
      *   itens: array<int, array{numero: int, area: ?string, tema: ?string, gabarito: string, respostas: int, acertos: int, emBranco: int, dificuldade: float, discriminacao: ?float, pontoBisserial: ?float, faixa: string, rotulo: string, acao: string}>,
-     *   simulacao: ?array{removidos: array<int, int>, kr20: ?float, ganho: float}
+     *   simulacao: ?array{removidos: array<int, int>, kr20: ?float, ganho: float} (ganho arredondado a 2 casas — ver simularRemocao())
      * }|null
      */
     public function analisar(Avaliacao $avaliacao, string $periodo = ''): ?array
@@ -230,6 +230,9 @@ class PsicometriaService
      * @param  array<int, array<string, mixed>>  $itens
      * @param  array<int, int>  $escoresOriginais
      * @return array{removidos: array<int, int>, kr20: ?float, ganho: float}|null
+     *         'ganho' é a diferença entre os dois KR-20 já arredondados a 2
+     *         casas (a precisão exibida na tela), não a diferença "crua" dos
+     *         valores de 4 casas — ver comentário mais abaixo.
      */
     private function simularRemocao(Avaliacao $avaliacao, string $periodo, array $itens, array $escoresOriginais): ?array
     {
@@ -257,10 +260,19 @@ class PsicometriaService
         $original = Psicometria::kr20(count($itens), $this->somaPQ($itens), Psicometria::variancia($escoresOriginais));
         $novo = Psicometria::kr20(count($mantidos), $this->somaPQ($mantidos), Psicometria::variancia($escores));
 
+        // Arredondado às mesmas 2 casas que a tela exibe pros dois números
+        // (KR-20 atual no card, KR-20 simulado neste aviso) — não à diferença
+        // "crua" de 4 casas. Senão dava pra ler "sobe para 0,93 (+0,01)" com
+        // 0,93 sendo EXATAMENTE o valor que já aparece no card acima: a
+        // melhoria era real na 4ª casa decimal, mas nas 2 casas visíveis os
+        // dois números são idênticos, e a diferença anunciada teria que
+        // bater com o que a pessoa consegue conferir na tela.
+        $ganho = $novo !== null && $original !== null ? round($novo, 2) - round($original, 2) : 0.0;
+
         return [
             'removidos' => $numerosFracos,
             'kr20' => $novo,
-            'ganho' => $novo !== null && $original !== null ? round($novo - $original, 4) : 0.0,
+            'ganho' => round($ganho, 2),
         ];
     }
 

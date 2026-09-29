@@ -100,7 +100,11 @@ class PsicometriaServiceTest extends TestCase
 
         // Sem Q3 e Q4: k=2, Σpq = 0,5, variância = 1,0 → (2/1)*(1-0,5) = 1,0
         $this->assertSame(1.0, $analise['simulacao']['kr20']);
-        $this->assertEqualsWithDelta(0.3333, $analise['simulacao']['ganho'], 0.0001);
+        // Ganho é a diferença dos dois valores já arredondados a 2 casas (a
+        // precisão exibida na tela): 1,00 - 0,67 = 0,33 — não a diferença
+        // "crua" de 4 casas (1,0 - 0,6667 = 0,3333), que podia anunciar uma
+        // melhora que não aparece nos números que a pessoa vê na tela.
+        $this->assertSame(0.33, $analise['simulacao']['ganho']);
     }
 
     public function test_curva_caracteristica_sobe_num_item_que_discrimina(): void
