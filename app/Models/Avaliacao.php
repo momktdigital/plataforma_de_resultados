@@ -57,11 +57,28 @@ class Avaliacao extends Model
         return is_numeric($valor) ? (float) $valor : null;
     }
 
+    public const STATUS_ANULADA = 'anulada';
+
+    /**
+     * Avaliação inteira anulada (`status = anulada`) não conta em lugar nenhum além da gestão do administrador:
+     * some do portal do aluno, da evolução, das comparações e de tudo que o coordenador enxerga. (Anulação de
+     * UMA questão é outra coisa — ver App\Support\Anulacao.) Status vazio vale como ativa.
+     */
+    public function scopeNaoAnulada(Builder $query): Builder
+    {
+        return $query->where(fn ($q) => $q->whereNull('avaliacoes.status')->orWhere('avaliacoes.status', '!=', self::STATUS_ANULADA));
+    }
+
+    public function estaAnulada(): bool
+    {
+        return $this->status === self::STATUS_ANULADA;
+    }
+
     /**
      * Restringe a consulta às avaliações que o usuário pode ver: administrador
      * vê todas; coordenador vê as que têm aluno de algum dos seus cursos
      * (avaliacao_cursos) ou em que recebeu acesso excepcional
-     * (avaliacao_usuarios). Qualquer outro perfil não vê nenhuma.
+     * (avaliacao_usuarios), exceto as anuladas. Qualquer outro perfil não vê nenhuma.
      */
     public function scopeVisivelPara(Builder $query, Admin $usuario): Builder
     {
@@ -77,7 +94,7 @@ class Avaliacao extends Model
         // Todas as grafias do mesmo curso (ADMINISTRACAO = ADMINISTRAÇÃO).
         $cursos = NomeCurso::variantes($usuario->cursos());
 
-        return $query->where(function (Builder $q) use ($usuario, $cursos) {
+        return $query->naoAnulada()->where(function (Builder $q) use ($usuario, $cursos) {
             $q->whereIn('avaliacoes.codigo', DB::table('avaliacao_cursos')->whereIn('curso', $cursos)->select('avaliacao_codigo'))
                 ->orWhereIn('avaliacoes.codigo', DB::table('avaliacao_usuarios')->where('admin_id', $usuario->id)->select('avaliacao_codigo'));
         });

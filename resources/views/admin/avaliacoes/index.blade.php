@@ -125,7 +125,12 @@
             @forelse ($avaliacoes as $avaliacao)
                 <tr>
                     <td class="px-4 py-3 font-mono">#{{ $avaliacao->codigo }}</td>
-                    <td class="px-4 py-3">{{ $avaliacao->nome ?? '—' }}</td>
+                    <td class="px-4 py-3">
+                        {{ $avaliacao->nome ?? '—' }}
+                        @if ($avaliacao->estaAnulada())
+                            <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700" title="Prova anulada: não aparece no portal do aluno, nas evoluções, nas comparações nem para os coordenadores">Anulada</span>
+                        @endif
+                    </td>
                     <td class="px-4 py-3">{{ $avaliacao->categoria?->nome ?? '—' }}</td>
                     <td class="px-4 py-3 text-slate-500">{{ $avaliacao->data_avaliacao?->format('d/m/Y') ?? '—' }}</td>
                     <td class="px-4 py-3">{{ $avaliacao->questoes_count }}</td>

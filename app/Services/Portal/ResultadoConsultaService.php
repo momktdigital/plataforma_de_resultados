@@ -32,7 +32,8 @@ class ResultadoConsultaService
         return ResultadoResumo::with('avaliacao.categoria')
             ->where(fn ($q) => $this->porAluno($q, $aluno))
             ->get()
-            ->filter(fn (ResultadoResumo $resumo) => $resumo->avaliacao !== null)
+            // Avaliação anulada não aparece no boletim do aluno (nem entra na evolução, que sai desta lista).
+            ->filter(fn (ResultadoResumo $resumo) => $resumo->avaliacao !== null && ! $resumo->avaliacao->estaAnulada())
             ->map(fn (ResultadoResumo $resumo) => [
                 'avaliacao' => $resumo->avaliacao,
                 'periodo' => $resumo->periodo,
@@ -78,7 +79,7 @@ class ResultadoConsultaService
     public function buscarUmaAvaliacao(Aluno $aluno, int $avaliacaoCodigo, string $periodo): ?array
     {
         $avaliacao = Avaliacao::with('categoria')->find($avaliacaoCodigo);
-        if ($avaliacao === null) {
+        if ($avaliacao === null || $avaliacao->estaAnulada()) {
             return null;
         }
 

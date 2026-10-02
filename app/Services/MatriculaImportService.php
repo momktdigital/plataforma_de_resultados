@@ -188,12 +188,26 @@ class MatriculaImportService
         return $resultado;
     }
 
-    /** @param array<int, array<string, mixed>> $matriculas */
+    /**
+     * Grava o histórico. Se a mesma matrícula (aluno × curso × período letivo) já existe com um estado MAIS
+     * RECENTE do que o da planilha, ela fica como está: reimportar uma planilha antiga (exportada antes de a
+     * matrícula ser cancelada, por exemplo) não pode reverter CANCELADA para ATIVA. "Mais recente" = a data do
+     * último fato registrado na linha — Dt. Ocorrência se houver, senão Dt. Ativação (ver marco()). Sem datas
+     * para comparar, ou com datas iguais, vale a planilha importada agora.
+     *
+     * @param  array<int, array<string, mixed>>  $matriculas
+     */
     private function gravarHistorico(array $matriculas): void
     {
         $agora = now();
 
         foreach (array_chunk($matriculas, 500) as $lote) {
+            $lote = $this->semRetrocesso($lote);
+
+            if ($lote === []) {
+                continue;
+            }
+
             AlunoMatricula::upsert(
                 array_map(fn ($m) => [...$m, 'created_at' => $agora, 'updated_at' => $agora], $lote),
                 ['aluno_id', 'curso', 'periodo_letivo'],
@@ -203,10 +217,43 @@ class MatriculaImportService
     }
 
     /**
+     * Tira do lote as matrículas que a planilha traz com um estado mais antigo do que o já gravado.
+     *
+     * @param  array<int, array<string, mixed>>  $lote
+     * @return array<int, array<string, mixed>>
+     */
+    private function semRetrocesso(array $lote): array
+    {
+        $existentes = [];
+        AlunoMatricula::whereIn('aluno_id', array_unique(array_column($lote, 'aluno_id')))
+            ->get(['aluno_id', 'curso', 'periodo_letivo', 'data_inicio', 'data_fim'])
+            ->each(function (AlunoMatricula $m) use (&$existentes) {
+                $existentes[$m->aluno_id.'|'.NomeCurso::chave((string) $m->curso).'|'.$m->periodo_letivo] = $this->marco(
+                    $m->data_inicio?->format('Y-m-d'),
+                    $m->data_fim?->format('Y-m-d'),
+                );
+            });
+
+        return array_values(array_filter($lote, function (array $m) use ($existentes) {
+            $gravado = $existentes[$m['aluno_id'].'|'.NomeCurso::chave((string) $m['curso']).'|'.$m['periodo_letivo']] ?? null;
+            $novo = $this->marco($m['data_inicio'], $m['data_fim']);
+
+            return ! ($gravado !== null && $novo !== null && $novo < $gravado);
+        }));
+    }
+
+    /** Data do último fato registrado na matrícula: a saída (Dt. Ocorrência), ou a ativação (Dt. Ativação). */
+    private function marco(?string $inicio, ?string $fim): ?string
+    {
+        return $fim ?? $inicio;
+    }
+
+    /**
      * Define a matrícula ATUAL de cada aluno a partir do histórico: a do
      * período letivo mais recente e, nele, ativa (sem status na planilha também
-     * conta como ativa) > aguardando > as demais (transferida, cancelada,
-     * trancada...); depois a data de início mais recente e, por fim, a gravada
+     * conta como ativa; aprovado/reprovado no período também — ver
+     * AlunoMatricula::vigenteNoPeriodo()) > aguardando > as demais (transferida,
+     * cancelada, trancada...); depois a data de início mais recente e, por fim, a gravada
      * por último. Independe da ordem das linhas do arquivo.
      *
      * @param  array<int, int>  $alunoIds
@@ -223,7 +270,7 @@ class MatriculaImportService
                     // vence um "CANCELADA" de 2026/2) e, nele, a ativa. Decrescente
                     // via string complementar (ver invertido()).
                     $this->invertido($m->periodo_letivo),
-                    AlunoMatricula::estaAtiva($m->status) ? 0 : (mb_strtoupper((string) $m->status, 'UTF-8') === 'AGUARDANDO' ? 1 : 2),
+                    AlunoMatricula::vigenteNoPeriodo($m->status) ? 0 : (mb_strtoupper((string) $m->status, 'UTF-8') === 'AGUARDANDO' ? 1 : 2),
                     $this->invertido($m->data_inicio?->format('Y-m-d') ?? ''),
                     $this->invertido($m->updated_at?->format('Y-m-d H:i:s') ?? '').'|'.$this->invertido(str_pad((string) $m->id, 12, '0', STR_PAD_LEFT)),
                 ])->first();
@@ -262,6 +309,11 @@ class MatriculaImportService
     ): void {
         $nome = HeaderResolver::findValue($row, self::NOME_PATTERNS);
         $cpf = HeaderResolver::findValue($row, self::CPF_PATTERNS);
+        // "123.456.789-09" → "12345678909": é assim que o CPF está nos resultados importados e que o login do
+        // portal procura (só dígitos). Com máscara, o aluno nunca seria achado por nenhum dos dois.
+        if ($cpf !== null && strlen($digitos = preg_replace('/\D/', '', $cpf)) === 11) {
+            $cpf = $digitos;
+        }
         $dataNascimento = $this->parseData(HeaderResolver::findValue($row, self::DATA_NASCIMENTO_PATTERNS));
         $email = HeaderResolver::findValue($row, self::EMAIL_PATTERNS);
         $codPerfil = HeaderResolver::findValue($row, self::COD_PERFIL_PATTERNS);

@@ -117,19 +117,35 @@ php artisan aluno:anonimizar --cpf=12345678909
 Atende um pedido de exclusão/anonimização: em uma transação,
 `App\Services\AnonimizacaoAlunoService`
 
+0. Descobre **quem é a pessoa**: busca o cadastro em `alunos` pelo RA e/ou CPF
+   informado e amplia os identificadores (RA informado ⇒ também o CPF do
+   cadastro, e vice-versa) além do vínculo por `aluno_id`. Isso importa porque a
+   maioria dos resultados reais foi importada **só com CPF** (RA nulo): sem
+   essa etapa, `--ra=` não achava nada. O CPF pode vir com máscara
+   (`123.456.789-09`); as linhas são achadas com e sem ela.
 1. Troca RA e CPF por um token anônimo (`ANON-XXXXXXXXXX`) em toda linha de
-   `respostas`/`resultado_metricas` que bater com o RA e/ou CPF informado —
-   sempre gravando o token no campo `ra` e zerando `cpf`, mesmo que a linha
-   original só tivesse `cpf` preenchido, pra unificar as duas formas de
-   identificar a mesma pessoa num token só (`aluno_chave`, coluna gerada
-   pelo banco como `COALESCE(cpf, ra)`, se recalcula sozinha).
+   `respostas`/`resultado_metricas` que bater com qualquer desses
+   identificadores — sempre gravando o token no campo `ra` e zerando `cpf`,
+   mesmo que a linha original só tivesse `cpf` preenchido, pra unificar as duas
+   formas de identificar a mesma pessoa num token só (`aluno_chave`, coluna
+   gerada pelo banco como `COALESCE(cpf, ra)`, se recalcula sozinha). Exceção:
+   se a mesma pessoa tem uma linha pelo RA **e** outra pelo CPF para a mesma
+   questão/avaliação/período (dado duplicado de dois imports), unificar violaria
+   o índice único — então cada identificação ganha o seu token (o comando
+   informa todos).
 2. Reconstrói `resultado_resumos` das avaliações afetadas chamando
    `ResumoResultadoService::recalcular()` de novo — é puro cache de leitura,
-   então não precisa (nem deve) ser editado na mão.
+   então não precisa (nem deve) ser editado na mão. O **curso** de cada
+   resultado é devolvido ao resumo novo (a pessoa continua nos números do curso).
 3. Apaga qualquer `verificacoes_email` pendente com aquele CPF.
 4. Apaga o cadastro em `alunos`, se ainda existir (não precisa existir — dá
    pra anonimizar o histórico de alguém cujo cadastro já foi excluído antes
    pela tela).
+5. **Trilha de auditoria:** o registro `aluno.anonimizado` guarda só o token
+   (nunca RA/CPF) e os registros **antigos** de `atividades` que citam a pessoa
+   (por exemplo o `aluno_chave` de "respondente.excluido") têm o RA/CPF trocado
+   pelo token. RA só é trocado quando o valor é exatamente igual — um RA curto
+   dentro de outro texto não é reescrito. É a única edição que a trilha admite.
 
 **O que fica preservado de propósito:** o número de respostas por questão,
 a nota/percentual de cada linha anonimizada e qualquer outro aluno da mesma
@@ -162,6 +178,16 @@ Reconstrói, do lado do servidor, o antigo fluxo client-side de
   planilha importada.
 - Cada curso visto na planilha é registrado em `cursos` (só para telas de
   referência/filtro — não há hoje nenhuma tela de gestão de cursos).
+- **CPF com máscara** (`123.456.789-09`) é gravado só com dígitos — é assim que
+  os resultados importados e o login do portal procuram o aluno.
+- **Planilha antiga não desfaz o estado novo.** A mesma matrícula (aluno ×
+  curso × período letivo) já gravada com um fato mais recente que o da planilha
+  fica como está: reimportar uma planilha exportada *antes* de um cancelamento
+  não reverte `CANCELADA` para `ATIVA`. "Mais recente" = a data do último fato
+  da linha (`Dt. Ocorrência`, senão `Dt. Ativação`); sem datas para comparar, ou
+  com datas iguais, vale a planilha importada agora. Limite conhecido: uma
+  reativação cuja `Dt. Ativação` não foi atualizada na origem parece "antiga" e
+  não substitui a saída já registrada.
 
 > **Correção em relação ao protótipo legado:** `alunos_di_process.php` já
 > gravava `cod_perfil`/`status`/`periodo_letivo`/`periodo`/`turma` e uma
@@ -268,6 +294,10 @@ naquele curso**. Por isso:
   escolhida do histórico e não pela ordem das linhas do arquivo: período
   letivo mais recente e, nele, ativa > aguardando > transferida/cancelada/
   trancada/desistente (todos esses status significam "não é mais do curso").
+  **`APROVADO`, `APROVADO_PARCIALMENTE` e `REPROVADO` não são saída:** são
+  alunos que cumpriram o período (milhares nos dados reais) e contam como
+  ativos (`AlunoMatricula::vigenteNoPeriodo()`); a `Dt. Ocorrência` deles é só a
+  data do lançamento do resultado e não encerra a matrícula.
 - **`resultado_resumos.curso`** é o curso do aluno **na época da prova**,
   decidido por `CursoDoResultadoService` (determinístico, refeito sempre que o
   histórico ou o resultado muda): (1) matrícula válida na data da avaliação —
@@ -275,6 +305,11 @@ naquele curso**. Por isso:
   matrícula do mesmo período letivo; (3) curso marcado **à mão** na avaliação
   (desempata dois cursos ativos); (4) curso atual. **Preencha a data das
   avaliações**: sem data, só os critérios 3 e 4 se aplicam.
+  Resultado cujo aluno não está no cadastro (excluído, ou importado antes da
+  matrícula) é ligado por `aluno_id`, depois por RA e por CPF — a matrícula
+  importada depois alcança resultados que ainda não tinham `aluno_id`. Se
+  mesmo assim não há aluno, o curso **já gravado é mantido** (um recálculo não
+  zera mais o curso, que faria o coordenador perder a prova).
 - Reimportar uma planilha de matrícula refaz o curso dos resultados desses
   alunos e os cursos das avaliações onde aparecem (`MatriculaImportService`).
 - Cabeçalhos das datas: exatamente `Dt. Ativação` (início da matrícula) e
@@ -292,7 +327,9 @@ avaliações" do BI, que só oferece avaliações da mesma categoria). A
 "avaliação anterior" é a anterior **da mesma categoria**, mesmo de outro
 período letivo. Equivalente ao boletim do aluno, para o curso: filtro por **período letivo**
 (2026/1, 2026/2 — derivado da data da avaliação, igual ao portal; padrão = o
-mais recente) e, com mais de um curso, por curso. Mostra insights em texto,
+mais recente; avaliação **sem data** usa o período do início do nome —
+`2026/2 - Diagnóstico...` — ou, sem isso, o período letivo em que a maioria
+dos alunos dela estava matriculada, em vez de aparecer só em "Todos") e, com mais de um curso, por curso. Mostra insights em texto,
 média do curso, presença, % de alunos abaixo de 60%, evolução da média por
 avaliação, desempenho por período do curso e por área. **Ausentes** (prova
 inteira em branco) ficam fora das médias e entram só na presença.
@@ -359,6 +396,12 @@ normalizado (`questoes`/`respostas`/`resultado_metricas`):
   `LIMIT`/`OFFSET` e degrada conforme o offset cresce; numa avaliação com 167
   mil respostas isso estourava o `max_execution_time` (500 na tela).
 - **Excluir avaliação:** soft-delete em cascata (questões, respostas, métricas).
+- **Status "Anulada"** (prova inteira, diferente de anular uma questão): a
+  avaliação deixa de existir para todo mundo, menos para o administrador — some
+  do portal do aluno (boletim, detalhe e evolução), das evoluções e comparações
+  do Dashboard e de tudo que o coordenador enxerga (painel, lista, Dashboard;
+  `Avaliacao::naoAnulada()` / `visivelPara()`). O administrador continua vendo e
+  abrindo pela lista, que mostra a etiqueta **Anulada**.
 
 ### Resultados por aluno (`/avaliacoes/{codigo}/respondentes`)
 

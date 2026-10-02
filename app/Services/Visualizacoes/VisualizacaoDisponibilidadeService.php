@@ -129,6 +129,7 @@ class VisualizacaoDisponibilidadeService
             $codigosNaCategoria = DB::table('avaliacoes')
                 ->where('categoria_id', $avaliacao->categoria_id)
                 ->whereNull('deleted_at')
+                ->where(fn ($q) => $q->whereNull('status')->orWhere('status', '!=', Avaliacao::STATUS_ANULADA))
                 ->pluck('codigo');
 
             $qtdAvaliacoesComResumo = DB::table('resultado_resumos')
@@ -146,6 +147,7 @@ class VisualizacaoDisponibilidadeService
             ->where('av.codigo', '!=', $codigo)
             ->where('av.categoria_id', $avaliacao->categoria_id)
             ->whereNull('av.deleted_at')
+            ->where(fn ($q) => $q->whereNull('av.status')->orWhere('av.status', '!=', Avaliacao::STATUS_ANULADA))
             ->exists();
 
         $base = fn (string $semGabaritoMsg = 'Cadastre o gabarito das questões desta avaliação.') => $temGabarito

@@ -635,6 +635,8 @@ class RelatorioAdminService
             ->leftJoin('alunos as a', 'a.id', '=', 'rr.aluno_id')
             ->where('av.categoria_id', $avaliacao->categoria_id)
             ->whereNull('av.deleted_at')
+            // Prova inteira anulada não entra na evolução.
+            ->where(fn ($q) => $q->whereNull('av.status')->orWhere('av.status', '!=', Avaliacao::STATUS_ANULADA))
             ->whereNotNull('rr.percentual')
             ->when($this->escopo !== null, fn ($q) => $this->escopo->restringirResumos($q, 'rr.curso'))
             ->get([
@@ -645,9 +647,20 @@ class RelatorioAdminService
             ]);
 
         // Ausente = nenhuma resposta de verdade na prova inteira (mesma
-        // definição de PsicometriaService::presenca()). Só quem tem 0 acerto
-        // pode ser ausente, então só esses entram na conferência em `respostas`.
-        $candidatos = $brutas->where('acertos', 0);
+        // definição de PsicometriaService::presenca()). Só os resultados com
+        // poucos acertos podem ser de ausente, então só esses entram na
+        // conferência em `respostas`: um ausente "acerta" exatamente as
+        // questões que dão o ponto a todos (anulação `dar_ponto`), então o
+        // corte é esse número por avaliação — e não 0, que deixava o ausente
+        // de uma prova com questão `dar_ponto` passar por presente.
+        $pontosDeGraca = DB::table('questoes')
+            ->whereIn('avaliacao_codigo', $brutas->pluck('codigo')->unique()->all())
+            ->whereNull('deleted_at')
+            ->where('anulada_modo', Anulacao::MODO_DAR_PONTO)
+            ->groupBy('avaliacao_codigo')
+            ->selectRaw('avaliacao_codigo, COUNT(*) as total')
+            ->pluck('total', 'avaliacao_codigo');
+        $candidatos = $brutas->filter(fn ($l) => (int) $l->acertos <= (int) ($pontosDeGraca[$l->codigo] ?? 0));
         $ausentes = $candidatos->isEmpty() ? collect() : DB::table('respostas')
             ->whereIn('avaliacao_codigo', $candidatos->pluck('codigo')->unique()->all())
             ->whereIn('aluno_chave', $candidatos->pluck('chave')->unique()->all())

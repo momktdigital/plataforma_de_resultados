@@ -65,6 +65,20 @@ deveria usar. Regra prática: se o app legado (ou um DBA olhando o banco
 compartilhado) precisaria enxergar/editar esse valor, é `Configuracao`; se é
 estritamente deste app, é `ConfiguracaoSistema`.
 
+## Ausente, vínculo de aluno e CPF
+
+- **Ausente** = nenhuma resposta de verdade na prova inteira. Nunca deduza "ausente"
+  de `acertos = 0`: uma questão `dar_ponto` credita até quem faltou. O corte seguro
+  é `acertos <= nº de questões dar_ponto` e, depois, conferir em `respostas`.
+- **CPF** é guardado só com dígitos (`alunos`, `respostas`, resumos). Um resultado
+  pode ter só CPF (RA nulo) — a maioria dos reais tem. Para achar a pessoa use
+  RA **e** CPF **e** `aluno_id`, nunca só RA.
+- Status de matrícula: `AlunoMatricula::vigenteNoPeriodo()` (ativa ou período
+  cumprido: aprovado/reprovado) vs. saída (transferida, cancelada, trancada...).
+  Só a saída é encerrada pela `Dt. Ocorrência`.
+- `resultado_resumos.curso` nunca é zerado por falta de aluno: sem aluno conhecido
+  o curso já gravado fica (ver `CursoDoResultadoService`).
+
 ## Perfil (`admins.role`) falha fechado
 
 Nunca escreva `! $usuario->ehCoordenador()` para decidir "então é administrador":

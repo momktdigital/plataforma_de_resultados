@@ -55,6 +55,17 @@ class ResumoResultadoService
             ->get();
 
         DB::transaction(function () use ($avaliacaoCodigo, $total, $linhas) {
+            // O curso de cada resultado vem do histórico de matrículas (CursoDoResultadoService, ao fim). Para um
+            // aluno que já não está no cadastro (excluído) ou que ainda não foi importado não há histórico de onde
+            // recalcular — então o curso já gravado é levado para a linha nova em vez de virar NULL (e o
+            // coordenador perder a prova). Quando o aluno é conhecido, o CursoDoResultadoService sobrescreve.
+            $cursoAnterior = DB::table('resultado_resumos')
+                ->where('avaliacao_codigo', $avaliacaoCodigo)
+                ->whereNotNull('curso')
+                ->get(['aluno_chave', 'periodo', 'curso'])
+                ->mapWithKeys(fn ($r) => [$r->aluno_chave.'|'.$r->periodo => $r->curso])
+                ->all();
+
             DB::table('resultado_resumos')->where('avaliacao_codigo', $avaliacaoCodigo)->delete();
 
             // resultado_resumos é justamente o que AlunoVinculoResolver::resolver()
@@ -78,7 +89,7 @@ class ResumoResultadoService
             // Em blocos, não tudo de uma vez: uma avaliação com muitos
             // milhares de respondentes num único INSERT arrisca estourar o
             // max_allowed_packet do MySQL.
-            $linhas->chunk(500)->each(function ($lote) use ($avaliacaoCodigo, $total, $agora) {
+            $linhas->chunk(500)->each(function ($lote) use ($avaliacaoCodigo, $total, $agora, $cursoAnterior) {
                 DB::table('resultado_resumos')->insert($lote->map(fn ($linha) => [
                     'avaliacao_codigo' => $avaliacaoCodigo,
                     'aluno_chave' => $linha->aluno_chave,
@@ -86,6 +97,7 @@ class ResumoResultadoService
                     'ra' => $linha->ra,
                     'cpf' => $linha->cpf,
                     'aluno_id' => $linha->aluno_id,
+                    'curso' => $cursoAnterior[$linha->aluno_chave.'|'.$linha->periodo] ?? null,
                     'acertos' => (int) $linha->acertos,
                     'total' => $total,
                     'percentual' => $total > 0 ? round($linha->acertos / $total * 100, 1) : null,

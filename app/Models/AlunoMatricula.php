@@ -35,9 +35,31 @@ class AlunoMatricula extends Model
         return $this->belongsTo(Aluno::class);
     }
 
+    /**
+     * Status de quem CUMPRIU o período letivo (aparecem aos milhares nos dados reais): o aluno ficou matriculado
+     * o período inteiro e o status só registra o resultado. Não são saída — a Dt. Ocorrência deles (data em que
+     * o resultado foi lançado) não encerra a matrícula.
+     */
+    public const STATUS_PERIODO_CUMPRIDO = ['APROVADO', 'APROVADO_PARCIALMENTE', 'REPROVADO'];
+
     /** Sem coluna de status na planilha, a matrícula conta como ativa. */
     public static function estaAtiva(?string $status): bool
     {
         return $status === null || trim($status) === '' || mb_strtoupper(trim($status), 'UTF-8') === 'ATIVA';
+    }
+
+    /** Aprovado, aprovado parcialmente ou reprovado no período letivo. */
+    public static function cumpriuPeriodo(?string $status): bool
+    {
+        return in_array(mb_strtoupper(trim((string) $status), 'UTF-8'), self::STATUS_PERIODO_CUMPRIDO, true);
+    }
+
+    /**
+     * A matrícula valeu até o FIM do período letivo: está ativa ou o aluno cumpriu o período. Só as demais
+     * (transferida, cancelada, trancada, desistente...) são saídas encerradas pela Dt. Ocorrência.
+     */
+    public static function vigenteNoPeriodo(?string $status): bool
+    {
+        return self::estaAtiva($status) || self::cumpriuPeriodo($status);
     }
 }

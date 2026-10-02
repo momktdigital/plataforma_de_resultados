@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Admin;
+use App\Models\Avaliacao;
 use App\Models\Categoria;
 use App\Models\Resposta;
 use App\Support\Anulacao;
@@ -218,18 +219,26 @@ class CoordenadorDashboardService
         return DB::table('resultado_resumos as rr')
             ->join('avaliacoes as av', 'av.codigo', '=', 'rr.avaliacao_codigo')
             ->whereNull('av.deleted_at')
-            ->where(fn ($q) => $q->whereNull('av.status')->orWhere('av.status', '!=', 'anulada'))
+            ->where(fn ($q) => $q->whereNull('av.status')->orWhere('av.status', '!=', Avaliacao::STATUS_ANULADA))
             ->whereIn('rr.curso', $variantesDoCurso);
     }
 
     /** @return Collection<int, array{codigo: int, nome: string, data: ?string, periodoLetivo: string, categoriaId: ?int}> */
     private function avaliacoesDoCurso(array $variantes): Collection
     {
-        return $this->resumos($variantes)
+        $linhas = $this->resumos($variantes)
             ->groupBy('av.codigo', 'av.nome', 'av.data_avaliacao', 'av.categoria_id')
             ->selectRaw('av.codigo as codigo, av.nome as nome, av.data_avaliacao as data, av.categoria_id as categoria_id')
-            ->get()
-            ->map(function ($l) {
+            ->get();
+
+        // Avaliação sem data não tem como cair em "jan–jun = /1, jul–dez = /2": sem outra pista ela só aparecia
+        // em "Todos". O período letivo vem, então, do nome ("2026/2 - Diagnóstico...") ou, na falta, do período
+        // letivo em que a maioria dos alunos dela estava matriculada.
+        $semData = $linhas->filter(fn ($l) => ! $l->data)->pluck('codigo')->map(fn ($c) => (int) $c)->all();
+        $porMatricula = $semData === [] ? [] : $this->periodoLetivoPelasMatriculas($semData, $variantes);
+
+        return $linhas
+            ->map(function ($l) use ($porMatricula) {
                 $data = $l->data ? Carbon::parse($l->data) : null;
 
                 return [
@@ -237,12 +246,46 @@ class CoordenadorDashboardService
                     'nome' => $l->nome ?: "Avaliação #{$l->codigo}",
                     'data' => $data?->format('Y-m-d'),
                     // Mesma regra de ResultadoConsultaService::periodoLetivo(): jan–jun = /1, jul–dez = /2.
-                    'periodoLetivo' => $data ? $data->year.'/'.($data->month <= 6 ? 1 : 2) : '',
+                    'periodoLetivo' => $data
+                        ? $data->year.'/'.($data->month <= 6 ? 1 : 2)
+                        : (self::periodoLetivoDoNome((string) $l->nome) ?? $porMatricula[(int) $l->codigo] ?? ''),
                     'categoriaId' => $l->categoria_id !== null ? (int) $l->categoria_id : null,
                 ];
             })
             ->sortByDesc(fn ($a) => $a['data'] ?? '')
             ->values();
+    }
+
+    /** "2026/2 - Diagnóstico Institucional" → "2026/2"; null se o nome não começa por um período letivo. */
+    public static function periodoLetivoDoNome(string $nome): ?string
+    {
+        return preg_match('#^\s*(20\d{2})\s*[/.\-]\s*([12])(?!\d)#', $nome, $m) === 1 ? $m[1].'/'.$m[2] : null;
+    }
+
+    /**
+     * Período letivo mais frequente entre as matrículas (`aluno_matriculas`) dos alunos de cada avaliação.
+     *
+     * @param  array<int, int>  $codigos
+     * @return array<int, string> codigo => período letivo
+     */
+    private function periodoLetivoPelasMatriculas(array $codigos, array $variantes): array
+    {
+        $melhor = [];
+
+        $this->resumos($variantes)
+            ->join('aluno_matriculas as m', 'm.id', '=', 'rr.matricula_id')
+            ->whereIn('rr.avaliacao_codigo', $codigos)
+            ->where('m.periodo_letivo', '!=', '')
+            ->groupBy('rr.avaliacao_codigo', 'm.periodo_letivo')
+            ->selectRaw('rr.avaliacao_codigo as codigo, m.periodo_letivo as periodo_letivo, COUNT(*) as total')
+            ->get()
+            ->each(function ($l) use (&$melhor) {
+                if (($melhor[(int) $l->codigo]['total'] ?? -1) < (int) $l->total) {
+                    $melhor[(int) $l->codigo] = ['periodo_letivo' => (string) $l->periodo_letivo, 'total' => (int) $l->total];
+                }
+            });
+
+        return array_map(fn ($m) => $m['periodo_letivo'], $melhor);
     }
 
     /** @return array<int, string> id => caminho completo ("Pai › Filha") */

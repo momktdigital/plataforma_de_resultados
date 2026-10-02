@@ -54,6 +54,7 @@ class ComparacaoAvaliacoesService
             ->where('av.codigo', '!=', $atual->codigo)
             ->where('av.categoria_id', $atual->categoria_id)
             ->whereNull('av.deleted_at')
+            ->where(fn ($q) => $q->whereNull('av.status')->orWhere('av.status', '!=', Avaliacao::STATUS_ANULADA))
             ->when($permitidas !== null, fn ($q) => $q->whereIn('av.codigo', $permitidas))
             ->groupBy('av.codigo', 'av.nome', 'av.data_avaliacao')
             ->selectRaw('av.codigo as codigo, av.nome as nome, av.data_avaliacao as data')
@@ -92,6 +93,7 @@ class ComparacaoAvaliacoesService
         }
 
         $comparadas = Avaliacao::whereIn('codigo', $codigos)
+            ->naoAnulada()
             ->where('categoria_id', $base->categoria_id)
             ->when($usuario !== null, fn ($q) => $q->visivelPara($usuario))
             ->whereNull('deleted_at')

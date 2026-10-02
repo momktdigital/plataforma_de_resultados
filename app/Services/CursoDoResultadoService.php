@@ -22,9 +22,12 @@ use Illuminate\Support\Facades\DB;
  * Regra, na ordem (a primeira que achar matrícula(s) decide):
  *  1. matrícula VÁLIDA NA DATA DA PROVA. Cada matrícula vale de `data_inicio`
  *     (Dt. Ativação; na falta, o início do período letivo) até `data_fim`
- *     (Dt. Ocorrência, só nas que NÃO estão ativas) — na falta, o fim do
- *     período letivo. Uma matrícula ATIVA de um período vale só até o fim
- *     dele; quem continua tem a linha do período seguinte.
+ *     (Dt. Ocorrência, só nas SAÍDAS: transferida, cancelada, trancada,
+ *     desistente...) — na falta, o fim do período letivo. Uma matrícula ATIVA
+ *     — ou de quem cumpriu o período (APROVADO, APROVADO_PARCIALMENTE,
+ *     REPROVADO: a Dt. Ocorrência delas é só a data do lançamento do resultado,
+ *     não uma saída) — vale até o fim do período; quem continua tem a linha
+ *     do período seguinte.
  *  2. sem data da prova (ou sem matrícula válida nela): matrícula do MESMO
  *     PERÍODO LETIVO da prova;
  *  3. matrícula de um curso marcado À MÃO na avaliação (`avaliacao_cursos`
@@ -34,6 +37,12 @@ use Illuminate\Support\Facades\DB;
  * Com mais de uma candidata (ex.: dois cursos ativos ao mesmo tempo), vence a
  * de curso marcado à mão na avaliação; depois a ATIVA, a de início mais
  * recente e a gravada por último.
+ *
+ * RESULTADO SEM ALUNO CONHECIDO (aluno excluído do cadastro, ou resultado
+ * importado antes da matrícula): o vínculo é buscado por aluno_id, depois por
+ * RA e por CPF. Se ainda assim não há aluno, o curso JÁ GRAVADO fica como está
+ * — nunca é zerado, senão o coordenador perderia a prova de um aluno que saiu
+ * do cadastro.
  */
 class CursoDoResultadoService
 {
@@ -43,7 +52,7 @@ class CursoDoResultadoService
     public function atualizarAvaliacao(int $avaliacaoCodigo): void
     {
         $this->aplicar(
-            DB::table('resultado_resumos')->where('avaliacao_codigo', $avaliacaoCodigo)->get(['id', 'avaliacao_codigo', 'aluno_id', 'ra'])
+            DB::table('resultado_resumos')->where('avaliacao_codigo', $avaliacaoCodigo)->get(['id', 'avaliacao_codigo', 'aluno_id', 'ra', 'cpf'])
         );
     }
 
@@ -59,7 +68,24 @@ class CursoDoResultadoService
         $avaliacoes = [];
 
         foreach (array_chunk(array_values(array_unique($alunoIds)), self::LOTE) as $lote) {
-            $resumos = DB::table('resultado_resumos')->whereIn('aluno_id', $lote)->get(['id', 'avaliacao_codigo', 'aluno_id', 'ra']);
+            // Resultados já ligados ao aluno E os que foram importados antes de ele existir
+            // (aluno_id nulo): esses só se acham pelo RA/CPF. RA/CPF vão como parâmetro
+            // (`alunos` tem collation diferente de `resultado_resumos`).
+            $identificadores = DB::table('alunos')->whereIn('id', $lote)->get(['ra', 'cpf']);
+            $ras = $identificadores->pluck('ra')->filter()->unique()->values()->all();
+            $cpfs = $identificadores->pluck('cpf')->filter()->unique()->values()->all();
+
+            $resumos = DB::table('resultado_resumos')
+                ->where(function ($q) use ($lote, $ras, $cpfs) {
+                    $q->whereIn('aluno_id', $lote)
+                        ->orWhere(function ($q) use ($ras, $cpfs) {
+                            $q->whereNull('aluno_id')->where(function ($q) use ($ras, $cpfs) {
+                                $q->when($ras !== [], fn ($q) => $q->orWhereIn('ra', $ras))
+                                    ->when($cpfs !== [], fn ($q) => $q->orWhereIn('cpf', $cpfs));
+                            });
+                        });
+                })
+                ->get(['id', 'avaliacao_codigo', 'aluno_id', 'ra', 'cpf']);
             $avaliacoes = [...$avaliacoes, ...$resumos->pluck('avaliacao_codigo')->all()];
             $this->aplicar($resumos);
         }
@@ -81,42 +107,46 @@ class CursoDoResultadoService
             ->whereIn('avaliacao_codigo', $resumos->pluck('avaliacao_codigo')->unique()->all())
             ->get(['avaliacao_codigo', 'curso'])->groupBy('avaliacao_codigo')->map->pluck('curso');
 
-        // Resultado cujo aluno ainda não estava na matrícula na hora da
-        // importação não tem aluno_id: casa pelo RA (como o AlunoVinculoResolver).
-        // RAs vão como parâmetro — `alunos` tem collation diferente de `resultado_resumos`.
-        $alunoPorRa = [];
-        $semId = $resumos->whereNull('aluno_id')->pluck('ra')->filter()->unique()->values();
-        foreach ($semId->chunk(1000) as $ras) {
-            foreach (DB::table('alunos')->whereIn('ra', $ras->all())->get(['id', 'ra']) as $a) {
-                $alunoPorRa[$a->ra] = (int) $a->id;
-            }
-        }
+        // 1) alunos que existem, pelo aluno_id gravado; 2) o resto (aluno_id nulo, ou apontando para um
+        // cadastro que foi excluído), pelo RA e pelo CPF — como o AlunoVinculoResolver. RAs/CPFs vão como
+        // parâmetro: `alunos` tem collation diferente de `resultado_resumos`.
+        $cursoAtual = $this->cursosAtuais($resumos->pluck('aluno_id')->filter()->map(fn ($id) => (int) $id)->unique()->values()->all());
 
-        $idDoResumo = fn ($r) => $r->aluno_id !== null ? (int) $r->aluno_id : ($alunoPorRa[$r->ra] ?? null);
+        $semAluno = $resumos->filter(fn ($r) => $r->aluno_id === null || ! array_key_exists((int) $r->aluno_id, $cursoAtual));
+        $alunoPorRa = $this->idsPor('ra', $semAluno->pluck('ra'));
+        $alunoPorCpf = $this->idsPor('cpf', $semAluno->pluck('cpf'));
+
+        $idDoResumo = function ($r) use ($cursoAtual, $alunoPorRa, $alunoPorCpf) {
+            if ($r->aluno_id !== null && array_key_exists((int) $r->aluno_id, $cursoAtual)) {
+                return (int) $r->aluno_id;
+            }
+
+            return ($r->ra !== null && $r->ra !== '' ? ($alunoPorRa[$r->ra] ?? null) : null)
+                ?? ($r->cpf !== null && $r->cpf !== '' ? ($alunoPorCpf[$r->cpf] ?? null) : null);
+        };
+
         $alunoIds = $resumos->map($idDoResumo)->filter()->unique()->values()->all();
-
+        $cursoAtual += $this->cursosAtuais(array_values(array_diff($alunoIds, array_keys($cursoAtual))));
         $matriculas = $this->carregarMatriculas($alunoIds);
-        $cursoAtual = [];
-        foreach (array_chunk($alunoIds, 1000) as $lote) {
-            foreach (DB::table('alunos')->whereIn('id', $lote)->get(['id', 'curso']) as $a) {
-                $cursoAtual[(int) $a->id] = $a->curso;
-            }
-        }
 
         // (curso, matrícula) => ids dos resumos — um UPDATE por combinação.
         $grupos = [];
         foreach ($resumos as $resumo) {
             $alunoId = $idDoResumo($resumo);
+
+            // Aluno desconhecido: não há de onde recalcular — o curso já gravado fica como está.
+            if ($alunoId === null) {
+                continue;
+            }
+
             $data = $avaliacoes[$resumo->avaliacao_codigo]->data_avaliacao ?? null;
 
-            [$curso, $matriculaId] = $alunoId === null
-                ? [null, null]
-                : $this->resolver(
-                    $matriculas[$alunoId] ?? [],
-                    $data ? substr((string) $data, 0, 10) : null,
-                    $cursosManuais[$resumo->avaliacao_codigo] ?? collect(),
-                    $cursoAtual[$alunoId] ?? null,
-                );
+            [$curso, $matriculaId] = $this->resolver(
+                $matriculas[$alunoId] ?? [],
+                $data ? substr((string) $data, 0, 10) : null,
+                $cursosManuais[$resumo->avaliacao_codigo] ?? collect(),
+                $cursoAtual[$alunoId] ?? null,
+            );
 
             $grupos[($curso ?? '').'|'.($matriculaId ?? '')]['ids'][] = $resumo->id;
             $grupos[($curso ?? '').'|'.($matriculaId ?? '')]['valor'] = ['curso' => $curso, 'matricula_id' => $matriculaId];
@@ -130,6 +160,38 @@ class CursoDoResultadoService
     }
 
     /**
+     * @param  array<int, int>  $ids
+     * @return array<int, ?string> id => curso atual, só dos alunos que existem
+     */
+    private function cursosAtuais(array $ids): array
+    {
+        $cursos = [];
+        foreach (array_chunk($ids, 1000) as $lote) {
+            foreach (DB::table('alunos')->whereIn('id', $lote)->get(['id', 'curso']) as $a) {
+                $cursos[(int) $a->id] = $a->curso;
+            }
+        }
+
+        return $cursos;
+    }
+
+    /**
+     * @param  Collection<int, mixed>  $valores
+     * @return array<string, int> valor da coluna ('ra' ou 'cpf') => id do aluno
+     */
+    private function idsPor(string $coluna, Collection $valores): array
+    {
+        $ids = [];
+        foreach ($valores->filter(fn ($v) => $v !== null && $v !== '')->unique()->chunk(1000) as $lote) {
+            foreach (DB::table('alunos')->whereIn($coluna, $lote->values()->all())->get(['id', $coluna]) as $a) {
+                $ids[$a->{$coluna}] = (int) $a->id;
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
      * @param  array<int, int>  $alunoIds
      * @return array<int, array<int, array<string, mixed>>> aluno_id => matrículas normalizadas
      */
@@ -139,7 +201,8 @@ class CursoDoResultadoService
 
         foreach (array_chunk($alunoIds, 1000) as $lote) {
             foreach (DB::table('aluno_matriculas')->whereIn('aluno_id', $lote)->get() as $m) {
-                $ativa = AlunoMatricula::estaAtiva($m->status);
+                // "Ativa" aqui = valeu até o fim do período letivo (ativa ou período cumprido), ver AlunoMatricula.
+                $ativa = AlunoMatricula::vigenteNoPeriodo($m->status);
                 $pl = (string) $m->periodo_letivo;
 
                 $porAluno[(int) $m->aluno_id][] = [
@@ -148,7 +211,8 @@ class CursoDoResultadoService
                     'ativa' => $ativa,
                     'periodo_letivo' => $pl,
                     'inicio' => $m->data_inicio ? substr((string) $m->data_inicio, 0, 10) : ($this->inicioDoPeriodo($pl) ?? '0000-01-01'),
-                    // Dt. Ocorrência só encerra matrícula que NÃO está ativa.
+                    // Dt. Ocorrência só encerra SAÍDA (transferida, cancelada, trancada...); em matrícula ativa ou de
+                    // período cumprido (aprovado/reprovado) ela é só a data de um lançamento.
                     'fim' => (! $ativa && $m->data_fim) ? substr((string) $m->data_fim, 0, 10) : ($this->fimDoPeriodo($pl) ?? '9999-12-31'),
                     'ordem' => (string) $m->updated_at.'|'.str_pad((string) $m->id, 12, '0', STR_PAD_LEFT),
                 ];
