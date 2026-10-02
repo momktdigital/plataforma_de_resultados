@@ -23,8 +23,15 @@ class LoginController extends Controller
 
     public function create(Request $request): View
     {
-        // ?modo=codigo abre a aba do coordenador (login por código enviado ao e-mail).
-        return view('auth.login', ['modo' => $request->query('modo') === 'codigo' ? 'codigo' : 'senha']);
+        // Abas da tela: administrador (usuário e senha) e coordenador, que entra por código enviado ao
+        // e-mail (?modo=codigo, o padrão da aba) ou, se tiver senha, por usuário e senha (?modo=coordenador).
+        $modo = match ($request->query('modo')) {
+            'codigo' => 'codigo',
+            'coordenador' => 'coordenador',
+            default => 'senha',
+        };
+
+        return view('auth.login', ['modo' => $modo]);
     }
 
     public function store(Request $request): RedirectResponse
@@ -45,6 +52,15 @@ class LoginController extends Controller
         }
 
         RateLimiter::clear($this->throttleKey($request));
+
+        if (! Auth::guard('admin')->user()->temPapelValido()) {
+            Auth::guard('admin')->logout();
+
+            throw ValidationException::withMessages([
+                'username' => __('Esta conta está sem um perfil de acesso válido. Procure um administrador.'),
+            ]);
+        }
+
         $request->session()->regenerate();
 
         return redirect()->intended(route(Auth::guard('admin')->user()->ehCoordenador() ? 'coordenador.painel' : 'avaliacoes.index'));

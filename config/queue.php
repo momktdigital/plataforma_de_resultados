@@ -40,7 +40,10 @@ return [
             'connection' => env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
+            // PRECISA ser maior que o `$timeout` do maior job (1800 s nos imports/backup). Com 90 s, um segundo
+            // `queue:work` reservava de novo um import ainda em andamento e o marcava como falho (tries = 1),
+            // apagando o arquivo enviado enquanto o primeiro worker ainda lia.
+            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 2000),
             'after_commit' => false,
         ],
 

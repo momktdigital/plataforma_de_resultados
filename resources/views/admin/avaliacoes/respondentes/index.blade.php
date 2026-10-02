@@ -31,7 +31,7 @@
 @if ($periodo !== '')
     <div class="mb-6 flex flex-wrap items-center gap-3">
         <form method="POST" action="{{ route('avaliacoes.periodos.destroy', $avaliacao) }}"
-              onsubmit="return confirm('Excluir todos os resultados do período \'{{ $periodo }}\' nesta avaliação?');">
+              onsubmit="return confirm(@js('Excluir todos os resultados do período "'.$periodo.'" nesta avaliação?'));">
             @csrf
             @method('DELETE')
             <input type="hidden" name="periodo" value="{{ $periodo }}">

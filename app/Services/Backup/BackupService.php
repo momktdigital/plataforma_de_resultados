@@ -68,10 +68,14 @@ class BackupService
 
     private function adicionarArquivosDaAplicacao(ZipArchive $zip): void
     {
-        $raiz = base_path();
+        // Tudo com "/": no Windows o iterador devolve "\" e, sem normalizar, as exclusões (vendor, .git...) nunca
+        // casavam e as entradas do zip saíam como "app/\composer.json" (quebradas ao restaurar em Linux).
+        $raiz = $this->normalizar(base_path());
         $excluidos = array_map(fn ($p) => $raiz.'/'.$p, self::EXCLUIR);
         // A pasta de backups configurada (se for outra que a padrão) também fica de fora do zip.
-        $excluidos[] = rtrim(str_replace('\\', '/', (string) config('sistema.backup_dir')), '/');
+        $excluidos[] = $this->normalizar((string) config('sistema.backup_dir'));
+        // Worktrees/configuração local de ferramentas de desenvolvimento não fazem parte do sistema.
+        $excluidos[] = $raiz.'/.claude';
 
         // CATCH_GET_CHILD: sem essa flag, uma única subpasta sem permissão de
         // leitura (comum em symlinks/junctions do Windows, ex.: public/storage)
@@ -84,7 +88,7 @@ class BackupService
         );
 
         foreach ($iterator as $arquivo) {
-            $caminho = $arquivo->getPathname();
+            $caminho = $this->normalizar($arquivo->getPathname());
 
             foreach ($excluidos as $excluido) {
                 if ($caminho === $excluido || str_starts_with($caminho, $excluido.'/')) {
@@ -100,6 +104,11 @@ class BackupService
                 $zip->addFile($caminho, $caminhoRelativo);
             }
         }
+    }
+
+    private function normalizar(string $caminho): string
+    {
+        return rtrim(str_replace('\\', '/', $caminho), '/');
     }
 
     private function removerBackupsAntigos(string $pasta): void

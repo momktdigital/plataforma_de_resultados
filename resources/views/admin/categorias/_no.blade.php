@@ -19,7 +19,7 @@
                     </button>
                 @else
                     <button type="submit" class="text-xs text-red-500 hover:text-red-700"
-                            onclick="return confirm('Excluir a categoria {{ $categoria->nome }}?');">
+                            onclick="return confirm(@js('Excluir a categoria '.$categoria->nome.'?'));">
                         Excluir
                     </button>
                 @endif

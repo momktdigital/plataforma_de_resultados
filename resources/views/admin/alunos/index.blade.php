@@ -75,7 +75,7 @@
                     <td class="px-4 py-3 text-right whitespace-nowrap">
                         <a href="{{ route('alunos.edit', $aluno) }}" class="text-blue-600 hover:underline mr-3">Editar</a>
                         <form method="POST" action="{{ route('alunos.destroy', $aluno) }}" class="inline-block"
-                              onsubmit="return confirm('Tem certeza que deseja excluir o aluno {{ $aluno->nome ?: $aluno->ra }}? Isso não remove os resultados dele, apenas o cadastro de acesso.');">
+                              onsubmit="return confirm(@js('Tem certeza que deseja excluir o aluno '.($aluno->nome ?: $aluno->ra).'? Isso não remove os resultados dele, apenas o cadastro de acesso.'));">
                             @csrf
                             @method('DELETE')
                             <button type="submit" class="text-red-500 hover:text-red-700">Excluir</button>

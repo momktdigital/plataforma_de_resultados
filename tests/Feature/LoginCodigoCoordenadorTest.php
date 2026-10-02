@@ -259,6 +259,72 @@ class LoginCodigoCoordenadorTest extends TestCase
             ->assertRedirect(route('coordenador.painel'));
     }
 
+    public function test_aba_do_coordenador_oferece_o_botao_entrar_com_senha(): void
+    {
+        $this->get('/login?modo=codigo')
+            ->assertOk()
+            ->assertSee('Entrar com senha')
+            ->assertSee(route('login', ['modo' => 'coordenador']), false);
+    }
+
+    public function test_aba_do_coordenador_no_modo_senha_tem_usuario_senha_e_volta_para_o_codigo(): void
+    {
+        $this->get('/login?modo=coordenador')
+            ->assertOk()
+            ->assertSee('name="password"', false)
+            ->assertSee('Entrar no meu painel')
+            ->assertSee('Receber código por e-mail')
+            ->assertSee(route('login', ['modo' => 'codigo']), false)
+            ->assertDontSee('Enviar código');
+    }
+
+    public function test_modo_senha_do_coordenador_mantem_a_aba_coordenador_ativa(): void
+    {
+        $html = $this->get('/login?modo=coordenador')->getContent();
+
+        // A aba "Coordenador" é a selecionada (aria-selected="true") e a de administrador não.
+        $this->assertMatchesRegularExpression('/aria-selected="false"[^>]*>\s*Administrador/s', $html);
+        $this->assertMatchesRegularExpression('/aria-selected="true"[^>]*>\s*Coordenador/s', $html);
+    }
+
+    public function test_aba_do_administrador_nao_mostra_o_botao_do_coordenador(): void
+    {
+        $this->get('/login')->assertOk()->assertDontSee('Entrar com senha')->assertDontSee('Receber código por e-mail');
+    }
+
+    public function test_coordenador_que_entra_por_senha_vai_para_o_painel_e_nao_para_a_lista_do_admin(): void
+    {
+        $this->coordenador('comsenha', 'comsenha@faa.edu.br', 'minha-senha-bem-longa-1');
+
+        $this->post('/login', ['username' => 'comsenha', 'password' => 'minha-senha-bem-longa-1'])
+            ->assertRedirect(route('coordenador.painel'));
+
+        $this->assertAuthenticated('admin');
+        $this->get(route('coordenador.painel'))->assertOk();
+    }
+
+    public function test_senha_errada_do_coordenador_volta_para_a_aba_do_coordenador(): void
+    {
+        $this->coordenador('comsenha', 'comsenha@faa.edu.br', 'minha-senha-bem-longa-1');
+
+        $this->from('/login?modo=coordenador')
+            ->post('/login', ['username' => 'comsenha', 'password' => 'errada'])
+            ->assertRedirect('/login?modo=coordenador')
+            ->assertSessionHasErrors('username');
+
+        $this->assertGuest('admin');
+    }
+
+    public function test_coordenador_sem_senha_nao_entra_por_senha_e_a_mensagem_nao_revela_isso(): void
+    {
+        $this->coordenador('semsenha', 'semsenha@faa.edu.br');
+
+        $this->post('/login', ['username' => 'semsenha', 'password' => 'qualquer-coisa'])
+            ->assertSessionHasErrors(['username' => 'Usuário ou senha inválidos.']);
+
+        $this->assertGuest('admin');
+    }
+
     // ---------------- destino do e-mail de 2FA do aluno ----------------
 
     private function aluno(): Aluno

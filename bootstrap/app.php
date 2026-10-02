@@ -2,6 +2,8 @@
 
 use App\Http\Middleware\EnsureInstalled;
 use App\Http\Middleware\EnsureNotInstalled;
+use App\Http\Middleware\PapelValido;
+use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\SomenteAdministrador;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
@@ -30,8 +32,15 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'instalado' => EnsureInstalled::class,
             'nao-instalado' => EnsureNotInstalled::class,
+            'papel-valido' => PapelValido::class,
             'somente-admin' => SomenteAdministrador::class,
         ]);
+
+        // Cabeçalhos de segurança (anti-clickjacking, nosniff, Referrer-Policy, HSTS em HTTPS, no-store em área logada).
+        $middleware->web(append: [SecurityHeaders::class]);
+
+        // Opcional (TRUSTED_HOSTS no .env): só aceita requisições para esses hosts. Lista vazia = sem restrição.
+        $middleware->trustHosts(at: fn () => config('app.trusted_hosts', []), subdomains: false);
 
         // Sem isso, o Laravel roda `auth`/`guest` antes do nosso middleware por
         // causa da lista de prioridade padrão — e num deploy sem admin ainda,

@@ -257,6 +257,53 @@ class QuestaoImportTest extends TestCase
         $this->assertCount(1, $questao->referencias()->where('tipo', 'dcn')->get());
     }
 
+    public function test_reimportar_planilha_parcial_nao_zera_os_metadados_que_ela_nao_traz(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        $admin = $this->admin();
+
+        $completa = UploadedFile::fake()->createWithContent(
+            'gabarito.csv',
+            "Questão,Gabarito,Área,Tema,Habilidade,Bloom Nível,Taxonomia,Miller,Dificuldade,Dificuldade TRI\n"
+            ."1,B,Clínica,Cardiologia,H1,Aplicar,Aplicar,Mostra,Fácil,-1.25\n"
+            ."2,C,Cirurgia,Trauma,H2,Lembrar,Lembrar,Sabe,Médio,0.5\n"
+        );
+        $this->actingAs($admin, 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/questoes/import", ['arquivo' => $completa]);
+
+        // Reimporta só com Questão+Gabarito (corrigindo o gabarito da 1) e uma única coluna de metadado (Tema).
+        $parcial = UploadedFile::fake()->createWithContent('gabarito.csv', "Questão,Gabarito,Tema\n1,D,Cardiologia nova\n2,C,Trauma\n");
+        $this->actingAs($admin, 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/questoes/import", ['arquivo' => $parcial]);
+
+        $q1 = Questao::where('numero', 1)->firstOrFail();
+        $this->assertSame('D', $q1->gabarito);
+        $this->assertSame('Cardiologia nova', $q1->tema);
+        // O que a planilha parcial não trazia segue intacto.
+        $this->assertSame('Clínica', $q1->area);
+        $this->assertSame('H1', $q1->habilidade);
+        $this->assertSame('Aplicar', $q1->bloom_nivel);
+        $this->assertSame('Aplicar', $q1->bloom_verbo);
+        $this->assertSame('facil', $q1->dificuldade_pedagogica);
+        $this->assertEquals(-1.25, $q1->dificuldade_tri);
+        $this->assertSame('Cirurgia', Questao::where('numero', 2)->firstOrFail()->area);
+    }
+
+    public function test_celula_em_branco_de_coluna_presente_limpa_o_valor(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        $admin = $this->admin();
+
+        $this->actingAs($admin, 'admin')->post("/avaliacoes/{$avaliacao->codigo}/questoes/import", [
+            'arquivo' => UploadedFile::fake()->createWithContent('gabarito.csv', "Questão,Gabarito,Tema\n1,B,Cardiologia\n"),
+        ]);
+        $this->actingAs($admin, 'admin')->post("/avaliacoes/{$avaliacao->codigo}/questoes/import", [
+            'arquivo' => UploadedFile::fake()->createWithContent('gabarito.csv', "Questão,Gabarito,Tema\n1,B,\n"),
+        ]);
+
+        $this->assertNull(Questao::where('numero', 1)->firstOrFail()->tema);
+    }
+
     public function test_reimportar_gabarito_recalcula_o_resumo_do_boletim(): void
     {
         $avaliacao = Avaliacao::create([]);

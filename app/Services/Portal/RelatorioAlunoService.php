@@ -228,6 +228,7 @@ class RelatorioAlunoService
                 );
             })
             ->where('r.avaliacao_codigo', $avaliacao->codigo)
+            ->whereNull('r.deleted_at')
             ->where('r.periodo', $periodo)
             ->groupBy('r.questao_numero')
             ->selectRaw('r.questao_numero as numero')

@@ -108,7 +108,8 @@ Route::middleware('instalado')->group(function () {
             ->name('senha.redefinir.salvar');
     });
 
-    Route::middleware('auth:admin')->group(function () {
+    // `papel-valido`: conta com `role` desconhecido tem a sessão encerrada (ver PapelValido).
+    Route::middleware(['auth:admin', 'papel-valido'])->group(function () {
         Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
 
         // Acessível a administradores E coordenadores. Para o coordenador,

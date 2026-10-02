@@ -41,11 +41,29 @@ class QuestaoImportService
         'ppc' => ['ppc'],
     ];
 
-    /** Colunas de `questoes` sobrescritas pelo upsert() a cada reimport (fora as chaves avaliacao_codigo/numero). */
-    private const CAMPOS_ATUALIZAVEIS = [
-        'gabarito', 'area', 'tema', 'habilidade', 'bloom_nivel', 'bloom_verbo',
-        'miller_nivel', 'dificuldade_pedagogica', 'dificuldade_tri', 'deleted_at', 'updated_at',
+    /**
+     * Metadados de valor único de `questoes` → padrões do cabeçalho em que cada um é reconhecido.
+     *
+     * "Taxonomia" sozinho também vale para o verbo de Bloom: nas planilhas dos coordenadores essa coluna
+     * já vem com os verbos (Lembrar, Aplicar...), só sem "Bloom" no cabeçalho. "Dificuldade" pura vale
+     * para a pedagógica (basta conter "dificuldade" e NÃO ser a coluna de TRI, que tem cabeçalho próprio).
+     */
+    private const METADADOS_PADROES = [
+        'area' => ['/\barea\b/'],
+        'tema' => ['/\btema\b/'],
+        'habilidade' => ['/\bhabilidade\b/'],
+        'bloom_nivel' => ['/(?=.*bloom)(?=.*nivel)/'],
+        'bloom_verbo' => ['/(?=.*bloom)(?=.*verbo)/', '/\btaxonomia\b/'],
+        'miller_nivel' => ['/miller/'],
+        'dificuldade_pedagogica' => ['/(?=.*dificuldade)(?!.*tri)/'],
+        'dificuldade_tri' => ['/(?=.*dificuldade)(?=.*tri)/'],
     ];
+
+    /**
+     * Colunas de `questoes` que o upsert() sobrescreve a cada reimport, além dos metadados cujas colunas
+     * existem na planilha (ver colunasDeMetadadoPresentes()). Fora as chaves avaliacao_codigo/numero.
+     */
+    private const CAMPOS_FIXOS_ATUALIZAVEIS = ['gabarito', 'deleted_at', 'updated_at'];
 
     /** Tamanho dos lotes do upsert() — ver ResultadoImportService::TAMANHO_LOTE. */
     private const TAMANHO_LOTE = 500;
@@ -58,14 +76,14 @@ class QuestaoImportService
     private const CAMPOS_PREVIEW = [
         ['chave' => 'numero', 'rotulo' => 'Questão', 'obrigatorio' => true, 'patterns' => self::NUMERO_PATTERNS],
         ['chave' => 'gabarito', 'rotulo' => 'Gabarito', 'obrigatorio' => true, 'patterns' => self::GABARITO_PATTERNS],
-        ['chave' => 'area', 'rotulo' => 'Área', 'obrigatorio' => false, 'patterns' => ['/\barea\b/']],
-        ['chave' => 'tema', 'rotulo' => 'Tema', 'obrigatorio' => false, 'patterns' => ['/\btema\b/']],
-        ['chave' => 'habilidade', 'rotulo' => 'Habilidade', 'obrigatorio' => false, 'patterns' => ['/\bhabilidade\b/']],
-        ['chave' => 'bloom_nivel', 'rotulo' => 'Bloom (nível)', 'obrigatorio' => false, 'patterns' => ['/(?=.*bloom)(?=.*nivel)/']],
-        ['chave' => 'bloom_verbo', 'rotulo' => 'Bloom (verbo)', 'obrigatorio' => false, 'patterns' => ['/(?=.*bloom)(?=.*verbo)/', '/\btaxonomia\b/']],
-        ['chave' => 'miller_nivel', 'rotulo' => 'Miller (nível)', 'obrigatorio' => false, 'patterns' => ['/miller/']],
-        ['chave' => 'dificuldade_pedagogica', 'rotulo' => 'Dificuldade Pedagógica', 'obrigatorio' => false, 'patterns' => ['/(?=.*dificuldade)(?!.*tri)/']],
-        ['chave' => 'dificuldade_tri', 'rotulo' => 'Dificuldade TRI', 'obrigatorio' => false, 'patterns' => ['/(?=.*dificuldade)(?=.*tri)/']],
+        ['chave' => 'area', 'rotulo' => 'Área', 'obrigatorio' => false, 'patterns' => self::METADADOS_PADROES['area']],
+        ['chave' => 'tema', 'rotulo' => 'Tema', 'obrigatorio' => false, 'patterns' => self::METADADOS_PADROES['tema']],
+        ['chave' => 'habilidade', 'rotulo' => 'Habilidade', 'obrigatorio' => false, 'patterns' => self::METADADOS_PADROES['habilidade']],
+        ['chave' => 'bloom_nivel', 'rotulo' => 'Bloom (nível)', 'obrigatorio' => false, 'patterns' => self::METADADOS_PADROES['bloom_nivel']],
+        ['chave' => 'bloom_verbo', 'rotulo' => 'Bloom (verbo)', 'obrigatorio' => false, 'patterns' => self::METADADOS_PADROES['bloom_verbo']],
+        ['chave' => 'miller_nivel', 'rotulo' => 'Miller (nível)', 'obrigatorio' => false, 'patterns' => self::METADADOS_PADROES['miller_nivel']],
+        ['chave' => 'dificuldade_pedagogica', 'rotulo' => 'Dificuldade Pedagógica', 'obrigatorio' => false, 'patterns' => self::METADADOS_PADROES['dificuldade_pedagogica']],
+        ['chave' => 'dificuldade_tri', 'rotulo' => 'Dificuldade TRI', 'obrigatorio' => false, 'patterns' => self::METADADOS_PADROES['dificuldade_tri']],
         ['chave' => 'matriz_periodo', 'rotulo' => 'Matriz (período)', 'obrigatorio' => false, 'patterns' => ['/(?=.*matriz)(?=.*period)/']],
         ['chave' => 'matriz_disciplina', 'rotulo' => 'Matriz (disciplina)', 'obrigatorio' => false, 'patterns' => ['/(?=.*matriz)(?=.*disciplina)/']],
         ['chave' => 'matriz_codigo', 'rotulo' => 'Matriz (código)', 'obrigatorio' => false, 'patterns' => ['/(?=.*matriz)(?=.*codigo)/']],
@@ -84,7 +102,11 @@ class QuestaoImportService
         $rows = SpreadsheetReader::readRows($file);
         $resultado = new ImportResult;
 
-        $linhas = $this->normalizarLinhas($rows, $resultado);
+        // Só as colunas de metadado que a planilha TEM são gravadas: reimportar uma planilha parcial
+        // (só Questão+Gabarito, ou sem "Tema") não pode zerar o que já estava salvo nas outras.
+        $colunasDeMetadado = $this->colunasDeMetadadoPresentes(array_keys($rows[0] ?? []));
+
+        $linhas = $this->normalizarLinhas($rows, $resultado, $colunasDeMetadado);
 
         if ($linhas === []) {
             return $resultado;
@@ -110,7 +132,7 @@ class QuestaoImportService
             $falharam = [];
 
             foreach (array_chunk($registros, self::TAMANHO_LOTE, true) as $lote) {
-                $this->salvarLote($lote, $existentes, $vistos, $falharam, $resultado);
+                $this->salvarLote($lote, $existentes, $vistos, $falharam, $resultado, array_merge(self::CAMPOS_FIXOS_ATUALIZAVEIS, $colunasDeMetadado));
             }
 
             $questoes = Questao::where('avaliacao_codigo', $avaliacao->codigo)
@@ -185,9 +207,10 @@ class QuestaoImportService
      * Valida e normaliza cada linha da planilha, sem tocar o banco.
      *
      * @param  array<int, array<string, mixed>>  $rows
-     * @return array<int, array{linha: int, numero: int, gabarito: string, atributos: array<string, string|null>, row: array<string, mixed>}>
+     * @param  array<int, string>  $colunasDeMetadado
+     * @return array<int, array{linha: int, numero: int, gabarito: string, atributos: array<string, string|float|null>, row: array<string, mixed>}>
      */
-    private function normalizarLinhas(array $rows, ImportResult $resultado): array
+    private function normalizarLinhas(array $rows, ImportResult $resultado, array $colunasDeMetadado): array
     {
         $linhas = [];
 
@@ -214,7 +237,7 @@ class QuestaoImportService
                 'linha' => $linha,
                 'numero' => (int) $matches[0],
                 'gabarito' => mb_strtoupper($gabarito, 'UTF-8'),
-                'atributos' => $this->extrairMetadados($row),
+                'atributos' => $this->extrairMetadados($row, $colunasDeMetadado),
                 'row' => $row,
             ];
         }
@@ -263,8 +286,9 @@ class QuestaoImportService
      * @param  array<int, true>  $existentes
      * @param  array<int, true>  $vistos
      * @param  array<int, true>  $falharam
+     * @param  array<int, string>  $camposAtualizaveis  colunas sobrescritas nos registros que já existem
      */
-    private function salvarLote(array $lote, array $existentes, array &$vistos, array &$falharam, ImportResult $resultado): void
+    private function salvarLote(array $lote, array $existentes, array &$vistos, array &$falharam, ImportResult $resultado, array $camposAtualizaveis): void
     {
         $agora = now();
 
@@ -272,7 +296,7 @@ class QuestaoImportService
             DB::table('questoes')->upsert(
                 array_map(fn (array $r) => $r['dados'] + ['created_at' => $agora, 'updated_at' => $agora], array_values($lote)),
                 ['avaliacao_codigo', 'numero'],
-                self::CAMPOS_ATUALIZAVEIS
+                $camposAtualizaveis
             );
 
             foreach ($lote as $numero => $registro) {
@@ -289,7 +313,7 @@ class QuestaoImportService
                 DB::table('questoes')->upsert(
                     [$registro['dados'] + ['created_at' => $agora, 'updated_at' => $agora]],
                     ['avaliacao_codigo', 'numero'],
-                    self::CAMPOS_ATUALIZAVEIS
+                    $camposAtualizaveis
                 );
 
                 $this->registrarSucesso($numero, $existentes, $vistos, $resultado);
@@ -312,33 +336,40 @@ class QuestaoImportService
         $vistos[$numero] = true;
     }
 
-    /** @return array<string, string|null> */
-    private function extrairMetadados(array $row): array
+    /**
+     * Quais metadados a planilha traz (coluna presente no cabeçalho, mesmo que com células em branco).
+     *
+     * @param  array<int, int|string>  $cabecalho
+     * @return array<int, string>
+     */
+    private function colunasDeMetadadoPresentes(array $cabecalho): array
+    {
+        return array_values(array_filter(
+            array_keys(self::METADADOS_PADROES),
+            fn (string $campo) => HeaderResolver::hasColumn($cabecalho, self::METADADOS_PADROES[$campo])
+        ));
+    }
+
+    /**
+     * Só os metadados cujas colunas existem na planilha; célula em branco de uma coluna que existe vira
+     * null (a planilha é a fonte da verdade para as colunas que ela traz).
+     *
+     * @param  array<int, string>  $colunas
+     * @return array<string, string|float|null>
+     */
+    private function extrairMetadados(array $row, array $colunas): array
     {
         $campos = [];
 
-        $campos['area'] = HeaderResolver::findValue($row, ['/\barea\b/']);
-        $campos['tema'] = HeaderResolver::findValue($row, ['/\btema\b/']);
-        $campos['habilidade'] = HeaderResolver::findValue($row, ['/\bhabilidade\b/']);
+        foreach ($colunas as $campo) {
+            $valor = HeaderResolver::findValue($row, self::METADADOS_PADROES[$campo]);
 
-        $campos['bloom_nivel'] = HeaderResolver::findValue($row, ['/(?=.*bloom)(?=.*nivel)/']);
-        // "Taxonomia" sozinho também é aceito: nas planilhas dos coordenadores
-        // essa coluna já vem com os verbos de Bloom (Lembrar, Aplicar...), só
-        // sem "Bloom" no nome do cabeçalho.
-        $campos['bloom_verbo'] = HeaderResolver::findValue($row, ['/(?=.*bloom)(?=.*verbo)/', '/\btaxonomia\b/']);
-        $campos['miller_nivel'] = HeaderResolver::findValue($row, ['/miller/']);
-
-        // Aceita tanto "Dificuldade Pedagógica" quanto uma coluna "Dificuldade"
-        // pura (comum nas planilhas dos coordenadores, sem qualificar
-        // "pedagógica") — únicas exigências são conter "dificuldade" e NÃO
-        // ser a coluna de TRI (essa tem cabeçalho próprio, tratado abaixo).
-        $dificuldadePedagogica = HeaderResolver::findValue($row, ['/(?=.*dificuldade)(?!.*tri)/']);
-        $campos['dificuldade_pedagogica'] = $this->normalizarDificuldade($dificuldadePedagogica);
-
-        $dificuldadeTri = HeaderResolver::findValue($row, ['/(?=.*dificuldade)(?=.*tri)/']);
-        $campos['dificuldade_tri'] = $dificuldadeTri !== null
-            ? (float) str_replace(',', '.', $dificuldadeTri)
-            : null;
+            $campos[$campo] = match ($campo) {
+                'dificuldade_pedagogica' => $this->normalizarDificuldade($valor),
+                'dificuldade_tri' => $valor !== null ? (float) str_replace(',', '.', $valor) : null,
+                default => $valor,
+            };
+        }
 
         return $campos;
     }

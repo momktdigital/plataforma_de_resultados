@@ -21,4 +21,15 @@ abstract class TestCase extends BaseTestCase
         // InstallStatus memoiza "instalado" por processo; cada teste começa do zero.
         InstallStatus::limpar();
     }
+
+    /**
+     * Caminho no disco de um upload cujo caminho público é `uploads/...` (ou `/uploads/...`): nos testes os
+     * uploads vão para `config('sistema.uploads_dir')` (descartável), não para `public/uploads`.
+     */
+    protected function caminhoDoUpload(string $caminhoPublico): string
+    {
+        $relativo = preg_replace('#^/?uploads/#', '', ltrim($caminhoPublico, '/'));
+
+        return rtrim((string) config('sistema.uploads_dir'), '/\\').'/'.$relativo;
+    }
 }

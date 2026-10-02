@@ -9,7 +9,7 @@ use Tests\TestCase;
 
 /**
  * Sem RefreshDatabase de propósito — LogoUploader não toca banco, só o
- * filesystem (via public_path(), por isso é Feature e não Unit: precisa da
+ * filesystem (via config('sistema.uploads_dir'), por isso é Feature e não Unit: precisa da
  * aplicação Laravel de pé).
  */
 class LogoUploaderTest extends TestCase
@@ -29,7 +29,7 @@ class LogoUploaderTest extends TestCase
     private function salvar(UploadedFile $file): string
     {
         $caminho = LogoUploader::salvar($file, 'teste');
-        $this->arquivosGravados[] = public_path($caminho);
+        $this->arquivosGravados[] = $this->caminhoDoUpload($caminho);
 
         return $caminho;
     }
@@ -40,7 +40,7 @@ class LogoUploaderTest extends TestCase
         $arquivo = UploadedFile::fake()->createWithContent('logo.svg', $svg);
 
         $caminho = $this->salvar($arquivo);
-        $conteudo = file_get_contents(public_path($caminho));
+        $conteudo = file_get_contents($this->caminhoDoUpload($caminho));
 
         $this->assertStringNotContainsString('<script', $conteudo);
         $this->assertStringNotContainsString('alert', $conteudo);
@@ -53,7 +53,7 @@ class LogoUploaderTest extends TestCase
         $arquivo = UploadedFile::fake()->createWithContent('logo.svg', $svg);
 
         $caminho = $this->salvar($arquivo);
-        $conteudo = file_get_contents(public_path($caminho));
+        $conteudo = file_get_contents($this->caminhoDoUpload($caminho));
 
         $this->assertStringNotContainsString('onload', $conteudo);
         $this->assertStringNotContainsString('onclick', $conteudo);
@@ -67,7 +67,7 @@ class LogoUploaderTest extends TestCase
         $arquivo = UploadedFile::fake()->createWithContent('logo.svg', $svg);
 
         $caminho = $this->salvar($arquivo);
-        $conteudo = file_get_contents(public_path($caminho));
+        $conteudo = file_get_contents($this->caminhoDoUpload($caminho));
 
         $this->assertStringNotContainsString('javascript:', $conteudo);
     }
@@ -79,7 +79,7 @@ class LogoUploaderTest extends TestCase
         $arquivo = UploadedFile::fake()->createWithContent('logo.svg', $svg);
 
         $caminho = $this->salvar($arquivo);
-        $conteudo = file_get_contents(public_path($caminho));
+        $conteudo = file_get_contents($this->caminhoDoUpload($caminho));
 
         $this->assertStringNotContainsString('foreignObject', $conteudo);
         $this->assertStringNotContainsString('script', $conteudo);
@@ -111,7 +111,7 @@ class LogoUploaderTest extends TestCase
         $arquivo = UploadedFile::fake()->createWithContent('logo.svg', $svg);
 
         $caminho = $this->salvar($arquivo);
-        $conteudo = file_get_contents(public_path($caminho));
+        $conteudo = file_get_contents($this->caminhoDoUpload($caminho));
 
         $this->assertStringContainsString('<circle', $conteudo);
         $this->assertStringContainsString('fill="red"', $conteudo);
@@ -123,6 +123,6 @@ class LogoUploaderTest extends TestCase
 
         $caminho = $this->salvar($arquivo);
 
-        $this->assertFileExists(public_path($caminho));
+        $this->assertFileExists($this->caminhoDoUpload($caminho));
     }
 }

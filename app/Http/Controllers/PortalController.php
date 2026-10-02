@@ -19,6 +19,7 @@ use App\Services\Visualizacoes\VisualizacaoConfigService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
@@ -480,7 +481,10 @@ class PortalController extends Controller
             if ($token === '') {
                 return 'Por favor, confirme que você não é um robô.';
             }
-            if ($secret !== '' && ! $captcha->verificarRecaptcha($secret, $token)) {
+            if ($secret === '') {
+                return $this->captchaSemSegredo('reCAPTCHA');
+            }
+            if (! $captcha->verificarRecaptcha($secret, $token)) {
                 return 'Falha na validação do reCAPTCHA. Tente novamente.';
             }
         } elseif (Configuracao::valor('hcaptcha_ativo', '0') === '1') {
@@ -490,12 +494,26 @@ class PortalController extends Controller
             if ($token === '') {
                 return 'Por favor, confirme que você não é um robô.';
             }
-            if ($secret !== '' && ! $captcha->verificarHcaptcha($secret, $token)) {
+            if ($secret === '') {
+                return $this->captchaSemSegredo('hCaptcha');
+            }
+            if (! $captcha->verificarHcaptcha($secret, $token)) {
                 return 'Falha na validação do hCaptcha. Tente novamente.';
             }
         }
 
         return null;
+    }
+
+    /**
+     * CAPTCHA ativo mas sem a secret key: falha FECHADA. Antes, a verificação era simplesmente pulada
+     * (bastava qualquer texto no campo do token) — um CAPTCHA que não protege, mas parece que protege.
+     */
+    private function captchaSemSegredo(string $nome): string
+    {
+        Log::warning("{$nome} está ativo mas sem secret key configurada: consulta recusada.");
+
+        return 'A verificação anti-robô está indisponível no momento. Tente novamente mais tarde ou procure a coordenação.';
     }
 
     private function emitirCodigo(string $cpf, Aluno $aluno, SmtpEmailSender $mailer): void

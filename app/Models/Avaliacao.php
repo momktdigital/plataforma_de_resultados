@@ -61,12 +61,17 @@ class Avaliacao extends Model
      * Restringe a consulta às avaliações que o usuário pode ver: administrador
      * vê todas; coordenador vê as que têm aluno de algum dos seus cursos
      * (avaliacao_cursos) ou em que recebeu acesso excepcional
-     * (avaliacao_usuarios).
+     * (avaliacao_usuarios). Qualquer outro perfil não vê nenhuma.
      */
     public function scopeVisivelPara(Builder $query, Admin $usuario): Builder
     {
-        if (! $usuario->ehCoordenador()) {
+        if ($usuario->ehAdministrador()) {
             return $query;
+        }
+
+        // Perfil desconhecido: nada (falha fechada).
+        if (! $usuario->ehCoordenador()) {
+            return $query->whereRaw('1 = 0');
         }
 
         // Todas as grafias do mesmo curso (ADMINISTRACAO = ADMINISTRAÇÃO).

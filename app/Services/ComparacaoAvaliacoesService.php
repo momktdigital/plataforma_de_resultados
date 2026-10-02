@@ -42,8 +42,8 @@ class ComparacaoAvaliacoesService
      */
     public function opcoesDisponiveis(Avaliacao $atual, ?Admin $usuario = null): Collection
     {
-        // Coordenador só compara com avaliações que ele mesmo pode ver.
-        $permitidas = $usuario?->ehCoordenador() ? Avaliacao::visivelPara($usuario)->pluck('codigo')->all() : null;
+        // Quem não é administrador (coordenador) só compara com avaliações que ele mesmo pode ver.
+        $permitidas = $usuario !== null && ! $usuario->ehAdministrador() ? Avaliacao::visivelPara($usuario)->pluck('codigo')->all() : null;
 
         if ($atual->categoria_id === null) {
             return collect();

@@ -72,6 +72,65 @@ class ForgotPasswordTest extends TestCase
         $this->assertDatabaseCount('redefinicoes_senha', 0);
     }
 
+    public function test_link_do_email_usa_o_app_url_e_nao_o_host_da_requisicao(): void
+    {
+        config(['app.url' => 'https://resultados.instituicao.edu.br']);
+        $this->ativarSmtp();
+        Admin::create(['username' => 'coordenador', 'email' => 'coordenador@example.com', 'password_hash' => bcrypt('x')]);
+
+        $corpo = null;
+        $this->mock(SmtpEmailSender::class, function (MockInterface $mock) use (&$corpo) {
+            $mock->shouldReceive('enviar')->once()->andReturnUsing(function ($destinatario, $assunto, $html) use (&$corpo) {
+                $corpo = $html;
+            });
+        });
+
+        // Host forjado pelo cliente: o link NÃO pode apontar para ele.
+        $this->post('http://atacante.example/esqueci-senha', ['username' => 'coordenador'])
+            ->assertRedirect();
+
+        $this->assertNotNull($corpo);
+        $this->assertStringContainsString('https://resultados.instituicao.edu.br/redefinir-senha/', $corpo);
+        $this->assertStringNotContainsString('atacante.example', $corpo);
+    }
+
+    public function test_sem_app_url_configurado_o_link_usa_o_endereco_da_requisicao(): void
+    {
+        config(['app.url' => 'http://localhost']);
+        $this->ativarSmtp();
+        Admin::create(['username' => 'coordenador', 'email' => 'coordenador@example.com', 'password_hash' => bcrypt('x')]);
+
+        $corpo = null;
+        $this->mock(SmtpEmailSender::class, function (MockInterface $mock) use (&$corpo) {
+            $mock->shouldReceive('enviar')->once()->andReturnUsing(function ($destinatario, $assunto, $html) use (&$corpo) {
+                $corpo = $html;
+            });
+        });
+
+        $this->post('http://intranet.local/esqueci-senha', ['username' => 'coordenador'])->assertRedirect();
+
+        $this->assertStringContainsString('http://intranet.local/redefinir-senha/', $corpo);
+    }
+
+    public function test_nome_de_usuario_e_escapado_no_corpo_do_email(): void
+    {
+        config(['app.url' => 'https://resultados.instituicao.edu.br']);
+        $this->ativarSmtp();
+        Admin::create(['username' => '<i>x</i>', 'email' => 'coordenador@example.com', 'password_hash' => bcrypt('x')]);
+
+        $corpo = null;
+        $this->mock(SmtpEmailSender::class, function (MockInterface $mock) use (&$corpo) {
+            $mock->shouldReceive('enviar')->once()->andReturnUsing(function ($destinatario, $assunto, $html) use (&$corpo) {
+                $corpo = $html;
+            });
+        });
+
+        $this->post('/esqueci-senha', ['username' => '<i>x</i>'])->assertRedirect();
+
+        $this->assertStringNotContainsString('<i>x</i>', $corpo);
+        $this->assertStringContainsString('&lt;i&gt;x&lt;/i&gt;', $corpo);
+    }
+
     public function test_solicitar_sem_smtp_configurado_nao_envia_nada(): void
     {
         Admin::create(['username' => 'coordenador', 'email' => 'coordenador@example.com', 'password_hash' => bcrypt('x')]);

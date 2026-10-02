@@ -137,6 +137,19 @@ return [
     |
     */
 
+    /*
+    |--------------------------------------------------------------------------
+    | Hosts confiáveis (opcional)
+    |--------------------------------------------------------------------------
+    |
+    | Lista separada por vírgula (TRUSTED_HOSTS=resultados.exemplo.edu.br). Quando preenchida, requisições com
+    | outro cabeçalho Host são recusadas (400) — evita links/redirecionamentos montados com um Host forjado.
+    | Vazia = sem restrição (comportamento anterior). Só tem efeito fora de `local`.
+    |
+    */
+
+    'trusted_hosts' => array_values(array_filter(array_map('trim', explode(',', (string) env('TRUSTED_HOSTS', ''))))),
+
     'instalado_marcador' => env('INSTALL_MARKER', storage_path('app/instalado.lock')) ?: null,
 
 ];

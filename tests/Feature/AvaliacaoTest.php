@@ -201,7 +201,7 @@ class AvaliacaoTest extends TestCase
         $avaliacao = Avaliacao::firstOrFail();
         $this->assertNotNull($avaliacao->link_comentado);
         $this->assertStringContainsString('uploads/gabaritos-comentados/', $avaliacao->link_comentado);
-        $this->assertFileExists(public_path(parse_url($avaliacao->link_comentado, PHP_URL_PATH)));
+        $this->assertFileExists($this->caminhoDoUpload(parse_url($avaliacao->link_comentado, PHP_URL_PATH)));
     }
 
     public function test_arquivo_do_gabarito_comentado_substitui_o_link_colado(): void

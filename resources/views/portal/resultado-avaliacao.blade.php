@@ -594,15 +594,21 @@ function portalExportarPdfAvaliacao() {
     btn.innerHTML = '<i class="ph-bold ph-spinner-gap animate-spin mr-2"></i> Gerando...';
     btn.disabled = true;
 
+    // Título do site, nome e RA vêm de cadastro/planilha: entram escapados, nunca como HTML cru.
+    const esc = function (valor) {
+        const d = document.createElement('div');
+        d.textContent = valor == null ? '' : String(valor);
+        return d.innerHTML;
+    };
     const cabecalho = document.createElement('div');
     cabecalho.className = 'flex justify-between items-center mb-6 pb-4 border-b-2 border-primary';
     cabecalho.innerHTML = '<div>'
-        + '<p class="font-black text-lg text-slate-800">' + PORTAL_SITE_TITLE + '</p>'
+        + '<p class="font-black text-lg text-slate-800">' + esc(PORTAL_SITE_TITLE) + '</p>'
         + '<p class="text-xs text-slate-500 mt-0.5">Relatório de Resultado</p>'
         + '</div>'
         + '<div class="text-right">'
-        + '<p class="text-sm font-bold text-slate-700">' + (PORTAL_ALUNO.nome || '') + '</p>'
-        + '<p class="text-xs text-slate-500">RA: ' + PORTAL_ALUNO.ra + ' &middot; Gerado em '
+        + '<p class="text-sm font-bold text-slate-700">' + esc(PORTAL_ALUNO.nome) + '</p>'
+        + '<p class="text-xs text-slate-500">RA: ' + esc(PORTAL_ALUNO.ra) + ' &middot; Gerado em '
         + new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR') + '</p>'
         + '</div>';
     conteudo.insertBefore(cabecalho, conteudo.firstChild);

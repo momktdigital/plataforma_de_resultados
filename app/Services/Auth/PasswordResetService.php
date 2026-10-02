@@ -53,18 +53,38 @@ class PasswordResetService
             'expira_em' => now()->addMinutes(self::EXPIRA_MINUTOS),
         ]);
 
-        $url = route('senha.redefinir.edit', $token);
+        $url = $this->urlDaRedefinicao($token);
         $site = Configuracao::valor('site_title', 'Resultados');
+        $usuario = e($admin->username);
 
         $this->mailer->enviar(
             $admin->email,
             "Redefinição de senha — {$site}",
-            "Olá, <b>{$admin->username}</b>.<br><br>"
-                .'Recebemos um pedido de redefinição de senha da sua conta de administrador. '
+            "Olá, <b>{$usuario}</b>.<br><br>"
+                .'Recebemos um pedido de redefinição de senha da sua conta de acesso ao sistema. '
                 .'Clique no link abaixo para escolher uma nova senha (válido por 1 hora):<br><br>'
-                ."<a href=\"{$url}\">{$url}</a><br><br>"
+                .'<a href="'.e($url).'">'.e($url).'</a><br><br>'
                 .'Se você não solicitou isso, pode ignorar este e-mail — sua senha continua a mesma.',
         );
+    }
+
+    /**
+     * O link vai para o endereço configurado (APP_URL), NUNCA para o Host da requisição: quem faz o pedido
+     * controla esse cabeçalho e poderia mandar ao admin um e-mail legítimo com o link apontando para um
+     * domínio dele (o token vazaria no primeiro clique). Só quando APP_URL ainda é o padrão de
+     * desenvolvimento (localhost) cai para o endereço da requisição, para não gerar um link quebrado.
+     */
+    private function urlDaRedefinicao(string $token): string
+    {
+        $caminho = route('senha.redefinir.edit', $token, false);
+        $base = rtrim((string) config('app.url'), '/');
+        $host = strtolower((string) parse_url($base, PHP_URL_HOST));
+
+        if ($host === '' || in_array($host, ['localhost', '127.0.0.1', '::1', '[::1]'], true)) {
+            return url($caminho);
+        }
+
+        return $base.$caminho;
     }
 
     public function validar(string $token): ?RedefinicaoSenha

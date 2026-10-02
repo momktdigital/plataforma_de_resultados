@@ -76,6 +76,7 @@ class AnaliseConsolidadaService
                     ->whereNotNull('q.dificuldade_tri');
             })
             ->whereIn('r.avaliacao_codigo', $avaliacaoCodigos)
+            ->whereNull('r.deleted_at')
             ->where(fn ($q) => $this->porAluno($q, $aluno))
             ->select('q.dificuldade_tri', 'r.resposta', 'q.gabarito', 'q.anulada_modo')
             ->get()
@@ -215,7 +216,8 @@ class AnaliseConsolidadaService
                     'q.anulada_modo',
                 );
             })
-            ->whereIn('r.avaliacao_codigo', $avaliacaoCodigos);
+            ->whereIn('r.avaliacao_codigo', $avaliacaoCodigos)
+            ->whereNull('r.deleted_at');
 
         if ($aluno !== null) {
             $query->where(fn ($q) => $this->porAluno($q, $aluno));
@@ -263,6 +265,7 @@ class AnaliseConsolidadaService
                 );
             })
             ->whereIn('r.avaliacao_codigo', $avaliacaoCodigos)
+            ->whereNull('r.deleted_at')
             ->where(fn ($q) => $this->porAluno($q, $aluno))
             ->groupBy('r.avaliacao_codigo', 'q.area')
             ->selectRaw('r.avaliacao_codigo as codigo, q.area as area')

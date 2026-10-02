@@ -52,20 +52,47 @@ class Admin extends Authenticatable
         ];
     }
 
+    /**
+     * Perfil normalizado (caixa/espaços não distinguem): ROLE_ADMIN (inclui linhas legadas sem role),
+     * ROLE_COORDENADOR, ou null quando o valor gravado não é nenhum dos dois. Null significa SEM acesso —
+     * antes, qualquer valor diferente de "coordinator" (ex.: "Coordinator", "coord", um erro de digitação)
+     * caía no ramo "não é coordenador" e virava administrador completo (falha aberta).
+     */
+    public function papel(): ?string
+    {
+        return match (strtolower(trim((string) $this->role))) {
+            '', self::ROLE_ADMIN => self::ROLE_ADMIN,
+            self::ROLE_COORDENADOR => self::ROLE_COORDENADOR,
+            default => null,
+        };
+    }
+
+    public function temPapelValido(): bool
+    {
+        return $this->papel() !== null;
+    }
+
+    public function ehAdministrador(): bool
+    {
+        return $this->papel() === self::ROLE_ADMIN;
+    }
+
     public function ehCoordenador(): bool
     {
-        return $this->role === self::ROLE_COORDENADOR;
+        return $this->papel() === self::ROLE_COORDENADOR;
     }
 
     public function scopeCoordenadores(Builder $query): Builder
     {
-        return $query->where('role', self::ROLE_COORDENADOR);
+        return $query->whereRaw('LOWER(TRIM(role)) = ?', [self::ROLE_COORDENADOR]);
     }
 
-    /** Tudo que não é coordenador (inclui linhas legadas sem role). */
+    /** Administradores de fato: `superadmin` ou linha legada sem role. Perfil desconhecido não entra aqui. */
     public function scopeAdministradores(Builder $query): Builder
     {
-        return $query->where(fn ($q) => $q->where('role', '!=', self::ROLE_COORDENADOR)->orWhereNull('role'));
+        return $query->where(fn ($q) => $q->whereNull('role')
+            ->orWhereRaw("TRIM(role) = ''")
+            ->orWhereRaw('LOWER(TRIM(role)) = ?', [self::ROLE_ADMIN]));
     }
 
     /**

@@ -177,6 +177,32 @@ class PortalTest extends TestCase
         $response->assertOk();
     }
 
+    public function test_captcha_ativo_sem_secret_key_recusa_a_consulta_em_vez_de_pular_a_verificacao(): void
+    {
+        $this->aluno();
+
+        foreach (['recaptcha' => 'g-recaptcha-response', 'hcaptcha' => 'h-captcha-response'] as $tipo => $campo) {
+            Configuracao::definir('recaptcha_ativo', $tipo === 'recaptcha' ? '1' : '0');
+            Configuracao::definir('hcaptcha_ativo', $tipo === 'hcaptcha' ? '1' : '0');
+            Configuracao::definir('recaptcha_secret_key', '');
+            Configuracao::definir('hcaptcha_secret_key', '');
+
+            // O verificador nem deve ser chamado: qualquer texto no token NÃO pode bastar.
+            $this->mock(CaptchaVerifier::class, function (MockInterface $mock) {
+                $mock->shouldNotReceive('verificarRecaptcha');
+                $mock->shouldNotReceive('verificarHcaptcha');
+            });
+
+            $this->post('/portal/consultar', [
+                'cpf' => '123.456.789-09',
+                'data_nascimento' => '15/03/2000',
+                $campo => 'qualquer-coisa',
+            ])->assertSessionHasErrors('captcha');
+
+            $this->assertDatabaseCount('verificacoes_email', 0);
+        }
+    }
+
     public function test_verificar_codigo_correto_mostra_resultados(): void
     {
         $aluno = $this->aluno(['email' => 'aluno@example.com']);

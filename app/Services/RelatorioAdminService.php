@@ -241,6 +241,7 @@ class RelatorioAdminService
                     ->whereNull('q.deleted_at');
             })
             ->where('r.avaliacao_codigo', $avaliacao->codigo)
+            ->whereNull('r.deleted_at')
             ->whereIn('r.questao_numero', $porQuestao->keys())
             ->groupBy('r.questao_numero')
             ->selectRaw('r.questao_numero as numero')
@@ -300,6 +301,7 @@ class RelatorioAdminService
                 );
             })
             ->where('r.avaliacao_codigo', $avaliacao->codigo)
+            ->whereNull('r.deleted_at')
             ->when($periodo !== '', fn ($q) => $q->where('r.periodo', $periodo))
             ->when($chaves !== null, fn ($q) => $q->whereIn('r.aluno_chave', $chaves))
             ->groupBy('r.aluno_chave', 'q.habilidade')
@@ -490,6 +492,7 @@ class RelatorioAdminService
                 );
             })
             ->where('r.avaliacao_codigo', $avaliacao->codigo)
+            ->whereNull('r.deleted_at')
             ->when($periodo !== '', fn ($q) => $q->where('r.periodo', $periodo))
             ->groupBy('q.area', 'q.tema')
             ->selectRaw('q.area as area, q.tema as tema')
@@ -905,6 +908,7 @@ class RelatorioAdminService
                 );
             })
             ->where('r.avaliacao_codigo', $avaliacao->codigo)
+            ->whereNull('r.deleted_at')
             ->when($periodo !== '', fn ($q) => $q->where('r.periodo', $periodo))
             ->groupBy("q.{$campo}")
             ->selectRaw("q.{$campo} as campo")

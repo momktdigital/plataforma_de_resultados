@@ -95,7 +95,7 @@
         @endif
 
         <form method="POST" action="{{ route('sistema.legado.tabelas.destroy') }}"
-              onsubmit="return confirm('Excluir permanentemente {{ implode(', ', array_keys($tabelasLegadasLinhas)) }}? Esta ação não pode ser desfeita.');"
+              onsubmit="return confirm(@js('Excluir permanentemente '.implode(', ', array_keys($tabelasLegadasLinhas)).'? Esta ação não pode ser desfeita.'));"
               class="space-y-3">
             @csrf
             @method('DELETE')

@@ -201,7 +201,21 @@ revela se o usuário existe. Para isso o coordenador precisa ter **e-mail**
 (obrigatório no cadastro; a senha é opcional — sem ela o `password_hash` recebe
 um valor aleatório que ninguém conhece) e o SMTP do portal precisa estar
 **ativado** (Configurações → Portal público → E-mail). Administrador não entra
-por código. Um coordenador que tenha senha cadastrada também pode entrar por ela.
+por código. Um coordenador que tenha senha cadastrada também pode entrar por ela: na
+aba **Coordenador** há o botão **Entrar com senha** (`/login?modo=coordenador`,
+usuário + senha — a mesma rota `login` do administrador) e, na tela de senha, o
+botão **Receber código por e-mail** para voltar. Entrando por senha ou por código,
+o coordenador cai direto no seu **painel** (`/painel`). Quem não tem senha
+cadastrada vê a mesma mensagem genérica de "usuário ou senha inválidos".
+
+**Perfil desconhecido não acessa nada.** `Admin::papel()` normaliza `admins.role`
+(caixa e espaços não distinguem): `superadmin` ou vazio ⇒ administrador,
+`coordinator` ⇒ coordenador, **qualquer outro valor ⇒ sem perfil**. Antes,
+tudo que não fosse exatamente `coordinator` virava administrador completo
+(falha aberta). Agora o login recusa a conta, o middleware `papel-valido`
+(grupo `auth:admin` de `routes/web.php`) encerra uma sessão que ficou com perfil
+inválido e `somente-admin` exige `ehAdministrador()`. Contas assim somem das duas
+abas da tela de usuários — corrija o `role` direto no banco.
 
 Os cursos do coordenador ficam em `admin_cursos` (por **nome**, igual a
 `alunos.curso`); `admins.curso` (legado, um só) guarda o primeiro, só por
@@ -512,11 +526,32 @@ tela (`resources/views/partials/accessibility-*.blade.php`):
 
 ## Autenticação
 
-Não há cadastro de usuário nem redefinição de senha por e-mail neste módulo.
 O guard `admin` autentica contra a tabela `admins` já existente (mesmo hash
 bcrypt gerado por `password_hash()` no PHP legado) — quem já tem acesso ao
 painel administrativo entra aqui com as mesmas credenciais. Login tem
-rate limiting (5 tentativas / 60s por usuário+IP).
+rate limiting (5 tentativas / 60s por usuário+IP). Há redefinição de senha
+por e-mail (`/esqueci-senha`, precisa de SMTP ativo e de e-mail cadastrado na
+conta) e, pela linha de comando, `php artisan admin:redefinir-senha <usuario>`.
+
+Pontos de segurança que valem conhecer:
+
+- **Links de e-mail usam `APP_URL`**, nunca o cabeçalho `Host` da requisição
+  (quem pede o reset controla esse cabeçalho). Defina `APP_URL` com o endereço
+  público real; enquanto ele estiver em `http://localhost`, o link cai para o
+  endereço da requisição só para não sair quebrado. Opcionalmente,
+  `TRUSTED_HOSTS=meu.dominio.edu.br` (lista separada por vírgula) faz o Laravel
+  recusar qualquer outro `Host` (só tem efeito fora do ambiente `local`).
+- **Cabeçalhos de segurança** (`SecurityHeaders`, no grupo `web`):
+  `X-Frame-Options: SAMEORIGIN` + `frame-ancestors 'self'` (anti-clickjacking),
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy` e
+  HSTS **somente** quando a requisição já veio por HTTPS. Área logada e
+  resultados do portal saem com `Cache-Control: no-store`. De propósito não há CSP
+  de scripts/estilos: as telas usam scripts inline e bibliotecas por CDN.
+- **CAPTCHA falha fechado.** Com reCAPTCHA/hCaptcha ativo e a *secret key* vazia,
+  a consulta do portal é **recusada** (antes a verificação era pulada). A tela de
+  configuração também não deixa ativar sem site key e secret key.
+- **Cookie de sessão:** em produção com HTTPS, mantenha `SESSION_SECURE_COOKIE=true`
+  no `.env`.
 
 ## Instalação
 
@@ -540,7 +575,13 @@ instalação** (`/instalar`), que cobre o resto:
 4. Cria o primeiro usuário administrador.
 
 O wizard **bloqueia sozinho** assim que existir um administrador — não dá
-pra reabri-lo depois num site em produção. Se o deploy apontar para o mesmo
+pra reabri-lo depois num site em produção. Ao concluir a instalação (ou ao
+confirmar um sistema já instalado) é gravado o marcador
+`storage/app/instalado.lock`: **se ele existe e o banco não responde, o sistema
+devolve 503 em vez de reabrir o wizard** (queda do MySQL não pode virar convite
+para criar um novo administrador). Os dados do banco digitados no wizard são
+validados por formato antes de irem para o `.env`, e a mensagem de erro do driver
+não é devolvida na tela (fica só no log). Se o deploy apontar para o mesmo
 banco que a aplicação legada (que já tem admins cadastrados), o wizard nem
 aparece: o sistema já se considera instalado.
 
@@ -557,8 +598,15 @@ php artisan tinker --execute="App\Models\Admin::create(['username' => 'admin', '
 php artisan test
 ```
 
-Os testes rodam contra SQLite em memória (configurado em `phpunit.xml`) —
-não é preciso um MySQL rodando nem tocar no banco de produção para testar.
+Os testes rodam contra SQLite em memória (configurado em `phpunit.xml`, com
+`force="true"` para um `DB_*` do ambiente nunca vencer) — não é preciso um MySQL
+rodando nem tocar no banco de produção para testar. O `phpunit.xml` também isola
+tudo o que o app grava fora do banco: modo de manutenção em memória
+(`APP_MAINTENANCE_DRIVER=cache` + store `array`, para o atualizador não colocar o
+site real em 503), backups em `storage/framework/testing/backups` (`BACKUP_DIR`),
+uploads em `storage/framework/testing/uploads` (`UPLOADS_DIR`) e log desligado
+(`LOG_CHANNEL=null`). Em testes que precisem do arquivo de um upload use
+`$this->caminhoDoUpload('uploads/...')` (`tests/TestCase.php`).
 SQLite não pega certos erros que só aparecem num MySQL de verdade (ver "FK
 pra admins/alunos" no `CLAUDE.md`) — por isso o CI (`.github/workflows/tests.yml`)
 também tem um job separado (`migrate-mysql`) que roda `php artisan migrate
@@ -585,6 +633,7 @@ acento):
 - **Opcionais:** `Matriz Prova (campo A/B/C)`, `Bloom (nível)`, `Bloom (verbo)`, `Miller (nível)`, `Dificuldade Pedagógica` (fácil/médio/difícil), `Dificuldade TRI`, `DCN (campo A/B)`, `Portaria INEP (campo A/B/C)`, `PPC (campo A/B/C/D)`, `Matriz (período)`, `Matriz (disciplina)`, `Matriz (código)`.
 - As três colunas de Matriz (período/disciplina/código) aceitam **múltiplos valores por célula**, separados por `,`, `;` ou `|` — cada posição vira uma linha em `questao_matrizes`. `Matriz Prova`, `DCN`, `Portaria INEP` e `PPC` são um valor por coluna de campo (A/B/C/D) — cada um vira uma linha em `questao_referencias` (ver "Performance e escala").
 - Reimportar o mesmo número de questão desta avaliação **atualiza** em vez de duplicar.
+- **Planilha parcial não apaga o que ela não traz:** só as colunas de metadado (Área, Tema, Habilidade, Bloom, Miller, Dificuldade, TRI) que existem no cabeçalho são regravadas. Reimportar só `Questão` + `Gabarito` (para corrigir um gabarito) mantém todo o resto. Já uma célula em branco de uma coluna que a planilha tem limpa o valor.
 
 ### Resultados (`/avaliacoes/{codigo}/resultados/import`)
 
@@ -726,7 +775,11 @@ install`/`npm install` a partir do `composer.lock`/`package-lock.json`
 incluídos. **Inclui o `.env` real**, com credenciais — por isso o download
 só é permitido para administradores autenticados, nunca por link direto.
 Mantém automaticamente só os N backups mais recentes (configurável em
-**Configurações**, padrão 5).
+**Configurações**, padrão 5). Os arquivos ficam em `storage/app/backups`
+(`BACKUP_DIR` no `.env` troca o diretório) com nome `backup-AAAA-MM-DD_HHMMSS-<8 hex>.zip`
+— o sufixo aleatório impede adivinhar a URL pelo horário e evita que dois backups
+no mesmo segundo se sobrescrevam. No Windows, as entradas do zip e as exclusões
+(`vendor/`, `.git`, `.claude`...) são normalizadas para `/`.
 
 **Clicar em "Gerar backup agora" não gera o arquivo na hora** — só
 enfileira `App\Jobs\GerarBackupJob` (`ConfiguracaoSistema.backup_status`
@@ -769,6 +822,12 @@ O servidor precisa de acesso a shell/Composer (usado pelo atualizador para
 rodar `composer install` após cada atualização) e, idealmente, ao binário
 `mysqldump` (usado nos backups — sem ele, cai para um dump em PHP puro,
 mais lento mas funcional).
+
+No `.env`: `APP_URL` com o endereço público (links de e-mail), `APP_TIMEZONE`
+(`America/Sao_Paulo` no `.env.example`; sem ele os horários saem em UTC, 3 h
+adiantados) e `DB_QUEUE_RETRY_AFTER` (padrão 2000 s, **maior que o `timeout` de
+1800 s** dos jobs de import/backup — com 90 s, um segundo worker pegava o mesmo
+job ainda em andamento e rodava o import em duplicidade).
 
 Precisa também de um worker de fila rodando continuamente
 (`php artisan queue:work`, `QUEUE_CONNECTION=database` por padrão — sem

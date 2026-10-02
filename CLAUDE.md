@@ -65,6 +65,15 @@ deveria usar. Regra prática: se o app legado (ou um DBA olhando o banco
 compartilhado) precisaria enxergar/editar esse valor, é `Configuracao`; se é
 estritamente deste app, é `ConfiguracaoSistema`.
 
+## Perfil (`admins.role`) falha fechado
+
+Nunca escreva `! $usuario->ehCoordenador()` para decidir "então é administrador":
+um `role` desconhecido não é coordenador **nem** administrador. Use
+`ehAdministrador()` para liberar e `ehCoordenador()` para restringir; `papel()`
+devolve `null` para perfil inválido e o middleware `papel-valido` encerra a sessão.
+Os escopos `Admin::administradores()/coordenadores()` já normalizam
+(`LOWER(TRIM(role))`) — não compare `role` cru em SQL.
+
 ## Coordenadores: sempre filtrar por `visivelPara`
 
 `admins.role` (`superadmin`/`coordinator`) é coluna **legada**. Qualquer
@@ -91,6 +100,14 @@ collation diferente (`utf8mb4_general_ci`) de `resultado_resumos`/`respostas`
 direto no SQL dá "Illegal mix of collations" no MySQL (SQLite não pega). Junte
 por `aluno_id` (INT) ou passe os valores como parâmetros.
 
+## Consultas cruas em `respostas` precisam de `deleted_at IS NULL`
+
+`respostas` usa soft delete ("Excluir resultados do período"). `Resposta::query()`
+já filtra sozinho; **`DB::table('respostas ...')` não** — acrescente
+`->whereNull('r.deleted_at')` (ver `RespostasExcluidasTest`, que compara todos os
+visuais antes/depois de apagar). Sem isso, o resumo e os gráficos passam a
+discordar sobre a mesma turma.
+
 ## Convenções de teste
 
 - `tests/Unit/`: `PHPUnit\Framework\TestCase` puro, sem Laravel — pra
@@ -98,6 +115,11 @@ por `aluno_id` (INT) ou passe os valores como parâmetros.
   `SpreadsheetReader`, `AlunoVinculoResolver`).
 - `tests/Feature/`: `Tests\TestCase` (boota o app) + `RefreshDatabase`
   (SQLite `:memory:`) — tudo que passa por rota/controller/banco.
+- Nada de teste mexe no ambiente real: backups/uploads vão para
+  `config('sistema.backup_dir')`/`config('sistema.uploads_dir')` (descartáveis,
+  ver `phpunit.xml`), o modo de manutenção é `array`, e o marcador do instalador
+  (`INSTALL_MARKER`) fica vazio. Não use `storage_path('app/backups')` nem
+  `public_path('uploads')` em teste.
 - Um teste que grava no `.env` real do ambiente é perigoso — `EnvFileWriter`
   sempre recebe um caminho de arquivo descartável em teste, nunca o `.env`
   do processo de teste.

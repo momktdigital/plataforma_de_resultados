@@ -70,6 +70,39 @@ class PortalConfiguracaoTest extends TestCase
         $this->assertSame('secret-antiga', Configuracao::valor('hcaptcha_secret_key'));
     }
 
+    public function test_nao_ativa_captcha_sem_secret_key(): void
+    {
+        $admin = $this->admin();
+
+        foreach (['recaptcha', 'hcaptcha'] as $tipo) {
+            $this->actingAs($admin, 'admin')->put('/sistema/portal/captcha', [
+                'captcha_type' => $tipo,
+                "{$tipo}_site_key" => 'site-key',
+            ])->assertSessionHasErrors("{$tipo}_secret_key");
+
+            $this->assertNotSame('1', Configuracao::valor("{$tipo}_ativo", '0'));
+        }
+    }
+
+    public function test_nao_ativa_captcha_sem_site_key(): void
+    {
+        $this->actingAs($this->admin(), 'admin')->put('/sistema/portal/captcha', [
+            'captcha_type' => 'recaptcha',
+            'recaptcha_secret_key' => 'secret',
+        ])->assertSessionHasErrors('recaptcha_site_key');
+
+        $this->assertNotSame('1', Configuracao::valor('recaptcha_ativo', '0'));
+    }
+
+    public function test_desativar_captcha_nao_exige_chaves(): void
+    {
+        $this->actingAs($this->admin(), 'admin')->put('/sistema/portal/captcha', [
+            'captcha_type' => 'none',
+        ])->assertRedirect(route('sistema.portal.index'));
+
+        $this->assertSame('0', Configuracao::valor('recaptcha_ativo'));
+    }
+
     public function test_secret_keys_do_captcha_nao_voltam_no_html_da_tela(): void
     {
         Configuracao::definir('recaptcha_secret_key', 'segredo-recaptcha-nao-deve-vazar');
@@ -108,10 +141,10 @@ class PortalConfiguracaoTest extends TestCase
         $caminhoSalvo = Configuracao::valor('site_logo');
         $this->assertNotEmpty($caminhoSalvo);
         $this->assertStringStartsWith('uploads/logos/', $caminhoSalvo);
-        $this->assertFileExists(public_path($caminhoSalvo));
+        $this->assertFileExists($this->caminhoDoUpload($caminhoSalvo));
 
         // Limpeza — não deixa arquivo de teste em public/.
-        @unlink(public_path($caminhoSalvo));
+        @unlink($this->caminhoDoUpload($caminhoSalvo));
     }
 
     public function test_arquivo_de_logo_invalido_e_rejeitado(): void

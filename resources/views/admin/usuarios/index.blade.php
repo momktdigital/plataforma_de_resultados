@@ -65,7 +65,7 @@
                             <a href="{{ route('usuarios.edit', $usuario) }}" class="text-emerald-700 hover:underline mr-3">Editar</a>
                             @if ($usuario->id !== auth('admin')->id())
                                 <form method="POST" action="{{ route('usuarios.destroy', $usuario) }}" class="inline"
-                                      onsubmit="return confirm('Tem certeza que deseja excluir o usuário {{ $usuario->username }}?');">
+                                      onsubmit="return confirm(@js('Tem certeza que deseja excluir o usuário '.$usuario->username.'?'));">
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit" class="text-red-500 hover:text-red-700">Excluir</button>
