@@ -15,6 +15,8 @@ class AtualizarPortalSmtpRequest extends FormRequest
     {
         return [
             'smtp_ativo' => ['nullable', 'boolean'],
+            // Para onde vai o código de 2FA do aluno: e-mail pessoal (da matrícula) ou acadêmico (RA@somos.unifaa.edu.br).
+            'email_destino_2fa' => ['nullable', 'in:pessoal,academico'],
             'smtp_from_name' => ['nullable', 'string', 'max:255'],
             'smtp_from_email' => ['nullable', 'email', 'max:255'],
             'smtp_user' => ['nullable', 'string', 'max:255'],

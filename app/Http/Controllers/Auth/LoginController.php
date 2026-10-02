@@ -21,9 +21,10 @@ class LoginController extends Controller
 
     private const DECAY_SECONDS = 60;
 
-    public function create(): View
+    public function create(Request $request): View
     {
-        return view('auth.login');
+        // ?modo=codigo abre a aba do coordenador (login por código enviado ao e-mail).
+        return view('auth.login', ['modo' => $request->query('modo') === 'codigo' ? 'codigo' : 'senha']);
     }
 
     public function store(Request $request): RedirectResponse
@@ -46,7 +47,7 @@ class LoginController extends Controller
         RateLimiter::clear($this->throttleKey($request));
         $request->session()->regenerate();
 
-        return redirect()->intended(route('avaliacoes.index'));
+        return redirect()->intended(route(Auth::guard('admin')->user()->ehCoordenador() ? 'coordenador.painel' : 'avaliacoes.index'));
     }
 
     public function destroy(Request $request): RedirectResponse

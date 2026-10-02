@@ -70,9 +70,14 @@ class PortalController extends Controller
         }
 
         if (Configuracao::valor('smtp_ativo', '0') === '1') {
-            if (empty($aluno->email)) {
+            $emailDoCodigo = $aluno->emailParaCodigo();
+            if ($emailDoCodigo === null) {
+                $academico = Configuracao::valor('email_destino_2fa', 'pessoal') === 'academico';
+
                 return back()
-                    ->withErrors(['cpf' => 'O 2FA está ativo, mas você não tem e-mail cadastrado. Contate a secretaria.'])
+                    ->withErrors(['cpf' => $academico
+                        ? 'O 2FA está ativo, mas não foi possível determinar o seu e-mail acadêmico. Contate a secretaria.'
+                        : 'O 2FA está ativo, mas você não tem e-mail cadastrado. Contate a secretaria.'])
                     ->withInput();
             }
 
@@ -88,7 +93,7 @@ class PortalController extends Controller
                 }
             }
 
-            return view('portal.verificar', ['cpf' => $cpf, 'emailOculto' => $this->ocultarEmail($aluno->email)]);
+            return view('portal.verificar', ['cpf' => $cpf, 'emailOculto' => $this->ocultarEmail($emailDoCodigo)]);
         }
 
         return $this->autenticarEIrParaResultados($request, $aluno);
@@ -173,7 +178,8 @@ class PortalController extends Controller
 
         $aluno = Aluno::where('cpf', $cpf)->first();
 
-        if ($aluno === null || empty($aluno->email)) {
+        $emailDoCodigo = $aluno?->emailParaCodigo();
+        if ($aluno === null || $emailDoCodigo === null) {
             return redirect()->route('portal.consulta')->withErrors(['cpf' => 'Aluno ou e-mail não encontrado.']);
         }
 
@@ -198,7 +204,7 @@ class PortalController extends Controller
         $verificacao->save();
 
         try {
-            $mailer->enviar($aluno->email, '[Reenvio] '.$this->montarTexto('subject', $aluno), $this->montarTexto('body', $aluno));
+            $mailer->enviar($emailDoCodigo, '[Reenvio] '.$this->montarTexto('subject', $aluno), $this->montarTexto('body', $aluno));
         } catch (TransportExceptionInterface) {
             return view('portal.verificar', [
                 'cpf' => $cpf,
@@ -209,7 +215,7 @@ class PortalController extends Controller
 
         return view('portal.verificar', [
             'cpf' => $cpf,
-            'emailOculto' => $this->ocultarEmail($aluno->email),
+            'emailOculto' => $this->ocultarEmail($emailDoCodigo),
             'status' => 'Código reenviado com sucesso.',
         ]);
     }
@@ -504,7 +510,7 @@ class PortalController extends Controller
             'vezes_reenviado' => 0,
         ]);
 
-        $mailer->enviar($aluno->email, $this->montarTexto('subject', $aluno, $codigo), $this->montarTexto('body', $aluno, $codigo));
+        $mailer->enviar($aluno->emailParaCodigo(), $this->montarTexto('subject', $aluno, $codigo), $this->montarTexto('body', $aluno, $codigo));
     }
 
     private function montarTexto(string $parte, Aluno $aluno, ?string $codigoForcado = null): string

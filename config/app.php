@@ -65,7 +65,9 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    // O fuso vem do .env (APP_TIMEZONE=America/Sao_Paulo no .env.example). Antes estava fixo em UTC e
+    // os horários de lixeira, atividades e backups apareciam 3 horas adiantados.
+    'timezone' => env('APP_TIMEZONE', 'UTC'),
 
     /*
     |--------------------------------------------------------------------------
@@ -122,5 +124,19 @@ return [
         'driver' => env('APP_MAINTENANCE_DRIVER', 'file'),
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Marcador de "já instalado"
+    |--------------------------------------------------------------------------
+    |
+    | Arquivo criado quando o sistema é instalado (ou confirmado como instalado).
+    | Se ele existe e o banco não responde, o instalador NÃO reabre — ver
+    | App\Support\InstallStatus. Vazio desliga (usado nos testes).
+    |
+    */
+
+    'instalado_marcador' => env('INSTALL_MARKER', storage_path('app/instalado.lock')) ?: null,
 
 ];

@@ -7,7 +7,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
-class AdministradorTest extends TestCase
+class UsuarioTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -20,7 +20,7 @@ class AdministradorTest extends TestCase
     {
         $admin = $this->admin();
 
-        $response = $this->actingAs($admin, 'admin')->get('/administradores');
+        $response = $this->actingAs($admin, 'admin')->get('/usuarios');
 
         $response->assertOk();
         $response->assertSee('coordenador');
@@ -28,19 +28,19 @@ class AdministradorTest extends TestCase
 
     public function test_cria_administrador(): void
     {
-        $response = $this->actingAs($this->admin(), 'admin')->post('/administradores', [
+        $response = $this->actingAs($this->admin(), 'admin')->post('/usuarios', [
             'username' => 'professor',
             'password' => 'senha123456',
         ]);
 
-        $response->assertRedirect(route('administradores.index'));
+        $response->assertRedirect(route('usuarios.index', ['aba' => 'administradores']));
         $novo = Admin::where('username', 'professor')->firstOrFail();
         $this->assertTrue(Hash::check('senha123456', $novo->password_hash));
     }
 
     public function test_rejeita_senha_curta_demais_ao_criar_administrador(): void
     {
-        $response = $this->actingAs($this->admin(), 'admin')->post('/administradores', [
+        $response = $this->actingAs($this->admin(), 'admin')->post('/usuarios', [
             'username' => 'professor',
             'password' => 'curta123',
         ]);
@@ -53,7 +53,7 @@ class AdministradorTest extends TestCase
     {
         $admin = $this->admin();
 
-        $response = $this->actingAs($admin, 'admin')->post('/administradores', [
+        $response = $this->actingAs($admin, 'admin')->post('/usuarios', [
             'username' => 'coordenador',
             'password' => 'senha123456',
         ]);
@@ -67,12 +67,12 @@ class AdministradorTest extends TestCase
         $admin = $this->admin();
         $hashAntes = $admin->password_hash;
 
-        $response = $this->actingAs($admin, 'admin')->put("/administradores/{$admin->id}", [
+        $response = $this->actingAs($admin, 'admin')->put("/usuarios/{$admin->id}", [
             'username' => 'novo-nome',
             'email' => 'novo@example.com',
         ]);
 
-        $response->assertRedirect(route('administradores.index'));
+        $response->assertRedirect(route('usuarios.index', ['aba' => 'administradores']));
         $admin->refresh();
         $this->assertSame('novo-nome', $admin->username);
         $this->assertSame('novo@example.com', $admin->email);
@@ -84,10 +84,10 @@ class AdministradorTest extends TestCase
         $admin = $this->admin();
         $outro = Admin::create(['username' => 'professor', 'password_hash' => bcrypt('senha-antiga')]);
 
-        $this->actingAs($admin, 'admin')->put("/administradores/{$outro->id}", [
+        $this->actingAs($admin, 'admin')->put("/usuarios/{$outro->id}", [
             'username' => 'professor',
             'password' => 'senha-nova-123',
-        ])->assertRedirect(route('administradores.index'));
+        ])->assertRedirect(route('usuarios.index', ['aba' => 'administradores']));
 
         $this->assertTrue(Hash::check('senha-nova-123', $outro->fresh()->password_hash));
     }
@@ -97,7 +97,7 @@ class AdministradorTest extends TestCase
         $admin = $this->admin();
         $outro = Admin::create(['username' => 'professor', 'password_hash' => bcrypt('x')]);
 
-        $response = $this->actingAs($admin, 'admin')->put("/administradores/{$outro->id}", [
+        $response = $this->actingAs($admin, 'admin')->put("/usuarios/{$outro->id}", [
             'username' => 'coordenador',
         ]);
 
@@ -110,9 +110,9 @@ class AdministradorTest extends TestCase
         $admin = $this->admin();
         $outro = Admin::create(['username' => 'professor', 'password_hash' => bcrypt('x')]);
 
-        $response = $this->actingAs($admin, 'admin')->delete("/administradores/{$outro->id}");
+        $response = $this->actingAs($admin, 'admin')->delete("/usuarios/{$outro->id}");
 
-        $response->assertRedirect(route('administradores.index'));
+        $response->assertRedirect(route('usuarios.index', ['aba' => 'administradores']));
         $this->assertDatabaseMissing('admins', ['id' => $outro->id]);
     }
 
@@ -120,17 +120,17 @@ class AdministradorTest extends TestCase
     {
         $admin = $this->admin();
 
-        $response = $this->actingAs($admin, 'admin')->delete("/administradores/{$admin->id}");
+        $response = $this->actingAs($admin, 'admin')->delete("/usuarios/{$admin->id}");
 
         $response->assertSessionHasErrors('admin');
         $this->assertDatabaseHas('admins', ['id' => $admin->id]);
     }
 
-    public function test_guest_nao_acessa_administradores(): void
+    public function test_guest_nao_acessa_usuarios(): void
     {
         $this->admin();
 
-        $this->get('/administradores')->assertRedirect(route('login'));
+        $this->get('/usuarios')->assertRedirect(route('login'));
     }
 
     public function test_lista_administradores_e_paginada(): void
@@ -140,9 +140,9 @@ class AdministradorTest extends TestCase
             Admin::create(['username' => "professor{$i}", 'password_hash' => bcrypt('x')]);
         }
 
-        $response = $this->actingAs($admin, 'admin')->get('/administradores');
+        $response = $this->actingAs($admin, 'admin')->get('/usuarios');
 
         $response->assertOk();
-        $response->assertViewHas('admins', fn ($admins) => $admins->count() === 50 && $admins->hasMorePages());
+        $response->assertViewHas('usuarios', fn ($usuarios) => $usuarios->count() === 50 && $usuarios->hasMorePages());
     }
 }

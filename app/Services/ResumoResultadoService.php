@@ -94,5 +94,10 @@ class ResumoResultadoService
                 ])->all());
             });
         });
+
+        // Em que curso cada aluno estava na prova → quem (coordenador) enxerga
+        // cada resultado e a avaliação (CursoDoResultadoService / AvaliacaoCursoService).
+        (new CursoDoResultadoService)->atualizarAvaliacao($avaliacaoCodigo);
+        (new AvaliacaoCursoService)->sincronizarDosRespondentes($avaliacaoCodigo);
     }
 }

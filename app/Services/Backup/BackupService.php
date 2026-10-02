@@ -39,10 +39,12 @@ class BackupService
     /** Gera o backup e devolve o caminho completo do .zip criado. */
     public function gerar(): string
     {
-        $pastaBackups = storage_path('app/backups');
+        $pastaBackups = rtrim((string) config('sistema.backup_dir'), '/\\');
         File::ensureDirectoryExists($pastaBackups);
 
-        $nomeArquivo = 'backup-'.now()->format('Y-m-d_His').'.zip';
+        // Sufixo aleatório: o nome deixa de ser previsível (quem soubesse a hora do backup agendado
+        // adivinharia a URL) e dois backups no mesmo segundo não se sobrescrevem mais.
+        $nomeArquivo = 'backup-'.now()->format('Y-m-d_His').'-'.bin2hex(random_bytes(4)).'.zip';
         $caminhoZip = $pastaBackups.'/'.$nomeArquivo;
 
         $dumpSql = tempnam(sys_get_temp_dir(), 'db_dump_').'.sql';
@@ -68,6 +70,8 @@ class BackupService
     {
         $raiz = base_path();
         $excluidos = array_map(fn ($p) => $raiz.'/'.$p, self::EXCLUIR);
+        // A pasta de backups configurada (se for outra que a padrão) também fica de fora do zip.
+        $excluidos[] = rtrim(str_replace('\\', '/', (string) config('sistema.backup_dir')), '/');
 
         // CATCH_GET_CHILD: sem essa flag, uma única subpasta sem permissão de
         // leitura (comum em symlinks/junctions do Windows, ex.: public/storage)

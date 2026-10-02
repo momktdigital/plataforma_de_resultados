@@ -1,13 +1,18 @@
 @extends('layouts.app')
 
-@section('title', "Painel BI — Avaliação #{$avaliacao->codigo}")
+@section('title', "Dashboard — Avaliação #{$avaliacao->codigo}")
 
 @section('content')
 <div class="flex items-start justify-between gap-4 mb-2">
-    <a href="{{ route('avaliacoes.show', $avaliacao) }}" class="text-sm text-slate-500 hover:underline">&larr; Avaliacao #{{ $avaliacao->codigo }}</a>
-    <a href="{{ route('avaliacoes.visualizacoes.edit', $avaliacao) }}" class="text-sm text-slate-500 hover:underline">Configurar visualizações &rarr;</a>
+    @if ($somenteLeitura)
+        <a href="{{ route('avaliacoes.index') }}" class="text-sm text-slate-500 hover:underline">&larr; Avaliações</a>
+        <span class="text-sm text-slate-400">Avaliação #{{ $avaliacao->codigo }}@if ($avaliacao->nome) — {{ $avaliacao->nome }}@endif</span>
+    @else
+        <a href="{{ route('avaliacoes.show', $avaliacao) }}" class="text-sm text-slate-500 hover:underline">&larr; Avaliacao #{{ $avaliacao->codigo }}</a>
+        <a href="{{ route('avaliacoes.visualizacoes.edit', $avaliacao) }}" class="text-sm text-slate-500 hover:underline">Configurar visualizações &rarr;</a>
+    @endif
 </div>
-<h1 class="text-2xl font-bold mt-2 mb-6">Painel BI</h1>
+<h1 class="text-2xl font-bold mt-2 mb-6">Dashboard</h1>
 
 <form method="GET" action="{{ route('avaliacoes.bi', $avaliacao) }}" class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-2 flex flex-wrap gap-3 items-end">
     <div>
@@ -84,7 +89,9 @@
 @if (! $temAlgumVisivel && empty($dados['semGabarito']) && empty($dados['semRespostas']))
     <div class="bg-slate-50 border border-slate-200 text-slate-500 rounded-xl p-6 text-sm">
         Nenhum visual está habilitado para o administrativo nesta avaliação.
-        <a href="{{ route('avaliacoes.visualizacoes.edit', $avaliacao) }}" class="text-emerald-700 font-medium hover:underline">Configure aqui.</a>
+        @unless ($somenteLeitura)
+            <a href="{{ route('avaliacoes.visualizacoes.edit', $avaliacao) }}" class="text-emerald-700 font-medium hover:underline">Configure aqui.</a>
+        @endunless
     </div>
 @endif
 
@@ -95,7 +102,12 @@
         $kr20Aceitavel = $kr20 !== null && $kr20 >= 0.70;
     @endphp
     <h2 class="text-lg font-bold mb-3">Números da prova</h2>
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5 mb-6">
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Alunos presentes</p>
+            <p class="text-3xl font-bold mt-2 tracking-tight">{{ number_format($presenca['percentual'], 1, ',', '.') }}<span class="text-lg font-medium text-slate-500">%</span></p>
+            <p class="text-xs text-slate-500 mt-1">{{ $presenca['presentes'] }} de {{ $presenca['total'] }} · {{ $presenca['ausentes'] }} ausente(s) (prova inteira em branco)</p>
+        </div>
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
             <div class="flex items-center gap-2">
                 <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Média da turma</p>
@@ -103,6 +115,9 @@
             </div>
             <p class="text-3xl font-bold mt-2 tracking-tight">{{ number_format($psicometria['media'], 1, ',', '.') }}<span class="text-lg font-medium text-slate-500">%</span></p>
             <p class="text-xs text-slate-500 mt-1">{{ $psicometria['respondentes'] }} respondente(s) · {{ $psicometria['questoes'] }} questão(ões)</p>
+            @if ($psicometria['semAusentes'])
+                <p class="text-xs text-slate-500 mt-2 pt-2 border-t border-slate-100">Sem ausentes: <span class="font-semibold text-slate-700">{{ number_format($psicometria['semAusentes']['media'], 1, ',', '.') }}%</span> ({{ $psicometria['semAusentes']['respondentes'] }} presente(s))</p>
+            @endif
         </div>
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
             <div class="flex items-center gap-2">
@@ -111,6 +126,9 @@
             </div>
             <p class="text-3xl font-bold mt-2 tracking-tight">{{ number_format($psicometria['mediana'], 1, ',', '.') }}<span class="text-lg font-medium text-slate-500">%</span></p>
             <p class="text-xs text-slate-500 mt-1">metade da turma ficou acima disto</p>
+            @if ($psicometria['semAusentes'])
+                <p class="text-xs text-slate-500 mt-2 pt-2 border-t border-slate-100">Sem ausentes: <span class="font-semibold text-slate-700">{{ number_format($psicometria['semAusentes']['mediana'], 1, ',', '.') }}%</span></p>
+            @endif
         </div>
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
             <div class="flex items-center gap-2">
@@ -496,41 +514,81 @@
 
 @if ($estado['ranking_completo']['visivelAdmin'] && $rankingCompleto !== null)
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mb-6">
-        <div class="px-6 py-4 border-b border-slate-100 font-semibold flex items-center gap-2">
-            <span>Ranking completo ({{ count($rankingCompleto) }} respondente(s))</span>
-            @include('_explicacao', ['explicacao' => $explicacoes['ranking_completo'] ?? null])
+        <div class="px-6 py-4 border-b border-slate-100 font-semibold flex flex-wrap items-center gap-3">
+            <span class="flex items-center gap-2">
+                <span>Alunos da avaliação ({{ count($rankingCompleto) }} respondente(s))</span>
+                @include('_explicacao', ['explicacao' => $explicacoes['ranking_completo'] ?? null])
+            </span>
+            <a href="{{ route('avaliacoes.bi.alunos.xlsx', array_filter(['avaliacao' => $avaliacao->codigo, 'periodo' => $periodo])) }}"
+               class="ml-auto inline-flex items-center gap-1.5 border border-slate-300 text-slate-700 hover:bg-slate-50 font-semibold rounded-lg px-3 py-1.5 text-sm">
+                <i class="ph-bold ph-file-xls text-emerald-600"></i> Baixar XLSX
+            </a>
         </div>
-        <div class="max-h-96 overflow-y-auto">
-            <table class="w-full text-sm">
-                <thead class="bg-slate-50 text-slate-500 text-left sticky top-0">
-                    <tr>
-                        <th class="px-4 py-3">#</th>
-                        <th class="px-4 py-3">Aluno</th>
-                        <th class="px-4 py-3">RA</th>
-                        <th class="px-4 py-3">Turma</th>
-                        <th class="px-4 py-3">Acertos</th>
-                        <th class="px-4 py-3">%</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    @foreach ($rankingCompleto as $i => $r)
+        @if (empty($rankingCompleto))
+            <p class="px-6 py-6 text-sm text-slate-400">Nenhum respondente{{ $somenteLeitura ? ' dos seus cursos' : '' }} para o filtro selecionado.</p>
+        @else
+            <div class="max-h-[32rem] overflow-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-slate-50 text-slate-500 text-left sticky top-0 z-10">
                         <tr>
-                            <td class="px-4 py-3 text-slate-400">{{ $i + 1 }}</td>
-                            <td class="px-4 py-3 font-medium">{{ $r['aluno_nome'] ?: '—' }}</td>
-                            <td class="px-4 py-3">{{ $r['ra'] ?: '—' }}</td>
-                            <td class="px-4 py-3">{{ $r['turma'] ?: '—' }}</td>
-                            <td class="px-4 py-3">{{ $r['acertos'] }}/{{ $r['total'] }}</td>
-                            <td class="px-4 py-3">
-                                <div class="relative w-24">
-                                    <div class="absolute inset-y-0 left-0 bg-emerald-100 rounded" style="width: {{ $r['percentual'] }}%"></div>
-                                    <span class="relative font-bold text-emerald-800 px-1">{{ $r['percentual'] }}%</span>
-                                </div>
-                            </td>
+                            <th class="px-4 py-3">#</th>
+                            <th class="px-4 py-3">Aluno</th>
+                            <th class="px-4 py-3">RA</th>
+                            <th class="px-4 py-3">Curso</th>
+                            <th class="px-4 py-3">Período</th>
+                            <th class="px-4 py-3">Turma</th>
+                            <th class="px-4 py-3">Total</th>
                         </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        </div>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        @foreach ($rankingCompleto as $i => $r)
+                            @php
+                                $nomeAluno = $r['aluno_nome'] ?: '—';
+                                $inicial = mb_strtoupper(mb_substr($r['aluno_nome'] ?: ($r['ra'] ?: '?'), 0, 1));
+                            @endphp
+                            <tr class="{{ $r['ausente'] ? 'bg-slate-50/60 text-slate-400' : '' }}">
+                                <td class="px-4 py-3 text-slate-400">{{ $r['ausente'] ? '—' : $i + 1 }}</td>
+                                <td class="px-4 py-3">
+                                    <div class="flex items-center gap-3 min-w-[14rem]">
+                                        @if ($r['foto'])
+                                            <img src="{{ $r['foto'] }}" alt="Foto de {{ $nomeAluno }}" loading="lazy" width="36" height="36"
+                                                 class="w-9 h-9 rounded-full object-cover bg-slate-100 shrink-0"
+                                                 onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='flex';">
+                                            <span style="display:none" class="w-9 h-9 rounded-full bg-slate-200 text-slate-600 font-bold items-center justify-center shrink-0">{{ $inicial }}</span>
+                                        @else
+                                            <span class="w-9 h-9 rounded-full bg-slate-200 text-slate-600 font-bold flex items-center justify-center shrink-0">{{ $inicial }}</span>
+                                        @endif
+                                        <span class="font-medium {{ $r['ausente'] ? '' : 'text-slate-800' }}">{{ $nomeAluno }}</span>
+                                        @if ($r['ausente'])
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-200 text-slate-600">Ausente</span>
+                                        @endif
+                                    </div>
+                                </td>
+                                <td class="px-4 py-3">{{ $r['ra'] ?: '—' }}</td>
+                                <td class="px-4 py-3">{{ $r['curso'] ?: '—' }}</td>
+                                <td class="px-4 py-3 whitespace-nowrap">{{ $r['periodo_curso'] ?: '—' }}</td>
+                                <td class="px-4 py-3">{{ $r['turma'] ?: '—' }}</td>
+                                <td class="px-4 py-3">
+                                    @if ($r['percentual'] === null)
+                                        <span class="text-slate-400">—</span>
+                                    @else
+                                        <div class="flex items-center gap-2 min-w-[9rem]">
+                                            <span class="tabular-nums">{{ $r['acertos'] }}/{{ $r['total'] }}</span>
+                                            {{-- Abaixo de 60%: amarelo (mesma regra de cor do painel do aluno). --}}
+                                            @php $adequado = $r['percentual'] >= \App\Services\CoordenadorDashboardService::LIMIAR_ADEQUADO; @endphp
+                                            <div class="relative w-20">
+                                                <div class="absolute inset-y-0 left-0 {{ $adequado ? 'bg-emerald-100' : 'bg-amber-100' }} rounded" style="width: {{ $r['percentual'] }}%"></div>
+                                                <span class="relative font-bold {{ $adequado ? 'text-emerald-800' : 'text-amber-800' }} px-1">{{ number_format($r['percentual'], 1, ',', '.') }}%</span>
+                                            </div>
+                                        </div>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
     </div>
 @endif
 
@@ -554,20 +612,35 @@
             <h2 class="font-semibold">Dificuldade pedagógica: esperado x observado</h2>
             @include('_explicacao', ['explicacao' => $explicacoes['curva_dificuldade'] ?? null])
         </div>
-        <p class="text-sm text-slate-500 mb-4">% de acerto observado por nível de dificuldade cadastrado nas questões.</p>
+        <p class="text-sm text-slate-500 mb-4">% de acerto observado por nível de dificuldade cadastrado nas questões, comparado à meta definida na configuração da avaliação.</p>
         @if (empty($curvaDificuldade))
             <p class="text-sm text-slate-400">Sem dados suficientes.</p>
         @else
             <table class="w-full text-sm">
                 <thead class="bg-slate-50 text-slate-500 text-left">
-                    <tr><th class="px-4 py-2">Dificuldade esperada</th><th class="px-4 py-2">Questões</th><th class="px-4 py-2">% de acerto observado</th></tr>
+                    <tr>
+                        <th class="px-4 py-2">Dificuldade esperada</th>
+                        <th class="px-4 py-2">Questões</th>
+                        <th class="px-4 py-2">Meta de acerto</th>
+                        <th class="px-4 py-2">% de acerto observado</th>
+                        <th class="px-4 py-2">Desvio</th>
+                    </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     @foreach ($curvaDificuldade as $linha)
                         <tr>
                             <td class="px-4 py-2">{{ $linha['esperado'] }}</td>
-                            <td class="px-4 py-2">{{ $linha['questoes'] }}</td>
-                            <td class="px-4 py-2 font-bold">{{ $linha['observado'] }}%</td>
+                            <td class="px-4 py-2">{{ $linha['questoes'] }}@if ($linha['questoes'] === 0)<span class="text-xs text-slate-400"> (nenhuma cadastrada)</span>@endif</td>
+                            <td class="px-4 py-2">{{ $linha['meta'] !== null ? number_format($linha['meta'], 1, ',', '.').'%' : '—' }}</td>
+                            <td class="px-4 py-2 font-bold">{{ $linha['observado'] !== null ? $linha['observado'].'%' : '—' }}</td>
+                            <td class="px-4 py-2">
+                                @if ($linha['desvio'] === null)
+                                    <span class="text-slate-400">—</span>
+                                @else
+                                    <span class="font-semibold {{ $linha['atingiu'] ? 'text-emerald-700' : 'text-amber-700' }}">{{ $linha['desvio'] > 0 ? '+' : '' }}{{ number_format($linha['desvio'], 1, ',', '.') }} pp</span>
+                                    <span class="text-xs text-slate-500">· {{ $linha['atingiu'] ? 'meta atingida' : 'abaixo da meta' }}</span>
+                                @endif
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>
@@ -774,7 +847,7 @@
                                 <span class="font-bold text-slate-800">{{ $percentual }}%</span>
                             </div>
                             <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
-                                <div class="h-full bg-emerald-500 rounded-full" style="width: {{ $percentual }}%"></div>
+                                <div class="h-full {{ \App\Support\CorDesempenho::classeBg((float) $percentual) }} rounded-full" style="width: {{ $percentual }}%"></div>
                             </div>
                         </li>
                     @endforeach
@@ -960,15 +1033,74 @@
 @endif
 
 @if ($estado['evolucao_categoria']['visivelAdmin'] && $evolucaoCategoria !== null)
+    @php
+        $temEvolucaoGeral = count($evolucaoCategoria) >= 2;
+        // Só períodos que tenham ao menos uma turma com resultado nas avaliações da categoria.
+        $periodosComEvolucao = collect($evolucaoPorPeriodo ?? [])
+            ->map(fn ($periodo) => [...$periodo, 'turmas' => collect($periodo['turmas'])->filter(fn ($pontos) => count($pontos) >= 1)->all()])
+            ->filter(fn ($periodo) => $periodo['turmas'] !== []);
+        // Período inicial: o da turma do filtro "Turma" (se houver); senão o que tem mais turmas com
+        // evolução de verdade (2+ avaliações) e, no empate, o mais numeroso na avaliação aberta.
+        $periodoInicial = null;
+        if ($filtro->turma !== null) {
+            $periodoInicial = $periodosComEvolucao->search(fn ($periodo) => array_key_exists($filtro->turma, $periodo['turmas']));
+        }
+        if ($periodoInicial === null || $periodoInicial === false) {
+            $periodoInicial = $periodosComEvolucao
+                ->sortByDesc(fn ($periodo) => [
+                    collect($periodo['turmas'])->filter(fn ($pontos) => count($pontos) >= 2)->count(),
+                    collect($periodo['turmas'])->sum(fn ($pontos) => collect($pontos)->where('codigo', $avaliacao->codigo)->sum('respondentes')),
+                ])
+                ->keys()->first();
+        }
+        $abaInicial = $periodoInicial !== null ? 'periodo' : 'geral';
+        $temAusentes = collect($evolucaoCategoria)->contains(fn ($p) => $p['presentes'] < $p['respondentes']);
+    @endphp
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
         <div class="flex items-center gap-2 mb-4">
-            <h2 class="font-semibold">Evolução da média da turma na categoria</h2>
+            <h2 class="font-semibold">Evolução da média na categoria</h2>
             @include('_explicacao', ['explicacao' => $explicacoes['evolucao_categoria'] ?? null])
         </div>
-        @if (count($evolucaoCategoria) < 2)
+        @if (! $temEvolucaoGeral)
             <p class="text-sm text-slate-400">Sem dados suficientes.</p>
         @else
-            <canvas id="grafico-evolucao" height="220"></canvas>
+            <div class="flex flex-wrap items-end justify-between gap-3 border-b border-slate-200 mb-4">
+                <div class="flex gap-1" role="tablist" aria-label="Evolução da média na categoria">
+                    @if ($periodosComEvolucao->isNotEmpty())
+                        <button type="button" role="tab" id="aba-evolucao-periodo" data-aba-evolucao="periodo" aria-selected="{{ $abaInicial === 'periodo' ? 'true' : 'false' }}"
+                                class="aba-evolucao px-4 py-2 text-sm font-medium -mb-px border-b-2">Período</button>
+                    @endif
+                    <button type="button" role="tab" id="aba-evolucao-geral" data-aba-evolucao="geral" aria-selected="{{ $abaInicial === 'geral' ? 'true' : 'false' }}"
+                            class="aba-evolucao px-4 py-2 text-sm font-medium -mb-px border-b-2">Avaliação inteira</button>
+                </div>
+                <label class="inline-flex items-center gap-2 text-sm text-slate-600 pb-2 cursor-pointer" title="Ausente = prova inteira em branco">
+                    <input type="checkbox" id="evolucao-sem-ausentes" checked class="rounded border-slate-300">
+                    Desconsiderar ausentes
+                </label>
+            </div>
+
+            @if ($periodosComEvolucao->isNotEmpty())
+                <div id="painel-evolucao-periodo" role="tabpanel" aria-labelledby="aba-evolucao-periodo" class="{{ $abaInicial === 'periodo' ? '' : 'hidden' }}">
+                    <div class="mb-3">
+                        <label for="seletor-periodo-evolucao" class="block text-xs font-medium text-slate-500 mb-1">Período do curso</label>
+                        <select id="seletor-periodo-evolucao" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                            @foreach ($periodosComEvolucao as $ordinal => $periodo)
+                                <option value="{{ $ordinal }}" {{ $ordinal === $periodoInicial ? 'selected' : '' }}>{{ $periodo['rotulo'] }}</option>
+                            @endforeach
+                        </select>
+                        <p class="text-xs text-slate-400 mt-1">Uma linha por turma do período: a média dos alunos que estavam nela em cada avaliação da categoria.</p>
+                    </div>
+                    <canvas id="grafico-evolucao-periodo" height="220"></canvas>
+                </div>
+            @endif
+
+            <div id="painel-evolucao-geral" role="tabpanel" aria-labelledby="aba-evolucao-geral" class="{{ $abaInicial === 'geral' ? '' : 'hidden' }}">
+                <p class="text-xs text-slate-400 mb-3">Média de todos os respondentes de cada avaliação da categoria.</p>
+                <canvas id="grafico-evolucao" height="220"></canvas>
+            </div>
+            @unless ($temAusentes)
+                <p class="text-xs text-slate-400 mt-3">Nenhum ausente nestas avaliações: com ou sem a opção marcada, os números são os mesmos.</p>
+            @endunless
         @endif
     </div>
 @endif
@@ -1031,6 +1163,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"></script>
 @include('_viz')
+@include('partials.linha-desempenho')
 
 @if ($estado['mapa_itens']['visivelAdmin'] && $psicometria !== null && ! empty($psicometria['itens']))
 <script>
@@ -1480,14 +1613,103 @@ new Chart(document.getElementById('grafico-cor-raca'), {
 @endif
 
 @if (! empty($evolucaoCategoria) && count($evolucaoCategoria) >= 2)
-new Chart(document.getElementById('grafico-evolucao'), {
-    type: 'line',
-    data: {
-        labels: {{ Js::from(array_column($evolucaoCategoria, 'nome')) }},
-        datasets: [{ label: 'Média (%)', data: {{ Js::from(array_column($evolucaoCategoria, 'media')) }}, borderColor: Viz.cores.serie1, backgroundColor: 'rgba(18,163,127,0.2)', tension: 0.2 }],
-    },
-    options: { scales: { y: { beginAtZero: true, max: 100 } } },
-});
+(function () {
+    var geral = {{ Js::from($evolucaoCategoria) }};
+    var porPeriodo = {{ Js::from($periodosComEvolucao ?? []) }};
+    var graficos = {};
+    var semAusentes = function () { return document.getElementById('evolucao-sem-ausentes').checked; };
+
+    // Média a exibir no ponto, conforme a caixa "Desconsiderar ausentes".
+    function valor(p) { return p ? (semAusentes() ? p.mediaPresentes : p.media) : null; }
+    function contagem(p) { return semAusentes() ? p.presentes : p.respondentes; }
+
+    function opcoes(rotulosPontos) {
+        return {
+            spanGaps: true,
+            scales: { y: { beginAtZero: true, max: 100 } },
+            plugins: {
+                // A cor da linha é o desempenho (verde ≥ 60%, amarelo abaixo, degradê entre um e outro);
+                // as séries se distinguem pelo formato do marcador e pelo traço.
+                legend: { labels: LinhaDesempenho.legenda({ usePointStyle: true }) },
+                tooltip: {
+                    callbacks: {
+                        afterLabel: function (c) {
+                            var p = rotulosPontos[c.datasetIndex] && rotulosPontos[c.datasetIndex][c.dataIndex];
+                            return p ? contagem(p) + (semAusentes() ? ' presente(s)' : ' respondente(s)') : '';
+                        },
+                    },
+                },
+            },
+        };
+    }
+
+    // Um gráfico só nasce quando a aba aparece: em contêiner oculto o Chart.js mede largura 0.
+    function desenhar(id, datasets, pontosPorSerie) {
+        if (graficos[id]) { graficos[id].destroy(); }
+        graficos[id] = new Chart(document.getElementById(id), {
+            type: 'line',
+            data: { labels: geral.map(function (p) { return p.nome; }), datasets: datasets },
+            options: opcoes(pontosPorSerie),
+        });
+    }
+
+    function desenharGeral() {
+        desenhar('grafico-evolucao', [LinhaDesempenho.serie({
+            label: 'Média (%)', data: geral.map(valor), pointRadius: 4,
+        })], [geral]);
+    }
+
+    // Uma linha por turma, todas na regra de cor do desempenho: o que distingue uma turma da
+    // outra é o formato do marcador e o traço (contínuo, tracejado, pontilhado), não a cor.
+    function desenharPeriodo() {
+        var seletor = document.getElementById('seletor-periodo-evolucao');
+        if (!seletor || !porPeriodo[seletor.value]) return;
+        var turmas = porPeriodo[seletor.value].turmas;
+        var marcadores = ['circle', 'rect', 'triangle', 'rectRot', 'star', 'crossRot'];
+        var tracos = [[], [8, 4], [2, 3]];
+        var nomes = Object.keys(turmas);
+        var series = [];
+        var pontos = [];
+        nomes.forEach(function (turma, i) {
+            var porCodigo = {};
+            turmas[turma].forEach(function (p) { porCodigo[p.codigo] = p; });
+            var alinhados = geral.map(function (g) { return porCodigo[g.codigo] || null; });
+            pontos.push(alinhados);
+            series.push(LinhaDesempenho.serie({
+                label: turma, data: alinhados.map(valor),
+                pointStyle: marcadores[i % marcadores.length], borderDash: tracos[i % tracos.length],
+                pointRadius: 5,
+            }));
+        });
+        desenhar('grafico-evolucao-periodo', series, pontos);
+    }
+
+    function mostrar(aba) {
+        document.querySelectorAll('.aba-evolucao').forEach(function (b) {
+            var ativa = b.dataset.abaEvolucao === aba;
+            b.setAttribute('aria-selected', ativa ? 'true' : 'false');
+            b.classList.toggle('border-emerald-600', ativa);
+            b.classList.toggle('text-emerald-700', ativa);
+            b.classList.toggle('border-transparent', !ativa);
+            b.classList.toggle('text-slate-500', !ativa);
+        });
+        var painelPeriodo = document.getElementById('painel-evolucao-periodo');
+        if (painelPeriodo) painelPeriodo.classList.toggle('hidden', aba !== 'periodo');
+        document.getElementById('painel-evolucao-geral').classList.toggle('hidden', aba !== 'geral');
+        if (aba === 'periodo') desenharPeriodo(); else desenharGeral();
+    }
+
+    function abaAtual() { return document.querySelector('.aba-evolucao[aria-selected="true"]').dataset.abaEvolucao; }
+
+    document.querySelectorAll('.aba-evolucao').forEach(function (b) {
+        b.addEventListener('click', function () { mostrar(b.dataset.abaEvolucao); });
+    });
+    var seletor = document.getElementById('seletor-periodo-evolucao');
+    if (seletor) seletor.addEventListener('change', desenharPeriodo);
+    document.getElementById('evolucao-sem-ausentes').addEventListener('change', function () { mostrar(abaAtual()); });
+
+    mostrar(abaAtual());
+})();
 @endif
 
 function ordenarTabelaAlternativas(campo) {

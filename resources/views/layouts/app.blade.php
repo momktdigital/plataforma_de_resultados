@@ -49,28 +49,39 @@
                 @endif
             </div>
 
-            <div class="px-3 pt-4">
-                <form method="GET" action="{{ route('busca.index') }}">
-                    <div class="relative">
-                        <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"></i>
-                        <input type="text" name="q" placeholder="Buscar aluno ou avaliação..."
-                               class="w-full pl-9 pr-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
-                    </div>
-                </form>
-            </div>
+            @php $usuarioLogado = auth('admin')->user(); $ehCoordenador = $usuarioLogado->ehCoordenador(); @endphp
+
+            {{-- Busca global procura alunos de qualquer curso: só administrador. --}}
+            @unless ($ehCoordenador)
+                <div class="px-3 pt-4">
+                    <form method="GET" action="{{ route('busca.index') }}">
+                        <div class="relative">
+                            <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"></i>
+                            <input type="text" name="q" placeholder="Buscar aluno ou avaliação..."
+                                   class="w-full pl-9 pr-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                    </form>
+                </div>
+            @endunless
 
             <nav class="flex-1 overflow-y-auto py-4">
                 <ul class="space-y-1 px-3">
                     @php
-                        $itensMenu = [
-                            ['rota' => 'avaliacoes.index', 'padrao' => 'avaliacoes.*', 'icone' => 'ph-exam', 'label' => 'Avaliações'],
-                            ['rota' => 'alunos.index', 'padrao' => 'alunos.*', 'icone' => 'ph-identification-card', 'label' => 'Alunos'],
-                            ['rota' => 'categorias.index', 'padrao' => 'categorias.*', 'icone' => 'ph-tree-structure', 'label' => 'Categorias'],
-                            ['rota' => 'lixeira.index', 'padrao' => 'lixeira.*', 'icone' => 'ph-trash', 'label' => 'Lixeira'],
-                            ['rota' => 'administradores.index', 'padrao' => 'administradores.*', 'icone' => 'ph-users', 'label' => 'Administradores'],
-                            ['rota' => 'sistema.configuracoes.index', 'padrao' => 'sistema.*', 'icone' => 'ph-gear', 'label' => 'Configurações'],
-                            ['rota' => 'perfil.edit', 'padrao' => 'perfil.*', 'icone' => 'ph-user-circle', 'label' => 'Meu Perfil'],
-                        ];
+                        $itensMenu = $ehCoordenador
+                            ? [
+                                ['rota' => 'coordenador.painel', 'padrao' => 'coordenador.*', 'icone' => 'ph-chart-line-up', 'label' => 'Painel do curso'],
+                                ['rota' => 'avaliacoes.index', 'padrao' => 'avaliacoes.*', 'icone' => 'ph-exam', 'label' => 'Avaliações'],
+                                ['rota' => 'perfil.edit', 'padrao' => 'perfil.*', 'icone' => 'ph-user-circle', 'label' => 'Meu Perfil'],
+                            ]
+                            : [
+                                ['rota' => 'avaliacoes.index', 'padrao' => 'avaliacoes.*', 'icone' => 'ph-exam', 'label' => 'Avaliações'],
+                                ['rota' => 'alunos.index', 'padrao' => 'alunos.*', 'icone' => 'ph-identification-card', 'label' => 'Alunos'],
+                                ['rota' => 'categorias.index', 'padrao' => 'categorias.*', 'icone' => 'ph-tree-structure', 'label' => 'Categorias'],
+                                ['rota' => 'lixeira.index', 'padrao' => 'lixeira.*', 'icone' => 'ph-trash', 'label' => 'Lixeira'],
+                                ['rota' => 'usuarios.index', 'padrao' => 'usuarios.*', 'icone' => 'ph-users', 'label' => 'Usuários'],
+                                ['rota' => 'sistema.configuracoes.index', 'padrao' => 'sistema.*', 'icone' => 'ph-gear', 'label' => 'Configurações'],
+                                ['rota' => 'perfil.edit', 'padrao' => 'perfil.*', 'icone' => 'ph-user-circle', 'label' => 'Meu Perfil'],
+                            ];
                     @endphp
                     @foreach ($itensMenu as $item)
                         @php($ativo = request()->routeIs($item['padrao']))

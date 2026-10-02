@@ -6,6 +6,7 @@ use App\Models\Avaliacao;
 use App\Models\Resposta;
 use App\Support\AlunoVinculoResolver;
 use App\Support\Anulacao;
+use App\Support\Concerns\ComEscopoDeCurso;
 use App\Support\FiltroDemografico;
 use Illuminate\Support\Facades\DB;
 
@@ -25,6 +26,8 @@ use Illuminate\Support\Facades\DB;
  */
 class BiDashboardService
 {
+    use ComEscopoDeCurso;
+
     public function __construct(
         private readonly AlunoVinculoResolver $alunoResolver = new AlunoVinculoResolver,
     ) {}
@@ -48,7 +51,7 @@ class BiDashboardService
             ? $this->alunoResolver->chavesFiltradas($avaliacao->codigo, $periodo, $filtro, $avaliacao->data_avaliacao)
             : null;
 
-        $porRespondente = Resposta::query()
+        $porRespondente = $this->escopar(Resposta::query(), 'respostas.', $avaliacao->codigo)
             ->join('questoes', function ($join) use ($avaliacao) {
                 Anulacao::excluirDistribuidas(
                     $join->on('questoes.numero', '=', 'respostas.questao_numero')
@@ -127,7 +130,7 @@ class BiDashboardService
             return [];
         }
 
-        $statsPorQuestao = Resposta::query()
+        $statsPorQuestao = $this->escopar(Resposta::query(), 'respostas.', $avaliacao->codigo)
             ->join('questoes', function ($join) use ($avaliacao) {
                 $join->on('questoes.numero', '=', 'respostas.questao_numero')
                     ->where('questoes.avaliacao_codigo', $avaliacao->codigo)

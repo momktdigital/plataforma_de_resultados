@@ -258,8 +258,8 @@
         @if ($temLacunasConsolidados)
             <div class="grid sm:grid-cols-2 gap-4 mb-6">
                 @if (! empty($lacunasConsolidados['lacunas']))
-                    <div class="bg-red-50 border border-red-100 rounded-xl p-4">
-                        <p class="text-xs font-bold text-red-600 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                    <div class="bg-amber-50 border border-amber-100 rounded-xl p-4">
+                        <p class="text-xs font-bold text-amber-600 uppercase tracking-wide mb-3 flex items-center gap-1.5">
                             <i class="ph-bold ph-warning-circle"></i> Lacunas de aprendizagem
                         </p>
                         <ul class="space-y-3">

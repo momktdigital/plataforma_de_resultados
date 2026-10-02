@@ -50,7 +50,10 @@ class AlunoController extends Controller
 
     public function edit(Aluno $aluno): View
     {
-        return view('admin.alunos.form', ['aluno' => $aluno]);
+        return view('admin.alunos.form', [
+            'aluno' => $aluno,
+            'matriculas' => $aluno->matriculas()->orderByDesc('periodo_letivo')->orderByDesc('data_inicio')->get(),
+        ]);
     }
 
     public function update(AlunoRequest $request, Aluno $aluno): RedirectResponse

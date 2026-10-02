@@ -172,13 +172,119 @@ Reconstrói, do lado do servidor, o antigo fluxo client-side de
 > garantiu os dois; só o cadastro manual em `/alunos` exige ambos, por
 > serem a credencial de login do aluno no portal público).
 
-## Administradores (`/administradores`) e Perfil (`/perfil`)
+## Usuários (`/usuarios`) e Perfil (`/perfil`)
 
-Porta `admin/usuarios.php` (CRUD de administradores: listar, criar, excluir —
+Porta `admin/usuarios.php` (CRUD de usuários: listar, criar, editar, excluir —
 não é possível excluir a própria conta logada) e `admin/perfil.php` (troca de
 senha, exige confirmar a senha atual) para cá. Mesma tabela `admins`
 herdada do schema da aplicação legada, então uma conta já cadastrada
 antes de o app legado ser removido continua funcionando aqui normalmente.
+(`/administradores` antigo redireciona para `/usuarios`.)
+
+A tela tem duas abas, distinguidas pela coluna legada `admins.role`:
+
+- **Administradores** (`superadmin`, ou sem role): acesso total.
+- **Coordenadores** (`coordinator`): acesso limitado aos cursos a que estão
+  vinculados. Veem só o **Painel do curso** (`/painel`), a lista de
+  avaliações (`/avaliacoes`, sem criar/editar/excluir), o **Dashboard** de
+  cada uma (somente leitura, só com os alunos dos cursos dele) e o próprio
+  perfil. Todo o resto responde 403 (middleware `somente-admin`, ver
+  `routes/web.php`) e a busca global some do menu.
+
+**Login.** A tela de login tem duas abas. **Administrador**: usuário e senha
+(a senha é obrigatória só para ele). **Coordenador**: informa usuário ou e-mail
+e recebe um **código de 6 dígitos** no e-mail cadastrado (`/login/codigo`,
+`LoginPorCodigoService`) — sem senha. O código vale 10 minutos e uma única vez,
+3 erros o invalidam, o reenvio tem espera crescente (1, 2, 5, 10 min) e só o
+**hash** (HMAC) do código fica no banco (`login_codigos`). A resposta nunca
+revela se o usuário existe. Para isso o coordenador precisa ter **e-mail**
+(obrigatório no cadastro; a senha é opcional — sem ela o `password_hash` recebe
+um valor aleatório que ninguém conhece) e o SMTP do portal precisa estar
+**ativado** (Configurações → Portal público → E-mail). Administrador não entra
+por código. Um coordenador que tenha senha cadastrada também pode entrar por ela.
+
+Os cursos do coordenador ficam em `admin_cursos` (por **nome**, igual a
+`alunos.curso`); `admins.curso` (legado, um só) guarda o primeiro, só por
+compatibilidade.
+
+### Quem vê qual avaliação
+
+Na configuração da avaliação (`/avaliacoes/{codigo}`, "Acesso aos
+resultados"):
+
+1. **Curso(s)** (`avaliacao_cursos`): preenchido **automaticamente** a cada
+   importação/recálculo de resultados com o curso **de cada resultado** (ver
+   "Curso é da matrícula" abaixo) — `AvaliacaoCursoService`, chamado por
+   `ResumoResultadoService::recalcular()` e pela importação de matrícula. O que
+   é automático (`origem = auto`) é **refeito** a cada vez: entra o curso que
+   passou a ter resultado e sai o que deixou de ter (uma avaliação de
+   Odontologia não fica "de Medicina" só porque um aluno já foi de Medicina).
+   O que um administrador marca na tela (`origem = manual`) nunca é apagado
+   pelas importações.
+2. **Usuários com acesso aos resultados** (`avaliacao_usuarios`): acesso
+   excepcional para um coordenador sem aluno do curso dele na avaliação.
+
+Um coordenador vê a avaliação se ela tem algum dos cursos dele **ou** se ele
+está na lista excepcional (`Avaliacao::scopeVisivelPara()`); fora disso, 404.
+Administradores veem todas. No BI, o coordenador vê **só os alunos dos cursos
+dele**: cada serviço de análise recebe um `EscopoCurso` (`paraCursos()`) que
+restringe toda consulta a `respostas`/`resultado_resumos`/`resultado_metricas`
+ao **curso do resultado** (`resultado_resumos.curso`); os filtros de
+turma/demografia também só listam alunos do curso.
+
+Nomes de curso que só diferem em **acento, caixa ou espaços** (ADMINISTRACAO =
+ADMINISTRAÇÃO) são o mesmo curso em todo o sistema (`App\Support\NomeCurso`):
+a lista de seleção mostra uma grafia só (a acentuada) e a visibilidade vale
+para qualquer grafia gravada em `alunos.curso`/`aluno_matriculas.curso`.
+
+### Curso é da matrícula, não do aluno
+
+O mesmo aluno pode mudar de curso (transferência) ou ter dois ativos ao mesmo
+tempo, e o coordenador de cada curso só enxerga as provas **que o aluno fez
+naquele curso**. Por isso:
+
+- **`aluno_matriculas`** guarda uma linha por matrícula (aluno × curso ×
+  período letivo, com status, `Dt. Ativação` e `Dt. Ocorrência`), alimentada
+  pela importação de matrícula e **nunca apagada** por uma importação nova —
+  então planilhas antigas (2026/1...) podem ser importadas depois, em qualquer
+  ordem. Um aluno transferido no meio do semestre tem duas linhas no mesmo
+  período letivo (Medicina `TRANSFERIDA` com data de ocorrência; Odontologia
+  `ATIVA`). O número de linha da primeira coluna da planilha nunca é gravado.
+- **`alunos`** continua com a matrícula **atual** (um curso por RA), agora
+  escolhida do histórico e não pela ordem das linhas do arquivo: período
+  letivo mais recente e, nele, ativa > aguardando > transferida/cancelada/
+  trancada/desistente (todos esses status significam "não é mais do curso").
+- **`resultado_resumos.curso`** é o curso do aluno **na época da prova**,
+  decidido por `CursoDoResultadoService` (determinístico, refeito sempre que o
+  histórico ou o resultado muda): (1) matrícula válida na data da avaliação —
+  de `Dt. Ativação` até `Dt. Ocorrência` (ou o fim do período letivo); (2)
+  matrícula do mesmo período letivo; (3) curso marcado **à mão** na avaliação
+  (desempata dois cursos ativos); (4) curso atual. **Preencha a data das
+  avaliações**: sem data, só os critérios 3 e 4 se aplicam.
+- Reimportar uma planilha de matrícula refaz o curso dos resultados desses
+  alunos e os cursos das avaliações onde aparecem (`MatriculaImportService`).
+- Cabeçalhos das datas: exatamente `Dt. Ativação` (início da matrícula) e
+  `Dt. Ocorrência` (fim, nas que não estão ativas); outras colunas de data
+  (ingresso, status...) são ignoradas. Sem elas a matrícula vale pelo período
+  letivo inteiro.
+- A edição manual em `/alunos` altera só o cadastro **atual**; o histórico vem
+  das planilhas (a tela de edição mostra o histórico, somente leitura).
+
+### Painel do coordenador (`/painel`)
+
+Tudo é analisado **por categoria de avaliação** — provas de categorias
+diferentes não são comparáveis (o mesmo vale para a "Comparação entre
+avaliações" do BI, que só oferece avaliações da mesma categoria). A
+"avaliação anterior" é a anterior **da mesma categoria**, mesmo de outro
+período letivo. Equivalente ao boletim do aluno, para o curso: filtro por **período letivo**
+(2026/1, 2026/2 — derivado da data da avaliação, igual ao portal; padrão = o
+mais recente) e, com mais de um curso, por curso. Mostra insights em texto,
+média do curso, presença, % de alunos abaixo de 60%, evolução da média por
+avaliação, desempenho por período do curso e por área. **Ausentes** (prova
+inteira em branco) ficam fora das médias e entram só na presença.
+`CoordenadorDashboardService` agrega tudo em SQL sobre `resultado_resumos`
+(unido a `alunos` por `aluno_id`) e, para presença e áreas, sobre
+`respostas` restrito aos alunos do curso e ao período escolhido.
 
 ## Configurações do portal público (`/sistema/portal`)
 
@@ -201,6 +307,12 @@ para uma aba própria em Configurações, gravando na tabela `configuracoes`
   código de 6 dígitos via SMTP puro do Symfony Mailer — não usa o
   `config/mail.php` do Laravel, pois as credenciais vêm do banco, editáveis
   pelo admin).
+- **Destino do código de 2FA do aluno** (`email_destino_2fa`): o código pode ir
+  para o **e-mail pessoal** do aluno (o da matrícula — padrão) ou para o
+  **e-mail acadêmico** (`RA@somos.unifaa.edu.br`, derivado do RA em
+  `Aluno::emailParaCodigo()`), e então o aluno nem precisa ter e-mail pessoal
+  cadastrado. A mesma escolha vale para o reenvio. O "SMTP ativado" também é o
+  que liga o login por código do coordenador e o "esqueci minha senha".
 
 ## Categorias de avaliação (`/categorias`)
 
@@ -243,7 +355,7 @@ métricas daquele respondente. Excluir/restaurar é sempre por período dentro
 da avaliação (`resultados.php` também excluía por período, mas globalmente —
 aqui é escopado à avaliação porque o schema novo já separa por avaliação).
 
-### Painel BI (`/avaliacoes/{codigo}/bi`)
+### Dashboard da avaliação (`/avaliacoes/{codigo}/bi`)
 
 Substitui o dashboard de `admin/index.php` (Chart.js): histograma de
 distribuição de % de acerto, radar de desempenho médio por disciplina (usa
@@ -252,6 +364,19 @@ essa coluna) e Top 5. Filtro por período. `App\Services\BiDashboardService`
 concentra o cálculo — mesma correção de performance da EstatisticaErroService
 acima: a nota de cada respondente e a média por disciplina são agregadas em
 SQL, não varrendo um Collection do PHP com todas as respostas da avaliação.
+
+**Alunos da avaliação:** lista nominal com foto de perfil (a mesma do portal,
+via `cod_perfil`; sem foto, a inicial), nome, RA, curso, período, turma e total
+(acertos/total e %), ordenada pelo percentual — ausentes (prova inteira em
+branco) vão ao fim, marcados. Respeita o filtro de período e, para o
+coordenador, só traz os alunos dos cursos dele. O botão **Baixar XLSX**
+(`/avaliacoes/{codigo}/bi/alunos.xlsx`, `ListaAlunosExportService`) exporta a
+mesma lista (com a URL da foto), grava a exportação em
+`atividades` (`avaliacao.lista_alunos_exportada`) e segue a configuração de
+visualizações: se a lista (visual `ranking_completo`) estiver desligada para a
+avaliação, o download também responde 404. Textos da planilha são gravados como
+string (um nome começando em `=` não vira fórmula) e o RA preserva zeros à
+esquerda.
 
 ## Lixeira (`/lixeira`)
 

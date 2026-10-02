@@ -3,6 +3,7 @@
 namespace Tests;
 
 use App\Support\AlunoVinculoResolver;
+use App\Support\InstallStatus;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 
 abstract class TestCase extends BaseTestCase
@@ -16,5 +17,8 @@ abstract class TestCase extends BaseTestCase
         // entre métodos de teste dentro do mesmo processo do PHPUnit —
         // limpa aqui para um teste nunca ver o cache preenchido por outro.
         AlunoVinculoResolver::limparCache();
+
+        // InstallStatus memoiza "instalado" por processo; cada teste começa do zero.
+        InstallStatus::limpar();
     }
 }

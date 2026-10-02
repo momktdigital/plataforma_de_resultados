@@ -45,6 +45,7 @@ class PortalConfiguracaoController extends Controller
             'hcaptchaSiteKey' => $config['hcaptcha_site_key'] ?? '',
             'hcaptchaSecretExists' => ! empty($config['hcaptcha_secret_key']),
             'smtpAtivo' => ($config['smtp_ativo'] ?? '0') === '1',
+            'emailDestino2fa' => ($config['email_destino_2fa'] ?? 'pessoal') === 'academico' ? 'academico' : 'pessoal',
             'smtpHost' => $config['smtp_host'] ?? '',
             'smtpPort' => $config['smtp_port'] ?? '',
             'smtpUser' => $config['smtp_user'] ?? '',
@@ -99,6 +100,7 @@ class PortalConfiguracaoController extends Controller
     public function atualizarSmtp(AtualizarPortalSmtpRequest $request): RedirectResponse
     {
         Configuracao::definir('smtp_ativo', $request->boolean('smtp_ativo') ? '1' : '0');
+        Configuracao::definir('email_destino_2fa', $request->validated('email_destino_2fa') === 'academico' ? 'academico' : 'pessoal');
         Configuracao::definir('smtp_from_name', $request->validated('smtp_from_name'));
         Configuracao::definir('smtp_from_email', $request->validated('smtp_from_email'));
         Configuracao::definir('smtp_user', $request->validated('smtp_user'));

@@ -205,5 +205,41 @@
             </div>
         </form>
     </div>
+
+    @if ($aluno->exists && $matriculas->isNotEmpty())
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mt-6">
+            <h2 class="font-semibold mb-1">Histórico de matrículas</h2>
+            <p class="text-sm text-slate-500 mb-4">
+                Vem das planilhas de matrícula importadas (somente leitura). O curso de cada resultado é o da matrícula que valia na data da prova —
+                por isso quem se transferiu continua nos números do curso antigo nas provas de antes.
+            </p>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-slate-50 text-slate-500 text-left">
+                        <tr>
+                            <th class="px-3 py-2">Per. letivo</th>
+                            <th class="px-3 py-2">Curso</th>
+                            <th class="px-3 py-2">Período</th>
+                            <th class="px-3 py-2">Status</th>
+                            <th class="px-3 py-2">Início</th>
+                            <th class="px-3 py-2">Ocorrência</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        @foreach ($matriculas as $m)
+                            <tr>
+                                <td class="px-3 py-2">{{ $m->periodo_letivo ?: '—' }}</td>
+                                <td class="px-3 py-2 font-medium">{{ $m->curso }}</td>
+                                <td class="px-3 py-2">{{ $m->periodo ?: '—' }}</td>
+                                <td class="px-3 py-2">{{ $m->status ?: '—' }}</td>
+                                <td class="px-3 py-2">{{ $m->data_inicio?->format('d/m/Y') ?? '—' }}</td>
+                                <td class="px-3 py-2">{{ $m->data_fim?->format('d/m/Y') ?? '—' }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    @endif
 </div>
 @endsection

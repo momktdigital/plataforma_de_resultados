@@ -7,6 +7,7 @@
     <h1 class="text-2xl font-bold">Avaliações</h1>
 </div>
 
+@unless ($somenteLeitura)
 <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-8">
     <h2 class="font-semibold mb-4">Nova avaliação</h2>
     <p class="text-sm text-slate-500 mb-4">
@@ -80,6 +81,7 @@
         },
     });
 </script>
+@endunless
 
 <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-6">
     <form method="GET" action="{{ route('avaliacoes.index') }}" class="flex flex-wrap gap-3">
@@ -129,14 +131,20 @@
                     <td class="px-4 py-3">{{ $avaliacao->questoes_count }}</td>
                     <td class="px-4 py-3">{{ $avaliacao->alunos_count }}</td>
                     <td class="px-4 py-3 text-right">
-                        <a href="{{ route('avaliacoes.show', $avaliacao) }}" class="text-emerald-700 font-semibold hover:underline">
-                            Gerenciar
-                        </a>
+                        @if ($somenteLeitura)
+                            <a href="{{ route('avaliacoes.bi', $avaliacao) }}" class="text-emerald-700 font-semibold hover:underline">
+                                Dashboard
+                            </a>
+                        @else
+                            <a href="{{ route('avaliacoes.show', $avaliacao) }}" class="text-emerald-700 font-semibold hover:underline">
+                                Gerenciar
+                            </a>
+                        @endif
                     </td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="7" class="px-4 py-8 text-center text-slate-400">Nenhuma avaliação cadastrada ainda.</td>
+                    <td colspan="7" class="px-4 py-8 text-center text-slate-400">{{ $somenteLeitura ? 'Nenhuma avaliação com alunos dos seus cursos ainda.' : 'Nenhuma avaliação cadastrada ainda.' }}</td>
                 </tr>
             @endforelse
         </tbody>

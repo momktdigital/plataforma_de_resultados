@@ -11,8 +11,10 @@ use App\Services\PsicometriaService;
 use App\Services\RelatorioAdminService;
 use App\Services\Visualizacoes\VisualizacaoConfigService;
 use App\Support\AlunoVinculoResolver;
+use App\Support\EscopoCurso;
 use App\Support\FiltroDemografico;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
 class BiController extends Controller
@@ -28,11 +30,24 @@ class BiController extends Controller
         ExplicacaoBiService $explicacaoService,
         ComparacaoAvaliacoesService $comparacaoService,
     ): View {
+        // Coordenador só abre o BI de avaliação com aluno de um curso dele (ou
+        // com acesso excepcional). 404 em vez de 403: não confirma que existe.
+        $usuario = Auth::guard('admin')->user();
+        abort_unless($avaliacao->acessivelPara($usuario), 404);
+        $coordenador = $usuario->ehCoordenador();
+
+        // Coordenador vê o BI SÓ com os alunos dos cursos dele: cada serviço de
+        // análise ganha uma cópia restrita a esses cursos.
+        $cursosDoEscopo = $coordenador ? $usuario->cursos() : null;
+        $biService = $biService->paraCursos($cursosDoEscopo);
+        $relatorioService = $relatorioService->paraCursos($cursosDoEscopo);
+        $psicometriaService = $psicometriaService->paraCursos($cursosDoEscopo);
+
         $periodo = trim((string) $request->query('periodo', ''));
         $periodosDisponiveis = $avaliacao->resultados()->select('periodo')->distinct()->pluck('periodo');
         $filtro = FiltroDemografico::deQueryString($request->query());
         $opcoesFiltro = [
-            ...$alunoResolver->opcoesDisponiveis($avaliacao->codigo),
+            ...$alunoResolver->opcoesDisponiveis($avaliacao->codigo, $coordenador ? new EscopoCurso($cursosDoEscopo) : null),
             'faixasEtarias' => FiltroDemografico::faixasEtarias(),
         ];
 
@@ -54,7 +69,7 @@ class BiController extends Controller
         // quantidade/existência é responsabilidade do serviço, não da rota.
         $codigosComparar = array_map('intval', (array) $request->query('comparar', []));
         $comparacaoAvaliacoes = $visivel('comparacao_avaliacoes')
-            ? $comparacaoService->comparar($avaliacao, $codigosComparar)
+            ? $comparacaoService->comparar($avaliacao, $codigosComparar, $usuario)
             : null;
 
         $painel = [
@@ -69,6 +84,7 @@ class BiController extends Controller
             'analiseAlternativas' => $visivel('analise_alternativas') ? $relatorioService->analiseAlternativas($avaliacao, $periodo, $filtro) : null,
             'correlacaoMetricas' => $visivel('correlacao_metricas') ? $relatorioService->correlacaoMetricas($avaliacao, $periodo, $filtro) : null,
             'evolucaoCategoria' => $visivel('evolucao_categoria') ? $relatorioService->evolucaoCategoria($avaliacao) : null,
+            'evolucaoPorPeriodo' => $visivel('evolucao_categoria') ? $relatorioService->evolucaoCategoriaPorPeriodo($avaliacao) : null,
             'mediaPorArea' => $visivel('desempenho_area') ? $relatorioService->mediaPorArea($avaliacao, $periodo) : null,
             'desempenhoPorTema' => $visivel('desempenho_tema') ? $relatorioService->desempenhoPorTema($avaliacao, $periodo) : null,
             'mediaPorBloom' => $visivel('desempenho_bloom') ? $relatorioService->mediaPorBloom($avaliacao, $periodo) : null,
@@ -95,17 +111,20 @@ class BiController extends Controller
             'analiseAlternativas' => $painel['analiseAlternativas'],
             'correlacaoMetricas' => $painel['correlacaoMetricas'],
             'evolucaoCategoria' => $painel['evolucaoCategoria'],
+            'evolucaoPorPeriodo' => $painel['evolucaoPorPeriodo'],
             'mediaPorArea' => $painel['mediaPorArea'],
             'desempenhoPorTema' => $painel['desempenhoPorTema'],
             'mediaPorBloom' => $painel['mediaPorBloom'],
             'mediaPorMiller' => $painel['mediaPorMiller'],
             'psicometria' => $psicometria,
+            'presenca' => $psicometria !== null ? $psicometriaService->presenca($avaliacao, $periodo) : null,
             'curvasItens' => ($visivel('mapa_itens') && $psicometria !== null)
                 ? $psicometriaService->curvasCaracteristicas($avaliacao, $periodo)
                 : null,
             'alinhamentoReferencias' => $painel['alinhamento'],
             'equidade' => $painel['equidade'],
-            'opcoesComparacao' => $visivel('comparacao_avaliacoes') ? $comparacaoService->opcoesDisponiveis($avaliacao) : collect(),
+            'somenteLeitura' => $coordenador,
+            'opcoesComparacao' => $visivel('comparacao_avaliacoes') ? $comparacaoService->opcoesDisponiveis($avaliacao, $usuario) : collect(),
             'comparacaoSelecionada' => $codigosComparar,
             'comparacaoAvaliacoes' => $comparacaoAvaliacoes,
             // Redigido por cima dos agregados já calculados acima — nenhuma

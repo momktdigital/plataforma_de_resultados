@@ -19,7 +19,7 @@ class UpdateServiceTest extends TestCase
     protected function tearDown(): void
     {
         Artisan::call('up');
-        File::deleteDirectory(storage_path('app/backups'));
+        File::deleteDirectory(config('sistema.backup_dir'));
 
         foreach ($this->diretoriosTemporarios as $dir) {
             File::deleteDirectory($dir);
@@ -139,8 +139,8 @@ class UpdateServiceTest extends TestCase
         // contrário do cenário acima (falha antes do migrate), onde nada
         // sobre migrations aparece.
         $destino = $this->criarDestinoFalso('1.0.0');
-        File::ensureDirectoryExists(storage_path('app/backups'));
-        $caminhoBackup = storage_path('app/backups/backup_teste.zip');
+        File::ensureDirectoryExists(config('sistema.backup_dir'));
+        $caminhoBackup = config('sistema.backup_dir').'/backup_teste.zip';
         $zip = new ZipArchive;
         $zip->open($caminhoBackup, ZipArchive::CREATE);
         $zip->addFromString('app/VERSION', "1.0.0\n");

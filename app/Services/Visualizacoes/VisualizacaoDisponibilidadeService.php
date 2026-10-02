@@ -139,12 +139,12 @@ class VisualizacaoDisponibilidadeService
             $temEvolucaoCategoria = $qtdAvaliacoesComResumo >= 2;
         }
 
-        // Diferente de evolucao_categoria, a comparação não exige a mesma
-        // categoria — o coordenador pode querer comparar com qualquer outra
-        // avaliação que já tenha resultado.
-        $temOutraAvaliacaoComparavel = DB::table('avaliacoes as av')
+        // Como evolucao_categoria, a comparação só faz sentido entre avaliações
+        // da MESMA categoria (provas de categorias diferentes não são comparáveis).
+        $temOutraAvaliacaoComparavel = $temCategoria && DB::table('avaliacoes as av')
             ->join('resultado_resumos as rr', 'rr.avaliacao_codigo', '=', 'av.codigo')
             ->where('av.codigo', '!=', $codigo)
+            ->where('av.categoria_id', $avaliacao->categoria_id)
             ->whereNull('av.deleted_at')
             ->exists();
 
@@ -265,7 +265,7 @@ class VisualizacaoDisponibilidadeService
             ),
 
             'comparacao_avaliacoes' => $baseComResumos() ?? (
-                $temOutraAvaliacaoComparavel ? null : 'Nenhuma outra avaliação com resultados importados para comparar.'
+                $temOutraAvaliacaoComparavel ? null : ($temCategoria ? 'Nenhuma outra avaliação da mesma categoria com resultados importados para comparar.' : 'Esta avaliação não está associada a uma categoria.')
             ),
         ];
 

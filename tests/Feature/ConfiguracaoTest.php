@@ -17,7 +17,7 @@ class ConfiguracaoTest extends TestCase
 
     protected function tearDown(): void
     {
-        File::deleteDirectory(storage_path('app/backups'));
+        File::deleteDirectory(config('sistema.backup_dir'));
 
         parent::tearDown();
     }
@@ -76,10 +76,9 @@ class ConfiguracaoTest extends TestCase
         $service = app(BackupService::class);
         for ($i = 0; $i < 4; $i++) {
             $service->gerar();
-            usleep(1_100_000);
         }
 
-        $this->assertCount(2, File::files(storage_path('app/backups')));
+        $this->assertCount(2, File::files(config('sistema.backup_dir')));
     }
 
     public function test_atualizador_usa_repositorio_configurado(): void

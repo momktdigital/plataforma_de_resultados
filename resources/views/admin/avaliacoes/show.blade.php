@@ -62,7 +62,7 @@
             </a>
             <a href="{{ route('avaliacoes.bi', $avaliacao) }}"
                class="inline-block border border-slate-300 text-slate-700 hover:bg-slate-50 font-semibold rounded-lg px-4 py-2 text-sm">
-                Painel BI
+                Dashboard
             </a>
             <a href="{{ route('avaliacoes.visualizacoes.edit', $avaliacao) }}"
                class="inline-block border border-slate-300 text-slate-700 hover:bg-slate-50 font-semibold rounded-lg px-4 py-2 text-sm">
@@ -126,6 +126,52 @@
                 <option value="anulada" {{ old('status', $avaliacao->status) === 'anulada' ? 'selected' : '' }}>Anulada</option>
             </select>
         </div>
+        <fieldset class="w-full border-t border-slate-100 pt-3 mt-1">
+            <legend class="text-sm font-medium px-1">Acesso aos resultados</legend>
+            <input type="hidden" name="acesso_enviado" value="1">
+            <p class="text-xs text-slate-500 mb-3">
+                Administradores veem todas as avaliações. Coordenadores veem as que tenham alunos dos cursos marcados abaixo
+                (preenchido automaticamente ao importar resultados) ou às quais você der acesso excepcional.
+            </p>
+            <div class="grid md:grid-cols-2 gap-4">
+                <div>
+                    <p class="block text-sm font-medium mb-1">Curso(s)</p>
+                    @include('partials.seletor-cursos', ['nome' => 'cursos', 'opcoes' => $opcoesCurso, 'selecionados' => $cursosSelecionados, 'id' => 'avaliacao-cursos'])
+                </div>
+                <div>
+                    <p class="block text-sm font-medium mb-1">Usuários com acesso aos resultados</p>
+                    <div class="max-h-48 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100">
+                        @forelse ($coordenadores as $coordenador)
+                            <label class="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-slate-50 cursor-pointer">
+                                <input type="checkbox" name="usuarios_acesso[]" value="{{ $coordenador->id }}" class="rounded border-slate-300"
+                                       {{ in_array($coordenador->id, (array) old('usuarios_acesso', $usuariosSelecionados)) ? 'checked' : '' }}>
+                                <span>{{ $coordenador->username }}</span>
+                            </label>
+                        @empty
+                            <p class="px-3 py-2 text-sm text-slate-400">Nenhum coordenador cadastrado (Usuários &rarr; Coordenadores).</p>
+                        @endforelse
+                    </div>
+                    <p class="text-xs text-slate-500 mt-1">Acesso excepcional: o coordenador vê esta avaliação mesmo sem aluno do curso dele.</p>
+                </div>
+            </div>
+        </fieldset>
+        <fieldset class="w-full border-t border-slate-100 pt-3 mt-1">
+            <legend class="text-sm font-medium px-1">Meta de acerto por dificuldade pedagógica (%)</legend>
+            <p class="text-xs text-slate-500 mb-2">Quanto esperamos que a turma acerte em questões de cada nível. O dashboard compara com o observado e mostra o desvio. Deixe em branco para não definir meta.</p>
+            <div class="flex flex-wrap gap-3">
+                @foreach (\App\Support\Dificuldade::rotulos() as $nivel => $rotulo)
+                    <div class="min-w-[120px]">
+                        <label class="block text-xs font-medium mb-1" for="meta_acerto_{{ $nivel }}">{{ $rotulo }}</label>
+                        <input id="meta_acerto_{{ $nivel }}" name="meta_acerto[{{ $nivel }}]" type="number" min="0" max="100" step="0.1"
+                               value="{{ old('meta_acerto.'.$nivel, $avaliacao->meta_acerto_dificuldade[$nivel] ?? '') }}"
+                               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                        @error('meta_acerto.'.$nivel)
+                            <p class="text-sm text-red-600 mt-1">{{ $message }}</p>
+                        @enderror
+                    </div>
+                @endforeach
+            </div>
+        </fieldset>
         <button type="submit" class="bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-lg px-5 py-2 text-sm">
             Salvar
         </button>

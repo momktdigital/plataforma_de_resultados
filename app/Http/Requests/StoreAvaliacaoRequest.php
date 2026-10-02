@@ -27,6 +27,16 @@ class StoreAvaliacaoRequest extends FormRequest
             'categoria_id' => ['nullable', 'integer', 'exists:categorias,id'],
             'data_avaliacao' => ['nullable', 'date_format:d/m/Y'],
             'status' => ['nullable', 'in:ativa,anulada'],
+            // % de acerto esperado por nível de dificuldade pedagógica.
+            'meta_acerto' => ['nullable', 'array'],
+            'meta_acerto.*' => ['nullable', 'numeric', 'between:0,100'],
+            // Acesso aos resultados: cursos da avaliação e coordenadores com
+            // acesso excepcional (AvaliacaoController::atualizarAcesso()).
+            'acesso_enviado' => ['nullable', 'boolean'],
+            'cursos' => ['nullable', 'array'],
+            'cursos.*' => ['string', 'max:200'],
+            'usuarios_acesso' => ['nullable', 'array'],
+            'usuarios_acesso.*' => ['integer'],
         ];
     }
 }

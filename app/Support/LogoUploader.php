@@ -43,7 +43,7 @@ class LogoUploader
             throw new RuntimeException('Tipo de arquivo inválido. Permitido: jpg, png, gif, webp, svg.');
         }
 
-        $uploadDir = public_path('uploads/logos');
+        $uploadDir = rtrim((string) config('sistema.uploads_dir'), '/\\').'/logos';
         if (! is_dir($uploadDir) && ! mkdir($uploadDir, 0755, true) && ! is_dir($uploadDir)) {
             throw new RuntimeException('Não foi possível criar o diretório de destino (public/uploads/logos/).');
         }

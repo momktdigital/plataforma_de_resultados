@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Admin;
 use App\Support\EnvFileWriter;
+use App\Support\InstallStatus;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -11,8 +12,10 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
+use InvalidArgumentException;
 use PDO;
 use PDOException;
+use RuntimeException;
 
 /**
  * Wizard de instalação: requisitos → conexão com o banco → migrations →
@@ -44,12 +47,17 @@ class InstallController extends Controller
 
     public function testarEGravarBanco(Request $request): RedirectResponse
     {
+        // Formato restrito: host/banco/usuário vão para o `.env` e para a string de conexão do PDO.
         $dados = $request->validate([
-            'host' => ['required', 'string', 'max:255'],
-            'porta' => ['required', 'integer'],
-            'banco' => ['required', 'string', 'max:255'],
-            'usuario' => ['required', 'string', 'max:255'],
+            'host' => ['required', 'string', 'max:255', 'regex:/^[A-Za-z0-9._-]+$/'],
+            'porta' => ['required', 'integer', 'between:1,65535'],
+            'banco' => ['required', 'string', 'max:64', 'regex:/^[A-Za-z0-9_$-]+$/'],
+            'usuario' => ['required', 'string', 'max:255', 'regex:/^[A-Za-z0-9._@$-]+$/'],
             'senha' => ['nullable', 'string', 'max:255'],
+        ], [
+            'host.regex' => 'Host inválido — use apenas letras, números, ponto, hífen e sublinhado.',
+            'banco.regex' => 'Nome de banco inválido — use apenas letras, números, hífen, sublinhado e $.',
+            'usuario.regex' => 'Usuário inválido — use apenas letras, números e . _ @ $ -.',
         ]);
 
         try {
@@ -60,19 +68,27 @@ class InstallController extends Controller
                 [PDO::ATTR_TIMEOUT => 5],
             );
         } catch (PDOException $e) {
+            // A mensagem do driver fica só no log: devolvê-la a quem não está autenticado
+            // transformaria o wizard num scanner de hosts/portas internos.
+            report($e);
+
             return back()->withInput()->withErrors([
-                'banco' => 'Não foi possível conectar: '.$e->getMessage(),
+                'banco' => 'Não foi possível conectar ao banco com esses dados. Confira host, porta, banco, usuário e senha.',
             ]);
         }
 
-        (new EnvFileWriter(base_path('.env')))->atualizar([
-            'DB_CONNECTION' => 'mysql',
-            'DB_HOST' => $dados['host'],
-            'DB_PORT' => (string) $dados['porta'],
-            'DB_DATABASE' => $dados['banco'],
-            'DB_USERNAME' => $dados['usuario'],
-            'DB_PASSWORD' => $dados['senha'] ?? '',
-        ]);
+        try {
+            (new EnvFileWriter(base_path('.env')))->atualizar([
+                'DB_CONNECTION' => 'mysql',
+                'DB_HOST' => $dados['host'],
+                'DB_PORT' => (string) $dados['porta'],
+                'DB_DATABASE' => $dados['banco'],
+                'DB_USERNAME' => $dados['usuario'],
+                'DB_PASSWORD' => $dados['senha'] ?? '',
+            ]);
+        } catch (RuntimeException|InvalidArgumentException $e) {
+            return back()->withInput()->withErrors(['banco' => $e->getMessage()]);
+        }
 
         return redirect()->route('instalar.migrar');
     }
@@ -116,6 +132,9 @@ class InstallController extends Controller
             'username' => $dados['username'],
             'password_hash' => Hash::make($dados['password']),
         ]);
+
+        // A partir daqui o sistema "já foi instalado": se o banco cair, o wizard não reabre (ver InstallStatus).
+        InstallStatus::gravarMarcador();
 
         return view('instalar.concluido');
     }

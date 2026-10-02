@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Admin;
 use App\Models\Avaliacao;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -32,17 +33,28 @@ class ComparacaoAvaliacoesService
     ) {}
 
     /**
-     * Avaliações elegíveis para comparar com $atual: qualquer outra (de
-     * qualquer categoria) que já tenha resultado importado.
+     * Avaliações elegíveis para comparar com $atual: outras da MESMA categoria
+     * que já tenham resultado importado. Comparar avaliações de categorias
+     * diferentes (provas distintas, dificuldade e escala diferentes) não diz
+     * nada — sem categoria não há com quem comparar.
      *
      * @return Collection<int, array{codigo: int, nome: string, data: ?string}>
      */
-    public function opcoesDisponiveis(Avaliacao $atual): Collection
+    public function opcoesDisponiveis(Avaliacao $atual, ?Admin $usuario = null): Collection
     {
+        // Coordenador só compara com avaliações que ele mesmo pode ver.
+        $permitidas = $usuario?->ehCoordenador() ? Avaliacao::visivelPara($usuario)->pluck('codigo')->all() : null;
+
+        if ($atual->categoria_id === null) {
+            return collect();
+        }
+
         return DB::table('avaliacoes as av')
             ->join('resultado_resumos as rr', 'rr.avaliacao_codigo', '=', 'av.codigo')
             ->where('av.codigo', '!=', $atual->codigo)
+            ->where('av.categoria_id', $atual->categoria_id)
             ->whereNull('av.deleted_at')
+            ->when($permitidas !== null, fn ($q) => $q->whereIn('av.codigo', $permitidas))
             ->groupBy('av.codigo', 'av.nome', 'av.data_avaliacao')
             ->selectRaw('av.codigo as codigo, av.nome as nome, av.data_avaliacao as data')
             ->orderByDesc('av.data_avaliacao')
@@ -61,7 +73,7 @@ class ComparacaoAvaliacoesService
      *   areas: array<int, string>
      * }|null
      */
-    public function comparar(Avaliacao $base, array $codigosComparar): ?array
+    public function comparar(Avaliacao $base, array $codigosComparar, ?Admin $usuario = null): ?array
     {
         // A base nunca é uma das comparadas (ainda que o usuário mande o
         // próprio código no seletor) e o limite de tons decide quantas
@@ -75,11 +87,13 @@ class ComparacaoAvaliacoesService
             self::MAX_COMPARACOES,
         );
 
-        if ($codigos === []) {
+        if ($codigos === [] || $base->categoria_id === null) {
             return null;
         }
 
         $comparadas = Avaliacao::whereIn('codigo', $codigos)
+            ->where('categoria_id', $base->categoria_id)
+            ->when($usuario !== null, fn ($q) => $q->visivelPara($usuario))
             ->whereNull('deleted_at')
             ->get()
             ->keyBy('codigo');
@@ -96,7 +110,7 @@ class ComparacaoAvaliacoesService
         }
 
         $avaliacoes = collect([$base])->concat($ordenadas)
-            ->map(fn (Avaliacao $avaliacao) => $this->resumoDe($avaliacao))
+            ->map(fn (Avaliacao $avaliacao) => $this->resumoDe($avaliacao, $usuario?->ehCoordenador() ? $usuario->cursos() : null))
             ->values()
             ->all();
 
@@ -114,9 +128,11 @@ class ComparacaoAvaliacoesService
     }
 
     /** @return array{codigo: int, nome: string, data: ?string, resumo: ?array, mediaPorArea: array<string, float>} */
-    private function resumoDe(Avaliacao $avaliacao): array
+    private function resumoDe(Avaliacao $avaliacao, ?array $cursos = null): array
     {
-        $psicometria = $this->psicometriaService->analisar($avaliacao);
+        $psicometriaService = $this->psicometriaService->paraCursos($cursos);
+        $relatorioService = $this->relatorioService->paraCursos($cursos);
+        $psicometria = $psicometriaService->analisar($avaliacao);
 
         return [
             'codigo' => $avaliacao->codigo,
@@ -129,7 +145,7 @@ class ComparacaoAvaliacoesService
                 'desvio' => $psicometria['desvio'],
                 'kr20' => $psicometria['kr20'],
             ],
-            'mediaPorArea' => $this->relatorioService->mediaPorArea($avaliacao),
+            'mediaPorArea' => $relatorioService->mediaPorArea($avaliacao),
         ];
     }
 }

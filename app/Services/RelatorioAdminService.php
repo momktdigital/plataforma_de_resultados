@@ -6,8 +6,10 @@ use App\Models\Avaliacao;
 use App\Models\Resposta;
 use App\Support\AlunoVinculoResolver;
 use App\Support\Anulacao;
+use App\Support\Concerns\ComEscopoDeCurso;
 use App\Support\Dificuldade;
 use App\Support\FiltroDemografico;
+use App\Support\PeriodoCurso;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -27,6 +29,11 @@ use Illuminate\Support\Facades\DB;
  */
 class RelatorioAdminService
 {
+    use ComEscopoDeCurso;
+
+    /** @var array<string, Collection<int, array<string, mixed>>> memo das linhas da evolução, por avaliação e escopo (vive só na requisição) */
+    private array $evolucaoMemo = [];
+
     /**
      * Rótulo de exibição de cada `tipo` de App\Models\QuestaoReferencia — a
      * ordem aqui é a ordem em que os blocos aparecem na tela. Os tipos são
@@ -49,28 +56,68 @@ class RelatorioAdminService
         private readonly AlunoVinculoResolver $alunoResolver = new AlunoVinculoResolver,
     ) {}
 
-    /** @return array<int, array{ra: ?string, cpf: ?string, periodo: string, acertos: int, total: int, percentual: ?float, aluno_nome: ?string, turma: ?string}> */
+    /**
+     * Lista nominal dos respondentes da avaliação (tela "Alunos da avaliação"
+     * e a planilha baixada dela — ver ListaAlunosExportService). Ordenada pelo
+     * percentual; ausentes (prova inteira em branco) vão pro fim, marcados.
+     *
+     * `periodo_curso` é o período do aluno no curso (1º, 2º... da matrícula;
+     * na falta dele, o que veio na planilha de resultados); `periodo` continua
+     * sendo o texto cru da planilha de resultados.
+     *
+     * @return array<int, array{ra: ?string, cpf: ?string, periodo: string, periodo_curso: ?string, acertos: int, total: int, percentual: ?float, aluno_nome: ?string, turma: ?string, curso: ?string, foto: ?string, ausente: bool}>
+     */
     public function rankingCompleto(Avaliacao $avaliacao, string $periodo = ''): array
     {
-        $resumos = DB::table('resultado_resumos')
+        $resumos = $this->escoparResumos(DB::table('resultado_resumos'))
             ->where('avaliacao_codigo', $avaliacao->codigo)
             ->when($periodo !== '', fn ($q) => $q->where('periodo', $periodo))
             ->orderByDesc('percentual')
-            ->select('aluno_chave', 'ra', 'cpf', 'periodo', 'acertos', 'total', 'percentual')
+            ->select('aluno_chave', 'ra', 'cpf', 'periodo', 'acertos', 'total', 'percentual', 'curso', 'matricula_id')
             ->get();
 
-        $alunos = $this->alunoResolver->resolver($avaliacao->codigo, $periodo);
+        // Período do curso na época da prova (da matrícula que valia nela).
+        $periodosDaMatricula = DB::table('aluno_matriculas')
+            ->whereIn('id', $resumos->pluck('matricula_id')->filter()->unique()->all())
+            ->pluck('periodo', 'id');
 
-        return $resumos->map(fn ($r) => [
-            'ra' => $r->ra,
-            'cpf' => $r->cpf,
-            'periodo' => $r->periodo,
-            'acertos' => (int) $r->acertos,
-            'total' => (int) $r->total,
-            'percentual' => $r->percentual !== null ? (float) $r->percentual : null,
-            'aluno_nome' => $alunos->get($r->aluno_chave)?->nome,
-            'turma' => $alunos->get($r->aluno_chave)?->turma,
-        ])->all();
+        $alunos = $this->dentroDoEscopo($this->alunoResolver->resolver($avaliacao->codigo, $periodo), $avaliacao->codigo);
+
+        // Ausente = nenhuma resposta de verdade na prova inteira (mesma
+        // definição de PsicometriaService::presenca()). Só os ausentes são
+        // trazidos — o conjunto é pequeno mesmo com `respostas` enorme.
+        $ausentes = $this->escopar(DB::table('respostas'), 'respostas.', $avaliacao->codigo)
+            ->where('avaliacao_codigo', $avaliacao->codigo)
+            ->whereNull('deleted_at')
+            ->when($periodo !== '', fn ($q) => $q->where('periodo', $periodo))
+            ->groupBy('aluno_chave', 'periodo')
+            ->havingRaw('SUM(CASE WHEN '.Resposta::semRespostaSql('resposta').' THEN 0 ELSE 1 END) = 0')
+            ->select('aluno_chave', 'periodo')
+            ->get()
+            ->mapWithKeys(fn ($l) => [$l->aluno_chave.'|'.$l->periodo => true]);
+
+        return $resumos->map(function ($r) use ($alunos, $ausentes, $periodosDaMatricula) {
+            $aluno = $alunos->get($r->aluno_chave);
+
+            return [
+                'ra' => $r->ra,
+                'cpf' => $r->cpf,
+                'periodo' => $r->periodo,
+                'periodo_curso' => ($r->matricula_id ? $periodosDaMatricula->get($r->matricula_id) : null) ?: $aluno?->periodo ?: ($r->periodo !== '' ? $r->periodo : null),
+                'acertos' => (int) $r->acertos,
+                'total' => (int) $r->total,
+                'percentual' => $r->percentual !== null ? (float) $r->percentual : null,
+                'aluno_nome' => $aluno?->nome,
+                'turma' => $aluno?->turma,
+                'curso' => $r->curso ?: $aluno?->curso,
+                'foto' => $aluno?->fotoUrl(96),
+                'ausente' => $ausentes->has($r->aluno_chave.'|'.$r->periodo),
+            ];
+        })
+            // sortBy é estável: dentro de cada grupo mantém a ordem por percentual.
+            ->sortBy(fn ($linha) => $linha['ausente'] ? 1 : 0)
+            ->values()
+            ->all();
     }
 
     /**
@@ -81,14 +128,14 @@ class RelatorioAdminService
      */
     public function distribuicaoPorTurma(Avaliacao $avaliacao, string $periodo = '', ?FiltroDemografico $filtro = null): array
     {
-        $resumos = DB::table('resultado_resumos')
+        $resumos = $this->escoparResumos(DB::table('resultado_resumos'))
             ->where('avaliacao_codigo', $avaliacao->codigo)
             ->when($periodo !== '', fn ($q) => $q->where('periodo', $periodo))
             ->whereNotNull('percentual')
             ->select('aluno_chave', 'percentual')
             ->get();
 
-        $alunos = $this->alunoResolver->resolver($avaliacao->codigo, $periodo);
+        $alunos = $this->dentroDoEscopo($this->alunoResolver->resolver($avaliacao->codigo, $periodo), $avaliacao->codigo);
         $chaves = $filtro !== null
             ? $this->alunoResolver->chavesFiltradas($avaliacao->codigo, $periodo, $filtro->semTurma(), $avaliacao->data_avaliacao)
             : null;
@@ -122,7 +169,13 @@ class RelatorioAdminService
         return $resultado;
     }
 
-    /** @return array<string, array{esperado: string, observado: float, questoes: int}> ver App\Support\Dificuldade */
+    /**
+     * `meta`/`desvio`/`atingiu` só vêm preenchidos quando a avaliação tem meta
+     * de % de acerto cadastrada pra aquele nível (Avaliacao::meta_acerto_dificuldade);
+     * desvio = observado − meta, em pontos percentuais.
+     *
+     * @return array<string, array{esperado: string, observado: ?float, questoes: int, meta: ?float, desvio: ?float, atingiu: ?bool}> ver App\Support\Dificuldade
+     */
     public function curvaDificuldade(Avaliacao $avaliacao): array
     {
         $porQuestao = $this->acertosPorQuestaoComCampo($avaliacao, 'dificuldade_pedagogica');
@@ -135,22 +188,28 @@ class RelatorioAdminService
             if (! isset($ordem[$chave])) {
                 continue;
             }
+            // A consulta já agrupa por nível: cada linha É um nível, então o
+            // nº de questões vem do COUNT(DISTINCT) dela, não de contar linhas.
             $acumulado[$chave] ??= ['acertos' => 0, 'total' => 0, 'questoes' => 0];
             $acumulado[$chave]['acertos'] += (int) $linha->acertos;
             $acumulado[$chave]['total'] += (int) $linha->total;
-            $acumulado[$chave]['questoes']++;
+            $acumulado[$chave]['questoes'] += (int) $linha->questoes;
         }
 
         $resultado = [];
         foreach ($ordem as $chave => $label) {
-            if (! isset($acumulado[$chave])) {
-                continue;
-            }
-            $s = $acumulado[$chave];
+            // Todos os níveis aparecem (mesmo sem questões) pra deixar claro
+            // que a avaliação não tem nada cadastrado naquele nível.
+            $s = $acumulado[$chave] ?? ['acertos' => 0, 'total' => 0, 'questoes' => 0];
+            $observado = $s['total'] > 0 ? round($s['acertos'] / $s['total'] * 100, 1) : null;
+            $meta = $avaliacao->metaAcertoDificuldade($chave);
             $resultado[$chave] = [
                 'esperado' => $label,
-                'observado' => $s['total'] > 0 ? round($s['acertos'] / $s['total'] * 100, 1) : 0.0,
+                'observado' => $observado,
                 'questoes' => $s['questoes'],
+                'meta' => $meta,
+                'desvio' => $meta === null || $observado === null ? null : round($observado - $meta, 1),
+                'atingiu' => $meta === null || $observado === null ? null : $observado >= $meta,
             ];
         }
 
@@ -175,7 +234,7 @@ class RelatorioAdminService
             return [];
         }
 
-        $stats = DB::table('respostas as r')
+        $stats = $this->escopar(DB::table('respostas as r'), 'r.', $avaliacao->codigo)
             ->join('questoes as q', function ($join) use ($avaliacao) {
                 $join->on('q.numero', '=', 'r.questao_numero')
                     ->where('q.avaliacao_codigo', $avaliacao->codigo)
@@ -227,7 +286,7 @@ class RelatorioAdminService
             ? $this->alunoResolver->chavesFiltradas($avaliacao->codigo, $periodo, $filtro->semTurma(), $avaliacao->data_avaliacao)
             : null;
 
-        $porAlunoHabilidade = DB::table('respostas as r')
+        $porAlunoHabilidade = $this->escopar(DB::table('respostas as r'), 'r.', $avaliacao->codigo)
             ->join('questoes as q', function ($join) use ($avaliacao) {
                 Anulacao::excluirDistribuidas(
                     $join->on('q.numero', '=', 'r.questao_numero')
@@ -253,7 +312,7 @@ class RelatorioAdminService
             return [];
         }
 
-        $alunos = $this->alunoResolver->resolver($avaliacao->codigo, $periodo);
+        $alunos = $this->dentroDoEscopo($this->alunoResolver->resolver($avaliacao->codigo, $periodo), $avaliacao->codigo);
 
         $acumulado = [];
         foreach ($porAlunoHabilidade as $linha) {
@@ -280,7 +339,7 @@ class RelatorioAdminService
     /** @return array{sexo: array<string, int>, cor_raca: array<string, int>, uf: array<string, int>} */
     public function perfilDemografico(Avaliacao $avaliacao): array
     {
-        $alunos = $this->alunoResolver->resolver($avaliacao->codigo);
+        $alunos = $this->dentroDoEscopo($this->alunoResolver->resolver($avaliacao->codigo), $avaliacao->codigo);
 
         $contarPor = fn (string $campo) => $alunos
             ->map(fn ($a) => $a->{$campo})
@@ -326,7 +385,7 @@ class RelatorioAdminService
             ? $this->alunoResolver->chavesFiltradas($avaliacao->codigo, $periodo, $filtro, $avaliacao->data_avaliacao)
             : null;
 
-        $linhas = DB::table('respostas')
+        $linhas = $this->escopar(DB::table('respostas'), 'respostas.', $avaliacao->codigo)
             ->where('avaliacao_codigo', $avaliacao->codigo)
             ->whereNull('deleted_at')
             ->when($periodo !== '', fn ($q) => $q->where('periodo', $periodo))
@@ -417,7 +476,7 @@ class RelatorioAdminService
      */
     public function desempenhoPorTema(Avaliacao $avaliacao, string $periodo = ''): array
     {
-        $linhas = DB::table('respostas as r')
+        $linhas = $this->escopar(DB::table('respostas as r'), 'r.', $avaliacao->codigo)
             ->join('questoes as q', function ($join) use ($avaliacao) {
                 Anulacao::excluirDistribuidas(
                     $join->on('q.numero', '=', 'r.questao_numero')
@@ -458,7 +517,7 @@ class RelatorioAdminService
             ? $this->alunoResolver->chavesFiltradas($avaliacao->codigo, $periodo, $filtro, $avaliacao->data_avaliacao)
             : null;
 
-        $percentuais = DB::table('resultado_resumos')
+        $percentuais = $this->escoparResumos(DB::table('resultado_resumos'))
             ->where('avaliacao_codigo', $avaliacao->codigo)
             ->when($periodo !== '', fn ($q) => $q->where('periodo', $periodo))
             ->when($chaves !== null, fn ($q) => $q->whereIn('aluno_chave', $chaves))
@@ -469,7 +528,7 @@ class RelatorioAdminService
             return [];
         }
 
-        $metricas = DB::table('resultado_metricas')
+        $metricas = $this->escopar(DB::table('resultado_metricas'), 'resultado_metricas.', $avaliacao->codigo)
             ->where('avaliacao_codigo', $avaliacao->codigo)
             ->whereNull('deleted_at')
             ->when($periodo !== '', fn ($q) => $q->where('periodo', $periodo))
@@ -503,30 +562,142 @@ class RelatorioAdminService
         return $resultado;
     }
 
-    /** @return array<int, array{codigo: int, nome: string, data: ?string, media: float, respondentes: int}> */
+    /**
+     * Evolução da média ao longo das avaliações da MESMA categoria, com todos os
+     * respondentes ("avaliação inteira"). Cada ponto traz a média com e sem os
+     * ausentes (prova inteira em branco), para a tela alternar sem recarregar.
+     *
+     * @return array<int, array{codigo: int, nome: string, data: ?string, media: float, mediaPresentes: ?float, respondentes: int, presentes: int}>
+     */
     public function evolucaoCategoria(Avaliacao $avaliacao): array
     {
+        [$linhas] = $this->linhasDaEvolucao($avaliacao);
+
+        return $this->pontosDaEvolucao($linhas);
+    }
+
+    /**
+     * A mesma evolução, aberta POR PERÍODO do curso e, dentro dele, por turma:
+     * para cada período (1º, 2º... 12º), uma série por turma — a média dos
+     * alunos que estavam naquela turma EM CADA avaliação (período e turma da
+     * época da prova, vindos da matrícula que valia nela; ver
+     * CursoDoResultadoService). Valor de período que não é um período do curso
+     * ("2026/1" digitado na coluna errada) fica de fora.
+     *
+     * @return array<int, array{rotulo: string, turmas: array<string, array<int, array{codigo: int, nome: string, data: ?string, media: float, mediaPresentes: ?float, respondentes: int, presentes: int}>>}> chaveado pelo nº do período
+     */
+    public function evolucaoCategoriaPorPeriodo(Avaliacao $avaliacao): array
+    {
+        [$linhas] = $this->linhasDaEvolucao($avaliacao);
+
+        $resultado = [];
+        foreach ($linhas->groupBy(fn ($l) => $l['periodoOrdinal'] ?? 0) as $ordinal => $doPeriodo) {
+            if ($ordinal === 0) {
+                continue;
+            }
+
+            $turmas = $doPeriodo->groupBy('turma')->map(fn ($doTurma) => $this->pontosDaEvolucao($doTurma))->sortKeys(SORT_NATURAL | SORT_FLAG_CASE)->all();
+            $resultado[(int) $ordinal] = ['rotulo' => PeriodoCurso::rotulo((int) $ordinal), 'turmas' => $turmas];
+        }
+        ksort($resultado);
+
+        return $resultado;
+    }
+
+    /**
+     * Uma linha por resultado das avaliações da categoria (poucos milhares:
+     * nº de respondentes × nº de avaliações da categoria), já com período e
+     * turma da época da prova e a marca de ausente. Memorizado por
+     * avaliação: o visual pede duas vezes (inteira e por período).
+     *
+     * @return array{0: Collection<int, array<string, mixed>>}
+     */
+    private function linhasDaEvolucao(Avaliacao $avaliacao): array
+    {
         if ($avaliacao->categoria_id === null) {
-            return [];
+            return [collect()];
         }
 
-        return DB::table('avaliacoes as av')
+        // A chave inclui o escopo: uma cópia paraCursos() herda o memo da original
+        // e não pode reaproveitar linhas de outro conjunto de cursos.
+        $chaveMemo = $avaliacao->codigo.'|'.($this->escopo === null ? '*' : implode(',', $this->escopo->cursos));
+        if (isset($this->evolucaoMemo[$chaveMemo])) {
+            return [$this->evolucaoMemo[$chaveMemo]];
+        }
+
+        $brutas = DB::table('avaliacoes as av')
             ->join('resultado_resumos as rr', 'rr.avaliacao_codigo', '=', 'av.codigo')
+            // Joins por id (INT): nunca comparam colunas de collations diferentes.
+            ->leftJoin('aluno_matriculas as m', 'm.id', '=', 'rr.matricula_id')
+            ->leftJoin('alunos as a', 'a.id', '=', 'rr.aluno_id')
             ->where('av.categoria_id', $avaliacao->categoria_id)
             ->whereNull('av.deleted_at')
-            ->groupBy('av.codigo', 'av.nome', 'av.data_avaliacao')
-            ->selectRaw('av.codigo as codigo, av.nome as nome, av.data_avaliacao as data')
-            ->selectRaw('AVG(rr.percentual) as media')
-            ->selectRaw('COUNT(DISTINCT rr.aluno_chave) as respondentes')
-            ->orderBy('av.data_avaliacao')
-            ->get()
-            ->map(fn ($l) => [
-                'codigo' => (int) $l->codigo,
-                'nome' => $l->nome,
-                'data' => $l->data,
-                'media' => round((float) $l->media, 1),
-                'respondentes' => (int) $l->respondentes,
-            ])
+            ->whereNotNull('rr.percentual')
+            ->when($this->escopo !== null, fn ($q) => $this->escopo->restringirResumos($q, 'rr.curso'))
+            ->get([
+                'av.codigo as codigo', 'av.nome as nome', 'av.data_avaliacao as data',
+                'rr.aluno_chave as chave', 'rr.acertos as acertos', 'rr.percentual as percentual',
+                'rr.periodo as periodo_resumo', 'm.periodo as periodo_matricula', 'm.turma as turma_matricula',
+                'a.periodo as periodo_atual', 'a.turma as turma_atual',
+            ]);
+
+        // Ausente = nenhuma resposta de verdade na prova inteira (mesma
+        // definição de PsicometriaService::presenca()). Só quem tem 0 acerto
+        // pode ser ausente, então só esses entram na conferência em `respostas`.
+        $candidatos = $brutas->where('acertos', 0);
+        $ausentes = $candidatos->isEmpty() ? collect() : DB::table('respostas')
+            ->whereIn('avaliacao_codigo', $candidatos->pluck('codigo')->unique()->all())
+            ->whereIn('aluno_chave', $candidatos->pluck('chave')->unique()->all())
+            ->whereNull('deleted_at')
+            ->groupBy('avaliacao_codigo', 'aluno_chave')
+            ->havingRaw('SUM(CASE WHEN '.Resposta::semRespostaSql('resposta').' THEN 0 ELSE 1 END) = 0')
+            ->get(['avaliacao_codigo', 'aluno_chave'])
+            ->mapWithKeys(fn ($l) => [$l->avaliacao_codigo.'|'.$l->aluno_chave => true]);
+
+        $linhas = $brutas->map(fn ($l) => [
+            'codigo' => (int) $l->codigo,
+            'nome' => $l->nome,
+            'data' => $l->data,
+            'percentual' => (float) $l->percentual,
+            'ausente' => $ausentes->has($l->codigo.'|'.$l->chave),
+            'periodoOrdinal' => PeriodoCurso::ordinal($l->periodo_matricula)
+                ?? PeriodoCurso::ordinal($l->periodo_resumo)
+                ?? PeriodoCurso::ordinal($l->periodo_atual),
+            'turma' => ($l->turma_matricula ?: $l->turma_atual) ?: 'Sem turma',
+        ]);
+
+        $this->evolucaoMemo[$chaveMemo] = $linhas;
+
+        return [$linhas];
+    }
+
+    /**
+     * Uma média por avaliação (em ordem de data) a partir das linhas de
+     * resultado: com todos e só com os presentes.
+     *
+     * @param  Collection<int, array<string, mixed>>  $linhas
+     * @return array<int, array{codigo: int, nome: string, data: ?string, media: float, mediaPresentes: ?float, respondentes: int, presentes: int}>
+     */
+    private function pontosDaEvolucao(Collection $linhas): array
+    {
+        return $linhas
+            ->groupBy('codigo')
+            ->map(function (Collection $doGrupo) {
+                $primeira = $doGrupo->first();
+                $presentes = $doGrupo->where('ausente', false);
+
+                return [
+                    'codigo' => $primeira['codigo'],
+                    'nome' => $primeira['nome'],
+                    'data' => $primeira['data'],
+                    'media' => round($doGrupo->avg('percentual'), 1),
+                    'mediaPresentes' => $presentes->isEmpty() ? null : round($presentes->avg('percentual'), 1),
+                    'respondentes' => $doGrupo->count(),
+                    'presentes' => $presentes->count(),
+                ];
+            })
+            ->sortBy(fn ($p) => [$p['data'] ?? '0000-00-00', $p['codigo']])
+            ->values()
             ->all();
     }
 
@@ -546,7 +717,7 @@ class RelatorioAdminService
      */
     public function desempenhoPorReferencia(Avaliacao $avaliacao, string $periodo = ''): array
     {
-        $linhas = DB::table('respostas as r')
+        $linhas = $this->escopar(DB::table('respostas as r'), 'r.', $avaliacao->codigo)
             ->join('questoes as q', function ($join) use ($avaliacao) {
                 Anulacao::excluirDistribuidas(
                     $join->on('q.numero', '=', 'r.questao_numero')
@@ -613,7 +784,7 @@ class RelatorioAdminService
      */
     public function equidadeDemografica(Avaliacao $avaliacao, string $periodo = ''): array
     {
-        $resumos = DB::table('resultado_resumos')
+        $resumos = $this->escoparResumos(DB::table('resultado_resumos'))
             ->where('avaliacao_codigo', $avaliacao->codigo)
             ->when($periodo !== '', fn ($q) => $q->where('periodo', $periodo))
             ->whereNotNull('percentual')
@@ -624,7 +795,7 @@ class RelatorioAdminService
             return [];
         }
 
-        $alunos = $this->alunoResolver->resolver($avaliacao->codigo, $periodo);
+        $alunos = $this->dentroDoEscopo($this->alunoResolver->resolver($avaliacao->codigo, $periodo), $avaliacao->codigo);
         $dataReferencia = $avaliacao->data_avaliacao ?? now();
 
         $recortes = [
@@ -720,7 +891,7 @@ class RelatorioAdminService
     /** @return Collection<int, object{campo: ?string, acertos: int, total: int}> */
     private function acertosPorQuestaoComCampo(Avaliacao $avaliacao, string $campo, string $periodo = '')
     {
-        return DB::table('respostas as r')
+        return $this->escopar(DB::table('respostas as r'), 'r.', $avaliacao->codigo)
             ->join('questoes as q', function ($join) use ($avaliacao, $campo) {
                 Anulacao::excluirDistribuidas(
                     $join->on('q.numero', '=', 'r.questao_numero')
@@ -738,6 +909,7 @@ class RelatorioAdminService
             ->groupBy("q.{$campo}")
             ->selectRaw("q.{$campo} as campo")
             ->selectRaw('COUNT(*) as total')
+            ->selectRaw('COUNT(DISTINCT r.questao_numero) as questoes')
             ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
             ->get();
     }

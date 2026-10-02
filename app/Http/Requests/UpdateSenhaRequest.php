@@ -19,7 +19,7 @@ class UpdateSenhaRequest extends FormRequest
         return [
             'current_password' => ['required', 'string'],
             // O sistema legado (admin/perfil.php) aceitava min:4 — não
-            // seguimos essa política aqui, ver StoreAdministradorRequest.
+            // seguimos essa política aqui, ver StoreUsuarioRequest.
             'new_password' => ['required', 'string', Password::min(10), 'confirmed'],
         ];
     }

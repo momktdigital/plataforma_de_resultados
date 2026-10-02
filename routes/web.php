@@ -1,12 +1,13 @@
 <?php
 
-use App\Http\Controllers\Admin\AdministradorController;
 use App\Http\Controllers\Admin\AlunoController;
 use App\Http\Controllers\Admin\AvaliacaoController;
 use App\Http\Controllers\Admin\AvaliacaoVisualizacaoController;
 use App\Http\Controllers\Admin\BiController;
+use App\Http\Controllers\Admin\BiListaController;
 use App\Http\Controllers\Admin\BuscaGlobalController;
 use App\Http\Controllers\Admin\CategoriaController;
+use App\Http\Controllers\Admin\CoordenadorController;
 use App\Http\Controllers\Admin\LixeiraController;
 use App\Http\Controllers\Admin\MatriculaImportController;
 use App\Http\Controllers\Admin\PerfilController;
@@ -15,7 +16,9 @@ use App\Http\Controllers\Admin\QuestaoExportController;
 use App\Http\Controllers\Admin\QuestaoImportController;
 use App\Http\Controllers\Admin\RespondenteController;
 use App\Http\Controllers\Admin\ResultadoImportController;
+use App\Http\Controllers\Admin\UsuarioController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
+use App\Http\Controllers\Auth\LoginCodigoController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\InstallController;
 use App\Http\Controllers\PortalController;
@@ -40,7 +43,11 @@ Route::middleware('nao-instalado')->prefix('instalar')->name('instalar.')->group
 
 Route::middleware('instalado')->group(function () {
     Route::get('/', function () {
-        return redirect()->route(Auth::guard('admin')->check() ? 'avaliacoes.index' : 'portal.consulta');
+        if (! Auth::guard('admin')->check()) {
+            return redirect()->route('portal.consulta');
+        }
+
+        return redirect()->route(Auth::guard('admin')->user()->ehCoordenador() ? 'coordenador.painel' : 'avaliacoes.index');
     });
 
     Route::prefix('portal')->name('portal.')->group(function () {
@@ -78,6 +85,19 @@ Route::middleware('instalado')->group(function () {
             ->middleware('throttle:10,1')
             ->name('login.attempt');
 
+        // Coordenador: entra com um código enviado por e-mail, sem senha (administrador
+        // continua com usuário e senha — a senha só é obrigatória para ele).
+        Route::get('/login/codigo', [LoginCodigoController::class, 'formulario'])->name('login.codigo.form');
+        Route::post('/login/codigo', [LoginCodigoController::class, 'solicitar'])
+            ->middleware('throttle:5,1')
+            ->name('login.codigo.solicitar');
+        Route::post('/login/codigo/verificar', [LoginCodigoController::class, 'verificar'])
+            ->middleware('throttle:10,1')
+            ->name('login.codigo.verificar');
+        Route::post('/login/codigo/reenviar', [LoginCodigoController::class, 'reenviar'])
+            ->middleware('throttle:5,1')
+            ->name('login.codigo.reenviar');
+
         Route::get('/esqueci-senha', [ForgotPasswordController::class, 'create'])->name('senha.esqueci');
         Route::post('/esqueci-senha', [ForgotPasswordController::class, 'store'])
             ->middleware('throttle:5,1')
@@ -91,6 +111,20 @@ Route::middleware('instalado')->group(function () {
     Route::middleware('auth:admin')->group(function () {
         Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
 
+        // Acessível a administradores E coordenadores. Para o coordenador,
+        // a listagem e o BI já filtram/validam pelos cursos dele (ver
+        // AvaliacaoController::index e BiController::index).
+        Route::get('/painel', [CoordenadorController::class, 'painel'])->name('coordenador.painel');
+        Route::get('/avaliacoes', [AvaliacaoController::class, 'index'])->name('avaliacoes.index');
+        Route::get('/avaliacoes/{avaliacao}/bi', [BiController::class, 'index'])->name('avaliacoes.bi');
+        Route::get('/avaliacoes/{avaliacao}/bi/alunos.xlsx', [BiListaController::class, 'xlsx'])->name('avaliacoes.bi.alunos.xlsx');
+        Route::redirect('/administradores', '/usuarios');
+        Route::get('/perfil', [PerfilController::class, 'edit'])->name('perfil.edit');
+        Route::put('/perfil/senha', [PerfilController::class, 'updateSenha'])->name('perfil.senha');
+
+        // Todo o resto é só de administrador (coordenador recebe 403).
+        Route::middleware('somente-admin')->group(function () {
+
         Route::get('/buscar', [BuscaGlobalController::class, 'index'])->name('busca.index');
 
         Route::get('/alunos', [AlunoController::class, 'index'])->name('alunos.index');
@@ -102,14 +136,11 @@ Route::middleware('instalado')->group(function () {
         Route::put('/alunos/{aluno}', [AlunoController::class, 'update'])->name('alunos.update');
         Route::delete('/alunos/{aluno}', [AlunoController::class, 'destroy'])->name('alunos.destroy');
 
-        Route::get('/administradores', [AdministradorController::class, 'index'])->name('administradores.index');
-        Route::post('/administradores', [AdministradorController::class, 'store'])->name('administradores.store');
-        Route::get('/administradores/{admin}/editar', [AdministradorController::class, 'edit'])->name('administradores.edit');
-        Route::put('/administradores/{admin}', [AdministradorController::class, 'update'])->name('administradores.update');
-        Route::delete('/administradores/{admin}', [AdministradorController::class, 'destroy'])->name('administradores.destroy');
-
-        Route::get('/perfil', [PerfilController::class, 'edit'])->name('perfil.edit');
-        Route::put('/perfil/senha', [PerfilController::class, 'updateSenha'])->name('perfil.senha');
+        Route::get('/usuarios', [UsuarioController::class, 'index'])->name('usuarios.index');
+        Route::post('/usuarios', [UsuarioController::class, 'store'])->name('usuarios.store');
+        Route::get('/usuarios/{admin}/editar', [UsuarioController::class, 'edit'])->name('usuarios.edit');
+        Route::put('/usuarios/{admin}', [UsuarioController::class, 'update'])->name('usuarios.update');
+        Route::delete('/usuarios/{admin}', [UsuarioController::class, 'destroy'])->name('usuarios.destroy');
 
         Route::get('/categorias', [CategoriaController::class, 'index'])->name('categorias.index');
         Route::post('/categorias', [CategoriaController::class, 'store'])->name('categorias.store');
@@ -117,7 +148,6 @@ Route::middleware('instalado')->group(function () {
         Route::put('/categorias/{categoria}', [CategoriaController::class, 'update'])->name('categorias.update');
         Route::delete('/categorias/{categoria}', [CategoriaController::class, 'destroy'])->name('categorias.destroy');
 
-        Route::get('/avaliacoes', [AvaliacaoController::class, 'index'])->name('avaliacoes.index');
         Route::post('/avaliacoes', [AvaliacaoController::class, 'store'])->name('avaliacoes.store');
         Route::get('/avaliacoes/{avaliacao}', [AvaliacaoController::class, 'show'])->name('avaliacoes.show');
         Route::put('/avaliacoes/{avaliacao}', [AvaliacaoController::class, 'update'])->name('avaliacoes.update');
@@ -155,8 +185,6 @@ Route::middleware('instalado')->group(function () {
         Route::delete('/avaliacoes/{avaliacao}/respondentes', [RespondenteController::class, 'destroyRespondente'])->name('avaliacoes.respondentes.destroy');
         Route::delete('/avaliacoes/{avaliacao}/periodos', [RespondenteController::class, 'destroyPeriodo'])->name('avaliacoes.periodos.destroy');
         Route::post('/avaliacoes/{avaliacao}/periodos/restaurar', [RespondenteController::class, 'restorePeriodo'])->name('avaliacoes.periodos.restore');
-
-        Route::get('/avaliacoes/{avaliacao}/bi', [BiController::class, 'index'])->name('avaliacoes.bi');
 
         Route::get('/avaliacoes/{avaliacao}/visualizacoes', [AvaliacaoVisualizacaoController::class, 'edit'])->name('avaliacoes.visualizacoes.edit');
         Route::put('/avaliacoes/{avaliacao}/visualizacoes', [AvaliacaoVisualizacaoController::class, 'update'])->name('avaliacoes.visualizacoes.update');
@@ -200,6 +228,7 @@ Route::middleware('instalado')->group(function () {
             Route::put('/portal/smtp', [PortalConfiguracaoController::class, 'atualizarSmtp'])->name('portal.smtp');
             Route::post('/portal/smtp/teste', [PortalConfiguracaoController::class, 'testarSmtp'])->name('portal.smtp.teste');
             Route::post('/portal/smtp/teste/verificar', [PortalConfiguracaoController::class, 'verificarTesteSmtp'])->name('portal.smtp.teste.verificar');
+        });
         });
     });
 });

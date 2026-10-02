@@ -39,7 +39,7 @@ class GabaritoComentadoUploader
             throw new RuntimeException("O conteúdo do arquivo não corresponde a um documento válido (MIME: {$realMime}).");
         }
 
-        $uploadDir = public_path('uploads/gabaritos-comentados');
+        $uploadDir = rtrim((string) config('sistema.uploads_dir'), '/\\').'/gabaritos-comentados';
         if (! is_dir($uploadDir) && ! mkdir($uploadDir, 0755, true) && ! is_dir($uploadDir)) {
             throw new RuntimeException('Não foi possível criar o diretório de destino (public/uploads/gabaritos-comentados/).');
         }

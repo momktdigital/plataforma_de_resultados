@@ -18,7 +18,7 @@ class AvaliacaoTest extends TestCase
 
     protected function tearDown(): void
     {
-        File::deleteDirectory(public_path('uploads/gabaritos-comentados'));
+        File::deleteDirectory(config('sistema.uploads_dir').'/gabaritos-comentados');
 
         parent::tearDown();
     }

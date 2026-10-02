@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use InvalidArgumentException;
 use RuntimeException;
 
 /**
@@ -50,16 +51,29 @@ class EnvFileWriter
         file_put_contents($this->path, implode("\n", $linhas));
     }
 
+    /**
+     * Valor simples vai cru; qualquer outro entre ASPAS SIMPLES, que o parser do
+     * dotenv trata como literal (sem `${VAR}`, sem `\n`, sem escapes). Quebra de
+     * linha, caractere de controle, aspas simples e barra invertida são recusados:
+     * com eles dava para injetar outras variáveis no `.env` (APP_KEY, SESSION_DRIVER...)
+     * ou corromper o arquivo.
+     *
+     * @throws InvalidArgumentException
+     */
     private function formatarValor(?string $valor): string
     {
         if ($valor === null || $valor === '') {
             return '';
         }
 
+        if (preg_match('/[\x00-\x1F\x7F\'\\\\]/', $valor) === 1) {
+            throw new InvalidArgumentException('O valor não pode conter quebra de linha, aspas simples (\') nem barra invertida (\\). Se precisar desses caracteres, edite o arquivo .env diretamente.');
+        }
+
         if (preg_match('/^[A-Za-z0-9_.\/:-]+$/', $valor) === 1) {
             return $valor;
         }
 
-        return '"'.str_replace('"', '\\"', $valor).'"';
+        return "'".$valor."'";
     }
 }

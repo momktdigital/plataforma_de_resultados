@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnsureInstalled;
 use App\Http\Middleware\EnsureNotInstalled;
+use App\Http\Middleware\SomenteAdministrador;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
 use Illuminate\Foundation\Application;
@@ -29,6 +30,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'instalado' => EnsureInstalled::class,
             'nao-instalado' => EnsureNotInstalled::class,
+            'somente-admin' => SomenteAdministrador::class,
         ]);
 
         // Sem isso, o Laravel roda `auth`/`guest` antes do nosso middleware por

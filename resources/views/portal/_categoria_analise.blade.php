@@ -191,7 +191,7 @@
                             @foreach ($analise['divergentes'] as $d)
                                 <tr>
                                     <td class="px-3 py-2">{{ $d['area'] }}</td>
-                                    <td class="px-3 py-2 font-bold text-red-600">{{ $d['percentualAluno'] }}%</td>
+                                    <td class="px-3 py-2 font-bold {{ \App\Support\CorDesempenho::classeTexto((float) $d['percentualAluno']) }}">{{ $d['percentualAluno'] }}%</td>
                                     <td class="px-3 py-2">{{ $d['percentualTurma'] }}%</td>
                                 </tr>
                             @endforeach

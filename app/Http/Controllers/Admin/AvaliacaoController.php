@@ -5,11 +5,14 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreAvaliacaoRequest;
 use App\Models\Avaliacao;
+use App\Models\Admin;
 use App\Models\Categoria;
+use App\Models\Curso;
 use App\Models\Resposta;
 use App\Services\EstatisticaErroService;
 use App\Services\Visualizacoes\VisualizacaoConfigService;
 use App\Support\AtividadeLogger;
+use App\Support\Dificuldade;
 use App\Support\GabaritoComentadoUploader;
 use App\Support\Ordenacao;
 use Illuminate\Http\RedirectResponse;
@@ -35,7 +38,11 @@ class AvaliacaoController extends Controller
             : null;
         [$sort, $direction] = Ordenacao::resolver($request, self::COLUNAS_ORDENAVEIS, 'codigo', 'desc');
 
+        $usuario = Auth::guard('admin')->user();
+
         $avaliacoes = Avaliacao::with('categoria')
+            // Coordenador só lista as avaliações dos cursos dele (ou com acesso excepcional).
+            ->visivelPara($usuario)
             ->withCount('questoes')
             // Nº de alunos distintos, não nº de linhas de resposta (uma por
             // questão respondida) — subquery correlacionada, sem N+1.
@@ -62,6 +69,7 @@ class AvaliacaoController extends Controller
             'opcoesCategoria' => Categoria::opcoesSelect(),
             'sort' => $sort,
             'direction' => $direction,
+            'somenteLeitura' => $usuario->ehCoordenador(),
         ]);
     }
 
@@ -111,6 +119,11 @@ class AvaliacaoController extends Controller
                 ? (new EstatisticaErroService)->calcular($avaliacao)
                 : [],
             'opcoesCategoria' => Categoria::opcoesSelect(),
+            // Acesso aos resultados (coordenadores): cursos da avaliação + acesso excepcional.
+            'opcoesCurso' => Curso::nomesDisponiveis(),
+            'cursosSelecionados' => $avaliacao->cursos(),
+            'coordenadores' => Admin::coordenadores()->orderBy('username')->get(['id', 'username']),
+            'usuariosSelecionados' => $avaliacao->usuariosComAcesso()->pluck('admins.id')->all(),
         ]);
     }
 
@@ -124,6 +137,12 @@ class AvaliacaoController extends Controller
 
         $statusAntes = $avaliacao->status;
         $avaliacao->update($dados);
+
+        // Só o formulário de edição manda este marcador — sem ele (ex.: outro
+        // formulário que reaproveite este endpoint) o acesso não é tocado.
+        if ($request->boolean('acesso_enviado')) {
+            $this->atualizarAcesso($request, $avaliacao);
+        }
 
         if (isset($dados['status']) && $statusAntes !== $avaliacao->status) {
             AtividadeLogger::registrar('avaliacao.status_alterado', 'Avaliacao', $avaliacao->codigo, [
@@ -156,9 +175,51 @@ class AvaliacaoController extends Controller
         if ($request->hasFile('gabarito_comentado_arquivo')) {
             $dados['link_comentado'] = GabaritoComentadoUploader::salvar($request->file('gabarito_comentado_arquivo'));
         }
-        unset($dados['gabarito_comentado_arquivo']);
+        unset($dados['gabarito_comentado_arquivo'], $dados['acesso_enviado'], $dados['cursos'], $dados['usuarios_acesso']);
+
+        // Só o formulário de edição manda `meta_acerto`; quando vem, substitui
+        // a meta inteira (campo vazio = nível sem meta).
+        if (array_key_exists('meta_acerto', $dados)) {
+            $metas = [];
+            foreach (Dificuldade::valores() as $nivel) {
+                $valor = $dados['meta_acerto'][$nivel] ?? null;
+                if ($valor !== null && $valor !== '') {
+                    $metas[$nivel] = (float) $valor;
+                }
+            }
+            $dados['meta_acerto_dificuldade'] = $metas === [] ? null : $metas;
+        }
+        unset($dados['meta_acerto']);
 
         return $dados;
+    }
+
+    /**
+     * Cursos da avaliação (quem de cada curso enxerga) e usuários com acesso
+     * excepcional. Substitui as duas listas pelo que veio marcado no formulário.
+     */
+    private function atualizarAcesso(StoreAvaliacaoRequest $request, Avaliacao $avaliacao): void
+    {
+        $cursosAntes = $avaliacao->cursos();
+        $usuariosAntes = $avaliacao->usuariosComAcesso()->pluck('admins.id')->all();
+
+        $cursos = (array) $request->validated('cursos', []);
+        // Só coordenadores entram: administrador já vê tudo, vincular não muda nada.
+        $usuarios = Admin::coordenadores()->whereIn('id', (array) $request->validated('usuarios_acesso', []))->pluck('id')->all();
+
+        $avaliacao->sincronizarCursos($cursos);
+        $avaliacao->usuariosComAcesso()->sync($usuarios);
+
+        sort($usuariosAntes);
+        sort($usuarios);
+        if ($cursosAntes !== $avaliacao->cursos() || $usuariosAntes !== $usuarios) {
+            AtividadeLogger::registrar('avaliacao.acesso_alterado', 'Avaliacao', $avaliacao->codigo, [
+                'cursos_antes' => $cursosAntes,
+                'cursos_depois' => $avaliacao->cursos(),
+                'usuarios_antes' => $usuariosAntes,
+                'usuarios_depois' => $usuarios,
+            ]);
+        }
     }
 
     public function destroy(Avaliacao $avaliacao): RedirectResponse

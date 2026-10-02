@@ -31,6 +31,40 @@
             </div>
         @endif
 
+        {{-- Administrador entra com usuário e senha; coordenador, com um código enviado ao e-mail. --}}
+        <div class="grid grid-cols-2 gap-1 p-1 mb-6 bg-slate-900 rounded-xl border border-slate-700" role="tablist" aria-label="Tipo de acesso">
+            <a href="{{ route('login') }}" role="tab" aria-selected="{{ $modo === 'senha' ? 'true' : 'false' }}"
+               class="text-center text-sm font-semibold py-2 rounded-lg transition-colors {{ $modo === 'senha' ? 'bg-primary text-white' : 'text-slate-400 hover:text-slate-200' }}">
+                Administrador
+            </a>
+            <a href="{{ route('login', ['modo' => 'codigo']) }}" role="tab" aria-selected="{{ $modo === 'codigo' ? 'true' : 'false' }}"
+               class="text-center text-sm font-semibold py-2 rounded-lg transition-colors {{ $modo === 'codigo' ? 'bg-primary text-white' : 'text-slate-400 hover:text-slate-200' }}">
+                Coordenador
+            </a>
+        </div>
+
+        @if ($modo === 'codigo')
+            <form method="POST" action="{{ route('login.codigo.solicitar') }}" class="space-y-6">
+                @csrf
+                <div>
+                    <label for="identificador" class="block text-sm font-medium text-slate-300 mb-1 ml-1">Usuário ou e-mail</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="ph-fill ph-envelope-simple text-slate-500 text-lg"></i>
+                        </div>
+                        <input type="text" id="identificador" name="identificador" required autofocus value="{{ old('identificador') }}" autocomplete="username"
+                               class="block w-full pl-10 pr-3 py-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                               placeholder="seu usuário ou e-mail">
+                    </div>
+                    <p class="text-xs text-slate-500 mt-2 ml-1">Enviaremos um código de acesso para o e-mail cadastrado. Não é preciso senha.</p>
+                </div>
+
+                <button type="submit"
+                        class="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-md text-sm font-bold text-white bg-primary hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-primary transition-all">
+                    <i class="ph-bold ph-paper-plane-tilt mr-2 text-lg"></i> Enviar código
+                </button>
+            </form>
+        @else
         <form method="POST" action="{{ route('login') }}" class="space-y-6">
             @csrf
             <div>
@@ -68,6 +102,7 @@
                 Esqueci minha senha
             </a>
         </div>
+        @endif
     </div>
 
     <div class="bg-slate-900/50 px-8 py-4 border-t border-slate-700 text-center">

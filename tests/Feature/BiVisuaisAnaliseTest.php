@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Admin;
 use App\Models\Aluno;
 use App\Models\Avaliacao;
+use App\Models\Categoria;
 use App\Models\Questao;
 use App\Models\QuestaoReferencia;
 use App\Models\Resposta;
@@ -211,7 +212,7 @@ class BiVisuaisAnaliseTest extends TestCase
     public function test_secao_de_comparacao_aparece_com_o_seletor_mesmo_sem_selecao(): void
     {
         $avaliacao = $this->cenario();
-        $this->outraAvaliacaoComparavel();
+        $this->outraAvaliacaoComparavel($avaliacao);
 
         $response = $this->actingAs($this->admin(), 'admin')->get("/avaliacoes/{$avaliacao->codigo}/bi");
 
@@ -223,7 +224,7 @@ class BiVisuaisAnaliseTest extends TestCase
     public function test_comparacao_de_avaliacoes_mostra_media_e_area_das_duas_provas(): void
     {
         $avaliacao = $this->cenario();
-        $outra = $this->outraAvaliacaoComparavel();
+        $outra = $this->outraAvaliacaoComparavel($avaliacao);
 
         $response = $this->actingAs($this->admin(), 'admin')
             ->get("/avaliacoes/{$avaliacao->codigo}/bi?comparar[]={$outra->codigo}");
@@ -236,10 +237,13 @@ class BiVisuaisAnaliseTest extends TestCase
         $response->assertSee('Clínica Médica');
     }
 
-    /** Cria uma segunda avaliação com resultado importado, elegível para comparação. */
-    private function outraAvaliacaoComparavel(): Avaliacao
+    /** Cria uma segunda avaliação, da MESMA categoria da base e com resultado importado, elegível para comparação. */
+    private function outraAvaliacaoComparavel(Avaliacao $base): Avaliacao
     {
-        $outra = Avaliacao::create(['nome' => 'Diagnóstica anterior']);
+        $categoria = Categoria::firstOrCreate(['nome' => 'Diagnósticas']);
+        $base->update(['categoria_id' => $categoria->id]);
+
+        $outra = Avaliacao::create(['nome' => 'Diagnóstica anterior', 'categoria_id' => $categoria->id]);
         Questao::create(['avaliacao_codigo' => $outra->codigo, 'numero' => 1, 'gabarito' => 'A', 'area' => 'Clínica Médica']);
 
         for ($i = 1; $i <= 12; $i++) {

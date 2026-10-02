@@ -385,6 +385,9 @@ class ExplicacaoBiService
             .'difíceis com acerto baixo. Quando a escada quebra — "difícil" com mais acerto que "fácil" — a classificação '
             .'das questões precisa ser revista, não a turma.';
 
+        // Níveis sem questões (observado null) não entram na leitura.
+        $curva = array_filter($curva, fn ($linha) => $linha['observado'] !== null);
+
         if (count($curva) < 2) {
             return $this->entrada($generico, null);
         }
@@ -596,6 +599,9 @@ class ExplicacaoBiService
         if (count($pontos) < 2) {
             return $this->entrada($generico, null);
         }
+
+        // A tela abre desconsiderando ausentes: a leitura usa a mesma série.
+        $pontos = array_map(fn ($p) => [...$p, 'media' => $p['mediaPresentes'] ?? $p['media']], $pontos);
 
         $primeiro = $pontos[0];
         $ultimo = $pontos[count($pontos) - 1];

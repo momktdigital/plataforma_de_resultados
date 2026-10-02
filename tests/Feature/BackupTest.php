@@ -18,7 +18,7 @@ class BackupTest extends TestCase
 
     protected function tearDown(): void
     {
-        File::deleteDirectory(storage_path('app/backups'));
+        File::deleteDirectory(config('sistema.backup_dir'));
 
         parent::tearDown();
     }
@@ -73,10 +73,9 @@ class BackupTest extends TestCase
 
         for ($i = 0; $i < 7; $i++) {
             $service->gerar();
-            usleep(1_100_000); // garante nomes de arquivo (por segundo) distintos
         }
 
-        $this->assertCount(5, File::files(storage_path('app/backups')));
+        $this->assertCount(5, File::files(config('sistema.backup_dir')));
     }
 
     public function test_admin_pode_gerar_e_baixar_backup_pela_interface(): void
@@ -87,7 +86,7 @@ class BackupTest extends TestCase
             ->post('/sistema/backups')
             ->assertRedirect(route('sistema.backups.index'));
 
-        $arquivo = File::files(storage_path('app/backups'))[0]->getFilename();
+        $arquivo = File::files(config('sistema.backup_dir'))[0]->getFilename();
 
         $this->actingAs($admin, 'admin')
             ->get("/sistema/backups/{$arquivo}/download")
@@ -194,7 +193,7 @@ class BackupTest extends TestCase
     public function test_tela_avisa_quando_o_backup_mais_recente_tem_mais_de_7_dias(): void
     {
         app(BackupService::class)->gerar();
-        $arquivo = File::files(storage_path('app/backups'))[0]->getPathname();
+        $arquivo = File::files(config('sistema.backup_dir'))[0]->getPathname();
         touch($arquivo, now()->subDays(8)->timestamp);
 
         $response = $this->actingAs($this->admin(), 'admin')->get('/sistema/backups');

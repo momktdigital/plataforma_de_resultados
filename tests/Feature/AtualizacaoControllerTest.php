@@ -30,7 +30,7 @@ class AtualizacaoControllerTest extends TestCase
     protected function tearDown(): void
     {
         Artisan::call('up');
-        File::deleteDirectory(storage_path('app/backups'));
+        File::deleteDirectory(config('sistema.backup_dir'));
 
         foreach ($this->diretoriosTemporarios as $dir) {
             File::deleteDirectory($dir);

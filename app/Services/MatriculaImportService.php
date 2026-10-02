@@ -3,11 +3,14 @@
 namespace App\Services;
 
 use App\Models\Aluno;
+use App\Models\AlunoMatricula;
 use App\Models\Curso;
 use App\Support\HeaderResolver;
 use App\Support\ImportResult;
+use App\Support\NomeCurso;
 use App\Support\SpreadsheetReader;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -18,6 +21,16 @@ use Throwable;
  * identificador de cada aluno é o RA (coluna UNIQUE em `alunos`); Per.
  * Letivo, Curso e Período são obrigatórios na planilha para a linha ser
  * aceita, o resto é opcional.
+ *
+ * HISTÓRICO DE MATRÍCULAS: a planilha tem uma linha por MATRÍCULA (aluno ×
+ * curso × período letivo) — um aluno transferido de curso aparece duas vezes.
+ * `alunos` guarda só a matrícula ATUAL (um curso por RA); cada linha vai
+ * também para `aluno_matriculas` (nunca apagada por uma nova importação), e a
+ * atual é ESCOLHIDA do histórico (ativa > mais recente), não pela ordem das
+ * linhas no arquivo. Depois, o curso dos resultados desses alunos é
+ * reavaliado (CursoDoResultadoService) — é como uma planilha antiga
+ * reimportada corrige o curso de provas já gravadas. A numeração de linha
+ * que a planilha traz na primeira coluna é irrelevante e nunca é gravada.
  */
 class MatriculaImportService
 {
@@ -59,6 +72,16 @@ class MatriculaImportService
 
     private const CELULAR_PATTERNS = ['/^celular$/'];
 
+    /**
+     * Dt. Ativação: quando esta matrícula foi ativada no período letivo. SÓ esse
+     * cabeçalho: a planilha tem outras datas parecidas (ingresso, status...) que
+     * não são o início da matrícula e leriam a data errada.
+     */
+    private const DATA_INICIO_PATTERNS = ['/^(dt|data) (da |de )?ativacao$/'];
+
+    /** Dt. Ocorrência: quando a matrícula deixou de valer (transferência, cancelamento...). */
+    private const DATA_FIM_PATTERNS = ['/^(dt|data) (da |de )?ocorrencia$/'];
+
     public function importar(UploadedFile $file, bool $dryRun = false): ImportResult
     {
         $rows = SpreadsheetReader::readRows($file);
@@ -79,6 +102,10 @@ class MatriculaImportService
             ->unique()
             ->values();
         $alunosPorRa = $ras->isEmpty() ? [] : Aluno::whereIn('ra', $ras)->get()->keyBy('ra')->all();
+
+        // Uma entrada por (RA, curso, período letivo) — a última linha do
+        // arquivo para a mesma matrícula vence.
+        $matriculas = [];
 
         DB::beginTransaction();
 
@@ -116,6 +143,18 @@ class MatriculaImportService
                 try {
                     $this->salvarAluno($resultado, $ra, $curso, $periodoLetivo, $periodo, $row, $alunosPorRa);
 
+                    $matriculas[$ra.'|'.NomeCurso::chave($curso).'|'.$periodoLetivo] = [
+                        'aluno_id' => $alunosPorRa[$ra]->id,
+                        'curso' => $curso,
+                        'matriz' => HeaderResolver::findValue($row, self::MATRIZ_PATTERNS),
+                        'periodo' => $periodo,
+                        'turma' => HeaderResolver::findValue($row, self::TURMA_PATTERNS),
+                        'periodo_letivo' => $periodoLetivo,
+                        'status' => ($status = HeaderResolver::findValue($row, self::STATUS_PATTERNS)) !== null ? mb_strtoupper($status, 'UTF-8') : null,
+                        'data_inicio' => $this->parseData(HeaderResolver::findValue($row, self::DATA_INICIO_PATTERNS)),
+                        'data_fim' => $this->parseData(HeaderResolver::findValue($row, self::DATA_FIM_PATTERNS)),
+                    ];
+
                     if (! isset($cursosConhecidos[$curso])) {
                         Curso::firstOrCreate(['nome' => $curso]);
                         $cursosConhecidos[$curso] = true;
@@ -123,6 +162,18 @@ class MatriculaImportService
                 } catch (Throwable $e) {
                     $resultado->ignorarLinha($linha, 'Falha ao salvar: '.$e->getMessage());
                 }
+            }
+
+            $this->gravarHistorico(array_values($matriculas));
+            $alunoIds = array_values(array_unique(array_column($matriculas, 'aluno_id')));
+            $this->escolherMatriculaAtual($alunoIds);
+
+            // O histórico mudou: refaz o curso dos resultados desses alunos e os
+            // cursos das avaliações onde eles aparecem. No dry-run nada disso
+            // precisa rodar (tudo seria desfeito logo abaixo).
+            if (! $dryRun && $alunoIds !== []) {
+                $avaliacoes = (new CursoDoResultadoService)->atualizarAlunos($alunoIds);
+                (new AvaliacaoCursoService)->sincronizarAvaliacoes($avaliacoes);
             }
         } catch (Throwable $e) {
             DB::rollBack();
@@ -135,6 +186,65 @@ class MatriculaImportService
         $dryRun ? DB::rollBack() : DB::commit();
 
         return $resultado;
+    }
+
+    /** @param array<int, array<string, mixed>> $matriculas */
+    private function gravarHistorico(array $matriculas): void
+    {
+        $agora = now();
+
+        foreach (array_chunk($matriculas, 500) as $lote) {
+            AlunoMatricula::upsert(
+                array_map(fn ($m) => [...$m, 'created_at' => $agora, 'updated_at' => $agora], $lote),
+                ['aluno_id', 'curso', 'periodo_letivo'],
+                ['matriz', 'periodo', 'turma', 'status', 'data_inicio', 'data_fim', 'updated_at'],
+            );
+        }
+    }
+
+    /**
+     * Define a matrícula ATUAL de cada aluno a partir do histórico: a do
+     * período letivo mais recente e, nele, ativa (sem status na planilha também
+     * conta como ativa) > aguardando > as demais (transferida, cancelada,
+     * trancada...); depois a data de início mais recente e, por fim, a gravada
+     * por último. Independe da ordem das linhas do arquivo.
+     *
+     * @param  array<int, int>  $alunoIds
+     */
+    private function escolherMatriculaAtual(array $alunoIds): void
+    {
+        foreach (array_chunk($alunoIds, 500) as $lote) {
+            /** @var Collection<int, Collection<int, AlunoMatricula>> $porAluno */
+            $porAluno = AlunoMatricula::whereIn('aluno_id', $lote)->get()->groupBy('aluno_id');
+
+            foreach ($porAluno as $alunoId => $doAluno) {
+                $atual = $doAluno->sortBy(fn (AlunoMatricula $m) => [
+                    // Período letivo mais recente primeiro (um "ATIVA" de 2026/1 não
+                    // vence um "CANCELADA" de 2026/2) e, nele, a ativa. Decrescente
+                    // via string complementar (ver invertido()).
+                    $this->invertido($m->periodo_letivo),
+                    AlunoMatricula::estaAtiva($m->status) ? 0 : (mb_strtoupper((string) $m->status, 'UTF-8') === 'AGUARDANDO' ? 1 : 2),
+                    $this->invertido($m->data_inicio?->format('Y-m-d') ?? ''),
+                    $this->invertido($m->updated_at?->format('Y-m-d H:i:s') ?? '').'|'.$this->invertido(str_pad((string) $m->id, 12, '0', STR_PAD_LEFT)),
+                ])->first();
+
+                Aluno::whereKey($alunoId)->update([
+                    'curso' => $atual->curso,
+                    'matriz' => $atual->matriz,
+                    'status' => $atual->status,
+                    'periodo_letivo' => $atual->periodo_letivo !== '' ? $atual->periodo_letivo : null,
+                    'periodo' => $atual->periodo,
+                    'turma' => $atual->turma,
+                ]);
+            }
+        }
+    }
+
+    /** Inverte a ordem de uma string numérica/data para usar em sortBy ascendente como "decrescente". */
+    private function invertido(string $valor): string
+    {
+        // Vazio (sem período letivo/data) vai por último: '~' é maior que qualquer dígito.
+        return $valor === '' ? '~' : strtr($valor, '0123456789', '9876543210');
     }
 
     /**

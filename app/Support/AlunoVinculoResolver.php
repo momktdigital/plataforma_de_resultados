@@ -109,9 +109,12 @@ class AlunoVinculoResolver
     }
 
     /** @return array{turmas: array<int,string>, sexos: array<int,string>, corRacas: array<int,string>} opções distintas entre os respondentes, pros <select> do filtro. */
-    public function opcoesDisponiveis(int $avaliacaoCodigo): array
+    public function opcoesDisponiveis(int $avaliacaoCodigo, ?EscopoCurso $escopo = null): array
     {
         $alunos = $this->resolver($avaliacaoCodigo, '');
+        if ($escopo !== null) {
+            $alunos = $escopo->filtrarAlunos($alunos, $avaliacaoCodigo);
+        }
 
         $distintos = fn (string $campo) => $alunos
             ->map(fn (Aluno $a) => $a->{$campo})

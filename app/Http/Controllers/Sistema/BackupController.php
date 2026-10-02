@@ -21,7 +21,7 @@ class BackupController extends Controller
 
     public function index(): View
     {
-        $pasta = storage_path('app/backups');
+        $pasta = (string) config('sistema.backup_dir');
         File::ensureDirectoryExists($pasta);
 
         $backups = collect(File::files($pasta))
@@ -66,9 +66,10 @@ class BackupController extends Controller
 
     public function download(string $nome): BinaryFileResponse
     {
-        abort_unless(preg_match('/^backup-[\d_-]+\.zip$/', $nome) === 1, 404);
+        // Formato fixo (data_hora e, nos backups novos, sufixo aleatório): nada de caminho vindo do cliente.
+        abort_unless(preg_match('/^backup-\d{4}-\d{2}-\d{2}_\d{6}(-[a-f0-9]{8})?\.zip$/', $nome) === 1, 404);
 
-        $caminho = storage_path('app/backups/'.$nome);
+        $caminho = rtrim((string) config('sistema.backup_dir'), '/\\').'/'.$nome;
 
         abort_unless(File::exists($caminho), 404);
 

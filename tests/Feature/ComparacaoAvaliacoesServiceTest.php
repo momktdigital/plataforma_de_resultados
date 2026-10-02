@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Aluno;
 use App\Models\Avaliacao;
+use App\Models\Categoria;
 use App\Models\Questao;
 use App\Models\Resposta;
 use App\Services\ComparacaoAvaliacoesService;
@@ -20,12 +21,16 @@ class ComparacaoAvaliacoesServiceTest extends TestCase
         return app(ComparacaoAvaliacoesService::class);
     }
 
-    /** Cria uma avaliação de 1 questão de área $area, com $n respondentes acertando $acertos deles. */
-    private function avaliacao(string $nome, string $area, int $n, int $acertos): Avaliacao
+    /**
+     * Cria uma avaliação de 1 questão de área $area, com $n respondentes
+     * acertando $acertos deles. Por padrão todas caem na mesma categoria
+     * (comparação só vale dentro da categoria).
+     */
+    private function avaliacao(string $nome, string $area, int $n, int $acertos, string $categoria = 'Padrão'): Avaliacao
     {
         static $ra = 0;
 
-        $avaliacao = Avaliacao::create(['nome' => $nome]);
+        $avaliacao = Avaliacao::create(['nome' => $nome, 'categoria_id' => Categoria::firstOrCreate(['nome' => $categoria])->id]);
         Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A', 'area' => $area]);
 
         for ($i = 0; $i < $n; $i++) {
@@ -49,7 +54,7 @@ class ComparacaoAvaliacoesServiceTest extends TestCase
     {
         $atual = $this->avaliacao('Atual', 'Clínica Médica', 3, 2);
         $outra = $this->avaliacao('Outra com resultado', 'Clínica Médica', 3, 2);
-        $semResultado = Avaliacao::create(['nome' => 'Sem resultado']);
+        $semResultado = Avaliacao::create(['nome' => 'Sem resultado', 'categoria_id' => $atual->categoria_id]);
 
         $opcoes = $this->service()->opcoesDisponiveis($atual);
 
@@ -115,5 +120,30 @@ class ComparacaoAvaliacoesServiceTest extends TestCase
         // mediaPorArea não depende do mínimo de respondentes da psicometria.
         $this->assertArrayHasKey('Clínica Médica', $resultado['avaliacoes'][0]['mediaPorArea']);
         $this->assertSame(['Clínica Médica'], $resultado['areas']);
+    }
+
+    public function test_so_compara_com_avaliacoes_da_mesma_categoria(): void
+    {
+        $atual = $this->avaliacao('Atual', 'Clínica Médica', 12, 6, 'Simulados');
+        $mesma = $this->avaliacao('Mesma categoria', 'Clínica Médica', 12, 6, 'Simulados');
+        $outra = $this->avaliacao('Outra categoria', 'Clínica Médica', 12, 6, 'Disciplinas');
+
+        $codigos = $this->service()->opcoesDisponiveis($atual)->pluck('codigo')->all();
+        $this->assertContains($mesma->codigo, $codigos);
+        $this->assertNotContains($outra->codigo, $codigos);
+
+        // E mesmo forçando o código de outra categoria pela URL, ela é descartada.
+        $this->assertNull($this->service()->comparar($atual, [$outra->codigo]));
+        $resultado = $this->service()->comparar($atual, [$outra->codigo, $mesma->codigo]);
+        $this->assertSame(['Atual', 'Mesma categoria'], array_column($resultado['avaliacoes'], 'nome'));
+    }
+
+    public function test_avaliacao_sem_categoria_nao_tem_com_quem_comparar(): void
+    {
+        $semCategoria = Avaliacao::create(['nome' => 'Sem categoria']);
+        $outra = $this->avaliacao('Outra', 'Clínica Médica', 12, 6);
+
+        $this->assertTrue($this->service()->opcoesDisponiveis($semCategoria)->isEmpty());
+        $this->assertNull($this->service()->comparar($semCategoria, [$outra->codigo]));
     }
 }

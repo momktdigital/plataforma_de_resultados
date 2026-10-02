@@ -65,6 +65,32 @@ deveria usar. Regra prática: se o app legado (ou um DBA olhando o banco
 compartilhado) precisaria enxergar/editar esse valor, é `Configuracao`; se é
 estritamente deste app, é `ConfiguracaoSistema`.
 
+## Coordenadores: sempre filtrar por `visivelPara`
+
+`admins.role` (`superadmin`/`coordinator`) é coluna **legada**. Qualquer
+listagem/consulta de avaliação que um coordenador possa alcançar precisa
+passar por `Avaliacao::visivelPara($usuario)` / `acessivelPara()` (curso em
+comum via `avaliacao_cursos`, ou acesso excepcional via `avaliacao_usuarios`)
+— rota nova que expõe dados de avaliação **e** fica fora do grupo
+`somente-admin` em `routes/web.php` tem que fazer essa checagem. Dado nominal
+de aluno (ranking, respondentes, busca) fica só no grupo `somente-admin`.
+
+**Curso do aluno é por matrícula e por prova.** Nunca filtre/agrupe resultado
+por `alunos.curso` (é só a matrícula *atual*): use `resultado_resumos.curso` — o
+curso em que o aluno estava na data da prova (`CursoDoResultadoService`, a
+partir de `aluno_matriculas`). Em consultas sobre `respostas`/`resultado_metricas`
+use `EscopoCurso::restringir($q, 'alias.', $avaliacaoCodigo)` (o prefixo SEMPRE
+qualificado); em `resultado_resumos`, `restringirResumos`. Comparar nomes de
+curso é `NomeCurso::chave()/estaEm()/variantes()` — acento/caixa não distinguem
+cursos. `avaliacao_cursos` tem `origem` (`auto` = refeito a cada importação,
+`manual` = nunca apagado).
+
+Cuidado ao juntar tabelas legadas com as novas: `alunos`/`admins` têm
+collation diferente (`utf8mb4_general_ci`) de `resultado_resumos`/`respostas`
+(`utf8mb4_unicode_ci`) — comparar `alunos.ra` com `resultado_resumos.ra`
+direto no SQL dá "Illegal mix of collations" no MySQL (SQLite não pega). Junte
+por `aluno_id` (INT) ou passe os valores como parâmetros.
+
 ## Convenções de teste
 
 - `tests/Unit/`: `PHPUnit\Framework\TestCase` puro, sem Laravel — pra

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Avaliacao;
 use App\Models\Resposta;
 use App\Support\Anulacao;
+use App\Support\Concerns\ComEscopoDeCurso;
 use App\Support\Psicometria;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +34,8 @@ use Illuminate\Support\Facades\DB;
  */
 class PsicometriaService
 {
+    use ComEscopoDeCurso;
+
     /**
      * Abaixo disto os cortes de 27% viram grupos minúsculos e o D não
      * significa nada. Público porque VisualizacaoDisponibilidadeService usa o
@@ -81,9 +84,79 @@ class PsicometriaService
             'media' => round(array_sum($percentuais) / count($percentuais), 1),
             'mediana' => round(Psicometria::mediana($percentuais), 1),
             'desvio' => round(Psicometria::desvioPadrao($percentuais), 1),
+            'semAusentes' => $this->mediaMedianaSemAusentes($avaliacao, $periodo, $k),
             'kr20' => Psicometria::kr20(count($itens), $this->somaPQ($itens), Psicometria::variancia($escores)),
             'itens' => $itens,
             'simulacao' => $this->simularRemocao($avaliacao, $periodo, $itens, $escores),
+        ];
+    }
+
+    /**
+     * Média e mediana (% de acerto) considerando só quem compareceu — a "outra
+     * visão" ao lado da que conta ausente como nota 0.
+     *
+     * @return array{media: float, mediana: float, respondentes: int}|null
+     */
+    private function mediaMedianaSemAusentes(Avaliacao $avaliacao, string $periodo, int $k): ?array
+    {
+        $presentes = $this->escopar(DB::table('respostas as pr'), 'pr.', $avaliacao->codigo)
+            ->where('pr.avaliacao_codigo', $avaliacao->codigo)
+            ->whereNull('pr.deleted_at')
+            ->when($periodo !== '', fn ($q) => $q->where('pr.periodo', $periodo))
+            ->groupBy('pr.aluno_chave', 'pr.periodo')
+            ->havingRaw('SUM(CASE WHEN '.Resposta::semRespostaSql('pr.resposta').' THEN 0 ELSE 1 END) > 0')
+            ->selectRaw('pr.aluno_chave as aluno_chave, pr.periodo as periodo');
+
+        $escores = $this->consultaEscores($avaliacao, $periodo)
+            ->joinSub($presentes, 'pres', function ($join) {
+                $join->on('pres.aluno_chave', '=', 'r.aluno_chave')
+                    ->on('pres.periodo', '=', 'r.periodo');
+            })
+            ->pluck('acertos')
+            ->map(fn ($v) => (int) $v / $k * 100)
+            ->all();
+
+        if ($escores === []) {
+            return null;
+        }
+
+        return [
+            'media' => round(array_sum($escores) / count($escores), 1),
+            'mediana' => round(Psicometria::mediana($escores), 1),
+            'respondentes' => count($escores),
+        ];
+    }
+
+    /**
+     * Presença na prova: respondente (aluno × período) AUSENTE é o que deixou a
+     * prova inteira sem resposta (todas as linhas em branco/sentinela). Conta
+     * todas as questões da avaliação, inclusive anuladas — ausência é sobre o
+     * aluno ter comparecido, não sobre a questão valer nota.
+     *
+     * @return array{total: int, presentes: int, ausentes: int, percentual: float}
+     */
+    public function presenca(Avaliacao $avaliacao, string $periodo = ''): array
+    {
+        $porRespondente = $this->escopar(DB::table('respostas as r'), 'r.', $avaliacao->codigo)
+            ->where('r.avaliacao_codigo', $avaliacao->codigo)
+            ->whereNull('r.deleted_at')
+            ->when($periodo !== '', fn ($q) => $q->where('r.periodo', $periodo))
+            ->groupBy('r.aluno_chave', 'r.periodo')
+            ->selectRaw('SUM(CASE WHEN '.Resposta::semRespostaSql('r.resposta').' THEN 0 ELSE 1 END) as respondidas');
+
+        $linha = DB::query()->fromSub($porRespondente, 'p')
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw('SUM(CASE WHEN p.respondidas > 0 THEN 1 ELSE 0 END) as presentes')
+            ->first();
+
+        $total = (int) ($linha->total ?? 0);
+        $presentes = (int) ($linha->presentes ?? 0);
+
+        return [
+            'total' => $total,
+            'presentes' => $presentes,
+            'ausentes' => $total - $presentes,
+            'percentual' => $total > 0 ? round($presentes / $total * 100, 1) : 0.0,
         ];
     }
 
@@ -321,7 +394,7 @@ class PsicometriaService
     /** `respostas` × `questoes` da avaliação, já sem anuladas e sem questão soft-deletada. */
     private function baseItens(Avaliacao $avaliacao, string $periodo): Builder
     {
-        return DB::table('respostas as r')
+        return $this->escopar(DB::table('respostas as r'), 'r.', $avaliacao->codigo)
             ->join('questoes as q', function ($join) use ($avaliacao) {
                 $join->on('q.numero', '=', 'r.questao_numero')
                     ->where('q.avaliacao_codigo', $avaliacao->codigo)

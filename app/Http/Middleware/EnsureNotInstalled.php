@@ -16,8 +16,11 @@ class EnsureNotInstalled
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (InstallStatus::instalado()) {
-            return redirect()->route('login');
+        switch (InstallStatus::estado()) {
+            case InstallStatus::INSTALADO:
+                return redirect()->route('login');
+            case InstallStatus::INDISPONIVEL:
+                abort(503, 'Sistema temporariamente indisponível. Tente novamente em instantes.');
         }
 
         return $next($request);

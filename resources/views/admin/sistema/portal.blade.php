@@ -110,8 +110,22 @@
 
             <label class="flex items-center gap-2 text-sm">
                 <input type="checkbox" name="smtp_ativo" value="1" {{ old('smtp_ativo', $smtpAtivo) ? 'checked' : '' }}>
-                SMTP ativado (envia código de 2FA por e-mail)
+                SMTP ativado (envia código de 2FA do portal, código de acesso do coordenador e link de redefinição de senha)
             </label>
+
+            <fieldset class="rounded-lg border border-slate-200 p-4">
+                <legend class="text-sm font-medium px-1">E-mail que recebe o código de 2FA do aluno</legend>
+                <div class="space-y-2 mt-1">
+                    <label class="flex items-start gap-2 text-sm cursor-pointer">
+                        <input type="radio" name="email_destino_2fa" value="pessoal" class="mt-1" {{ old('email_destino_2fa', $emailDestino2fa) === 'pessoal' ? 'checked' : '' }}>
+                        <span><strong>E-mail pessoal</strong> do aluno <span class="text-slate-500">(o cadastrado na matrícula)</span></span>
+                    </label>
+                    <label class="flex items-start gap-2 text-sm cursor-pointer">
+                        <input type="radio" name="email_destino_2fa" value="academico" class="mt-1" {{ old('email_destino_2fa', $emailDestino2fa) === 'academico' ? 'checked' : '' }}>
+                        <span><strong>E-mail acadêmico</strong> <span class="text-slate-500">(RA@somos.unifaa.edu.br — o aluno não precisa ter e-mail pessoal cadastrado)</span></span>
+                    </label>
+                </div>
+            </fieldset>
 
             <div class="grid sm:grid-cols-2 gap-4">
                 <div>

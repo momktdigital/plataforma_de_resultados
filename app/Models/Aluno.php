@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Cadastro de alunos, mantido pela aplicação legada.
@@ -35,6 +36,12 @@ class Aluno extends Model
         'celular',
     ];
 
+    /** Histórico de matrículas (curso × período letivo) vindo das planilhas de matrícula. */
+    public function matriculas(): HasMany
+    {
+        return $this->hasMany(AlunoMatricula::class);
+    }
+
     protected function casts(): array
     {
         return [
@@ -51,6 +58,21 @@ class Aluno extends Model
         return Attribute::make(
             get: fn () => $this->ra ? "{$this->ra}@somos.unifaa.edu.br" : null,
         );
+    }
+
+    /**
+     * E-mail para onde vai o código de verificação (2FA) do portal, conforme a
+     * configuração do portal (`email_destino_2fa`): o e-mail PESSOAL cadastrado na
+     * matrícula (padrão) ou o ACADÊMICO ({RA}@somos.unifaa.edu.br). Null quando o
+     * escolhido não existe para este aluno (sem e-mail pessoal / sem RA).
+     */
+    public function emailParaCodigo(): ?string
+    {
+        $email = Configuracao::valor('email_destino_2fa', 'pessoal') === 'academico'
+            ? $this->email_institucional
+            : $this->email;
+
+        return filled($email) ? trim($email) : null;
     }
 
     /**

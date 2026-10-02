@@ -26,6 +26,86 @@ class InstallWizardTest extends TestCase
         $this->get('/instalar/banco')->assertRedirect(route('login'));
     }
 
+    /**
+     * Regressão (auditoria de segurança): numa falha do banco o sistema se achava "não instalado" e
+     * reabria o wizard — dava para apontar o app para um banco do atacante e reescrever o `.env`.
+     */
+    public function test_banco_fora_do_ar_num_sistema_ja_instalado_nao_reabre_o_wizard(): void
+    {
+        $marcador = sys_get_temp_dir().'/instalado_queda_'.uniqid();   // ainda não existe: nasce ao confirmar o sistema instalado
+        config(['app.instalado_marcador' => $marcador]);
+
+        try {
+            Admin::create(['username' => 'adm', 'password_hash' => bcrypt('x')]);
+            $this->get('/login')->assertOk();   // confirma "instalado" e grava o marcador
+            $this->assertStringContainsString('instalado em', file_get_contents($marcador));
+
+            // Simula o MySQL fora do ar: a verificação de instalação lança exceção.
+            InstallStatus::limpar();
+            Schema::shouldReceive('hasTable')->with('admins')->andThrow(new \RuntimeException('SQLSTATE[HY000] [2002] Connection refused'));
+
+            $this->assertSame(InstallStatus::INDISPONIVEL, InstallStatus::estado());
+            $this->get('/instalar')->assertStatus(503);
+            $this->post('/instalar/banco', ['host' => 'banco-do-atacante.exemplo', 'porta' => 3306, 'banco' => 'x', 'usuario' => 'u'])->assertStatus(503);
+            $this->get('/login')->assertStatus(503);
+        } finally {
+            Schema::clearResolvedInstance('db.schema');
+            @unlink($marcador);
+        }
+    }
+
+    public function test_instalacao_nova_sem_marcador_continua_abrindo_o_wizard(): void
+    {
+        $marcador = sys_get_temp_dir().'/instalado_inexistente_'.uniqid();
+        config(['app.instalado_marcador' => $marcador]);
+
+        $this->assertSame(InstallStatus::PENDENTE, InstallStatus::estado());
+        $this->get('/instalar')->assertOk();
+        $this->assertFileDoesNotExist($marcador);
+    }
+
+    public function test_banco_sem_administrador_mas_com_marcador_nao_reabre_o_wizard(): void
+    {
+        $marcador = tempnam(sys_get_temp_dir(), 'instalado_');
+        config(['app.instalado_marcador' => $marcador]);
+
+        try {
+            // Já foi instalado (marcador), mas a tabela de admins está vazia — por exemplo, app apontado para outro banco.
+            $this->assertSame(InstallStatus::INDISPONIVEL, InstallStatus::estado());
+            $this->get('/instalar')->assertStatus(503);
+        } finally {
+            @unlink($marcador);
+        }
+    }
+
+    public function test_concluir_o_wizard_grava_o_marcador(): void
+    {
+        $marcador = sys_get_temp_dir().'/instalado_wizard_'.uniqid();
+        config(['app.instalado_marcador' => $marcador]);
+
+        try {
+            $this->post('/instalar/admin', ['username' => 'novo', 'password' => 'senha-bem-forte', 'password_confirmation' => 'senha-bem-forte'])->assertOk();
+
+            $this->assertFileExists($marcador);
+        } finally {
+            @unlink($marcador);
+        }
+    }
+
+    public function test_banco_nao_ecoa_a_mensagem_do_driver_e_valida_o_formato(): void
+    {
+        $resposta = $this->post('/instalar/banco', ['host' => '127.0.0.1', 'porta' => 1, 'banco' => 'x', 'usuario' => 'u', 'senha' => 's']);
+        $resposta->assertSessionHasErrors('banco');
+        $this->assertStringNotContainsString('SQLSTATE', session('errors')->first('banco'));
+        $this->assertStringNotContainsString('refused', strtolower(session('errors')->first('banco')));
+
+        // Host/banco/usuário só aceitam caracteres seguros (vão para o .env e para a string do PDO).
+        $this->post('/instalar/banco', ['host' => "x
+APP_KEY=y", 'porta' => 3306, 'banco' => 'x', 'usuario' => 'u'])->assertSessionHasErrors('host');
+        $this->post('/instalar/banco', ['host' => 'ok', 'porta' => 3306, 'banco' => 'a;b', 'usuario' => 'u'])->assertSessionHasErrors('banco');
+        $this->post('/instalar/banco', ['host' => 'ok', 'porta' => 99999, 'banco' => 'x', 'usuario' => 'u'])->assertSessionHasErrors('porta');
+    }
+
     public function test_criar_admin_conclui_a_instalacao(): void
     {
         $this->assertDatabaseCount('admins', 0);
