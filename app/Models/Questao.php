@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\CacheDeAnalise;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -27,6 +28,15 @@ class Questao extends Model
         'dificuldade_pedagogica',
         'dificuldade_tri',
     ];
+
+    protected static function booted(): void
+    {
+        // Editar/excluir/restaurar uma questão (área, tema, anulação...) muda as análises em cache da avaliação.
+        $invalidar = fn (self $questao) => CacheDeAnalise::invalidar((int) $questao->avaliacao_codigo);
+        static::saved($invalidar);
+        static::deleted($invalidar);
+        static::restored($invalidar);
+    }
 
     protected function casts(): array
     {

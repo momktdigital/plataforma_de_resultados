@@ -5,6 +5,7 @@ namespace Tests;
 use App\Support\AlunoVinculoResolver;
 use App\Support\InstallStatus;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\Cache;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -20,6 +21,12 @@ abstract class TestCase extends BaseTestCase
 
         // InstallStatus memoiza "instalado" por processo; cada teste começa do zero.
         InstallStatus::limpar();
+
+        // O cache em memória dos testes guarda os objetos como vieram; o de produção (banco/arquivo) serializa e NÃO
+        // devolve objetos (cache.serializable_classes = false). Serializando aqui também, um agregado cacheado que
+        // contenha um stdClass falha nos testes, e não só em produção.
+        config(['cache.stores.array.serialize' => true]);
+        Cache::forgetDriver('array');
     }
 
     /**

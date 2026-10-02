@@ -9,6 +9,7 @@ use App\Models\Admin;
 use App\Models\Categoria;
 use App\Models\Curso;
 use App\Models\Resposta;
+use App\Models\ResultadoResumo;
 use App\Services\EstatisticaErroService;
 use App\Services\Visualizacoes\VisualizacaoConfigService;
 use App\Support\AtividadeLogger;
@@ -46,9 +47,10 @@ class AvaliacaoController extends Controller
             ->withCount('questoes')
             // Nº de alunos distintos, não nº de linhas de resposta (uma por
             // questão respondida) — subquery correlacionada, sem N+1.
-            ->addSelect(['alunos_count' => Resposta::selectRaw('count(distinct aluno_chave)')
-                ->whereColumn('avaliacao_codigo', 'avaliacoes.codigo')
-                ->whereNull('deleted_at'),
+            // Lido de `resultado_resumos` (uma linha por respondente), não de `respostas`: a subconsulta correlacionada
+            // sobre centenas de milhares de linhas era o que mais pesava nesta tela.
+            ->addSelect(['alunos_count' => ResultadoResumo::selectRaw('count(distinct aluno_chave)')
+                ->whereColumn('avaliacao_codigo', 'avaliacoes.codigo'),
             ])
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($query) use ($search) {

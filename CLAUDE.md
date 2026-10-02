@@ -65,6 +65,16 @@ deveria usar. Regra prática: se o app legado (ou um DBA olhando o banco
 compartilhado) precisaria enxergar/editar esse valor, é `Configuracao`; se é
 estritamente deste app, é `ConfiguracaoSistema`.
 
+## O Dashboard lê o escore de `resultado_resumos`, não de `respostas`
+
+Nota, ausência e escore da análise psicométrica de cada respondente estão em
+`resultado_resumos` (`acertos`, `ausente`, `acertos_itens`, `itens_considerados`),
+calculados em `ResumoResultadoService::recalcular()`. Não refaça esse cálculo
+varrendo `respostas` numa tela nova — junte com o resumo. Quem grava
+`respostas`/`questoes` por fora do fluxo normal (teste, script) chama `recalcular()`
+depois. Agregados pesados vão em `CacheDeAnalise::lembrar()`: só **arrays** (nunca
+objeto/stdClass — o cache não desserializa classes), e bump em `VERSAO` ao mudar a conta.
+
 ## Ausente, vínculo de aluno e CPF
 
 - **Ausente** = nenhuma resposta de verdade na prova inteira. Nunca deduza "ausente"

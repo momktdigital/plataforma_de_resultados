@@ -38,6 +38,7 @@ class AvaliacaoVisualizacaoTest extends TestCase
         $avaliacao = Avaliacao::create([]);
         Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A']);
         Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A']);
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
 
         $response = $this->actingAs($this->admin(), 'admin')->get("/avaliacoes/{$avaliacao->codigo}/bi");
 
@@ -50,6 +51,7 @@ class AvaliacaoVisualizacaoTest extends TestCase
         $avaliacao = Avaliacao::create([]);
         Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 1, 'gabarito' => 'A']);
         Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'questao_numero' => 1, 'resposta' => 'A']);
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
         $admin = $this->admin();
 
         // Desmarca tudo, exceto "histograma" pra admin (o form não envia entradas desmarcadas).

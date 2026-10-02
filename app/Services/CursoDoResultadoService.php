@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AlunoMatricula;
+use App\Support\CacheDeAnalise;
 use App\Support\NomeCurso;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -152,11 +153,19 @@ class CursoDoResultadoService
             $grupos[($curso ?? '').'|'.($matriculaId ?? '')]['valor'] = ['curso' => $curso, 'matricula_id' => $matriculaId];
         }
 
-        foreach ($grupos as $grupo) {
-            foreach (array_chunk($grupo['ids'], 1000) as $ids) {
-                DB::table('resultado_resumos')->whereIn('id', $ids)->update($grupo['valor']);
+        // Uma transação só: cada aluno costuma ter a PRÓPRIA matrícula, então são milhares de UPDATEs de uma linha; em
+        // autocommit cada um paga uma gravação em disco (era ~17 s para 1.700 resultados, a maior parte do tempo de
+        // recalcular()); numa transação, o conjunto todo leva ~1 s.
+        DB::transaction(function () use ($grupos) {
+            foreach ($grupos as $grupo) {
+                foreach (array_chunk($grupo['ids'], 1000) as $ids) {
+                    DB::table('resultado_resumos')->whereIn('id', $ids)->update($grupo['valor']);
+                }
             }
-        }
+        });
+
+        // O curso decide quem está no escopo dos coordenadores: as análises em cache dessas avaliações envelheceram.
+        CacheDeAnalise::invalidar($resumos->pluck('avaliacao_codigo')->unique()->map(fn ($c) => (int) $c)->all());
     }
 
     /**
@@ -240,8 +249,14 @@ class CursoDoResultadoService
             }
         }
 
+        // Sem matrícula que valha na data (ou sem data): daqui em diante é só palpite, e o palpite é a matrícula do
+        // período letivo MAIS RECENTE — senão um período já cumprido (APROVADO, também "vigente") ganharia de um
+        // período mais novo que terminou em trancamento/transferência.
+        $porPeriodoLetivo = false;
+
         if ($candidatas === [] && $cursosManuais->isNotEmpty()) {
             $candidatas = array_filter($matriculas, fn ($m) => NomeCurso::estaEm($m['curso'], $cursosManuais));
+            $porPeriodoLetivo = true;
         }
 
         if ($candidatas === []) {
@@ -249,7 +264,7 @@ class CursoDoResultadoService
             if ($cursoAtual !== null && $cursoAtual !== '') {
                 $doAtual = array_values(array_filter($matriculas, fn ($m) => NomeCurso::mesmo($m['curso'], $cursoAtual)));
 
-                return [$cursoAtual, $doAtual === [] ? null : $this->melhor($doAtual)['id']];
+                return [$cursoAtual, $doAtual === [] ? null : $this->melhor($doAtual, true)['id']];
             }
 
             if ($matriculas === []) {
@@ -271,7 +286,7 @@ class CursoDoResultadoService
             }
         }
 
-        $escolhida = $this->melhor($candidatas);
+        $escolhida = $this->melhor($candidatas, $porPeriodoLetivo);
 
         return [$escolhida['curso'], $escolhida['id']];
     }

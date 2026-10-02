@@ -6,7 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Resumo pré-calculado (acertos/total/percentual) de um aluno numa avaliação+
+ * Resumo pré-calculado (acertos/total/percentual, ausente e o escore da análise
+ * psicométrica) de um aluno numa avaliação+
  * período — mantido por App\Services\ResumoResultadoService, nunca gravado
  * diretamente pela aplicação. Existe só para o boletim do portal não
  * precisar escanear `respostas` (que cresce por aluno×avaliação×questão) toda
@@ -16,7 +17,7 @@ class ResultadoResumo extends Model
 {
     protected $table = 'resultado_resumos';
 
-    protected $fillable = ['avaliacao_codigo', 'aluno_chave', 'periodo', 'ra', 'cpf', 'aluno_id', 'acertos', 'total', 'percentual'];
+    protected $fillable = ['avaliacao_codigo', 'aluno_chave', 'periodo', 'ra', 'cpf', 'aluno_id', 'acertos', 'total', 'percentual', 'ausente', 'acertos_itens', 'itens_considerados'];
 
     protected function casts(): array
     {
@@ -24,6 +25,9 @@ class ResultadoResumo extends Model
             'acertos' => 'integer',
             'total' => 'integer',
             'percentual' => 'decimal:1',
+            'ausente' => 'boolean',
+            'acertos_itens' => 'integer',
+            'itens_considerados' => 'integer',
         ];
     }
 

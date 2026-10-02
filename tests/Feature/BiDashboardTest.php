@@ -43,6 +43,7 @@ class BiDashboardTest extends TestCase
         // Aluno 2: acerta uma (50%)
         Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2', 'questao_numero' => 1, 'resposta' => 'A']);
         Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2', 'questao_numero' => 2, 'resposta' => 'C']);
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
 
         $admin = $this->admin();
 
@@ -69,6 +70,7 @@ class BiDashboardTest extends TestCase
 
         Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '1', 'periodo' => '2026/1', 'questao_numero' => 1, 'resposta' => 'A']);
         Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '2', 'periodo' => '2026/2', 'questao_numero' => 1, 'resposta' => 'A']);
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
 
         $response = $this->actingAs($this->admin(), 'admin')
             ->get("/avaliacoes/{$avaliacao->codigo}/bi?periodo=".urlencode('2026/1'));
@@ -93,6 +95,7 @@ class BiDashboardTest extends TestCase
             ];
         }
         Resposta::insert($lote);
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
 
         $inicio = microtime(true);
         $response = $this->actingAs($this->admin(), 'admin')->get("/avaliacoes/{$avaliacao->codigo}/bi");

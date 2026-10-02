@@ -7,6 +7,7 @@ use App\Models\Avaliacao;
 use App\Models\Categoria;
 use App\Models\Resposta;
 use App\Support\Anulacao;
+use App\Support\CacheDeAnalise;
 use App\Support\NomeCurso;
 use App\Support\PeriodoCurso;
 use Illuminate\Database\Query\Builder;
@@ -309,18 +310,16 @@ class CoordenadorDashboardService
     }
 
     /**
-     * (aluno × avaliação) que NÃO ficou com a prova inteira em branco — os
-     * presentes. Restrito aos alunos do curso e às avaliações pedidas.
+     * Subconsulta (avaliação × aluno) dos PRESENTES — quem não ficou com a prova inteira em branco —, restrita
+     * aos alunos do curso e às avaliações pedidas. Vem de `resultado_resumos.ausente`, sem tocar em `respostas`.
      */
     private function presentes(array $variantes, array $codigos): Builder
     {
-        return DB::table('respostas as rp')
-            ->whereIn('rp.avaliacao_codigo', $codigos)
-            ->whereNull('rp.deleted_at')
-            ->whereIn('rp.aluno_chave', $this->resumos($variantes)->whereIn('rr.avaliacao_codigo', $codigos)->select('rr.aluno_chave'))
-            ->groupBy('rp.avaliacao_codigo', 'rp.aluno_chave')
-            ->havingRaw('SUM(CASE WHEN '.Resposta::semRespostaSql('rp.resposta').' THEN 0 ELSE 1 END) > 0')
-            ->select('rp.avaliacao_codigo', 'rp.aluno_chave');
+        return $this->resumos($variantes)
+            ->whereIn('rr.avaliacao_codigo', $codigos)
+            ->where('rr.ausente', false)
+            ->select('rr.avaliacao_codigo', 'rr.aluno_chave')
+            ->distinct();
     }
 
     /**
@@ -338,19 +337,17 @@ class CoordenadorDashboardService
 
         $rotulos = collect($cursos)->mapWithKeys(fn ($c) => [NomeCurso::chave($c) => $c]);
 
+        // Presente = não ficou com a prova inteira em branco: `rr.ausente`, gravado por ResumoResultadoService. Antes
+        // isso vinha de uma subconsulta que varria `respostas` das avaliações todas, a cada visita ao painel.
         return $this->resumos($variantes)
             ->whereIn('rr.avaliacao_codigo', $codigos)
-            ->leftJoinSub($this->presentes($variantes, $codigos), 'pr', function ($join) {
-                $join->on('pr.avaliacao_codigo', '=', 'rr.avaliacao_codigo')
-                    ->on('pr.aluno_chave', '=', 'rr.aluno_chave');
-            })
             ->groupBy('rr.avaliacao_codigo', 'rr.curso', 'rr.periodo')
             ->selectRaw('rr.avaliacao_codigo as codigo, rr.curso as curso, rr.periodo as periodo')
             ->selectRaw('COUNT(*) as inscritos')
-            ->selectRaw('SUM(CASE WHEN pr.aluno_chave IS NULL THEN 0 ELSE 1 END) as presentes')
-            ->selectRaw('SUM(CASE WHEN pr.aluno_chave IS NOT NULL AND rr.percentual IS NOT NULL THEN rr.percentual ELSE 0 END) as soma_pct')
-            ->selectRaw('SUM(CASE WHEN pr.aluno_chave IS NOT NULL AND rr.percentual IS NOT NULL THEN 1 ELSE 0 END) as n_pct')
-            ->selectRaw('SUM(CASE WHEN pr.aluno_chave IS NOT NULL AND rr.percentual IS NOT NULL AND rr.percentual < '.self::LIMIAR_ADEQUADO.' THEN 1 ELSE 0 END) as abaixo')
+            ->selectRaw('SUM(CASE WHEN rr.ausente = 0 THEN 1 ELSE 0 END) as presentes')
+            ->selectRaw('SUM(CASE WHEN rr.ausente = 0 AND rr.percentual IS NOT NULL THEN rr.percentual ELSE 0 END) as soma_pct')
+            ->selectRaw('SUM(CASE WHEN rr.ausente = 0 AND rr.percentual IS NOT NULL THEN 1 ELSE 0 END) as n_pct')
+            ->selectRaw('SUM(CASE WHEN rr.ausente = 0 AND rr.percentual IS NOT NULL AND rr.percentual < '.self::LIMIAR_ADEQUADO.' THEN 1 ELSE 0 END) as abaixo')
             ->get()
             ->map(function ($l) use ($rotulos) {
                 $l->codigo = (int) $l->codigo;
@@ -465,6 +462,19 @@ class CoordenadorDashboardService
             return [];
         }
 
+        // A varredura de `respostas` por área é a parte cara do painel; só muda quando os resultados, as questões
+        // ou o curso dos resultados mudam (ver CacheDeAnalise).
+        return CacheDeAnalise::lembrarVarias(
+            'painel-areas',
+            $codigos,
+            ['variantes' => $variantes],
+            fn () => $this->calcularDesempenhoPorArea($variantes, $codigos),
+        );
+    }
+
+    /** @return array<int, array{area: string, percentual: float, respostas: int}> */
+    private function calcularDesempenhoPorArea(array $variantes, array $codigos): array
+    {
         $linhas = DB::table('respostas as r')
             ->joinSub($this->presentes($variantes, $codigos), 'pr', function ($join) {
                 $join->on('pr.avaliacao_codigo', '=', 'r.avaliacao_codigo')

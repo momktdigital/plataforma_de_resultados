@@ -94,6 +94,43 @@ nas outras, quase qualquer desenho funciona igual de bem.
   sistema), mas usa o mesmo resumo pra acertos/total/percentual — garante
   que a lista e o detalhe sempre mostrem o mesmo número, e tem um fallback
   que recalcula na hora caso o resumo não exista por algum motivo.
+- **O que o resumo guarda além de acertos/total/percentual** (Dashboard rápido):
+  `ausente` (prova inteira em branco — `Resposta::semRespostaSql`, sobre TODAS as
+  respostas do aluno), `acertos_itens` e `itens_considerados` (acertos e nº de
+  respostas só nos itens da análise psicométrica: questão com gabarito e **sem**
+  anulação em qualquer modo). Com isso o Dashboard, a presença, a lista nominal, a
+  evolução e o painel do coordenador **não varrem mais `respostas` para saber a nota ou
+  a presença de cada aluno** — antes o mesmo escore era refeito mais de dez vezes por
+  visita. Consequência: **quem grava `respostas`/`questoes` direto (teste, script,
+  migration) precisa chamar `ResumoResultadoService::recalcular()` depois**, como já
+  faz todo fluxo do sistema. Ao subir esta versão, a migration
+  `2026_10_05_120000_add_itens_da_analise_to_resultado_resumos_table` preenche as colunas
+  recalculando o resumo de todas as avaliações (leva de segundos a alguns minutos,
+  conforme o volume; ~1,5 min com 1,4 milhão de respostas).
+- **Uma varredura por tipo de análise.** `RelatorioAdminService::contagensPorQuestao()` lê
+  `respostas` UMA vez (por questão × resposta) e dela saem área, tema, bloom, miller,
+  dificuldade e alternativas; `PsicometriaService::agregadosDosItens()` faz o mesmo para
+  a análise de itens e as curvas características (agrupa por questão × escore, e os quintos
+  e os grupos de 27% são decididos no PHP).
+- **Cache dos agregados pesados** (`App\Support\CacheDeAnalise`): as duas varreduras acima,
+  a simulação de remoção de itens, o desempenho por área do painel do coordenador e a
+  média da turma no boletim ficam em cache e são invalidados pelos DADOS (impressão
+  digital de `resultado_resumos` + `questoes` + um carimbo de "geração" que
+  `ResumoResultadoService`, `CursoDoResultadoService` e o model `Questao` atualizam) —
+  não por relógio (o TTL de 6 h é só rede de segurança). Regras: o valor cacheado é
+  **array/escalar** (o cache não desserializa objetos; os testes rodam o cache em
+  memória com serialização para pegar isso) e, ao mudar a conta de um agregado
+  cacheado, **incremente `CacheDeAnalise::VERSAO`**. `php artisan cache:clear` limpa tudo.
+- **Lista nominal paginada.** O Dashboard traz as primeiras 100 linhas no HTML; o resto
+  vem sob demanda (botão "Mostrar mais" ou rolando a lista) por
+  `GET /avaliacoes/{codigo}/bi/alunos/linhas` (`BiListaController::linhas`, mesmas regras
+  de acesso da planilha). A ordem é total e estável (presentes primeiro, maior percentual,
+  empate pela chave do aluno), então paginar não repete nem pula ninguém. A planilha
+  `.xlsx` continua levando todos.
+- Medido no banco local (avaliação de 171 mil respostas): Dashboard de 10,5 s para
+  3,0 s na primeira visita e 0,7 s com cache (HTML de 4,7 MB para 0,7 MB); painel do
+  coordenador de Medicina de 7,0 s para 1,3 s / 0,2 s; lista de avaliações de 1,0 s para
+  0,1 s; boletim do aluno de 1,1 s para 0,4 s com cache.
 
 ## Alunos (`/alunos`)
 

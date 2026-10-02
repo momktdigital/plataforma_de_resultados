@@ -15,10 +15,14 @@ use App\Support\EscopoCurso;
 use App\Support\FiltroDemografico;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class BiController extends Controller
 {
+    /** Linhas da lista nominal que já vão no HTML; as demais são carregadas sob demanda. */
+    public const LINHAS_POR_PAGINA = 100;
+
     public function index(
         Request $request,
         Avaliacao $avaliacao,
@@ -44,7 +48,8 @@ class BiController extends Controller
         $psicometriaService = $psicometriaService->paraCursos($cursosDoEscopo);
 
         $periodo = trim((string) $request->query('periodo', ''));
-        $periodosDisponiveis = $avaliacao->resultados()->select('periodo')->distinct()->pluck('periodo');
+        // Dos resumos (uma linha por respondente), não de `respostas`: um DISTINCT sobre centenas de milhares de linhas.
+        $periodosDisponiveis = DB::table('resultado_resumos')->where('avaliacao_codigo', $avaliacao->codigo)->distinct()->orderBy('periodo')->pluck('periodo');
         $filtro = FiltroDemografico::deQueryString($request->query());
         $opcoesFiltro = [
             ...$alunoResolver->opcoesDisponiveis($avaliacao->codigo, $coordenador ? new EscopoCurso($cursosDoEscopo) : null),
@@ -72,10 +77,13 @@ class BiController extends Controller
             ? $comparacaoService->comparar($avaliacao, $codigosComparar, $usuario)
             : null;
 
+        $resumoRanking = $visivel('ranking_completo') ? $relatorioService->resumoDoRanking($avaliacao, $periodo) : null;
+
         $painel = [
             'psicometria' => $psicometria,
             'bi' => $dados,
-            'ranking' => $visivel('ranking_completo') ? $relatorioService->rankingCompleto($avaliacao, $periodo) : null,
+            // Só a primeira página da lista nominal vai no HTML; o resto vem sob demanda (BiListaController::linhas).
+            'ranking' => $visivel('ranking_completo') ? $relatorioService->rankingCompleto($avaliacao, $periodo, self::LINHAS_POR_PAGINA) : null,
             'distribuicaoTurma' => $visivel('distribuicao_turma') ? $relatorioService->distribuicaoPorTurma($avaliacao, $periodo, $filtro) : null,
             'curvaDificuldade' => $visivel('curva_dificuldade') ? $relatorioService->curvaDificuldade($avaliacao) : null,
             'dispersaoTri' => $visivel('dispersao_tri') ? $relatorioService->dispersaoTri($avaliacao) : null,
@@ -103,6 +111,8 @@ class BiController extends Controller
             'estado' => $estado,
             'dados' => $dados,
             'rankingCompleto' => $painel['ranking'],
+            'rankingTotal' => $resumoRanking['total'] ?? 0,
+            'linhasPorPagina' => self::LINHAS_POR_PAGINA,
             'distribuicaoTurma' => $painel['distribuicaoTurma'],
             'curvaDificuldade' => $painel['curvaDificuldade'],
             'dispersaoTri' => $painel['dispersaoTri'],
@@ -129,7 +139,11 @@ class BiController extends Controller
             'comparacaoAvaliacoes' => $comparacaoAvaliacoes,
             // Redigido por cima dos agregados já calculados acima — nenhuma
             // consulta a mais só para explicar os gráficos.
-            'explicacoes' => $explicacaoService->gerar($painel),
+            'explicacoes' => $explicacaoService->gerar([
+                ...$painel,
+                // O texto sobre a lista fala do conjunto inteiro (primeiro e último colocado), não só da página.
+                'ranking' => $resumoRanking !== null ? array_map(fn ($p) => ['percentual' => $p], $resumoRanking['percentuais']) : null,
+            ]),
         ]);
     }
 }

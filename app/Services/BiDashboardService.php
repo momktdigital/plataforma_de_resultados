@@ -51,24 +51,13 @@ class BiDashboardService
             ? $this->alunoResolver->chavesFiltradas($avaliacao->codigo, $periodo, $filtro, $avaliacao->data_avaliacao)
             : null;
 
-        $porRespondente = $this->escopar(Resposta::query(), 'respostas.', $avaliacao->codigo)
-            ->join('questoes', function ($join) use ($avaliacao) {
-                Anulacao::excluirDistribuidas(
-                    $join->on('questoes.numero', '=', 'respostas.questao_numero')
-                        ->where('questoes.avaliacao_codigo', $avaliacao->codigo)
-                        ->whereNull('questoes.deleted_at')
-                        ->whereNotNull('questoes.gabarito')
-                        ->where('questoes.gabarito', '!=', ''),
-                    'questoes.anulada_modo',
-                );
-            })
-            ->where('respostas.avaliacao_codigo', $avaliacao->codigo)
-            ->when($periodo !== '', fn ($query) => $query->where('respostas.periodo', $periodo))
-            ->when($chaves !== null, fn ($query) => $query->whereIn('respostas.aluno_chave', $chaves))
-            ->selectRaw('respostas.aluno_chave as aluno_chave, respostas.periodo as periodo')
-            ->selectRaw('MAX(respostas.ra) as ra, MAX(respostas.cpf) as cpf')
-            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('respostas.resposta', 'questoes.gabarito', 'questoes.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
-            ->groupBy('respostas.aluno_chave', 'respostas.periodo')
+        // Uma linha por respondente, direto de `resultado_resumos` (acertos já calculados com a regra de anulação):
+        // antes isto varria `respostas` inteira a cada visita ao Dashboard.
+        $porRespondente = $this->escoparResumos(DB::table('resultado_resumos'))
+            ->where('avaliacao_codigo', $avaliacao->codigo)
+            ->when($periodo !== '', fn ($query) => $query->where('periodo', $periodo))
+            ->when($chaves !== null, fn ($query) => $query->whereIn('aluno_chave', $chaves))
+            ->select('ra', 'cpf', 'periodo', 'acertos')
             ->get();
 
         if ($porRespondente->isEmpty()) {

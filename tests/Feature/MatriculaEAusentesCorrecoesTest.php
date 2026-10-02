@@ -171,6 +171,22 @@ class MatriculaEAusentesCorrecoesTest extends TestCase
         $this->assertTrue(AlunoMatricula::vigenteNoPeriodo('ATIVA'));
     }
 
+    public function test_sem_data_da_prova_vale_a_matricula_do_periodo_letivo_mais_recente(): void
+    {
+        // 2026/1 cumprido (APROVADO) e 2026/2 trancado: uma prova sem data não pode cair no semestre antigo só
+        // porque o aprovado conta como "vigente".
+        $this->importar(
+            '67482,Sofia,APROVADO_PARCIALMENTE,27/11/2025,2026/1,Medicina,1,',
+            '67482,Sofia,TRANCADA,28/07/2026,2026/2,Medicina,2,22/09/2026',
+        );
+
+        $avaliacao = $this->avaliacaoDaAluna('Diagnóstico sem data', null);
+
+        $matricula = DB::table('aluno_matriculas')->where('id', DB::table('resultado_resumos')->where('avaliacao_codigo', $avaliacao->codigo)->value('matricula_id'))->first();
+        $this->assertSame('2026/2', $matricula->periodo_letivo);
+        $this->assertSame('MEDICINA', $this->cursoDoResultado($avaliacao));
+    }
+
     // ---------------------------------------------------------------- 12: curso dos resultados
 
     public function test_resultado_de_aluno_excluido_continua_no_curso_depois_de_recalcular(): void

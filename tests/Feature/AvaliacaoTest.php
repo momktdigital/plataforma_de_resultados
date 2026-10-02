@@ -184,6 +184,8 @@ class AvaliacaoTest extends TestCase
         // `respostas`, mas só 1 aluno.
         Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '111', 'questao_numero' => 1, 'resposta' => 'A']);
         Resposta::create(['avaliacao_codigo' => $avaliacao->codigo, 'ra' => '111', 'questao_numero' => 2, 'resposta' => 'B']);
+        // A lista conta respondentes em `resultado_resumos` (o sistema o recalcula a cada import).
+        app(\App\Services\ResumoResultadoService::class)->recalcular($avaliacao->codigo);
 
         $response = $this->actingAs($this->admin(), 'admin')->get('/avaliacoes');
 

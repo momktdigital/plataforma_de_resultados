@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\Resposta;
 use App\Services\Visualizacoes\VisualizacaoDisponibilidadeService;
+use App\Support\CacheDeAnalise;
 use App\Support\AlunoVinculoResolver;
 use App\Support\Anulacao;
 use Illuminate\Support\Facades\DB;
@@ -33,8 +35,17 @@ class ResumoResultadoService
                 ->where('gabarito', '!=', '')
         )->count();
 
+        $semResposta = Resposta::semRespostaSql('r.resposta');
+        // Item da análise psicométrica: questão com gabarito e NÃO anulada (em nenhum modo) — o mesmo recorte de
+        // PsicometriaService::baseItens(). Guardar o escore dele aqui evita recalculá-lo, a cada visita ao Dashboard,
+        // varrendo `respostas`.
+        $itemDaAnalise = "q.id is not null and q.gabarito is not null and q.gabarito != '' and q.anulada_modo is null";
+
         $linhas = DB::table('respostas as r')
-            ->join('questoes as q', function ($join) {
+            // LEFT JOIN só para que `respondidas` (ausente) enxergue TODAS as respostas do aluno, inclusive a
+            // questão anulada com distribuição de pontuação; o HAVING abaixo mantém o conjunto de linhas igual ao
+            // do INNER JOIN de antes (aluno só aparece se respondeu alguma questão que conta).
+            ->leftJoin('questoes as q', function ($join) {
                 Anulacao::excluirDistribuidas(
                     $join->on('q.avaliacao_codigo', '=', 'r.avaliacao_codigo')
                         ->on('q.numero', '=', 'r.questao_numero')
@@ -50,8 +61,16 @@ class ResumoResultadoService
                 .'max(r.ra) as ra, max(r.cpf) as cpf, max(r.aluno_id) as aluno_id, '
                 ."sum(case when q.gabarito is not null and q.gabarito != '' and "
                 .Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo')
-                .' then 1 else 0 end) as acertos'
+                .' then 1 else 0 end) as acertos, '
+                ."sum(case when {$itemDaAnalise} then 1 else 0 end) as itens_considerados, "
+                ."sum(case when {$itemDaAnalise} and "
+                .Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo')
+                .' then 1 else 0 end) as acertos_itens, '
+                // Nenhuma resposta de verdade na prova inteira = AUSENTE (não "errou tudo"); mesma definição de
+                // PsicometriaService::presenca(), sobre todas as respostas do aluno.
+                ."sum(case when not {$semResposta} then 1 else 0 end) as respondidas"
             )
+            ->havingRaw('sum(case when q.id is not null then 1 else 0 end) > 0')
             ->get();
 
         DB::transaction(function () use ($avaliacaoCodigo, $total, $linhas) {
@@ -79,6 +98,7 @@ class ResumoResultadoService
             // que calcular() enxerga (import, edição de gabarito, exclusão
             // de período), então é o ponto certo pra invalidar.
             VisualizacaoDisponibilidadeService::invalidar($avaliacaoCodigo);
+            CacheDeAnalise::invalidar($avaliacaoCodigo);
 
             if ($linhas->isEmpty()) {
                 return;
@@ -98,6 +118,9 @@ class ResumoResultadoService
                     'cpf' => $linha->cpf,
                     'aluno_id' => $linha->aluno_id,
                     'curso' => $cursoAnterior[$linha->aluno_chave.'|'.$linha->periodo] ?? null,
+                    'ausente' => (int) $linha->respondidas === 0,
+                    'acertos_itens' => (int) $linha->acertos_itens,
+                    'itens_considerados' => (int) $linha->itens_considerados,
                     'acertos' => (int) $linha->acertos,
                     'total' => $total,
                     'percentual' => $total > 0 ? round($linha->acertos / $total * 100, 1) : null,

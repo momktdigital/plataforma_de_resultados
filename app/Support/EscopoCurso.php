@@ -73,6 +73,19 @@ final class EscopoCurso
     }
 
     /**
+     * Identifica QUEM está no escopo naquela avaliação (os alunos cujo resultado é de um dos cursos), para compor
+     * chave de cache: os cursos sozinhos não bastam, porque o curso de um resultado pode mudar (nova matrícula
+     * importada) sem que a avaliação seja recalculada.
+     */
+    public function assinatura(int $avaliacaoCodigo): string
+    {
+        $chaves = $this->chaves($avaliacaoCodigo);
+        sort($chaves);
+
+        return md5(implode('|', $this->variantes).'#'.implode(',', $chaves));
+    }
+
+    /**
      * @param  Collection<string, Aluno>  $alunos  aluno_chave => Aluno (saída do AlunoVinculoResolver)
      * @return Collection<string, Aluno>
      */

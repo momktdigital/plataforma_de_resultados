@@ -6,6 +6,7 @@ use App\Models\Avaliacao;
 use App\Models\Questao;
 use App\Models\Resposta;
 use App\Services\PsicometriaService;
+use App\Services\ResumoResultadoService;
 use App\Support\Psicometria;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -52,7 +53,18 @@ class PsicometriaServiceTest extends TestCase
             }
         }
 
+        $this->recalcular($avaliacao);
+
         return $avaliacao;
+    }
+
+    /**
+     * O escore de cada respondente vem de `resultado_resumos`, que o sistema recalcula a cada import/edição de
+     * gabarito/anulação/exclusão — os testes que mexem nos dados diretamente fazem o mesmo.
+     */
+    private function recalcular(Avaliacao $avaliacao): void
+    {
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
     }
 
     public function test_calcula_dificuldade_e_discriminacao_por_questao(): void
@@ -131,6 +143,7 @@ class PsicometriaServiceTest extends TestCase
         Questao::where('avaliacao_codigo', $avaliacao->codigo)
             ->where('numero', 1)
             ->update(['anulada_modo' => 'dar_ponto']);
+        $this->recalcular($avaliacao);
 
         $analise = app(PsicometriaService::class)->analisar($avaliacao);
 
@@ -145,6 +158,7 @@ class PsicometriaServiceTest extends TestCase
         Questao::where('avaliacao_codigo', $avaliacao->codigo)
             ->where('numero', 2)
             ->update(['anulada_modo' => 'distribuir_pontuacao']);
+        $this->recalcular($avaliacao);
 
         $analise = app(PsicometriaService::class)->analisar($avaliacao);
 
@@ -155,6 +169,7 @@ class PsicometriaServiceTest extends TestCase
     {
         $avaliacao = $this->cenario();
         Questao::where('avaliacao_codigo', $avaliacao->codigo)->where('numero', 4)->delete();
+        $this->recalcular($avaliacao);
 
         $analise = app(PsicometriaService::class)->analisar($avaliacao);
 
@@ -189,6 +204,7 @@ class PsicometriaServiceTest extends TestCase
 
         // Com 4 respondentes os cortes de 27% viram grupos de 1 pessoa — o D
         // não significaria nada, então a análise inteira é suprimida.
+        $this->recalcular($avaliacao);
         $this->assertNull(app(PsicometriaService::class)->analisar($avaliacao));
     }
 
@@ -208,6 +224,7 @@ class PsicometriaServiceTest extends TestCase
                 ]);
             }
         }
+        $this->recalcular($avaliacao);
 
         $segundo = app(PsicometriaService::class)->analisar($avaliacao, '2026/2');
         $itens = collect($segundo['itens'])->keyBy('numero');

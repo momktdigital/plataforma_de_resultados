@@ -516,7 +516,7 @@
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mb-6">
         <div class="px-6 py-4 border-b border-slate-100 font-semibold flex flex-wrap items-center gap-3">
             <span class="flex items-center gap-2">
-                <span>Alunos da avaliação ({{ count($rankingCompleto) }} respondente(s))</span>
+                <span>Alunos da avaliação ({{ $rankingTotal }} respondente(s))</span>
                 @include('_explicacao', ['explicacao' => $explicacoes['ranking_completo'] ?? null])
             </span>
             <a href="{{ route('avaliacoes.bi.alunos.xlsx', array_filter(['avaliacao' => $avaliacao->codigo, 'periodo' => $periodo])) }}"
@@ -527,7 +527,11 @@
         @if (empty($rankingCompleto))
             <p class="px-6 py-6 text-sm text-slate-400">Nenhum respondente{{ $somenteLeitura ? ' dos seus cursos' : '' }} para o filtro selecionado.</p>
         @else
-            <div class="max-h-[32rem] overflow-auto">
+            <div id="lista-alunos" class="max-h-[32rem] overflow-auto"
+                 data-url="{{ route('avaliacoes.bi.alunos.linhas', ['avaliacao' => $avaliacao->codigo]) }}"
+                 data-periodo="{{ $periodo }}"
+                 data-total="{{ $rankingTotal }}"
+                 data-proximo="{{ $rankingTotal > count($rankingCompleto) ? count($rankingCompleto) : '' }}">
                 <table class="w-full text-sm">
                     <thead class="bg-slate-50 text-slate-500 text-left sticky top-0 z-10">
                         <tr>
@@ -541,52 +545,18 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
-                        @foreach ($rankingCompleto as $i => $r)
-                            @php
-                                $nomeAluno = $r['aluno_nome'] ?: '—';
-                                $inicial = mb_strtoupper(mb_substr($r['aluno_nome'] ?: ($r['ra'] ?: '?'), 0, 1));
-                            @endphp
-                            <tr class="{{ $r['ausente'] ? 'bg-slate-50/60 text-slate-400' : '' }}">
-                                <td class="px-4 py-3 text-slate-400">{{ $r['ausente'] ? '—' : $i + 1 }}</td>
-                                <td class="px-4 py-3">
-                                    <div class="flex items-center gap-3 min-w-[14rem]">
-                                        @if ($r['foto'])
-                                            <img src="{{ $r['foto'] }}" alt="Foto de {{ $nomeAluno }}" loading="lazy" width="36" height="36"
-                                                 class="w-9 h-9 rounded-full object-cover bg-slate-100 shrink-0"
-                                                 onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='flex';">
-                                            <span style="display:none" class="w-9 h-9 rounded-full bg-slate-200 text-slate-600 font-bold items-center justify-center shrink-0">{{ $inicial }}</span>
-                                        @else
-                                            <span class="w-9 h-9 rounded-full bg-slate-200 text-slate-600 font-bold flex items-center justify-center shrink-0">{{ $inicial }}</span>
-                                        @endif
-                                        <span class="font-medium {{ $r['ausente'] ? '' : 'text-slate-800' }}">{{ $nomeAluno }}</span>
-                                        @if ($r['ausente'])
-                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-200 text-slate-600">Ausente</span>
-                                        @endif
-                                    </div>
-                                </td>
-                                <td class="px-4 py-3">{{ $r['ra'] ?: '—' }}</td>
-                                <td class="px-4 py-3">{{ $r['curso'] ?: '—' }}</td>
-                                <td class="px-4 py-3 whitespace-nowrap">{{ $r['periodo_curso'] ?: '—' }}</td>
-                                <td class="px-4 py-3">{{ $r['turma'] ?: '—' }}</td>
-                                <td class="px-4 py-3">
-                                    @if ($r['percentual'] === null)
-                                        <span class="text-slate-400">—</span>
-                                    @else
-                                        <div class="flex items-center gap-2 min-w-[9rem]">
-                                            <span class="tabular-nums">{{ $r['acertos'] }}/{{ $r['total'] }}</span>
-                                            {{-- Abaixo de 60%: amarelo (mesma regra de cor do painel do aluno). --}}
-                                            @php $adequado = $r['percentual'] >= \App\Services\CoordenadorDashboardService::LIMIAR_ADEQUADO; @endphp
-                                            <div class="relative w-20">
-                                                <div class="absolute inset-y-0 left-0 {{ $adequado ? 'bg-emerald-100' : 'bg-amber-100' }} rounded" style="width: {{ $r['percentual'] }}%"></div>
-                                                <span class="relative font-bold {{ $adequado ? 'text-emerald-800' : 'text-amber-800' }} px-1">{{ number_format($r['percentual'], 1, ',', '.') }}%</span>
-                                            </div>
-                                        </div>
-                                    @endif
-                                </td>
-                            </tr>
-                        @endforeach
+                        @include('admin.avaliacoes._linhas-alunos', ['linhas' => $rankingCompleto, 'inicio' => 0])
                     </tbody>
                 </table>
+                {{-- A lista tem milhares de linhas com foto: só a primeira página vai no HTML; o resto chega por aqui. --}}
+                @if ($rankingTotal > count($rankingCompleto))
+                    <div id="lista-alunos-mais" class="px-4 py-3 text-center">
+                        <button type="button" id="lista-alunos-botao" class="text-sm font-semibold text-primary hover:underline">
+                            Mostrar mais ({{ $rankingTotal - count($rankingCompleto) }} restantes)
+                        </button>
+                        <span id="lista-alunos-carregando" class="hidden text-sm text-slate-400">Carregando…</span>
+                    </div>
+                @endif
             </div>
         @endif
     </div>
@@ -1727,4 +1697,57 @@ function ordenarTabelaAlternativas(campo) {
     }
 }
 </script>
+@if ($estado['ranking_completo']['visivelAdmin'] && $rankingCompleto !== null && $rankingTotal > count($rankingCompleto))
+<script>
+// Lista nominal: o HTML traz só a primeira página; as demais chegam por fetch (rolando até o fim ou pelo botão).
+(function () {
+    const caixa = document.getElementById('lista-alunos');
+    if (!caixa) return;
+    const corpo = caixa.querySelector('tbody');
+    const rodape = document.getElementById('lista-alunos-mais');
+    const botao = document.getElementById('lista-alunos-botao');
+    const carregando = document.getElementById('lista-alunos-carregando');
+    const total = parseInt(caixa.dataset.total, 10);
+    let proximo = caixa.dataset.proximo === '' ? null : parseInt(caixa.dataset.proximo, 10);
+    let ocupado = false;
+
+    function rotulo() {
+        botao.textContent = 'Mostrar mais (' + Math.max(0, total - corpo.rows.length) + ' restantes)';
+    }
+
+    async function carregar() {
+        if (ocupado || proximo === null) return;
+        ocupado = true;
+        botao.classList.add('hidden');
+        carregando.classList.remove('hidden');
+        try {
+            const url = new URL(caixa.dataset.url, window.location.origin);
+            url.searchParams.set('inicio', proximo);
+            if (caixa.dataset.periodo) url.searchParams.set('periodo', caixa.dataset.periodo);
+            const resposta = await fetch(url, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' });
+            if (!resposta.ok) throw new Error('HTTP ' + resposta.status);
+            const dados = await resposta.json();
+            corpo.insertAdjacentHTML('beforeend', dados.html);
+            proximo = dados.proximo;
+            if (proximo === null) {
+                rodape.classList.add('hidden');
+            } else {
+                rotulo();
+            }
+        } catch (erro) {
+            botao.textContent = 'Não foi possível carregar — tentar de novo';
+        } finally {
+            ocupado = false;
+            carregando.classList.add('hidden');
+            if (proximo !== null) botao.classList.remove('hidden');
+        }
+    }
+
+    botao.addEventListener('click', carregar);
+    caixa.addEventListener('scroll', function () {
+        if (caixa.scrollTop + caixa.clientHeight >= caixa.scrollHeight - 200) carregar();
+    });
+})();
+</script>
+@endif
 @endsection

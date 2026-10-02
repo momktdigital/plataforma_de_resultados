@@ -4,6 +4,7 @@ namespace App\Services\Portal;
 
 use App\Models\Aluno;
 use App\Support\Anulacao;
+use App\Support\CacheDeAnalise;
 use App\Support\Dificuldade;
 use Illuminate\Contracts\Database\Query\Builder as BuilderContract;
 use Illuminate\Support\Collection;
@@ -204,6 +205,24 @@ class AnaliseConsolidadaService
             return collect();
         }
 
+        // A TURMA inteira é a mesma para todo aluno que abre o boletim: cacheada por avaliação (só muda quando os
+        // resultados ou as questões mudam). O agregado do próprio aluno é pequeno e não vale cache. O cache guarda
+        // arrays (não desserializa objetos), então volta como stdClass aqui.
+        if ($aluno === null) {
+            return collect(CacheDeAnalise::lembrarVarias(
+                'turma-por-campo',
+                $avaliacaoCodigos,
+                ['campo' => $campo],
+                fn () => $this->somarPorCampo(null, $avaliacaoCodigos, $campo)->map(fn ($l) => (array) $l)->all(),
+            ))->map(fn ($l) => (object) $l);
+        }
+
+        return $this->somarPorCampo($aluno, $avaliacaoCodigos, $campo);
+    }
+
+    /** @return Collection<int, object{campo: string, total: int, acertos: int}> */
+    private function somarPorCampo(?Aluno $aluno, array $avaliacaoCodigos, string $campo): Collection
+    {
         $query = DB::table('respostas as r')
             ->join('questoes as q', function ($join) use ($avaliacaoCodigos, $campo) {
                 Anulacao::excluirDistribuidas(

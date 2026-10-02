@@ -119,6 +119,7 @@ Route::middleware('instalado')->group(function () {
         Route::get('/avaliacoes', [AvaliacaoController::class, 'index'])->name('avaliacoes.index');
         Route::get('/avaliacoes/{avaliacao}/bi', [BiController::class, 'index'])->name('avaliacoes.bi');
         Route::get('/avaliacoes/{avaliacao}/bi/alunos.xlsx', [BiListaController::class, 'xlsx'])->name('avaliacoes.bi.alunos.xlsx');
+        Route::get('/avaliacoes/{avaliacao}/bi/alunos/linhas', [BiListaController::class, 'linhas'])->name('avaliacoes.bi.alunos.linhas');
         Route::redirect('/administradores', '/usuarios');
         Route::get('/perfil', [PerfilController::class, 'edit'])->name('perfil.edit');
         Route::put('/perfil/senha', [PerfilController::class, 'updateSenha'])->name('perfil.senha');
