@@ -80,13 +80,17 @@ class AtualizacaoControllerTest extends TestCase
         return $zipPath;
     }
 
-    private function fakeGithub(string $tag, string $zipPath): void
+    private function fakeGithub(string $tag, string $zipPath, bool $assinada = true, string $assinante = 'mantenedor'): void
     {
         Http::fake([
             'api.github.com/repos/*/releases/latest' => Http::response([
                 'tag_name' => $tag,
                 'body' => 'notas',
                 'zipball_url' => 'https://codeload.example/zip',
+            ]),
+            'api.github.com/repos/*/commits/*' => Http::response([
+                'commit' => ['verification' => ['verified' => $assinada, 'reason' => $assinada ? 'valid' : 'unsigned']],
+                'committer' => ['login' => $assinante],
             ]),
             'codeload.example/zip' => Http::response(File::get($zipPath)),
         ]);
@@ -139,7 +143,7 @@ class AtualizacaoControllerTest extends TestCase
         $this->usarDestinoFalso('1.0.0');
 
         $this->actingAs($this->admin(), 'admin')
-            ->post('/sistema/atualizacao', ['versao_confirmada' => '1.1.0'])
+            ->post('/sistema/atualizacao', ['versao_confirmada' => '1.1.0', 'senha_atual' => 'x'])
             ->assertRedirect(route('sistema.atualizacao.index'))
             ->assertSessionHasErrors('atualizacao');
     }
@@ -154,7 +158,7 @@ class AtualizacaoControllerTest extends TestCase
         $this->actingAs($admin, 'admin')->post('/sistema/atualizacao/verificar');
 
         $this->actingAs($admin, 'admin')
-            ->post('/sistema/atualizacao', ['versao_confirmada' => '9.9.9'])
+            ->post('/sistema/atualizacao', ['versao_confirmada' => '9.9.9', 'senha_atual' => 'x'])
             ->assertSessionHasErrors('versao_confirmada');
 
         $this->assertSame("1.0.0\n", File::get($destino.'/VERSION'));
@@ -171,10 +175,104 @@ class AtualizacaoControllerTest extends TestCase
         $this->actingAs($admin, 'admin')->post('/sistema/atualizacao/verificar');
 
         $response = $this->actingAs($admin, 'admin')
-            ->post('/sistema/atualizacao', ['versao_confirmada' => '1.1.0']);
+            ->post('/sistema/atualizacao', ['versao_confirmada' => '1.1.0', 'senha_atual' => 'x']);
 
         $response->assertOk();
         $this->assertSame("1.1.0\n", File::get($destino.'/VERSION'));
         $this->assertFalse(app()->isDownForMaintenance());
+    }
+
+    // ------------------------------------------------------------ reautenticação, auditoria, assinatura
+
+    /** Baixa o pacote como o admin e devolve [destino, admin]. */
+    private function prepararPendente(): array
+    {
+        $destino = $this->usarDestinoFalso('1.0.0');
+        $this->fakeGithub('v1.1.0', $this->criarPacoteFalso('1.1.0'));
+        $admin = $this->admin();
+        $this->actingAs($admin, 'admin')->post('/sistema/atualizacao/verificar');
+        $this->diretoriosTemporarios[] = session('atualizacao_pendente')['zip_path'];
+
+        return [$destino, $admin];
+    }
+
+    public function test_aplicar_exige_a_senha_do_administrador(): void
+    {
+        [$destino, $admin] = $this->prepararPendente();
+
+        $this->actingAs($admin, 'admin')
+            ->post('/sistema/atualizacao', ['versao_confirmada' => '1.1.0'])
+            ->assertSessionHasErrors('senha_atual');
+
+        $this->assertSame("1.0.0\n", File::get($destino.'/VERSION'));
+    }
+
+    public function test_senha_errada_nao_aplica_e_fica_registrada(): void
+    {
+        [$destino, $admin] = $this->prepararPendente();
+
+        $this->actingAs($admin, 'admin')
+            ->post('/sistema/atualizacao', ['versao_confirmada' => '1.1.0', 'senha_atual' => 'errada'])
+            ->assertSessionHasErrors(['senha_atual' => 'Senha incorreta.']);
+
+        $this->assertSame("1.0.0\n", File::get($destino.'/VERSION'));
+        $this->assertDatabaseHas('atividades', ['acao' => 'sistema.atualizacao_senha_recusada']);
+    }
+
+    public function test_depois_de_varias_senhas_erradas_ate_a_certa_e_recusada(): void
+    {
+        [$destino, $admin] = $this->prepararPendente();
+
+        for ($i = 0; $i < 5; $i++) {
+            $this->actingAs($admin, 'admin')->post('/sistema/atualizacao', ['versao_confirmada' => '1.1.0', 'senha_atual' => 'errada'.$i]);
+        }
+
+        $this->actingAs($admin, 'admin')
+            ->post('/sistema/atualizacao', ['versao_confirmada' => '1.1.0', 'senha_atual' => 'x'])
+            ->assertSessionHasErrors('senha_atual');
+
+        $this->assertSame("1.0.0\n", File::get($destino.'/VERSION'));
+    }
+
+    public function test_baixar_e_aplicar_ficam_na_trilha_de_auditoria(): void
+    {
+        [$destino, $admin] = $this->prepararPendente();
+        $this->assertDatabaseHas('atividades', ['acao' => 'sistema.atualizacao_baixada', 'admin_username' => 'coordenador']);
+
+        $this->actingAs($admin, 'admin')->post('/sistema/atualizacao', ['versao_confirmada' => '1.1.0', 'senha_atual' => 'x'])->assertOk();
+
+        $registro = \DB::table('atividades')->where('acao', 'sistema.atualizacao_aplicada')->first();
+        $this->assertNotNull($registro);
+        $this->assertStringContainsString('1.1.0', $registro->detalhes);
+    }
+
+    public function test_tela_informa_o_estado_da_assinatura_da_versao(): void
+    {
+        $admin = $this->admin();
+        $this->usarDestinoFalso('1.0.0');
+
+        $this->fakeGithub('v1.1.0', $this->criarPacoteFalso('1.1.0'), assinada: true, assinante: 'mantenedor');
+        $this->actingAs($admin, 'admin')->get('/sistema/atualizacao')->assertSee('assinatura verificada')->assertSee('mantenedor');
+
+    }
+
+    public function test_tela_avisa_quando_a_versao_nao_tem_assinatura_verificada(): void
+    {
+        $this->usarDestinoFalso('1.0.0');
+        $this->fakeGithub('v1.1.0', $this->criarPacoteFalso('1.1.0'), assinada: false);
+
+        $this->actingAs($this->admin(), 'admin')->get('/sistema/atualizacao')->assertSee('não tem assinatura verificada');
+    }
+
+    public function test_tela_avisa_que_o_repositorio_antigo_do_painel_e_ignorado(): void
+    {
+        $this->usarDestinoFalso('1.0.0');
+        $this->fakeGithub('v1.1.0', $this->criarPacoteFalso('1.1.0'));
+        \App\Models\ConfiguracaoSistema::definir('atualizacao_repositorio', 'fork/antigo');
+
+        $resposta = $this->actingAs($this->admin(), 'admin')->get('/sistema/atualizacao');
+
+        $resposta->assertSee('fork/antigo')->assertSee('ignorado');
+        $resposta->assertSee(config('sistema.repositorio'));
     }
 }

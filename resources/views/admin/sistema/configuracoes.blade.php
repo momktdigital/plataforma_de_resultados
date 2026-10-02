@@ -12,14 +12,12 @@
         @csrf
 
         <div>
-            <label class="block text-sm font-medium mb-1" for="atualizacao_repositorio">
-                Repositório do GitHub para atualizações
-            </label>
-            <input id="atualizacao_repositorio" name="atualizacao_repositorio" type="text" required
-                   value="{{ old('atualizacao_repositorio', $atualizacaoRepositorio) }}"
-                   placeholder="owner/repositorio"
-                   class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono">
-            <p class="text-xs text-slate-500 mt-1">Repositório público consultado por "Atualizações" — formato <code>owner/repositorio</code>.</p>
+            <p class="block text-sm font-medium mb-1">Repositório do GitHub para atualizações</p>
+            <p class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-mono text-slate-700">{{ $atualizacaoRepositorio }}</p>
+            <p class="text-xs text-slate-600 mt-1">
+                Definido no servidor (<code>ATUALIZACAO_REPOSITORIO</code> no arquivo <code>.env</code>) e não pode ser alterado por aqui:
+                o atualizador baixa e executa o código desse repositório.
+            </p>
         </div>
 
         <div>

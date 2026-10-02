@@ -3,10 +3,16 @@
 namespace App\Http\Controllers\Sistema;
 
 use App\Http\Controllers\Controller;
+use App\Models\ConfiguracaoSistema;
+use App\Services\Update\GithubReleaseClient;
 use App\Services\Update\UpdateService;
+use App\Support\AtividadeLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\View\View;
 use Throwable;
 
@@ -14,11 +20,23 @@ class AtualizacaoController extends Controller
 {
     private const SESSAO_PENDENTE = 'atualizacao_pendente';
 
-    public function index(UpdateService $service): View
+    /** Tentativas com senha errada toleradas ao confirmar uma atualização (por administrador) antes de bloquear por 15 min. */
+    private const MAX_SENHAS_ERRADAS = 5;
+
+    public function index(UpdateService $service, GithubReleaseClient $github): View
     {
+        $disponivel = $service->verificarAtualizacao();
+
+        // Repositório salvo pelo painel em versões antigas: agora é ignorado (só vale o .env). Avisa se for diferente.
+        $repositorioLegado = ConfiguracaoSistema::valor('atualizacao_repositorio');
+
         return view('admin.sistema.atualizacao', [
             'versaoAtual' => $service->versaoAtual(),
-            'disponivel' => $service->verificarAtualizacao(),
+            'disponivel' => $disponivel,
+            'assinatura' => $disponivel !== null ? $service->assinaturaDe($disponivel) : null,
+            'exigirAssinatura' => (bool) config('sistema.exigir_assinatura'),
+            'repositorio' => $github->repositorio(),
+            'repositorioLegadoIgnorado' => $repositorioLegado !== null && $repositorioLegado !== '' && $repositorioLegado !== $github->repositorio() ? $repositorioLegado : null,
             'pendente' => session(self::SESSAO_PENDENTE),
         ]);
     }
@@ -32,7 +50,13 @@ class AtualizacaoController extends Controller
     public function verificar(UpdateService $service): RedirectResponse
     {
         try {
-            session([self::SESSAO_PENDENTE => $service->baixarParaConfirmacao()]);
+            $pendente = $service->baixarParaConfirmacao();
+            session([self::SESSAO_PENDENTE => $pendente]);
+
+            AtividadeLogger::registrar('sistema.atualizacao_baixada', 'Sistema', null, [
+                'versao' => $pendente['versao'],
+                'sha256' => $pendente['sha256'],
+            ]);
         } catch (Throwable $e) {
             Log::error('Falha ao baixar pacote de atualização.', ['exception' => $e]);
 
@@ -45,9 +69,10 @@ class AtualizacaoController extends Controller
 
     /**
      * Só aplica depois que o admin digita de volta a versão mostrada na
-     * confirmação — uma checagem manual explícita, não só um clique, já que
-     * as releases deste repositório não publicam assinatura/checksum pra
-     * verificar isso automaticamente (ver UpdateService::aplicarConfirmado()).
+     * confirmação E a própria senha. A versão digitada é uma checagem manual
+     * explícita (não só um clique); a senha garante que uma sessão deixada
+     * aberta — ou sequestrada — não basta para baixar e executar código no
+     * servidor.
      */
     public function store(Request $request, UpdateService $service): View|RedirectResponse
     {
@@ -58,7 +83,30 @@ class AtualizacaoController extends Controller
                 ->withErrors(['atualizacao' => 'Baixe o pacote e confira a versão antes de aplicar.']);
         }
 
-        $dados = $request->validate(['versao_confirmada' => ['required', 'string']]);
+        $dados = $request->validate([
+            'versao_confirmada' => ['required', 'string'],
+            'senha_atual' => ['required', 'string'],
+        ], [
+            'senha_atual.required' => 'Digite a sua senha para confirmar a atualização.',
+        ]);
+
+        $admin = Auth::guard('admin')->user();
+        $chave = 'atualizacao-senha:'.$admin->id;
+
+        if (RateLimiter::tooManyAttempts($chave, self::MAX_SENHAS_ERRADAS)) {
+            $minutos = (int) ceil(RateLimiter::availableIn($chave) / 60);
+
+            return back()->withErrors(['senha_atual' => "Muitas tentativas com senha errada. Tente de novo em {$minutos} minuto(s)."]);
+        }
+
+        if (! Hash::check($dados['senha_atual'], (string) $admin->password_hash)) {
+            RateLimiter::hit($chave, 900);
+            AtividadeLogger::registrar('sistema.atualizacao_senha_recusada', 'Sistema', null, ['versao' => $pendente['versao']]);
+
+            return back()->withErrors(['senha_atual' => 'Senha incorreta.']);
+        }
+
+        RateLimiter::clear($chave);
 
         if (trim($dados['versao_confirmada']) !== $pendente['versao']) {
             return back()->withErrors([
@@ -69,6 +117,13 @@ class AtualizacaoController extends Controller
         session()->forget(self::SESSAO_PENDENTE);
 
         $resultado = $service->aplicarConfirmado($pendente['zip_path'], $pendente['sha256'], $pendente['versao']);
+
+        AtividadeLogger::registrar(
+            $resultado['status'] === 'atualizado' ? 'sistema.atualizacao_aplicada' : 'sistema.atualizacao_falhou',
+            'Sistema',
+            null,
+            ['versao' => $pendente['versao'], 'sha256' => $pendente['sha256'], 'status' => $resultado['status']],
+        );
 
         return view('admin.sistema.atualizacao-resultado', ['resultado' => $resultado]);
     }

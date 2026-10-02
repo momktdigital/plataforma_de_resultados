@@ -5,7 +5,7 @@
 @section('content')
 <div class="max-w-xl mx-auto mt-10 bg-white border border-slate-200 rounded-xl shadow-sm p-8">
     <h1 class="text-xl font-bold mb-1">Criar administrador</h1>
-    <p class="text-sm text-slate-500 mb-6">Passo 4 de 4 — esta conta poderá entrar no painel assim que a instalação terminar.</p>
+    <p class="text-sm text-slate-400 mb-6">Passo 4 de 4 — esta conta poderá entrar no painel assim que a instalação terminar.</p>
 
     <form method="POST" action="{{ route('instalar.admin.criar') }}" class="space-y-4">
         @csrf

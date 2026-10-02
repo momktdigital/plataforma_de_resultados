@@ -10,11 +10,11 @@
 <div class="flex gap-1 border-b border-slate-200 mb-6" role="tablist">
     <a href="{{ route('usuarios.index', ['aba' => 'administradores']) }}" role="tab" aria-selected="{{ $coordenadores ? 'false' : 'true' }}"
        class="px-4 py-2 text-sm font-medium -mb-px border-b-2 {{ $coordenadores ? 'border-transparent text-slate-500 hover:text-slate-700' : 'border-emerald-600 text-emerald-700' }}">
-        Administradores <span class="ml-1 text-xs text-slate-400">{{ $totalAdministradores }}</span>
+        Administradores <span class="ml-1 text-xs text-slate-500">{{ $totalAdministradores }}</span>
     </a>
     <a href="{{ route('usuarios.index', ['aba' => 'coordenadores']) }}" role="tab" aria-selected="{{ $coordenadores ? 'true' : 'false' }}"
        class="px-4 py-2 text-sm font-medium -mb-px border-b-2 {{ $coordenadores ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700' }}">
-        Coordenadores <span class="ml-1 text-xs text-slate-400">{{ $totalCoordenadores }}</span>
+        Coordenadores <span class="ml-1 text-xs text-slate-500">{{ $totalCoordenadores }}</span>
     </a>
 </div>
 
@@ -56,7 +56,7 @@
                                 @forelse ($cursosDoUsuario as $curso)
                                     <span class="inline-block px-2 py-0.5 mr-1 mb-1 rounded bg-slate-100 text-slate-700 text-xs">{{ $curso }}</span>
                                 @empty
-                                    <span class="text-amber-600 text-xs">Nenhum curso vinculado</span>
+                                    <span class="text-amber-700 text-xs">Nenhum curso vinculado</span>
                                 @endforelse
                             </td>
                         @endif
@@ -68,7 +68,7 @@
                                       onsubmit="return confirm(@js('Tem certeza que deseja excluir o usuário '.$usuario->username.'?'));">
                                     @csrf
                                     @method('DELETE')
-                                    <button type="submit" class="text-red-500 hover:text-red-700">Excluir</button>
+                                    <button type="submit" class="text-red-600 hover:text-red-700">Excluir</button>
                                 </form>
                             @else
                                 <span class="text-slate-300" title="Você não pode se excluir">Excluir</span>
@@ -77,7 +77,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" class="px-4 py-8 text-center text-slate-400">
+                        <td colspan="6" class="px-4 py-8 text-center text-slate-500">
                             {{ $coordenadores ? 'Nenhum coordenador cadastrado ainda.' : 'Nenhum administrador cadastrado.' }}
                         </td>
                     </tr>

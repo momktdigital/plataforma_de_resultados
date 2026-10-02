@@ -63,13 +63,17 @@ class UpdateServiceTest extends TestCase
         );
     }
 
-    private function fakeGithub(string $tag, string $zipPath): void
+    private function fakeGithub(string $tag, string $zipPath, bool $assinada = true, string $assinante = 'mantenedor'): void
     {
         Http::fake([
             'api.github.com/repos/*/releases/latest' => Http::response([
                 'tag_name' => $tag,
                 'body' => 'notas da versão',
                 'zipball_url' => 'https://codeload.example/zip',
+            ]),
+            'api.github.com/repos/*/commits/*' => Http::response([
+                'commit' => ['verification' => ['verified' => $assinada, 'reason' => $assinada ? 'valid' : 'unsigned']],
+                'committer' => ['login' => $assinante],
             ]),
             'codeload.example/zip' => Http::response(File::get($zipPath)),
         ]);
@@ -229,5 +233,112 @@ class UpdateServiceTest extends TestCase
         $this->assertSame('erro', $resultado['status']);
         $this->assertSame("1.0.0\n", File::get($destino.'/VERSION'));
         $this->assertFalse(app()->isDownForMaintenance());
+    }
+
+    // ------------------------------------------------------------ assinatura da versão
+
+    public function test_sem_exigir_assinatura_nao_consulta_o_github_sobre_commits(): void
+    {
+        config(['sistema.exigir_assinatura' => false]);
+        $destino = $this->criarDestinoFalso('1.0.0');
+        $this->fakeGithub('v1.1.0', $this->criarPacoteFalso('1.1.0'), assinada: false);
+
+        $resultado = $this->service($destino)->atualizar();
+
+        $this->assertSame('atualizado', $resultado['status']);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/commits/'));
+    }
+
+    public function test_exigindo_assinatura_bloqueia_versao_nao_assinada_sem_baixar_nem_tocar_nada(): void
+    {
+        config(['sistema.exigir_assinatura' => true]);
+        $destino = $this->criarDestinoFalso('1.0.0');
+        $this->fakeGithub('v1.1.0', $this->criarPacoteFalso('1.1.0'), assinada: false);
+
+        $resultado = $this->service($destino)->atualizar();
+
+        $this->assertSame('erro', $resultado['status']);
+        $this->assertStringContainsString('não tem assinatura verificada', implode(' ', $resultado['mensagens']));
+        $this->assertSame("1.0.0\n", File::get($destino.'/VERSION'));
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'codeload.example'));
+    }
+
+    public function test_exigindo_assinatura_o_painel_tambem_nao_baixa_versao_nao_assinada(): void
+    {
+        config(['sistema.exigir_assinatura' => true]);
+        $destino = $this->criarDestinoFalso('1.0.0');
+        $this->fakeGithub('v1.1.0', $this->criarPacoteFalso('1.1.0'), assinada: false);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('assinatura verificada');
+
+        $this->service($destino)->baixarParaConfirmacao();
+    }
+
+    public function test_exigindo_assinatura_aceita_versao_com_assinatura_verificada(): void
+    {
+        config(['sistema.exigir_assinatura' => true]);
+        $destino = $this->criarDestinoFalso('1.0.0');
+        $this->fakeGithub('v1.1.0', $this->criarPacoteFalso('1.1.0'), assinada: true);
+
+        $this->assertSame('atualizado', $this->service($destino)->atualizar()['status']);
+    }
+
+    public function test_lista_de_assinantes_restringe_quem_pode_ter_assinado(): void
+    {
+        config(['sistema.exigir_assinatura' => true, 'sistema.assinantes' => ['Mantenedor']]);
+        $destino = $this->criarDestinoFalso('1.0.0');
+
+        // Assinada por outra pessoa: bloqueia, mesmo "Verified".
+        $this->fakeGithub('v1.1.0', $this->criarPacoteFalso('1.1.0'), assinada: true, assinante: 'intruso');
+        $bloqueado = $this->service($destino)->atualizar();
+        $this->assertSame('erro', $bloqueado['status']);
+        $this->assertStringContainsString("'intruso'", implode(' ', $bloqueado['mensagens']));
+        $this->assertSame("1.0.0\n", File::get($destino.'/VERSION'));
+
+    }
+
+    public function test_assinante_da_lista_passa_sem_diferenciar_maiusculas(): void
+    {
+        config(['sistema.exigir_assinatura' => true, 'sistema.assinantes' => ['Mantenedor']]);
+        $destino = $this->criarDestinoFalso('1.0.0');
+        $this->fakeGithub('v1.1.0', $this->criarPacoteFalso('1.1.0'), assinada: true, assinante: 'MANTENEDOR');
+
+        $this->assertSame('atualizado', $this->service($destino)->atualizar()['status']);
+    }
+
+    public function test_falha_ao_consultar_a_assinatura_conta_como_nao_verificada(): void
+    {
+        config(['sistema.exigir_assinatura' => true]);
+        $destino = $this->criarDestinoFalso('1.0.0');
+        Http::fake([
+            'api.github.com/repos/*/releases/latest' => Http::response(['tag_name' => 'v1.1.0', 'body' => '', 'zipball_url' => 'https://codeload.example/zip']),
+            'api.github.com/repos/*/commits/*' => Http::response([], 500),
+        ]);
+
+        $this->assertSame('erro', $this->service($destino)->atualizar()['status']);
+    }
+
+    // ------------------------------------------------------------ composer sem scripts nem plugins
+
+    public function test_composer_roda_sem_scripts_e_sem_plugins_do_pacote_baixado(): void
+    {
+        $destino = $this->criarDestinoFalso('1.0.0');
+        $this->fakeGithub('v1.1.0', $this->criarPacoteFalso('1.1.0'));
+        Process::fake(['*composer*' => Process::result(output: 'ok')]);
+
+        $this->service($destino, executarComposer: true)->atualizar();
+
+        Process::assertRan(fn ($processo) => in_array('composer', (array) $processo->command, true)
+            && in_array('--no-scripts', (array) $processo->command, true)
+            && in_array('--no-plugins', (array) $processo->command, true));
+    }
+
+    public function test_download_so_por_https(): void
+    {
+        $destino = $this->criarDestinoFalso('1.0.0');
+        Http::fake(['api.github.com/repos/*/releases/latest' => Http::response(['tag_name' => 'v1.1.0', 'body' => '', 'zipball_url' => 'http://codeload.example/zip'])]);
+
+        $this->assertNull($this->service($destino)->verificarAtualizacao());
     }
 }

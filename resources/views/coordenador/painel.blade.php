@@ -87,12 +87,12 @@
         {{-- Visão geral: só o que não depende da prova (presença e contagem) --}}
         <div class="grid gap-4 sm:grid-cols-3 mb-6">
             <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Presença</p>
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Presença</p>
                 <p class="text-3xl font-bold mt-2 tracking-tight">{{ $fmt($g['presenca']) }}<span class="text-lg font-medium text-slate-500">%</span></p>
                 <p class="text-xs text-slate-500 mt-1">{{ $g['presentes'] }} de {{ $g['inscritos'] }} participações &middot; {{ $g['ausentes'] }} ausente(s)</p>
             </div>
             <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Avaliações no período</p>
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Avaliações no período</p>
                 <p class="text-3xl font-bold mt-2 tracking-tight">{{ $g['avaliacoes'] }}</p>
                 <p class="text-xs text-slate-500 mt-1">em {{ count($painel['categorias']) }} categoria(s)</p>
             </div>
@@ -134,22 +134,22 @@
 
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-4">
                     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Média da categoria</p>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Média da categoria</p>
                         <p class="text-3xl font-bold mt-2 tracking-tight {{ CorDesempenho::classeTexto($t['media']) }}">{{ $fmt($t['media']) }}<span class="text-lg font-medium text-slate-500">%</span></p>
                         <p class="text-xs text-slate-500 mt-1">só alunos presentes</p>
                     </div>
                     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Abaixo de 60%</p>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Abaixo de 60%</p>
                         <p class="text-3xl font-bold mt-2 tracking-tight">{{ $fmt($t['abaixoPct']) }}<span class="text-lg font-medium text-slate-500">%</span></p>
                         <p class="text-xs text-slate-500 mt-1">{{ $t['abaixo'] }} de {{ $t['comNota'] }} resultados</p>
                     </div>
                     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Presença</p>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Presença</p>
                         <p class="text-3xl font-bold mt-2 tracking-tight">{{ $fmt($t['presenca']) }}<span class="text-lg font-medium text-slate-500">%</span></p>
                         <p class="text-xs text-slate-500 mt-1">{{ $t['presentes'] }} de {{ $t['inscritos'] }} &middot; {{ $t['ausentes'] }} ausente(s)</p>
                     </div>
                     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Avaliações</p>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Avaliações</p>
                         <p class="text-3xl font-bold mt-2 tracking-tight">{{ $t['avaliacoes'] }}</p>
                         <p class="text-xs text-slate-500 mt-1">neste período</p>
                     </div>
@@ -182,12 +182,12 @@
                         <tbody class="divide-y divide-slate-100">
                             @foreach ($cat['avaliacoes'] as $a)
                                 <tr>
-                                    <td class="px-4 py-3 font-medium">{{ $a['nome'] }} <span class="font-mono text-xs text-slate-400">#{{ $a['codigo'] }}</span></td>
+                                    <td class="px-4 py-3 font-medium">{{ $a['nome'] }} <span class="font-mono text-xs text-slate-500">#{{ $a['codigo'] }}</span></td>
                                     <td class="px-4 py-3 text-slate-500">{{ $a['data'] ? \Illuminate\Support\Carbon::parse($a['data'])->format('d/m/Y') : '—' }}</td>
-                                    <td class="px-4 py-3 text-slate-600">{{ $fmt($a['presenca']) }}% <span class="text-xs text-slate-400">({{ $a['presentes'] }}/{{ $a['inscritos'] }})</span></td>
+                                    <td class="px-4 py-3 text-slate-600">{{ $fmt($a['presenca']) }}% <span class="text-xs text-slate-500">({{ $a['presentes'] }}/{{ $a['inscritos'] }})</span></td>
                                     <td class="px-4 py-3">
                                         @if ($a['media'] === null)
-                                            <span class="text-slate-400">—</span>
+                                            <span class="text-slate-500">—</span>
                                         @else
                                             <div class="flex items-center gap-2 min-w-[140px]">
                                                 <div class="h-2 w-24 rounded-full bg-slate-100 overflow-hidden">
@@ -199,10 +199,10 @@
                                     </td>
                                     <td class="px-4 py-3">
                                         @if ($a['delta'] === null)
-                                            <span class="text-slate-400" title="Nenhuma avaliação anterior desta categoria com resultado">—</span>
+                                            <span class="text-slate-500" title="Nenhuma avaliação anterior desta categoria com resultado">—</span>
                                         @else
                                             <span class="font-semibold {{ $a['delta'] >= 0 ? 'text-emerald-700' : 'text-amber-700' }}">{{ $a['delta'] > 0 ? '+' : '' }}{{ $fmt($a['delta']) }} pp</span>
-                                            <span class="block text-xs text-slate-400">{{ $a['anterior']['nome'] }}@if ($a['anterior']['periodoLetivo'] !== '') ({{ $a['anterior']['periodoLetivo'] }})@endif</span>
+                                            <span class="block text-xs text-slate-500">{{ $a['anterior']['nome'] }}@if ($a['anterior']['periodoLetivo'] !== '') ({{ $a['anterior']['periodoLetivo'] }})@endif</span>
                                         @endif
                                     </td>
                                     <td class="px-4 py-3 text-slate-600">{{ $fmt($a['abaixoPct']) }}%</td>

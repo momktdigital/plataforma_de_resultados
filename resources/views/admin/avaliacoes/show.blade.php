@@ -148,7 +148,7 @@
                                 <span>{{ $coordenador->username }}</span>
                             </label>
                         @empty
-                            <p class="px-3 py-2 text-sm text-slate-400">Nenhum coordenador cadastrado (Usuários &rarr; Coordenadores).</p>
+                            <p class="px-3 py-2 text-sm text-slate-500">Nenhum coordenador cadastrado (Usuários &rarr; Coordenadores).</p>
                         @endforelse
                     </div>
                     <p class="text-xs text-slate-500 mt-1">Acesso excepcional: o coordenador vê esta avaliação mesmo sem aluno do curso dele.</p>
@@ -219,7 +219,7 @@
                 <label class="block text-sm font-medium mb-1" for="numero">Número</label>
                 <input id="numero" name="numero" type="number" min="1" required
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                <p id="numero-aviso-existente" class="hidden text-xs text-amber-600 mt-1">
+                <p id="numero-aviso-existente" class="hidden text-xs text-amber-700 mt-1">
                     Já existe a questão <span id="numero-aviso-existente-num"></span> — salvar aqui vai <strong>sobrescrever</strong> ela, não criar uma nova.
                 </p>
             </div>
@@ -276,7 +276,7 @@
         </div>
 
         <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Referências externas</p>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Referências externas</p>
             <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 @include('admin.avaliacoes._tag_input', ['name' => 'matriz_prova', 'label' => 'Matriz Prova'])
                 @include('admin.avaliacoes._tag_input', ['name' => 'dcn', 'label' => 'DCN'])
@@ -286,8 +286,8 @@
         </div>
 
         <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Matriz curricular</p>
-            <p class="text-xs text-slate-400 mb-2">Informe na mesma ordem nas três listas — a 1ª entrada de cada uma forma um item da matriz, a 2ª forma outro, e assim por diante.</p>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Matriz curricular</p>
+            <p class="text-xs text-slate-500 mb-2">Informe na mesma ordem nas três listas — a 1ª entrada de cada uma forma um item da matriz, a 2ª forma outro, e assim por diante.</p>
             <div class="grid sm:grid-cols-3 gap-4">
                 @include('admin.avaliacoes._tag_input', ['name' => 'matriz_periodo', 'label' => 'Período', 'placeholder' => 'Ex.: 1'])
                 @include('admin.avaliacoes._tag_input', ['name' => 'matriz_disciplina', 'label' => 'Disciplina'])
@@ -301,10 +301,10 @@
     </form>
 
     @if ($questoes->isEmpty())
-        <p class="text-sm text-slate-400">Nenhuma questão cadastrada ainda.</p>
+        <p class="text-sm text-slate-500">Nenhuma questão cadastrada ainda.</p>
     @else
         <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <p class="text-xs text-slate-400">Role a tabela para o lado para ver todas as colunas.</p>
+            <p class="text-xs text-slate-500">Role a tabela para o lado para ver todas as colunas.</p>
             <div class="flex gap-2 text-xs font-medium">
                 <button type="button" id="btn-bulk-questoes-excluir"
                         class="inline-flex items-center gap-1 border border-red-300 text-red-600 hover:bg-red-50 rounded-lg px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed" disabled>
@@ -403,11 +403,11 @@
                             <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $matrizCurricular ?: '—' }}</td>
                             <td class="px-3 py-2 whitespace-nowrap">
                                 @if ($questao->trashed())
-                                    <span class="text-slate-400">Excluída</span>
+                                    <span class="text-slate-500">Excluída</span>
                                 @elseif ($questao->anulada_modo === 'dar_ponto')
-                                    <span class="text-amber-600 font-medium">Anulada (ponto p/ todos)</span>
+                                    <span class="text-amber-700 font-medium">Anulada (ponto p/ todos)</span>
                                 @elseif ($questao->anulada_modo === 'distribuir_pontuacao')
-                                    <span class="text-amber-600 font-medium">Anulada (fora da prova)</span>
+                                    <span class="text-amber-700 font-medium">Anulada (fora da prova)</span>
                                 @endif
                             </td>
                             <td class="px-3 py-2 text-right whitespace-nowrap">
@@ -419,7 +419,7 @@
                                     <button type="button" class="questao-editar-btn text-emerald-700 hover:underline mr-3" data-questao='@json($dadosQuestao)'>Editar</button>
                                     <button type="submit" formaction="{{ route('avaliacoes.questoes.destroy', [$avaliacao, $questao]) }}"
                                             onclick="return submeterAcaoQuestaoIndividual(this, 'DELETE', 'Excluir a questão {{ $questao->numero }}?');"
-                                            class="text-red-500 hover:text-red-700">Excluir</button>
+                                            class="text-red-600 hover:text-red-700">Excluir</button>
                                 @endif
                             </td>
                         </tr>

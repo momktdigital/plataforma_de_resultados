@@ -20,6 +20,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\View\View;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
@@ -43,6 +44,21 @@ class PortalController extends Controller
     /** Janelas de cooldown entre reenvios, em minutos (índice = vezes já reenviado). */
     private const ESPERAS_REENVIO = [1, 2, 5, 10];
 
+    /**
+     * Prova de que o PRIMEIRO fator (CPF + data de nascimento) foi acertado nesta sessão — sem ela, `verificar` e
+     * `reenviar` não fazem nada. Antes elas confiavam num CPF vindo de um campo oculto do formulário: quem soubesse
+     * só o CPF de um aluno conseguia gastar as 3 tentativas do código dele (travando o acesso) ou disparar e-mails
+     * de reenvio para ele.
+     */
+    private const SESSAO_PRE_AUTH = 'portal_pre_auth';
+
+    private const PRE_AUTH_MINUTOS = 15;
+
+    /** Consultas com CPF/data errados toleradas, por CPF (de qualquer IP), antes de bloquear esse CPF por 1 hora. */
+    private const MAX_FALHAS_POR_CPF = 10;
+
+    private const BLOQUEIO_CPF_SEGUNDOS = 3600;
+
     public function mostrarConsulta(): View
     {
         return view('portal.consulta', $this->configuracaoCaptcha());
@@ -56,6 +72,17 @@ class PortalController extends Controller
         $dados = $request->validated();
         $cpf = $dados['cpf'];
 
+        // O limite por IP (throttle da rota) não segura quem tenta a data de nascimento de UM CPF a partir de muitos
+        // IPs. Este é por CPF, de onde vier, e também conta CPF que nem existe (a resposta é a mesma nos dois casos).
+        $chaveCpf = 'portal-consulta:'.$cpf;
+        if (RateLimiter::tooManyAttempts($chaveCpf, self::MAX_FALHAS_POR_CPF)) {
+            $minutos = (int) ceil(RateLimiter::availableIn($chaveCpf) / 60);
+
+            return back()
+                ->withErrors(['cpf' => "Muitas tentativas para este CPF. Tente novamente em {$minutos} minuto(s)."])
+                ->withInput();
+        }
+
         if ($erro = $this->validarCaptcha($request, $captcha)) {
             return back()->withErrors(['captcha' => $erro])->withInput();
         }
@@ -65,10 +92,14 @@ class PortalController extends Controller
         $aluno = Aluno::where('cpf', $cpf)->whereDate('data_nascimento', $dataNascimento)->first();
 
         if ($aluno === null) {
+            RateLimiter::hit($chaveCpf, self::BLOQUEIO_CPF_SEGUNDOS);
+
             return back()
                 ->withErrors(['cpf' => 'Nenhum aluno encontrado com este CPF e Data de Nascimento.'])
                 ->withInput();
         }
+
+        RateLimiter::clear($chaveCpf);
 
         if (Configuracao::valor('smtp_ativo', '0') === '1') {
             $emailDoCodigo = $aluno->emailParaCodigo();
@@ -94,7 +125,14 @@ class PortalController extends Controller
                 }
             }
 
-            return view('portal.verificar', ['cpf' => $cpf, 'emailOculto' => $this->ocultarEmail($emailDoCodigo)]);
+            // Primeiro fator aprovado: é só isso que libera `verificar` e `reenviar`.
+            session([self::SESSAO_PRE_AUTH => [
+                'aluno_id' => $aluno->id,
+                'cpf' => $cpf,
+                'ate' => Carbon::now()->addMinutes(self::PRE_AUTH_MINUTOS)->timestamp,
+            ]]);
+
+            return view('portal.verificar', ['emailOculto' => $this->ocultarEmail($emailDoCodigo)]);
         }
 
         return $this->autenticarEIrParaResultados($request, $aluno);
@@ -102,11 +140,13 @@ class PortalController extends Controller
 
     public function verificar(Request $request, RateLimit2faService $rateLimiter): View|RedirectResponse
     {
-        $dados = $request->validate([
-            'cpf' => ['required', 'string'],
-            'codigo' => ['required', 'string'],
-        ]);
-        $cpf = preg_replace('/\D/', '', $dados['cpf']);
+        $dados = $request->validate(['codigo' => ['required', 'string']]);
+
+        $preAuth = $this->preAutenticacao();
+        if ($preAuth === null) {
+            return $this->primeiroFatorExpirado();
+        }
+        $cpf = $preAuth['cpf'];
         $ip = $request->ip();
 
         if ($rateLimiter->estaBloqueado($ip)) {
@@ -135,7 +175,8 @@ class PortalController extends Controller
 
         // hash_equals (não !==): compara em tempo constante — evita que a
         // duração da resposta vaze quantos caracteres do código já acertou.
-        if (! hash_equals($verificacao->codigo, trim($dados['codigo']))) {
+        // Compara os HASHES: o código em si nunca fica gravado (ver VerificacaoEmail::hashDoCodigo()).
+        if (! hash_equals($verificacao->codigo, VerificacaoEmail::hashDoCodigo($cpf, trim($dados['codigo'])))) {
             $verificacao->increment('tentativas_falhas');
             $rateLimiter->registrarFalha($ip);
 
@@ -147,7 +188,6 @@ class PortalController extends Controller
             }
 
             return view('portal.verificar', [
-                'cpf' => $cpf,
                 'emailOculto' => null,
                 'erro' => "Código incorreto. Você tem mais {$restantes} tentativa(s).",
             ]);
@@ -156,19 +196,24 @@ class PortalController extends Controller
         $verificacao->delete();
         $rateLimiter->resetar($ip);
 
-        $aluno = Aluno::where('cpf', $cpf)->first();
+        $aluno = Aluno::find($preAuth['aluno_id']);
 
         if ($aluno === null) {
             return redirect()->route('portal.consulta')->withErrors(['cpf' => 'Aluno não encontrado.']);
         }
 
+        session()->forget(self::SESSAO_PRE_AUTH);
+
         return $this->autenticarEIrParaResultados($request, $aluno);
     }
 
-    public function reenviar(Request $request, SmtpEmailSender $mailer): View|RedirectResponse
+    public function reenviar(SmtpEmailSender $mailer): View|RedirectResponse
     {
-        $dados = $request->validate(['cpf' => ['required', 'string']]);
-        $cpf = preg_replace('/\D/', '', $dados['cpf']);
+        $preAuth = $this->preAutenticacao();
+        if ($preAuth === null) {
+            return $this->primeiroFatorExpirado();
+        }
+        $cpf = $preAuth['cpf'];
 
         $verificacao = VerificacaoEmail::where('cpf', $cpf)->latest('id')->first();
 
@@ -177,7 +222,7 @@ class PortalController extends Controller
                 ->withErrors(['cpf' => 'Nenhuma verificação pendente para este CPF. Tente fazer a consulta novamente.']);
         }
 
-        $aluno = Aluno::where('cpf', $cpf)->first();
+        $aluno = Aluno::find($preAuth['aluno_id']);
 
         $emailDoCodigo = $aluno?->emailParaCodigo();
         if ($aluno === null || $emailDoCodigo === null) {
@@ -193,32 +238,58 @@ class PortalController extends Controller
             $minutosRestantes = (int) ceil(Carbon::now()->diffInSeconds($fimEspera) / 60);
 
             return view('portal.verificar', [
-                'cpf' => $cpf,
                 'emailOculto' => null,
                 'erro' => "Aguarde {$minutosRestantes} minuto(s) para solicitar um novo código.",
             ]);
         }
 
+        // Como só o hash fica gravado, o reenvio gera um código NOVO (e zera as tentativas dele).
+        $codigo = sprintf('%06d', random_int(0, 999999));
+
+        $verificacao->codigo = VerificacaoEmail::hashDoCodigo($cpf, $codigo);
+        $verificacao->tentativas_falhas = 0;
         $verificacao->vezes_reenviado++;
         $verificacao->ultimo_reenvio = Carbon::now();
         $verificacao->expira_em = Carbon::now()->addMinutes(10);
         $verificacao->save();
 
         try {
-            $mailer->enviar($emailDoCodigo, '[Reenvio] '.$this->montarTexto('subject', $aluno), $this->montarTexto('body', $aluno));
+            $mailer->enviar($emailDoCodigo, '[Reenvio] '.$this->montarTexto('subject', $aluno, $codigo), $this->montarTexto('body', $aluno, $codigo));
         } catch (TransportExceptionInterface) {
             return view('portal.verificar', [
-                'cpf' => $cpf,
                 'emailOculto' => null,
                 'erro' => 'Erro ao enviar o e-mail. Tente novamente.',
             ]);
         }
 
         return view('portal.verificar', [
-            'cpf' => $cpf,
             'emailOculto' => $this->ocultarEmail($emailDoCodigo),
             'status' => 'Código reenviado com sucesso.',
         ]);
+    }
+
+    /**
+     * Pré-autenticação desta sessão (primeiro fator aprovado e ainda dentro da validade) ou null.
+     *
+     * @return array{aluno_id: int, cpf: string}|null
+     */
+    private function preAutenticacao(): ?array
+    {
+        $pre = session(self::SESSAO_PRE_AUTH);
+
+        if (! is_array($pre) || ! isset($pre['aluno_id'], $pre['cpf'], $pre['ate']) || $pre['ate'] < Carbon::now()->timestamp) {
+            return null;
+        }
+
+        return ['aluno_id' => (int) $pre['aluno_id'], 'cpf' => (string) $pre['cpf']];
+    }
+
+    private function primeiroFatorExpirado(): RedirectResponse
+    {
+        session()->forget(self::SESSAO_PRE_AUTH);
+
+        return redirect()->route('portal.consulta')
+            ->withErrors(['cpf' => 'Sua verificação expirou. Informe o CPF e a data de nascimento novamente.']);
     }
 
     /**
@@ -523,7 +594,7 @@ class PortalController extends Controller
         VerificacaoEmail::where('cpf', $cpf)->delete();
         VerificacaoEmail::create([
             'cpf' => $cpf,
-            'codigo' => $codigo,
+            'codigo' => VerificacaoEmail::hashDoCodigo($cpf, $codigo),
             'expira_em' => Carbon::now()->addMinutes(10),
             'vezes_reenviado' => 0,
         ]);
@@ -531,10 +602,8 @@ class PortalController extends Controller
         $mailer->enviar($aluno->emailParaCodigo(), $this->montarTexto('subject', $aluno, $codigo), $this->montarTexto('body', $aluno, $codigo));
     }
 
-    private function montarTexto(string $parte, Aluno $aluno, ?string $codigoForcado = null): string
+    private function montarTexto(string $parte, Aluno $aluno, string $codigo): string
     {
-        $codigo = $codigoForcado ?? VerificacaoEmail::where('cpf', $aluno->cpf)->latest('id')->value('codigo') ?? '';
-
         $template = $parte === 'subject'
             ? Configuracao::valor('email_template_subject', self::ASSUNTO_PADRAO)
             : Configuracao::valor('email_template_body', self::CORPO_PADRAO);

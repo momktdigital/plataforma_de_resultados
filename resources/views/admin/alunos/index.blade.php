@@ -54,11 +54,11 @@
                                 <img src="{{ $aluno->fotoUrl(60) }}" alt="" aria-hidden="true"
                                      class="w-7 h-7 rounded-full object-cover border border-slate-200 shrink-0"
                                      onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='flex';">
-                                <span style="display:none" class="w-7 h-7 rounded-full bg-primary/10 text-primary items-center justify-center text-xs font-bold shrink-0">
+                                <span style="display:none" class="w-7 h-7 rounded-full bg-primary/10 text-emerald-700 items-center justify-center text-xs font-bold shrink-0">
                                     {{ mb_strtoupper(mb_substr($aluno->nome ?: $aluno->ra, 0, 1)) }}
                                 </span>
                             @else
-                                <span class="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
+                                <span class="w-7 h-7 rounded-full bg-primary/10 text-emerald-700 flex items-center justify-center text-xs font-bold shrink-0">
                                     {{ mb_strtoupper(mb_substr($aluno->nome ?: $aluno->ra, 0, 1)) }}
                                 </span>
                             @endif
@@ -78,13 +78,13 @@
                               onsubmit="return confirm(@js('Tem certeza que deseja excluir o aluno '.($aluno->nome ?: $aluno->ra).'? Isso não remove os resultados dele, apenas o cadastro de acesso.'));">
                             @csrf
                             @method('DELETE')
-                            <button type="submit" class="text-red-500 hover:text-red-700">Excluir</button>
+                            <button type="submit" class="text-red-600 hover:text-red-700">Excluir</button>
                         </form>
                     </td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="7" class="px-4 py-12 text-center text-slate-400">
+                    <td colspan="7" class="px-4 py-12 text-center text-slate-500">
                         Nenhum aluno encontrado. Importe uma planilha de matrícula ou cadastre manualmente.
                     </td>
                 </tr>

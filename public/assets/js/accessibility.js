@@ -88,51 +88,101 @@ document.addEventListener('DOMContentLoaded', () => {
     injectVLibras();
 
     // --- UI Injection ---
-    // Look for a container to inject the menu.
+    // A barra é montada em cada `.accessibility-container`. Tudo nela funciona por teclado: o menu de temas abre com
+    // Enter/Espaço (não só no hover), fecha com Esc devolvendo o foco ao botão, e cada botão só de ícone tem nome
+    // acessível (aria-label) — `title` sozinho não é lido de forma confiável por leitores de tela.
     const containers = document.querySelectorAll('.accessibility-container');
+    const foco = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1';
+    const botaoIcone = `text-slate-600 hover:text-emerald-700 transition-colors p-1 flex items-center justify-center rounded hover:bg-slate-100 ${foco}`;
+    const itemTema = `btn-acc-theme block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-emerald-700 transition-colors ${foco} focus-visible:ring-inset`;
 
-    containers.forEach(container => {
+    const temas = [
+        { id: 'light', rotulo: 'Modo claro', icone: 'ph-sun' },
+        { id: 'dark', rotulo: 'Modo escuro', icone: 'ph-moon' },
+        { id: 'high-contrast', rotulo: 'Alto contraste', icone: 'ph-circle-half' },
+    ];
+
+    const marcarTemaAtual = (raiz) => {
+        raiz.querySelectorAll('.btn-acc-theme').forEach(btn => {
+            btn.setAttribute('aria-pressed', btn.dataset.theme === currentTheme ? 'true' : 'false');
+        });
+    };
+
+    containers.forEach((container, indice) => {
+        const idMenu = `acc-menu-temas-${indice}`;
+
         container.innerHTML = `
             <div class="flex items-center gap-1 sm:gap-2">
-                <!-- Theme Selector -->
-                <div class="relative group">
-                    <button class="text-slate-500 hover:text-primary transition-colors p-1 flex items-center justify-center rounded hover:bg-slate-100" title="Temas (Claro, Escuro, Contraste)">
-                        <i class="ph ph-palette text-xl"></i>
+                <div class="relative">
+                    <button type="button" class="btn-acc-temas ${botaoIcone}" aria-label="Tema da página: claro, escuro ou alto contraste"
+                            aria-haspopup="true" aria-expanded="false" aria-controls="${idMenu}">
+                        <i class="ph ph-palette text-xl" aria-hidden="true"></i>
                     </button>
-                    <!-- Dropdown -->
-                    <div class="absolute right-0 top-full mt-1 w-44 bg-white border border-slate-200 shadow-lg rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                        <button class="btn-acc-theme block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-primary first:rounded-t-lg transition-colors" data-theme="light">
-                            <i class="ph ph-sun mr-2"></i> Modo Claro
-                        </button>
-                        <button class="btn-acc-theme block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-primary transition-colors" data-theme="dark">
-                            <i class="ph ph-moon mr-2"></i> Modo Escuro
-                        </button>
-                        <button class="btn-acc-theme block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-primary last:rounded-b-lg transition-colors" data-theme="high-contrast">
-                            <i class="ph ph-circle-half mr-2"></i> Alto Contraste
-                        </button>
+                    <div id="${idMenu}" role="group" aria-label="Tema da página" hidden
+                         class="absolute right-0 top-full mt-1 w-44 bg-white border border-slate-200 shadow-lg rounded-lg z-50">
+                        ${temas.map(t => `
+                        <button type="button" class="${itemTema}" data-theme="${t.id}" aria-pressed="false">
+                            <i class="ph ${t.icone} mr-2" aria-hidden="true"></i> ${t.rotulo}
+                        </button>`).join('')}
                     </div>
                 </div>
 
-                <!-- VLibras Trigger -->
-                <button title="Tradutor de Libras" class="btn-acc-vlibras text-slate-500 hover:text-primary transition-colors p-1 flex items-center justify-center rounded hover:bg-slate-100">
-                    <i class="ph ph-hands-clapping text-xl"></i>
+                <button type="button" class="btn-acc-vlibras ${botaoIcone}" aria-label="Abrir o tradutor de Libras (VLibras)">
+                    <i class="ph ph-hands-clapping text-xl" aria-hidden="true"></i>
                 </button>
 
-                <!-- Sienna Trigger -->
-                <button title="Recursos de acessibilidade (Sienna)" class="btn-acc-sienna text-slate-500 hover:text-primary transition-colors p-1 flex items-center justify-center rounded hover:bg-slate-100">
-                    <i class="ph ph-wheelchair text-xl"></i>
+                <button type="button" class="btn-acc-sienna ${botaoIcone}" aria-label="Abrir os recursos de acessibilidade (Sienna)">
+                    <i class="ph ph-wheelchair text-xl" aria-hidden="true"></i>
                 </button>
             </div>
         `;
 
-        // Attach events
+        const alternar = container.querySelector('.btn-acc-temas');
+        const menu = container.querySelector(`#${idMenu}`);
+
+        const abrir = (aberto) => {
+            menu.hidden = !aberto;
+            alternar.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+        };
+
+        alternar.addEventListener('click', () => {
+            abrir(menu.hidden);
+            if (!menu.hidden) {
+                const atual = menu.querySelector('[aria-pressed="true"]') || menu.querySelector('.btn-acc-theme');
+                atual && atual.focus();
+            }
+        });
+
+        menu.addEventListener('keydown', (e) => {
+            const itens = Array.from(menu.querySelectorAll('.btn-acc-theme'));
+            const i = itens.indexOf(document.activeElement);
+            if (e.key === 'ArrowDown') { e.preventDefault(); itens[(i + 1) % itens.length].focus(); }
+            if (e.key === 'ArrowUp') { e.preventDefault(); itens[(i - 1 + itens.length) % itens.length].focus(); }
+        });
+
+        container.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !menu.hidden) {
+                abrir(false);
+                alternar.focus();
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!menu.hidden && !container.contains(e.target)) abrir(false);
+        });
+
         container.querySelector('.btn-acc-vlibras').addEventListener('click', triggerVLibras);
         container.querySelector('.btn-acc-sienna').addEventListener('click', triggerSienna);
 
         container.querySelectorAll('.btn-acc-theme').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 setTheme(e.currentTarget.dataset.theme);
+                document.querySelectorAll('.accessibility-container').forEach(marcarTemaAtual);
+                abrir(false);
+                alternar.focus();
             });
         });
+
+        marcarTemaAtual(container);
     });
 });

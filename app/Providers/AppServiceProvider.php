@@ -3,7 +3,6 @@
 namespace App\Providers;
 
 use App\Models\Aluno;
-use App\Models\ConfiguracaoSistema;
 use App\Services\Update\GithubReleaseClient;
 use App\Support\AlunoVinculoResolver;
 use Illuminate\Support\ServiceProvider;
@@ -15,9 +14,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->bind(GithubReleaseClient::class, fn () => new GithubReleaseClient(
-            ConfiguracaoSistema::valor('atualizacao_repositorio', config('sistema.repositorio')),
-        ));
+        // O repositório de onde o servidor baixa e executa código vem SÓ do .env (config/sistema.php): um
+        // administrador (ou uma sessão de administrador comprometida) não pode apontá-lo para outro lugar.
+        $this->app->bind(GithubReleaseClient::class, fn () => new GithubReleaseClient((string) config('sistema.repositorio')));
     }
 
     /**

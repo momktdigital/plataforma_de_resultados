@@ -7,11 +7,22 @@
 
 @include('admin.sistema._subnav')
 
-<p class="text-sm text-slate-500 mb-6 max-w-2xl">
+<p class="text-sm text-slate-600 mb-6 max-w-2xl">
     Estas configurações alimentam o portal público (consulta de resultados por
     CPF + Data de Nascimento): aparência, CAPTCHA e o SMTP/template usados no
     2FA por e-mail.
 </p>
+
+@if (! $smtpAtivo && $captchaType === 'none')
+    <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 mb-6 max-w-2xl text-sm text-amber-900" role="status">
+        <p class="font-semibold mb-1">Portal sem segunda verificação</p>
+        <p>
+            Com o 2FA por e-mail desligado e sem CAPTCHA, quem souber o CPF e a data de nascimento de um aluno vê o
+            boletim dele. Ficam valendo o limite por IP (10 consultas/min) e o bloqueio por CPF (10 erros → 1 hora), mas
+            o recomendado é ativar o <strong>SMTP</strong> (2FA) e, se houver abuso, um <strong>CAPTCHA</strong>.
+        </p>
+    </div>
+@endif
 
 <div class="space-y-8 max-w-2xl">
     {{-- Aparência --}}
@@ -192,7 +203,7 @@
 {{-- Modal de teste SMTP --}}
 <div id="modal-teste-smtp" class="hidden fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center p-4">
     <div class="w-full max-w-sm bg-white rounded-xl shadow-lg p-6 relative">
-        <button type="button" onclick="fecharTesteSmtp()" class="absolute top-3 right-3 text-slate-400 hover:text-slate-600">&times;</button>
+        <button type="button" onclick="fecharTesteSmtp()" class="absolute top-3 right-3 text-slate-500 hover:text-slate-600">&times;</button>
         <h3 class="font-bold mb-1" id="teste-titulo">Testar envio de e-mail</h3>
         <p class="text-sm text-slate-500 mb-4" id="teste-desc">Informe um e-mail para receber o código de teste.</p>
 

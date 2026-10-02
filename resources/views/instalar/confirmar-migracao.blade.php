@@ -5,7 +5,7 @@
 @section('content')
 <div class="max-w-2xl mx-auto mt-10 bg-white border border-slate-200 rounded-xl shadow-sm p-8">
     <h1 class="text-xl font-bold mb-1">Criar as tabelas do banco</h1>
-    <p class="text-sm text-slate-500 mb-6">Passo 3 de 4.</p>
+    <p class="text-sm text-slate-400 mb-6">Passo 3 de 4.</p>
 
     <p class="text-sm text-slate-700 mb-6">
         Esta etapa roda as migrations no banco configurado no passo anterior — cria (ou atualiza)

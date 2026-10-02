@@ -70,6 +70,16 @@ class PortalConfiguracaoTest extends TestCase
         $this->assertSame('secret-antiga', Configuracao::valor('hcaptcha_secret_key'));
     }
 
+    public function test_avisa_quando_o_portal_esta_sem_2fa_e_sem_captcha(): void
+    {
+        $admin = $this->admin();
+
+        $this->actingAs($admin, 'admin')->get('/sistema/portal')->assertOk()->assertSee('Portal sem segunda verificação');
+
+        Configuracao::definir('smtp_ativo', '1');
+        $this->actingAs($admin, 'admin')->get('/sistema/portal')->assertDontSee('Portal sem segunda verificação');
+    }
+
     public function test_nao_ativa_captcha_sem_secret_key(): void
     {
         $admin = $this->admin();

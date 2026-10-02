@@ -46,7 +46,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="5" class="px-4 py-8 text-center text-slate-400">Nenhuma atividade registrada ainda.</td>
+                    <td colspan="5" class="px-4 py-8 text-center text-slate-500">Nenhuma atividade registrada ainda.</td>
                 </tr>
             @endforelse
         </tbody>

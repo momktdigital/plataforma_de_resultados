@@ -22,6 +22,6 @@
     <a href="{{ request()->url().'?'.http_build_query($query) }}"
        class="inline-flex items-center gap-1 hover:text-slate-700 {{ $ativo ? 'text-slate-800 font-semibold' : '' }}">
         {{ $label }}
-        <span aria-hidden="true" class="text-slate-400">{{ $ativo ? ($direction === 'asc' ? '▲' : '▼') : '⇅' }}</span>
+        <span aria-hidden="true" class="text-slate-500">{{ $ativo ? ($direction === 'asc' ? '▲' : '▼') : '⇅' }}</span>
     </a>
 </th>

@@ -25,6 +25,16 @@ class VerificacaoEmail extends Model
         'expira_em',
     ];
 
+    /**
+     * O código de 6 dígitos NUNCA fica em texto puro no banco (só 10^6 combinações: quem lesse a tabela
+     * entraria em qualquer conta com código pendente). Guarda-se um HMAC com a chave da aplicação, amarrado ao
+     * CPF — um dump do banco, sozinho, não revela o código.
+     */
+    public static function hashDoCodigo(string $cpf, string $codigo): string
+    {
+        return hash_hmac('sha256', $cpf.'|'.$codigo, (string) config('app.key'));
+    }
+
     protected function casts(): array
     {
         return [

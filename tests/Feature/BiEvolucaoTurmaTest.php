@@ -197,7 +197,10 @@ class BiEvolucaoTurmaTest extends TestCase
      */
     public function test_template_do_bi_nao_tem_secoes_repetidas(): void
     {
-        $fonte = file_get_contents(resource_path('views/admin/avaliacoes/bi.blade.php'));
+        // O Dashboard é montado de vários parciais (bi/*.blade.php, bi/scripts/*.blade.php): vale o conjunto.
+        $arquivos = [resource_path('views/admin/avaliacoes/bi.blade.php'), ...glob(resource_path('views/admin/avaliacoes/bi/{,scripts/}*.blade.php'), GLOB_BRACE)];
+        $fonte = implode("
+", array_map('file_get_contents', $arquivos));
 
         preg_match_all('#<h2[^>]*>([^<{@]+)</h2>#u', $fonte, $h);
         $titulos = array_map('trim', $h[1]);
@@ -209,6 +212,19 @@ class BiEvolucaoTurmaTest extends TestCase
         $this->assertSame([], $graficosRepetidos, 'gráficos montados mais de uma vez: '.implode(', ', $graficosRepetidos));
 
         $this->assertSame(1, substr_count($fonte, 'function ordenarTabelaAlternativas'));
+    }
+
+    public function test_script_da_evolucao_recebe_os_periodos_do_curso(): void
+    {
+        // Regressão da divisão do bi.blade.php em parciais: uma variável calculada no bloco HTML da evolução não chega
+        // ao script (@include tem escopo próprio) e o gráfico por período ficava com a lista vazia.
+        [, $segunda] = $this->categoriaComDuasProvas();
+
+        $html = $this->actingAs($this->admin(), 'admin')->get("/avaliacoes/{$segunda->codigo}/bi")->getContent();
+
+        // Js::from() grava o objeto como JSON.parse('...') com as aspas escapadas (").
+        $this->assertMatchesRegularExpression('/var porPeriodo = JSON\.parse\(.*u0022rotulo/', $html);
+        $this->assertStringNotContainsString('var porPeriodo = [];', $html);
     }
 
     public function test_sem_periodo_valido_so_ha_a_aba_da_avaliacao_inteira(): void

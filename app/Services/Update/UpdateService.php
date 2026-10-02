@@ -78,6 +78,48 @@ class UpdateService
         return ['versao' => $versaoRemota, 'notas' => $release['notas'], 'zip_url' => $release['zip_url']];
     }
 
+    /**
+     * Assinatura do commit da versão disponível, como o GitHub a verificou (ver GithubReleaseClient::assinatura()).
+     * Uma falha de rede conta como "não verificada" — nunca estoura.
+     *
+     * @param  array{versao: string}  $disponivel
+     * @return array{verificada: bool, motivo: string, assinante: ?string}
+     */
+    public function assinaturaDe(array $disponivel): array
+    {
+        try {
+            return $this->github->assinatura('v'.$disponivel['versao']);
+        } catch (Throwable) {
+            return ['verificada' => false, 'motivo' => 'consulta_falhou', 'assinante' => null];
+        }
+    }
+
+    /**
+     * Com ATUALIZACAO_EXIGIR_ASSINATURA ligado, só passa versão com assinatura verificada pelo GitHub (e, se
+     * ATUALIZACAO_ASSINANTES estiver preenchido, assinada por alguém da lista). Desligado: não faz nada.
+     *
+     * @param  array{versao: string}  $disponivel
+     *
+     * @throws RuntimeException
+     */
+    public function exigirAssinaturaSeConfigurado(array $disponivel): void
+    {
+        if (! config('sistema.exigir_assinatura')) {
+            return;
+        }
+
+        $assinatura = $this->assinaturaDe($disponivel);
+
+        if (! $assinatura['verificada']) {
+            throw new RuntimeException("A versão {$disponivel['versao']} não tem assinatura verificada pelo GitHub (motivo: {$assinatura['motivo']}). A atualização foi bloqueada porque a assinatura é obrigatória neste servidor.");
+        }
+
+        $permitidos = array_map('strtolower', (array) config('sistema.assinantes'));
+        if ($permitidos !== [] && ! in_array(strtolower((string) $assinatura['assinante']), $permitidos, true)) {
+            throw new RuntimeException("A versão {$disponivel['versao']} foi assinada por '".($assinatura['assinante'] ?? 'desconhecido')."', que não está na lista de assinantes autorizados deste servidor.");
+        }
+    }
+
     /** @return array{status: string, versao?: string, mensagens: array<int, string>} */
     public function atualizar(): array
     {
@@ -88,6 +130,7 @@ class UpdateService
         }
 
         try {
+            $this->exigirAssinaturaSeConfigurado($disponivel);
             $zipTemp = $this->baixarZip($disponivel['zip_url']);
         } catch (Throwable $e) {
             return ['status' => 'erro', 'mensagens' => ['ERRO: '.$e->getMessage()]];
@@ -115,6 +158,8 @@ class UpdateService
         if ($disponivel === null) {
             throw new RuntimeException('Nenhuma atualização disponível.');
         }
+
+        $this->exigirAssinaturaSeConfigurado($disponivel);
 
         $zipTemp = $this->baixarZip($disponivel['zip_url']);
 
@@ -174,7 +219,7 @@ class UpdateService
 
             if ($this->executarComposer) {
                 $this->rodarComposer();
-                $mensagens[] = 'Dependências atualizadas (composer install).';
+                $mensagens[] = 'Dependências atualizadas (composer install, sem scripts nem plugins).';
             }
 
             Artisan::call('migrate', ['--force' => true]);
@@ -340,15 +385,22 @@ class UpdateService
         return false;
     }
 
+    /**
+     * `--no-scripts --no-plugins`: o composer.json do pacote baixado NÃO pode executar comandos nem carregar plugins
+     * (scripts e plugins rodam código arbitrário dentro do `composer install`, antes de qualquer verificação). O único
+     * script de que a aplicação precisa — descobrir os pacotes — é refeito explicitamente logo depois.
+     */
     private function rodarComposer(): void
     {
         $resultado = Process::path($this->destino)->timeout(300)->run([
-            'composer', 'install', '--no-dev', '--optimize-autoloader', '--no-interaction',
+            'composer', 'install', '--no-dev', '--optimize-autoloader', '--no-interaction', '--no-scripts', '--no-plugins',
         ]);
 
         if (! $resultado->successful()) {
             throw new RuntimeException('composer install falhou: '.$resultado->errorOutput());
         }
+
+        Artisan::call('package:discover');
     }
 
     private function restaurarArquivosDoBackup(string $caminhoBackupZip): void

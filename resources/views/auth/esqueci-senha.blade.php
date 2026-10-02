@@ -14,8 +14,8 @@
 <div class="bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 overflow-hidden">
     <div class="p-8">
         @if ($errors->any())
-            <div class="bg-red-900/30 border border-red-800 text-red-300 p-4 mb-6 rounded-lg text-sm flex items-start gap-2">
-                <i class="ph-fill ph-warning-circle text-xl mt-0.5"></i>
+            <div id="erros-do-formulario" data-resumo-erros role="alert" class="bg-red-900/30 border border-red-800 text-red-300 p-4 mb-6 rounded-lg text-sm flex items-start gap-2">
+                <i class="ph-fill ph-warning-circle text-xl mt-0.5" aria-hidden="true"></i>
                 <ul class="space-y-1">
                     @foreach ($errors->all() as $error)
                         <li>{{ $error }}</li>
@@ -42,7 +42,7 @@
                         <i class="ph-fill ph-user text-slate-500 text-lg"></i>
                     </div>
                     <input type="text" id="username" name="username" required autofocus value="{{ old('username') }}"
-                           class="block w-full pl-10 pr-3 py-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                           class="block w-full pl-10 pr-3 py-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                            placeholder="admin">
                 </div>
             </div>
@@ -55,7 +55,7 @@
     </div>
 
     <div class="bg-slate-900/50 px-8 py-4 border-t border-slate-700 text-center">
-        <a href="{{ route('login') }}" class="text-sm text-slate-500 hover:text-slate-300 transition-colors flex items-center justify-center">
+        <a href="{{ route('login') }}" class="text-sm text-slate-400 hover:text-slate-300 transition-colors flex items-center justify-center">
             <i class="ph-bold ph-arrow-left mr-1"></i> Voltar para o login
         </a>
     </div>

@@ -53,7 +53,7 @@
 
         @if ($r['avaliacao']->link_comentado)
             <a href="{{ $r['avaliacao']->link_comentado }}" target="_blank" rel="noopener"
-               class="inline-flex items-center mb-4 text-sm font-medium text-primary hover:underline">
+               class="inline-flex items-center mb-4 text-sm font-medium text-emerald-700 hover:underline">
                 <i class="ph-bold ph-link mr-1.5"></i> Acessar gabarito comentado
             </a>
         @endif
@@ -73,9 +73,9 @@
                     <div class="w-11 h-11 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
                         <i class="ph-fill ph-trophy text-primary text-2xl"></i>
                     </div>
-                    <div class="text-sm font-bold text-primary uppercase tracking-wide truncate">{{ $metricaTotal->nome_metrica }}</div>
+                    <div class="text-sm font-bold text-emerald-700 uppercase tracking-wide truncate">{{ $metricaTotal->nome_metrica }}</div>
                 </div>
-                <div class="text-3xl font-black text-primary shrink-0">{{ $metricaTotal->valor }}</div>
+                <div class="text-3xl font-black text-emerald-700 shrink-0">{{ $metricaTotal->valor }}</div>
             </div>
         @endif
 
@@ -91,7 +91,7 @@
         @endif
 
         @if ($estado['desempenho_area']['visivelAluno'] && ! empty($desempenhoAreaContagem))
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+            <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
                 <i class="ph-bold ph-chart-bar text-primary"></i> Total por área
             </p>
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
@@ -99,7 +99,7 @@
                     <div class="bg-slate-50 border border-slate-100 rounded-lg p-3">
                         <div class="text-xs font-bold text-slate-500 uppercase truncate" title="{{ $area }}">{{ $area }}</div>
                         <div class="text-lg font-black text-slate-800">
-                            {{ $dados['acertos'] }}<span class="text-xs font-normal text-slate-400"> ({{ $dados['percentual'] }}%)</span>
+                            {{ $dados['acertos'] }}<span class="text-xs font-normal text-slate-500"> ({{ $dados['percentual'] }}%)</span>
                         </div>
                     </div>
                 @endforeach
@@ -112,7 +112,7 @@
                 $temasDetalhe = $r['questoesMeta']->pluck('tema')->filter()->unique()->sort()->values();
             @endphp
             <div class="flex items-center justify-between flex-wrap gap-3 mb-3">
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                <p class="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
                     <i class="ph-bold ph-squares-four text-primary"></i> Detalhamento das respostas
                 </p>
                 @if ($areasDetalhe->isNotEmpty() || $temasDetalhe->isNotEmpty())
@@ -173,7 +173,7 @@
                 @endforeach
             </div>
             @if ($r['anuladas']->isNotEmpty())
-                <p class="text-xs text-slate-400 -mt-4 mb-6">* Questão anulada — não conta na nota.</p>
+                <p class="text-xs text-slate-500 -mt-4 mb-6">* Questão anulada — não conta na nota.</p>
             @endif
         @endif
 
@@ -194,11 +194,11 @@
             <div class="grid sm:grid-cols-2 gap-4 mb-6">
                 @if ($temComparativoTurma)
                     <div class="bg-slate-50 border border-slate-100 rounded-xl p-4">
-                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
                             <i class="ph-bold ph-users-three text-primary"></i> Comparativo com a turma {{ $comparativoTurma['turma'] }}
                         </p>
                         <canvas id="grafico-comparativo-turma" height="110"></canvas>
-                        <p class="text-[11px] text-slate-400 mt-2">{{ $comparativoTurma['respondentesTurma'] }} respondente(s) na turma</p>
+                        <p class="text-[11px] text-slate-500 mt-2">{{ $comparativoTurma['respondentesTurma'] }} respondente(s) na turma</p>
                     </div>
                 @endif
 
@@ -208,9 +208,9 @@
                             <i class="ph-fill ph-medal text-primary text-2xl"></i>
                         </div>
                         <div>
-                            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">Posição relativa</p>
+                            <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Posição relativa</p>
                             <p class="text-sm text-slate-600">
-                                Você está entre os <span class="font-black text-primary text-base">top {{ round(100 - $rankingPercentil['percentil']) }}%</span>
+                                Você está entre os <span class="font-black text-emerald-700 text-base">top {{ round(100 - $rankingPercentil['percentil']) }}%</span>
                                 — posição {{ $rankingPercentil['posicao'] }} de {{ $rankingPercentil['totalRespondentes'] }}.
                             </p>
                         </div>
@@ -219,7 +219,7 @@
 
                 @if ($temRadar)
                     <div class="bg-slate-50 border border-slate-100 rounded-xl p-4">
-                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
                             <i class="ph-bold ph-chart-polar text-primary"></i> Desempenho por disciplina
                         </p>
                         <canvas id="grafico-radar-disciplina" height="200"></canvas>
@@ -228,7 +228,7 @@
 
                 @if ($temArea)
                     <div class="bg-slate-50 border border-slate-100 rounded-xl p-4">
-                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
                             <i class="ph-bold ph-chart-polar text-primary"></i> Desempenho por área
                         </p>
                         <canvas id="grafico-area" height="200"></canvas>
@@ -237,7 +237,7 @@
 
                 @if ($temBloom)
                     <div class="bg-slate-50 border border-slate-100 rounded-xl p-4">
-                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
                             <i class="ph-bold ph-brain text-primary"></i> Desempenho por nível de Bloom
                         </p>
                         <canvas id="grafico-bloom" height="180"></canvas>
@@ -246,7 +246,7 @@
 
                 @if ($temMiller)
                     <div class="bg-slate-50 border border-slate-100 rounded-xl p-4">
-                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
                             <i class="ph-bold ph-stethoscope text-primary"></i> Desempenho por nível de Miller
                         </p>
                         <canvas id="grafico-miller" height="180"></canvas>
@@ -259,7 +259,7 @@
             <div class="grid sm:grid-cols-2 gap-4 mb-6">
                 @if (! empty($lacunasConsolidados['lacunas']))
                     <div class="bg-amber-50 border border-amber-100 rounded-xl p-4">
-                        <p class="text-xs font-bold text-amber-600 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                        <p class="text-xs font-bold text-amber-700 uppercase tracking-wide mb-3 flex items-center gap-1.5">
                             <i class="ph-bold ph-warning-circle"></i> Lacunas de aprendizagem
                         </p>
                         <ul class="space-y-3">
@@ -293,7 +293,7 @@
 
         @if ($estado['trilha_estudo']['visivelAluno'] && ! empty($trilhaEstudo))
             <div class="bg-white border border-slate-200 rounded-xl p-4 mb-6">
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 flex items-center gap-1.5">
                     <i class="ph-bold ph-list-checks text-primary"></i> Trilha de estudo
                 </p>
                 <p class="text-xs text-slate-500 mb-3">
@@ -303,7 +303,7 @@
                 <ol class="space-y-2">
                     @foreach ($trilhaEstudo as $passo)
                         <li class="flex items-start gap-3 border border-slate-100 rounded-lg px-3 py-2.5">
-                            <span class="text-[11px] font-bold text-slate-400 tabular-nums pt-0.5 w-5 shrink-0">{{ str_pad((string) $loop->iteration, 2, '0', STR_PAD_LEFT) }}</span>
+                            <span class="text-[11px] font-bold text-slate-500 tabular-nums pt-0.5 w-5 shrink-0">{{ str_pad((string) $loop->iteration, 2, '0', STR_PAD_LEFT) }}</span>
                             <span class="flex-1 min-w-0">
                                 <span class="block text-sm font-bold text-slate-700">{{ $passo['tema'] }}</span>
                                 <span class="block text-xs text-slate-500">
@@ -318,7 +318,7 @@
                 </ol>
                 @if ($r['avaliacao']->link_comentado)
                     <a href="{{ $r['avaliacao']->link_comentado }}" target="_blank" rel="noopener"
-                       class="inline-flex items-center gap-1.5 mt-3 text-xs font-semibold text-primary hover:underline">
+                       class="inline-flex items-center gap-1.5 mt-3 text-xs font-semibold text-emerald-700 hover:underline">
                         <i class="ph-bold ph-arrow-square-out"></i> Ver o gabarito comentado desta prova
                     </a>
                 @endif
@@ -327,7 +327,7 @@
 
         @if ($estado['comparativo_questao']['visivelAluno'] && ! empty($comparativoQuestao))
             <div>
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
                     <i class="ph-bold ph-table text-primary"></i> Sua resposta x turma, por questão
                 </p>
                 <div class="overflow-x-auto">
@@ -358,7 +358,7 @@
     <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5">
         <div class="flex items-center justify-between mb-4">
             <h3 id="modal-detalhe-titulo" class="font-bold text-slate-800"></h3>
-            <button type="button" id="modal-detalhe-fechar" onclick="portalFecharDetalheQuestao()" aria-label="Fechar" class="text-slate-400 hover:text-slate-600">
+            <button type="button" id="modal-detalhe-fechar" onclick="portalFecharDetalheQuestao()" aria-label="Fechar" class="text-slate-500 hover:text-slate-600">
                 <i class="ph-bold ph-x text-lg"></i>
             </button>
         </div>

@@ -21,8 +21,8 @@
         @endif
 
         @if ($errors->any())
-            <div class="bg-red-900/30 border border-red-800 text-red-300 p-4 mb-6 rounded-lg text-sm flex items-start gap-2">
-                <i class="ph-fill ph-warning-circle text-xl mt-0.5"></i>
+            <div id="erros-do-formulario" data-resumo-erros role="alert" class="bg-red-900/30 border border-red-800 text-red-300 p-4 mb-6 rounded-lg text-sm flex items-start gap-2">
+                <i class="ph-fill ph-warning-circle text-xl mt-0.5" aria-hidden="true"></i>
                 <ul class="space-y-1">
                     @foreach ($errors->all() as $error)
                         <li>{{ $error }}</li>
@@ -54,10 +54,10 @@
                             <i class="ph-fill ph-envelope-simple text-slate-500 text-lg"></i>
                         </div>
                         <input type="text" id="identificador" name="identificador" required autofocus value="{{ old('identificador') }}" autocomplete="username"
-                               class="block w-full pl-10 pr-3 py-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                               class="block w-full pl-10 pr-3 py-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                                placeholder="seu usuário ou e-mail">
                     </div>
-                    <p class="text-xs text-slate-500 mt-2 ml-1">Enviaremos um código de acesso para o e-mail cadastrado. Não é preciso senha.</p>
+                    <p class="text-xs text-slate-400 mt-2 ml-1">Enviaremos um código de acesso para o e-mail cadastrado. Não é preciso senha.</p>
                 </div>
 
                 <button type="submit"
@@ -68,7 +68,7 @@
 
             <div class="flex items-center gap-3 my-5" aria-hidden="true">
                 <span class="flex-1 h-px bg-slate-700"></span>
-                <span class="text-xs uppercase tracking-wider text-slate-500">ou</span>
+                <span class="text-xs uppercase tracking-wider text-slate-400">ou</span>
                 <span class="flex-1 h-px bg-slate-700"></span>
             </div>
 
@@ -76,7 +76,7 @@
                class="w-full flex justify-center items-center py-3 px-4 border border-slate-600 rounded-xl text-sm font-semibold text-slate-200 bg-slate-900 hover:bg-slate-700 hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-primary transition-all">
                 <i class="ph-bold ph-key mr-2 text-lg"></i> Entrar com senha
             </a>
-            <p class="text-xs text-slate-500 mt-2 text-center">Para quem tem senha cadastrada. Você vai direto para o seu painel.</p>
+            <p class="text-xs text-slate-400 mt-2 text-center">Para quem tem senha cadastrada. Você vai direto para o seu painel.</p>
         @else
         <form method="POST" action="{{ route('login') }}" class="space-y-6">
             @csrf
@@ -87,7 +87,7 @@
                         <i class="ph-fill ph-user text-slate-500 text-lg"></i>
                     </div>
                     <input type="text" id="username" name="username" required autofocus value="{{ old('username') }}" autocomplete="username"
-                           class="block w-full pl-10 pr-3 py-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                           class="block w-full pl-10 pr-3 py-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                            placeholder="{{ $modo === 'coordenador' ? 'seu usuário' : 'admin' }}">
                 </div>
             </div>
@@ -99,7 +99,7 @@
                         <i class="ph-fill ph-lock text-slate-500 text-lg"></i>
                     </div>
                     <input type="password" id="password" name="password" required autocomplete="current-password"
-                           class="block w-full pl-10 pr-3 py-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                           class="block w-full pl-10 pr-3 py-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                            placeholder="••••••••">
                 </div>
             </div>
@@ -113,7 +113,7 @@
         @if ($modo === 'coordenador')
             <div class="flex items-center gap-3 my-5" aria-hidden="true">
                 <span class="flex-1 h-px bg-slate-700"></span>
-                <span class="text-xs uppercase tracking-wider text-slate-500">ou</span>
+                <span class="text-xs uppercase tracking-wider text-slate-400">ou</span>
                 <span class="flex-1 h-px bg-slate-700"></span>
             </div>
 
@@ -121,11 +121,11 @@
                class="w-full flex justify-center items-center py-3 px-4 border border-slate-600 rounded-xl text-sm font-semibold text-slate-200 bg-slate-900 hover:bg-slate-700 hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-primary transition-all">
                 <i class="ph-bold ph-envelope-simple mr-2 text-lg"></i> Receber código por e-mail
             </a>
-            <p class="text-xs text-slate-500 mt-2 text-center">Não tem senha? Entre com um código enviado ao seu e-mail.</p>
+            <p class="text-xs text-slate-400 mt-2 text-center">Não tem senha? Entre com um código enviado ao seu e-mail.</p>
         @endif
 
         <div class="text-center mt-4">
-            <a href="{{ route('senha.esqueci') }}" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">
+            <a href="{{ route('senha.esqueci') }}" class="text-sm text-slate-400 hover:text-slate-300 transition-colors">
                 Esqueci minha senha
             </a>
         </div>
@@ -133,7 +133,7 @@
     </div>
 
     <div class="bg-slate-900/50 px-8 py-4 border-t border-slate-700 text-center">
-        <a href="{{ route('portal.consulta') }}" class="text-sm text-slate-500 hover:text-slate-300 transition-colors flex items-center justify-center">
+        <a href="{{ route('portal.consulta') }}" class="text-sm text-slate-400 hover:text-slate-300 transition-colors flex items-center justify-center">
             <i class="ph-bold ph-arrow-left mr-1"></i> Voltar para Consulta de Alunos
         </a>
     </div>

@@ -16,7 +16,7 @@
             <div class="min-w-0">
                 <div class="flex items-center justify-between gap-2 text-xs mb-1">
                     <span class="font-medium text-slate-600 truncate" title="{{ $item['rotulo'] }}">
-                        {{ $item['rotulo'] }}@if (! empty($item['extra'])) <span class="text-slate-400">{{ $item['extra'] }}</span>@endif
+                        {{ $item['rotulo'] }}@if (! empty($item['extra'])) <span class="text-slate-500">{{ $item['extra'] }}</span>@endif
                     </span>
                     <span class="font-bold {{ CorDesempenho::classeTexto($item['valor']) }} shrink-0">{{ number_format($item['valor'], 1, ',', '.') }}%</span>
                 </div>
@@ -27,6 +27,6 @@
         @endforeach
     </div>
     @if (! empty($rodape))
-        <p class="text-xs text-slate-400 mt-4">{{ $rodape }}</p>
+        <p class="text-xs text-slate-500 mt-4">{{ $rodape }}</p>
     @endif
 </div>

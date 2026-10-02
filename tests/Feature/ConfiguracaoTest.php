@@ -45,26 +45,31 @@ class ConfiguracaoTest extends TestCase
     public function test_admin_atualiza_configuracoes(): void
     {
         $this->actingAs($this->admin(), 'admin')->post('/sistema/configuracoes', [
-            'atualizacao_repositorio' => 'minhaorg/meurepo',
             'backup_manter_ultimos' => 3,
         ])->assertRedirect(route('sistema.configuracoes.index'));
 
-        $this->assertSame('minhaorg/meurepo', ConfiguracaoSistema::valor('atualizacao_repositorio'));
         $this->assertSame('3', ConfiguracaoSistema::valor('backup_manter_ultimos'));
     }
 
-    public function test_rejeita_repositorio_em_formato_invalido(): void
+    public function test_repositorio_de_atualizacao_nao_e_editavel_pelo_painel(): void
     {
-        $this->actingAs($this->admin(), 'admin')->post('/sistema/configuracoes', [
-            'atualizacao_repositorio' => 'sem-barra',
-            'backup_manter_ultimos' => 5,
-        ])->assertSessionHasErrors('atualizacao_repositorio');
+        // Mesmo mandando o campo (um administrador comprometido, ou um formulário antigo), nada é gravado.
+        $admin = $this->admin();
+        $this->actingAs($admin, 'admin')->post('/sistema/configuracoes', [
+            'atualizacao_repositorio' => 'atacante/repositorio-malicioso',
+            'backup_manter_ultimos' => 3,
+        ])->assertRedirect(route('sistema.configuracoes.index'));
+
+        $this->assertNull(ConfiguracaoSistema::valor('atualizacao_repositorio'));
+
+        $tela = $this->actingAs($admin, 'admin')->get('/sistema/configuracoes');
+        $tela->assertSee(config('sistema.repositorio'));
+        $tela->assertDontSee('name="atualizacao_repositorio"', false);
     }
 
     public function test_rejeita_retencao_fora_do_intervalo(): void
     {
         $this->actingAs($this->admin(), 'admin')->post('/sistema/configuracoes', [
-            'atualizacao_repositorio' => 'org/repo',
             'backup_manter_ultimos' => 0,
         ])->assertSessionHasErrors('backup_manter_ultimos');
     }
@@ -81,9 +86,11 @@ class ConfiguracaoTest extends TestCase
         $this->assertCount(2, File::files(config('sistema.backup_dir')));
     }
 
-    public function test_atualizador_usa_repositorio_configurado(): void
+    public function test_atualizador_usa_o_repositorio_do_env_e_ignora_o_valor_antigo_do_painel(): void
     {
-        ConfiguracaoSistema::definir('atualizacao_repositorio', 'minhaorg/meurepo');
+        config(['sistema.repositorio' => 'minhaorg/meurepo']);
+        // Valor deixado por uma versão antiga do painel: não pode redirecionar o atualizador.
+        ConfiguracaoSistema::definir('atualizacao_repositorio', 'atacante/repositorio-malicioso');
 
         Http::fake([
             'api.github.com/repos/minhaorg/meurepo/*' => Http::response(['tag_name' => 'v1.0.0', 'body' => '', 'zipball_url' => 'https://x/zip']),
@@ -92,5 +99,13 @@ class ConfiguracaoTest extends TestCase
         app(GithubReleaseClient::class)->ultimaRelease();
 
         Http::assertSent(fn ($request) => str_contains($request->url(), 'minhaorg/meurepo'));
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'atacante'));
+    }
+
+    public function test_repositorio_do_env_em_formato_invalido_e_recusado(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        new GithubReleaseClient('sem-barra');
     }
 }

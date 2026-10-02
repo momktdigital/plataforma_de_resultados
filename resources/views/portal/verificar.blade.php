@@ -33,7 +33,6 @@
 
     <form method="POST" action="{{ route('portal.verificar') }}" class="space-y-6">
         @csrf
-        <input type="hidden" name="cpf" value="{{ $cpf }}">
         <div>
             <label class="block text-sm font-bold text-slate-700 mb-1 ml-1 text-center" for="codigo">Código de verificação</label>
             <input id="codigo" name="codigo" type="text" maxlength="6" required autofocus
@@ -50,14 +49,13 @@
     <div class="text-center mt-6">
         <form method="POST" action="{{ route('portal.reenviar') }}" class="inline">
             @csrf
-            <input type="hidden" name="cpf" value="{{ $cpf }}">
-            <button type="submit" class="text-sm font-medium text-slate-500 hover:text-primary transition-colors">
+                <button type="submit" class="text-sm font-medium text-slate-500 hover:text-primary transition-colors">
                 Reenviar código
             </button>
         </form>
     </div>
     <div class="text-center mt-2">
-        <a href="{{ route('portal.consulta') }}" class="text-xs text-slate-400 hover:text-slate-600 underline">
+        <a href="{{ route('portal.consulta') }}" class="text-xs text-slate-500 hover:text-slate-600 underline">
             Cancelar e voltar
         </a>
     </div>

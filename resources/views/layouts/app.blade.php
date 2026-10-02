@@ -27,20 +27,27 @@
     @include('partials.accessibility-head')
     <style>
         body { font-family: 'Inter', sans-serif; }
-        @media (max-width: 768px) {
-            .sidebar { transform: translateX(-100%); transition: transform .3s ease-in-out; z-index: 50; position: fixed; height: 100vh; }
-            .sidebar.open { transform: translateX(0); }
+        /* Abaixo de 768px (o `md:` do Tailwind começa EM 768px): com "max-width: 768px" a barra lateral ficava escondida
+           justamente em 768px, onde o botão do menu (md:hidden) também some — o menu ficava inalcançável. */
+        @media (max-width: 767.98px) {
+            /* visibility: escondida fora da tela, a barra também sai da ordem de tabulação do teclado */
+            .sidebar { transform: translateX(-100%); visibility: hidden; transition: transform .3s ease-in-out, visibility 0s linear .3s; z-index: 50; position: fixed; height: 100vh; }
+            .sidebar.open { transform: translateX(0); visibility: visible; transition-delay: 0s; }
             .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 40; }
             .overlay.open { display: block; }
         }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans">
+<a href="#conteudo-principal"
+   class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:bg-white focus:text-slate-900 focus:font-semibold focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg focus:ring-2 focus:ring-primary">
+    Pular para o conteúdo
+</a>
 @auth('admin')
     <div class="h-screen flex overflow-hidden">
         <div id="sidebar-overlay" class="overlay" onclick="toggleSidebar()"></div>
 
-        <aside id="sidebar" class="sidebar w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0">
+        <aside id="sidebar" class="sidebar w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0" aria-label="Barra lateral">
             <div class="h-16 flex items-center px-6 border-b border-slate-800 bg-slate-950">
                 @if ($siteLogoDark || $siteLogo)
                     <img src="{{ asset('uploads/logos/'.basename($siteLogoDark ?: $siteLogo)) }}" alt="{{ $siteTitle }}" class="h-8 object-contain">
@@ -58,13 +65,13 @@
                         <div class="relative">
                             <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"></i>
                             <input type="text" name="q" placeholder="Buscar aluno ou avaliação..."
-                                   class="w-full pl-9 pr-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                                   class="w-full pl-9 pr-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
                         </div>
                     </form>
                 </div>
             @endunless
 
-            <nav class="flex-1 overflow-y-auto py-4">
+            <nav class="flex-1 overflow-y-auto py-4" aria-label="Menu principal">
                 <ul class="space-y-1 px-3">
                     @php
                         $itensMenu = $ehCoordenador
@@ -86,8 +93,8 @@
                     @foreach ($itensMenu as $item)
                         @php($ativo = request()->routeIs($item['padrao']))
                         <li>
-                            <a href="{{ route($item['rota']) }}"
-                               class="flex items-center px-3 py-2.5 rounded-lg transition-colors {{ $ativo ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-slate-800 hover:text-white' }}">
+                            <a href="{{ route($item['rota']) }}" @if ($ativo) aria-current="page" @endif
+                               class="flex items-center px-3 py-2.5 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary {{ $ativo ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-slate-800 hover:text-white' }}">
                                 <i class="ph {{ $item['icone'] }} text-xl mr-3 {{ $ativo ? 'text-primary' : '' }}"></i> {{ $item['label'] }}
                             </a>
                         </li>
@@ -113,38 +120,57 @@
                 </div>
                 <div class="flex items-center gap-2">
                     <div class="accessibility-container"></div>
-                    <button onclick="toggleSidebar()" class="text-slate-500 hover:text-primary focus:outline-none">
-                        <i class="ph ph-list text-2xl"></i>
+                    <button type="button" id="botao-menu" onclick="toggleSidebar()" aria-label="Abrir o menu" aria-controls="sidebar" aria-expanded="false"
+                            class="text-slate-600 hover:text-emerald-700 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                        <i class="ph ph-list text-2xl" aria-hidden="true"></i>
                     </button>
                 </div>
             </header>
 
             <div class="bg-white border-b border-slate-200 px-6 h-14 shrink-0 hidden md:flex items-center justify-between">
-                <span class="text-sm text-slate-400">{{ $siteTitle }}</span>
+                <span class="text-sm text-slate-500">{{ $siteTitle }}</span>
                 <div class="flex items-center gap-4">
                     <div class="accessibility-container"></div>
                     <span class="text-sm text-slate-500 border-l border-slate-200 pl-4">{{ auth('admin')->user()->username }}</span>
                 </div>
             </div>
 
-            <main class="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 p-4 sm:p-6 lg:p-8">
+            <main id="conteudo-principal" tabindex="-1" class="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 p-4 sm:p-6 lg:p-8 focus:outline-none">
                 @include('partials.flash')
                 @yield('content')
             </main>
         </div>
     </div>
 @else
-    <main class="max-w-5xl mx-auto px-6 py-8">
+    <main id="conteudo-principal" tabindex="-1" class="max-w-5xl mx-auto px-6 py-8 focus:outline-none">
         @include('partials.flash')
         @yield('content')
     </main>
 @endauth
 
 <script>
-    function toggleSidebar() {
-        document.getElementById('sidebar').classList.toggle('open');
-        document.getElementById('sidebar-overlay').classList.toggle('open');
+    function toggleSidebar(forcarFechado) {
+        var barra = document.getElementById('sidebar');
+        var botao = document.getElementById('botao-menu');
+        var aberta = forcarFechado === true ? false : !barra.classList.contains('open');
+        barra.classList.toggle('open', aberta);
+        document.getElementById('sidebar-overlay').classList.toggle('open', aberta);
+        if (botao) {
+            botao.setAttribute('aria-expanded', aberta ? 'true' : 'false');
+            botao.setAttribute('aria-label', aberta ? 'Fechar o menu' : 'Abrir o menu');
+        }
+        if (aberta) {
+            var primeiro = barra.querySelector('nav a');
+            if (primeiro) primeiro.focus();
+        } else if (botao && forcarFechado === true) {
+            botao.focus();
+        }
     }
+    // Esc fecha o menu no celular e devolve o foco ao botão.
+    document.addEventListener('keydown', function (e) {
+        var barra = document.getElementById('sidebar');
+        if (e.key === 'Escape' && barra && barra.classList.contains('open')) toggleSidebar(true);
+    });
 </script>
 @include('partials.accessibility-scripts')
 </body>

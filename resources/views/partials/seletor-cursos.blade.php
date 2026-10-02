@@ -21,7 +21,7 @@
                 <span>{{ $curso }}</span>
             </label>
         @empty
-            <p class="px-3 py-2 text-sm text-slate-400">Nenhum curso cadastrado ainda — importe a matrícula dos alunos.</p>
+            <p class="px-3 py-2 text-sm text-slate-500">Nenhum curso cadastrado ainda — importe a matrícula dos alunos.</p>
         @endforelse
     </div>
 </div>

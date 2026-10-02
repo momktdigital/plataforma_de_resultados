@@ -21,8 +21,8 @@
         @endif
 
         @if ($errors->any())
-            <div class="bg-red-900/30 border border-red-800 text-red-300 p-4 mb-6 rounded-lg text-sm flex items-start gap-2">
-                <i class="ph-fill ph-warning-circle text-xl mt-0.5"></i>
+            <div id="erros-do-formulario" data-resumo-erros role="alert" class="bg-red-900/30 border border-red-800 text-red-300 p-4 mb-6 rounded-lg text-sm flex items-start gap-2">
+                <i class="ph-fill ph-warning-circle text-xl mt-0.5" aria-hidden="true"></i>
                 <ul class="space-y-1">
                     @foreach ($errors->all() as $error)
                         <li>{{ $error }}</li>
@@ -37,7 +37,7 @@
                 <label for="codigo" class="block text-sm font-medium text-slate-300 mb-1 ml-1">Código de acesso</label>
                 <input type="text" id="codigo" name="codigo" required autofocus inputmode="numeric" autocomplete="one-time-code"
                        maxlength="6" pattern="\d{6}"
-                       class="block w-full text-center tracking-[0.5em] text-2xl font-bold py-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                       class="block w-full text-center tracking-[0.5em] text-2xl font-bold py-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                        placeholder="000000">
             </div>
 
@@ -49,14 +49,14 @@
 
         <form method="POST" action="{{ route('login.codigo.reenviar') }}" class="text-center mt-4">
             @csrf
-            <button type="submit" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">
+            <button type="submit" class="text-sm text-slate-400 hover:text-slate-300 transition-colors">
                 Não recebi o código &mdash; enviar de novo
             </button>
         </form>
     </div>
 
     <div class="bg-slate-900/50 px-8 py-4 border-t border-slate-700 text-center">
-        <a href="{{ route('login', ['modo' => 'codigo']) }}" class="text-sm text-slate-500 hover:text-slate-300 transition-colors flex items-center justify-center">
+        <a href="{{ route('login', ['modo' => 'codigo']) }}" class="text-sm text-slate-400 hover:text-slate-300 transition-colors flex items-center justify-center">
             <i class="ph-bold ph-arrow-left mr-1"></i> Voltar
         </a>
     </div>

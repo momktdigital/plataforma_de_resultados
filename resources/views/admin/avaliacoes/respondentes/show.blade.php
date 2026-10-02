@@ -92,7 +92,7 @@
             </div>
         @endforeach
     </div>
-    <p class="text-xs text-slate-400 mt-3">Clique numa resposta pra corrigi-la (ex.: bolha mal escaneada) sem reimportar o período inteiro.</p>
+    <p class="text-xs text-slate-500 mt-3">Clique numa resposta pra corrigi-la (ex.: bolha mal escaneada) sem reimportar o período inteiro.</p>
 </div>
 
 <div id="modal-editar-resposta" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 p-4"
@@ -100,7 +100,7 @@
     <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5">
         <div class="flex items-center justify-between mb-4">
             <h3 id="modal-editar-resposta-titulo" class="font-bold text-slate-800">Corrigir resposta — Questão <span id="modal-editar-resposta-numero"></span></h3>
-            <button type="button" id="modal-editar-resposta-fechar" aria-label="Fechar" class="text-slate-400 hover:text-slate-600">
+            <button type="button" id="modal-editar-resposta-fechar" aria-label="Fechar" class="text-slate-500 hover:text-slate-600">
                 <i class="ph-bold ph-x text-lg"></i>
             </button>
         </div>
@@ -111,7 +111,7 @@
                 <label class="block text-sm font-medium mb-1" for="modal-editar-resposta-valor">Nova resposta</label>
                 <input id="modal-editar-resposta-valor" name="resposta" type="text" maxlength="10"
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm uppercase">
-                <p class="text-xs text-slate-400 mt-1">Deixe em branco para marcar como "sem resposta".</p>
+                <p class="text-xs text-slate-500 mt-1">Deixe em branco para marcar como "sem resposta".</p>
             </div>
             <div class="flex gap-3">
                 <button type="button" id="modal-editar-resposta-cancelar" class="flex-1 border border-slate-300 text-slate-700 hover:bg-slate-50 font-semibold rounded-lg px-4 py-2 text-sm">
@@ -130,7 +130,7 @@
     <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5">
         <div class="flex items-center justify-between mb-4">
             <h3 id="modal-trocar-vinculo-titulo" class="font-bold text-slate-800">Trocar aluno vinculado</h3>
-            <button type="button" id="modal-trocar-vinculo-fechar" aria-label="Fechar" class="text-slate-400 hover:text-slate-600">
+            <button type="button" id="modal-trocar-vinculo-fechar" aria-label="Fechar" class="text-slate-500 hover:text-slate-600">
                 <i class="ph-bold ph-x text-lg"></i>
             </button>
         </div>
@@ -147,7 +147,7 @@
                 @error('cpf_ou_ra')
                     <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
                 @enderror
-                <p class="text-xs text-slate-400 mt-1">Busca o aluno cadastrado por CPF ou RA e reatribui todas as respostas e notas deste respondente a ele.</p>
+                <p class="text-xs text-slate-500 mt-1">Busca o aluno cadastrado por CPF ou RA e reatribui todas as respostas e notas deste respondente a ele.</p>
             </div>
             <div class="flex gap-3">
                 <button type="button" id="modal-trocar-vinculo-cancelar" class="flex-1 border border-slate-300 text-slate-700 hover:bg-slate-50 font-semibold rounded-lg px-4 py-2 text-sm">

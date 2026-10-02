@@ -132,6 +132,55 @@ já filtra sozinho; **`DB::table('respostas ...')` não** — acrescente
 visuais antes/depois de apagar). Sem isso, o resumo e os gráficos passam a
 discordar sobre a mesma turma.
 
+## O atualizador substitui o código — cuidado com a fronteira de confiança
+
+`UpdateService` baixa um zip e sobrescreve a aplicação. Por isso:
+
+- O repositório vem **só do `.env`** (`config('sistema.repositorio')`). Nunca
+  volte a ler repositório de `ConfiguracaoSistema`/formulário: quem alcança o
+  painel passaria a poder rodar código arbitrário no servidor.
+- `composer install` roda com `--no-scripts --no-plugins` (+ `package:discover`
+  depois). Não remova as flags.
+- Aplicar uma atualização pede a senha do admin e é auditado; a verificação de
+  assinatura (`ATUALIZACAO_EXIGIR_ASSINATURA`) passa por
+  `exigirAssinaturaSeConfigurado()` tanto em `atualizar()` quanto em
+  `baixarParaConfirmacao()` — um caminho novo que aplique código precisa chamá-la.
+
+## Portal: o 2FA depende da pré-autenticação da sessão
+
+`/portal/verificar` e `/portal/reenviar` só funcionam com `portal_pre_auth` na
+sessão (gravada por `consultar` depois de CPF + data de nascimento). Não receba
+o CPF dessas rotas por campo/corpo — foi exatamente o furo corrigido (qualquer
+CPF dava 2FA sem primeiro fator). O código de 2FA é guardado como HMAC
+(`VerificacaoEmail::hashDoCodigo`); nunca grave nem logue o código em texto, e
+reenviar significa **gerar um código novo**. O limite de falhas é por IP
+(`RateLimit2faService`) **e** por CPF (`RateLimiter`, `MAX_FALHAS_POR_CPF`).
+
+## Blade: `@include` não compartilha variáveis atribuídas
+
+Variável criada num `@php` de um partial **não existe** nos outros partials,
+mesmo incluídos pela mesma view (a `bi.blade.php` foi quebrada em `bi/_*.blade.php`
+e `bi/scripts/_*.blade.php` e isso já gerou um gráfico vazio em silêncio, porque
+`$x ?? []` esconde o erro). Se mais de um partial precisa do mesmo valor derivado,
+calcule num helper PHP (`App\Support\EvolucaoDoDashboard`) e chame dos dois
+lados — ou passe via `@include('...', [...])`. Ao mexer na view, compare o HTML
+renderizado antes/depois, não só se a página abre.
+
+## Acessibilidade das views
+
+- Texto pequeno em fundo claro: `text-slate-500`/`-emerald-700`/`-amber-700`/
+  `-red-600`; nunca `text-slate-400`, `-emerald-600`, `-amber-600`, `-red-500`
+  ou `text-primary` (`AcessibilidadeTest` varre as views e falha). Em fundo
+  escuro, `text-slate-400` (não `-500`).
+- Botão só de ícone precisa de `aria-label`; ícone decorativo, `aria-hidden="true"`.
+- Caixa de erros de formulário: `id="erros-do-formulario" data-resumo-erros
+  role="alert"` (o `partials/erros-de-campo` marca os campos inválidos e foca o primeiro).
+- Gráfico novo em `<canvas>`: o `graficos-acessiveis.js` descreve sozinho a partir
+  do `Chart.getChart(canvas)` e do título (`h1–h3`) mais próximo acima; use
+  `data-titulo` no canvas se o título da seção não servir.
+- O ponto de quebra do menu lateral é `max-width: 767.98px` (o `md:` do Tailwind
+  começa em 768px) — não volte para `768px`.
+
 ## Convenções de teste
 
 - `tests/Unit/`: `PHPUnit\Framework\TestCase` puro, sem Laravel — pra

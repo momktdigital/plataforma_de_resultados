@@ -16,6 +16,24 @@ return [
 
     'repositorio' => env('ATUALIZACAO_REPOSITORIO', 'momktdigital/resultados_di'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Assinatura das versões
+    |--------------------------------------------------------------------------
+    |
+    | O atualizador baixa uma versão e EXECUTA o código dela (migrations, composer). Com
+    | ATUALIZACAO_EXIGIR_ASSINATURA=true ele só aceita uma versão cujo commit o GitHub
+    | marcou como "Verified" (commit assinado por uma chave cadastrada na conta de quem
+    | assinou). ATUALIZACAO_ASSINANTES (logins do GitHub, separados por vírgula) restringe
+    | QUEM pode ter assinado — sem a lista, qualquer assinatura verificada serve. Desligado
+    | por padrão: ligue depois que os commits de release passarem a ser assinados.
+    |
+    */
+
+    'exigir_assinatura' => filter_var(env('ATUALIZACAO_EXIGIR_ASSINATURA', false), FILTER_VALIDATE_BOOLEAN),
+
+    'assinantes' => array_values(array_filter(array_map('trim', explode(',', (string) env('ATUALIZACAO_ASSINANTES', ''))))),
+
     'subpasta' => '',
 
     /*

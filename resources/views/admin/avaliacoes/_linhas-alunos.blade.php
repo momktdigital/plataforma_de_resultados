@@ -4,8 +4,8 @@
         $nomeAluno = $r['aluno_nome'] ?: '—';
         $inicial = mb_strtoupper(mb_substr($r['aluno_nome'] ?: ($r['ra'] ?: '?'), 0, 1));
     @endphp
-    <tr class="{{ $r['ausente'] ? 'bg-slate-50/60 text-slate-400' : '' }}">
-        <td class="px-4 py-3 text-slate-400">{{ $r['ausente'] ? '—' : $inicio + $i + 1 }}</td>
+    <tr class="{{ $r['ausente'] ? 'bg-slate-50/60 text-slate-500' : '' }}">
+        <td class="px-4 py-3 text-slate-500">{{ $r['ausente'] ? '—' : $inicio + $i + 1 }}</td>
         <td class="px-4 py-3">
             <div class="flex items-center gap-3 min-w-[14rem]">
                 @if ($r['foto'])
@@ -28,7 +28,7 @@
         <td class="px-4 py-3">{{ $r['turma'] ?: '—' }}</td>
         <td class="px-4 py-3">
             @if ($r['percentual'] === null)
-                <span class="text-slate-400">—</span>
+                <span class="text-slate-500">—</span>
             @else
                 <div class="flex items-center gap-2 min-w-[9rem]">
                     <span class="tabular-nums">{{ $r['acertos'] }}/{{ $r['total'] }}</span>

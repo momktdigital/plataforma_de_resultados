@@ -149,7 +149,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="7" class="px-4 py-8 text-center text-slate-400">{{ $somenteLeitura ? 'Nenhuma avaliação com alunos dos seus cursos ainda.' : 'Nenhuma avaliação cadastrada ainda.' }}</td>
+                    <td colspan="7" class="px-4 py-8 text-center text-slate-500">{{ $somenteLeitura ? 'Nenhuma avaliação com alunos dos seus cursos ainda.' : 'Nenhuma avaliação cadastrada ainda.' }}</td>
                 </tr>
             @endforelse
         </tbody>

@@ -13,8 +13,8 @@
 <div class="bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 overflow-hidden">
     <div class="p-8">
         @if ($errors->any())
-            <div class="bg-red-900/30 border border-red-800 text-red-300 p-4 mb-6 rounded-lg text-sm flex items-start gap-2">
-                <i class="ph-fill ph-warning-circle text-xl mt-0.5"></i>
+            <div id="erros-do-formulario" data-resumo-erros role="alert" class="bg-red-900/30 border border-red-800 text-red-300 p-4 mb-6 rounded-lg text-sm flex items-start gap-2">
+                <i class="ph-fill ph-warning-circle text-xl mt-0.5" aria-hidden="true"></i>
                 <ul class="space-y-1">
                     @foreach ($errors->all() as $error)
                         <li>{{ $error }}</li>
@@ -28,13 +28,13 @@
             <div>
                 <label for="password" class="block text-sm font-medium text-slate-300 mb-1 ml-1">Nova senha</label>
                 <input type="password" id="password" name="password" required minlength="10" autofocus
-                       class="block w-full px-3 py-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                       class="block w-full px-3 py-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                        placeholder="••••••••">
             </div>
             <div>
                 <label for="password_confirmation" class="block text-sm font-medium text-slate-300 mb-1 ml-1">Confirme a nova senha</label>
                 <input type="password" id="password_confirmation" name="password_confirmation" required minlength="10"
-                       class="block w-full px-3 py-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                       class="block w-full px-3 py-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                        placeholder="••••••••">
             </div>
 

@@ -5,7 +5,7 @@
 @section('content')
 <div class="max-w-xl mx-auto mt-10 bg-white border border-slate-200 rounded-xl shadow-sm p-8">
     <h1 class="text-xl font-bold mb-1">Instalação — Avaliações</h1>
-    <p class="text-sm text-slate-500 mb-6">Passo 1 de 4 — verificação de requisitos.</p>
+    <p class="text-sm text-slate-400 mb-6">Passo 1 de 4 — verificação de requisitos.</p>
 
     <ul class="space-y-2 text-sm mb-6">
         <li class="flex items-center justify-between border-b border-slate-100 pb-2">

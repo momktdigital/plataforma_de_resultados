@@ -17,11 +17,11 @@
                 <img src="{{ $aluno->fotoUrl(300) }}" alt="Foto de {{ $aluno->nome ?: $aluno->ra }}"
                      class="w-32 h-32 rounded-full object-cover mx-auto border border-slate-200"
                      onerror="this.onerror=null;this.src='';this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden');">
-                <div class="hidden w-32 h-32 rounded-full mx-auto bg-slate-100 flex items-center justify-center text-slate-400 text-4xl font-bold">
+                <div class="hidden w-32 h-32 rounded-full mx-auto bg-slate-100 flex items-center justify-center text-slate-500 text-4xl font-bold">
                     {{ mb_strtoupper(mb_substr($aluno->nome ?: $aluno->ra, 0, 1)) }}
                 </div>
             @else
-                <div class="w-32 h-32 rounded-full mx-auto bg-slate-100 flex items-center justify-center text-slate-400 text-4xl font-bold">
+                <div class="w-32 h-32 rounded-full mx-auto bg-slate-100 flex items-center justify-center text-slate-500 text-4xl font-bold">
                     {{ mb_strtoupper(mb_substr($aluno->nome ?: $aluno->ra, 0, 1)) }}
                 </div>
             @endif

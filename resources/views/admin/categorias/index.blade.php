@@ -15,7 +15,7 @@
         <h2 class="font-semibold mb-4">Árvore de categorias</h2>
 
         @if ($raizes->isEmpty())
-            <p class="text-sm text-slate-400">Nenhuma categoria cadastrada ainda.</p>
+            <p class="text-sm text-slate-500">Nenhuma categoria cadastrada ainda.</p>
         @else
             <ul>
                 @foreach ($raizes as $categoria)
@@ -57,7 +57,7 @@
     <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5">
         <div class="flex items-center justify-between mb-4">
             <h3 id="modal-excluir-categoria-titulo" class="font-bold text-slate-800">Excluir categoria</h3>
-            <button type="button" id="modal-excluir-categoria-fechar" aria-label="Fechar" class="text-slate-400 hover:text-slate-600">
+            <button type="button" id="modal-excluir-categoria-fechar" aria-label="Fechar" class="text-slate-500 hover:text-slate-600">
                 <i class="ph-bold ph-x text-lg"></i>
             </button>
         </div>

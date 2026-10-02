@@ -13,7 +13,8 @@ class ConfiguracaoController extends Controller
     public function index(): View
     {
         return view('admin.sistema.configuracoes', [
-            'atualizacaoRepositorio' => ConfiguracaoSistema::valor('atualizacao_repositorio', config('sistema.repositorio')),
+            // Somente leitura: o repositório de onde o servidor baixa e executa código vem do .env.
+            'atualizacaoRepositorio' => config('sistema.repositorio'),
             'backupManterUltimos' => ConfiguracaoSistema::valor('backup_manter_ultimos', '5'),
         ]);
     }
@@ -22,7 +23,6 @@ class ConfiguracaoController extends Controller
     {
         $dados = $request->validated();
 
-        ConfiguracaoSistema::definir('atualizacao_repositorio', $dados['atualizacao_repositorio']);
         ConfiguracaoSistema::definir('backup_manter_ultimos', (string) $dados['backup_manter_ultimos']);
 
         return redirect()->route('sistema.configuracoes.index')->with('status', 'Configurações salvas.');

@@ -53,12 +53,12 @@
                                     class="text-blue-600 hover:underline mr-3">Restaurar</button>
                             <button type="submit" formaction="{{ route('lixeira.avaliacoes.forceDelete', $avaliacao->codigo) }}"
                                     onclick="return submeterAcaoIndividual(this, 'DELETE', 'Excluir permanentemente a avaliação #{{ $avaliacao->codigo }} e tudo que ela contém? Esta ação não pode ser desfeita.');"
-                                    class="text-red-500 hover:text-red-700">Excluir definitivamente</button>
+                                    class="text-red-600 hover:text-red-700">Excluir definitivamente</button>
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="4" class="px-4 py-8 text-center text-slate-400">Nenhuma avaliação na lixeira.</td>
+                        <td colspan="4" class="px-4 py-8 text-center text-slate-500">Nenhuma avaliação na lixeira.</td>
                     </tr>
                 @endforelse
             </tbody>
@@ -121,12 +121,12 @@
                                     class="text-blue-600 hover:underline mr-3">Restaurar</button>
                             <button type="submit" formaction="{{ route('lixeira.questoes.forceDelete', $questao->id) }}"
                                     onclick="return submeterAcaoIndividual(this, 'DELETE', 'Excluir permanentemente esta questão?');"
-                                    class="text-red-500 hover:text-red-700">Excluir definitivamente</button>
+                                    class="text-red-600 hover:text-red-700">Excluir definitivamente</button>
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="5" class="px-4 py-8 text-center text-slate-400">Nenhuma questão na lixeira.</td>
+                        <td colspan="5" class="px-4 py-8 text-center text-slate-500">Nenhuma questão na lixeira.</td>
                     </tr>
                 @endforelse
             </tbody>

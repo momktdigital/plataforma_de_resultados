@@ -88,7 +88,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="4" class="px-4 py-8 text-center text-slate-400">Nenhum backup gerado ainda.</td>
+                    <td colspan="4" class="px-4 py-8 text-center text-slate-500">Nenhum backup gerado ainda.</td>
                 </tr>
             @endforelse
         </tbody>

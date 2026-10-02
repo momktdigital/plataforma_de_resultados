@@ -35,6 +35,10 @@
     </style>
 </head>
 <body class="bg-secondary text-dark min-h-screen flex flex-col">
+<a href="#conteudo-principal"
+   class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:bg-white focus:text-slate-900 focus:font-semibold focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg focus:ring-2 focus:ring-primary">
+    Pular para o conteúdo
+</a>
 
 <div class="bg-white shadow-sm sticky top-0 z-40">
     <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -65,11 +69,11 @@
                             <img src="{{ $aluno->fotoUrl(60) }}" alt="Foto de {{ $aluno->nome ?: $aluno->ra }}"
                                  class="w-9 h-9 rounded-full object-cover border border-slate-200"
                                  onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='flex';">
-                            <span style="display:none" class="w-9 h-9 rounded-full bg-primary/10 text-primary items-center justify-center text-sm font-bold">
+                            <span style="display:none" class="w-9 h-9 rounded-full bg-primary/10 text-emerald-700 items-center justify-center text-sm font-bold">
                                 {{ mb_strtoupper(mb_substr($aluno->nome ?: $aluno->ra, 0, 1)) }}
                             </span>
                         @else
-                            <span class="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">
+                            <span class="w-9 h-9 rounded-full bg-primary/10 text-emerald-700 flex items-center justify-center text-sm font-bold">
                                 {{ mb_strtoupper(mb_substr($aluno->nome ?: $aluno->ra, 0, 1)) }}
                             </span>
                         @endif
@@ -117,14 +121,14 @@
     </div>
 </div>
 
-<main class="@yield('container-class', 'max-w-2xl') mx-auto px-6 py-12 flex-1 w-full">
+<main id="conteudo-principal" tabindex="-1" class="@yield('container-class', 'max-w-2xl') mx-auto px-6 py-12 flex-1 w-full focus:outline-none">
     @include('partials.flash')
     @yield('content')
 </main>
 
 <footer class="py-6 text-center">
     <a href="{{ route('login') }}" title="Área administrativa" aria-label="Área administrativa"
-       class="inline-flex items-center gap-1 text-xs text-slate-300 hover:text-slate-500 transition-colors">
+       class="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors">
         <i class="ph ph-lock-key"></i> Área administrativa
     </a>
 </footer>

@@ -42,6 +42,22 @@ class PortalTest extends TestCase
         ], $atributos));
     }
 
+    /** Simula o primeiro fator (CPF + nascimento) já aprovado nesta sessão — o que libera `verificar`/`reenviar`. */
+    private function primeiroFator(Aluno $aluno, ?int $ate = null): void
+    {
+        $this->withSession(['portal_pre_auth' => [
+            'aluno_id' => $aluno->id,
+            'cpf' => $aluno->cpf,
+            'ate' => $ate ?? Carbon::now()->addMinutes(15)->timestamp,
+        ]]);
+    }
+
+    /** O código de 2FA só existe no banco como HMAC (ver VerificacaoEmail::hashDoCodigo()). */
+    private function codigoGuardado(Aluno $aluno, string $codigo = '123456'): string
+    {
+        return VerificacaoEmail::hashDoCodigo($aluno->cpf, $codigo);
+    }
+
     public function test_consulta_sem_2fa_mostra_resultados_diretamente(): void
     {
         $aluno = $this->aluno();
@@ -142,6 +158,184 @@ class PortalTest extends TestCase
         $response->assertOk();
         $response->assertSee('Verificação');
         $this->assertDatabaseHas('verificacoes_email', ['cpf' => '12345678909']);
+        // O CPF não é repassado à tela do código (nem em campo oculto): a sessão é que lembra de quem é.
+        $response->assertDontSee('12345678909');
+        $response->assertDontSee('123.456.789-09');
+    }
+
+    // ------------------------------------------------------------ 2FA: primeiro fator, hash do código, limite por CPF
+
+    /** Código que o aluno recebeu por e-mail numa consulta com 2FA ativo (capturado do corpo da mensagem). */
+    private function consultarEReceberCodigo(Aluno $aluno): string
+    {
+        $corpo = '';
+        $this->mock(SmtpEmailSender::class, function (MockInterface $mock) use (&$corpo) {
+            $mock->shouldReceive('enviar')->andReturnUsing(function ($para, $assunto, $texto) use (&$corpo) {
+                $corpo = $texto;
+            });
+        });
+
+        $this->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000'])->assertOk();
+        preg_match('/\b(\d{6})\b/', $corpo, $m);
+
+        return $m[1];
+    }
+
+    public function test_codigo_de_2fa_nunca_fica_em_texto_puro_no_banco(): void
+    {
+        Configuracao::definir('smtp_ativo', '1');
+        $aluno = $this->aluno(['email' => 'aluno@example.com']);
+
+        $codigo = $this->consultarEReceberCodigo($aluno);
+
+        $guardado = VerificacaoEmail::firstOrFail()->codigo;
+        $this->assertNotSame($codigo, $guardado);
+        $this->assertSame(64, strlen($guardado));
+        $this->assertSame(VerificacaoEmail::hashDoCodigo($aluno->cpf, $codigo), $guardado);
+        $this->assertSame(0, \DB::table('verificacoes_email')->where('codigo', $codigo)->count());
+    }
+
+    public function test_o_codigo_recebido_por_email_abre_o_portal(): void
+    {
+        Configuracao::definir('smtp_ativo', '1');
+        $aluno = $this->aluno(['email' => 'aluno@example.com']);
+        $codigo = $this->consultarEReceberCodigo($aluno);
+
+        $this->post('/portal/verificar', ['codigo' => $codigo])->assertRedirect(route('portal.resultados'));
+        $this->get('/portal/resultados')->assertOk();
+    }
+
+    public function test_verificar_e_reenviar_nao_funcionam_sem_o_primeiro_fator(): void
+    {
+        Configuracao::definir('smtp_ativo', '1');
+        $aluno = $this->aluno(['email' => 'aluno@example.com']);
+        VerificacaoEmail::create(['cpf' => $aluno->cpf, 'codigo' => $this->codigoGuardado($aluno), 'expira_em' => Carbon::now()->addMinutes(10)]);
+        $this->mock(SmtpEmailSender::class, fn (MockInterface $mock) => $mock->shouldNotReceive('enviar'));
+
+        // Quem só sabe o CPF: nem reenvia e-mail para o aluno, nem gasta as tentativas do código dele.
+        $this->post('/portal/verificar', ['cpf' => $aluno->cpf, 'codigo' => '000000'])
+            ->assertRedirect(route('portal.consulta'))
+            ->assertSessionHasErrors('cpf');
+        $this->post('/portal/reenviar', ['cpf' => $aluno->cpf])
+            ->assertRedirect(route('portal.consulta'))
+            ->assertSessionHasErrors('cpf');
+
+        $this->assertDatabaseHas('verificacoes_email', ['cpf' => $aluno->cpf, 'tentativas_falhas' => 0, 'vezes_reenviado' => 0]);
+        $this->assertDatabaseCount('rate_limit_2fa', 0);
+    }
+
+    public function test_primeiro_fator_expirado_nao_vale(): void
+    {
+        $aluno = $this->aluno(['email' => 'aluno@example.com']);
+        VerificacaoEmail::create(['cpf' => $aluno->cpf, 'codigo' => $this->codigoGuardado($aluno), 'expira_em' => Carbon::now()->addMinutes(10)]);
+        $this->primeiroFator($aluno, ate: Carbon::now()->subMinute()->timestamp);
+
+        $this->post('/portal/verificar', ['codigo' => '123456'])
+            ->assertRedirect(route('portal.consulta'))
+            ->assertSessionHasErrors(['cpf' => 'Sua verificação expirou. Informe o CPF e a data de nascimento novamente.']);
+        $this->get('/portal/resultados')->assertRedirect(route('portal.consulta'));
+    }
+
+    public function test_cpf_enviado_no_corpo_e_ignorado_vale_o_da_sessao(): void
+    {
+        $meu = $this->aluno(['email' => 'aluno@example.com']);
+        $outro = $this->aluno(['ra' => '2026002', 'cpf' => '98765432100', 'email' => 'outro@example.com']);
+        VerificacaoEmail::create(['cpf' => $outro->cpf, 'codigo' => $this->codigoGuardado($outro), 'expira_em' => Carbon::now()->addMinutes(10)]);
+        VerificacaoEmail::create(['cpf' => $meu->cpf, 'codigo' => $this->codigoGuardado($meu, '654321'), 'expira_em' => Carbon::now()->addMinutes(10)]);
+        $this->primeiroFator($meu);
+
+        // Mandar o CPF do outro e o código dele não entra na conta dele.
+        $this->post('/portal/verificar', ['cpf' => $outro->cpf, 'codigo' => '123456'])->assertOk()->assertSee('Código incorreto');
+
+        $this->assertDatabaseHas('verificacoes_email', ['cpf' => $meu->cpf, 'tentativas_falhas' => 1]);
+        $this->assertDatabaseHas('verificacoes_email', ['cpf' => $outro->cpf, 'tentativas_falhas' => 0]);
+        $this->get('/portal/resultados')->assertRedirect(route('portal.consulta'));
+    }
+
+    public function test_reenviar_gera_um_codigo_novo_e_o_antigo_deixa_de_valer(): void
+    {
+        Configuracao::definir('smtp_ativo', '1');
+        $aluno = $this->aluno(['email' => 'aluno@example.com']);
+        $velho = $this->consultarEReceberCodigo($aluno);
+        VerificacaoEmail::query()->update(['tentativas_falhas' => 2, 'criado_em' => Carbon::now()->subMinutes(5)]);
+
+        $corpo = '';
+        $this->mock(SmtpEmailSender::class, function (MockInterface $mock) use (&$corpo) {
+            $mock->shouldReceive('enviar')->once()->andReturnUsing(function ($para, $assunto, $texto) use (&$corpo) {
+                $corpo = $texto;
+            });
+        });
+$this->post('/portal/reenviar')->assertOk()->assertSee('Código reenviado com sucesso.');
+        preg_match('/\b(\d{6})\b/', $corpo, $m);
+        $novo = $m[1];
+
+        $this->assertDatabaseHas('verificacoes_email', ['cpf' => $aluno->cpf, 'tentativas_falhas' => 0, 'vezes_reenviado' => 1]);
+        $this->assertSame(VerificacaoEmail::hashDoCodigo($aluno->cpf, $novo), VerificacaoEmail::firstOrFail()->codigo);
+
+        if ($velho !== $novo) {
+            $this->post('/portal/verificar', ['codigo' => $velho])->assertSee('Código incorreto');
+        }
+        $this->post('/portal/verificar', ['codigo' => $novo])->assertRedirect(route('portal.resultados'));
+    }
+
+    public function test_consultas_erradas_de_varios_ips_bloqueiam_o_cpf(): void
+    {
+        $aluno = $this->aluno();
+
+        // 10 chutes de data de nascimento para o MESMO CPF, cada um de um IP diferente (o throttle por IP não pega).
+        for ($i = 1; $i <= 10; $i++) {
+            $this->withServerVariables(['REMOTE_ADDR' => "10.0.0.{$i}"])
+                ->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '01/01/19'.(70 + $i)])
+                ->assertSessionHasErrors(['cpf' => 'Nenhum aluno encontrado com este CPF e Data de Nascimento.']);
+        }
+
+        // O 11º, de um IP novo e mesmo com a data CERTA, é recusado: o CPF ficou bloqueado.
+        $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.99'])
+            ->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000'])
+            ->assertSessionHasErrors('cpf');
+        $this->assertStringContainsString('Muitas tentativas para este CPF', session('errors')->first('cpf'));
+
+        // Outro CPF não é afetado.
+        $outro = $this->aluno(['ra' => '2026002', 'cpf' => '98765432100']);
+        $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.98'])
+            ->post('/portal/consultar', ['cpf' => $outro->cpf, 'data_nascimento' => '15/03/2000'])
+            ->assertRedirect(route('portal.resultados'));
+    }
+
+    public function test_cpf_que_nao_existe_tambem_conta_e_a_resposta_e_a_mesma(): void
+    {
+        for ($i = 1; $i <= 10; $i++) {
+            $this->withServerVariables(['REMOTE_ADDR' => "10.1.0.{$i}"])
+                ->post('/portal/consultar', ['cpf' => '11144477735', 'data_nascimento' => '01/01/2000'])
+                ->assertSessionHasErrors(['cpf' => 'Nenhum aluno encontrado com este CPF e Data de Nascimento.']);
+        }
+
+        $this->withServerVariables(['REMOTE_ADDR' => '10.1.0.99'])
+            ->post('/portal/consultar', ['cpf' => '11144477735', 'data_nascimento' => '01/01/2000'])
+            ->assertSessionHasErrors('cpf');
+        $this->assertStringContainsString('Muitas tentativas', session('errors')->first('cpf'));
+    }
+
+    public function test_acertar_a_consulta_zera_o_contador_do_cpf(): void
+    {
+        $aluno = $this->aluno();
+
+        for ($i = 1; $i <= 9; $i++) {
+            $this->withServerVariables(['REMOTE_ADDR' => "10.2.0.{$i}"])
+                ->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '01/01/1990']);
+        }
+        $this->withServerVariables(['REMOTE_ADDR' => '10.2.0.50'])
+            ->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000'])
+            ->assertRedirect(route('portal.resultados'));
+
+        // Contador zerado: mais 9 erros ainda não bloqueiam.
+        for ($i = 1; $i <= 9; $i++) {
+            $this->withServerVariables(['REMOTE_ADDR' => "10.3.0.{$i}"])
+                ->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '01/01/1990']);
+        }
+        $this->withServerVariables(['REMOTE_ADDR' => '10.3.0.50'])
+            ->post('/portal/consultar', ['cpf' => $aluno->cpf, 'data_nascimento' => '15/03/2000'])
+            ->assertRedirect(route('portal.resultados'));
     }
 
     public function test_captcha_ativo_exige_token(): void
@@ -213,11 +407,12 @@ class PortalTest extends TestCase
 
         VerificacaoEmail::create([
             'cpf' => $aluno->cpf,
-            'codigo' => '123456',
+            'codigo' => $this->codigoGuardado($aluno),
             'expira_em' => Carbon::now()->addMinutes(10),
         ]);
 
-        $response = $this->followingRedirects()->post('/portal/verificar', ['cpf' => $aluno->cpf, 'codigo' => '123456']);
+        $this->primeiroFator($aluno);
+        $response = $this->followingRedirects()->post('/portal/verificar', ['codigo' => '123456']);
 
         $response->assertOk();
         $response->assertSee('ENADE 2026');
@@ -229,11 +424,12 @@ class PortalTest extends TestCase
         $aluno = $this->aluno();
         VerificacaoEmail::create([
             'cpf' => $aluno->cpf,
-            'codigo' => '123456',
+            'codigo' => $this->codigoGuardado($aluno),
             'expira_em' => Carbon::now()->addMinutes(10),
         ]);
 
-        $response = $this->post('/portal/verificar', ['cpf' => $aluno->cpf, 'codigo' => '000000']);
+        $this->primeiroFator($aluno);
+        $response = $this->post('/portal/verificar', ['codigo' => '000000']);
 
         $response->assertOk();
         $response->assertSee('Código incorreto');
@@ -245,12 +441,13 @@ class PortalTest extends TestCase
         $aluno = $this->aluno();
         VerificacaoEmail::create([
             'cpf' => $aluno->cpf,
-            'codigo' => '123456',
+            'codigo' => $this->codigoGuardado($aluno),
             'tentativas_falhas' => 2,
             'expira_em' => Carbon::now()->addMinutes(10),
         ]);
 
-        $response = $this->post('/portal/verificar', ['cpf' => $aluno->cpf, 'codigo' => '000000']);
+        $this->primeiroFator($aluno);
+        $response = $this->post('/portal/verificar', ['codigo' => '000000']);
 
         $response->assertRedirect(route('portal.consulta'));
         $response->assertSessionHasErrors('cpf');
@@ -262,7 +459,7 @@ class PortalTest extends TestCase
         $aluno = $this->aluno();
         VerificacaoEmail::create([
             'cpf' => $aluno->cpf,
-            'codigo' => '123456',
+            'codigo' => $this->codigoGuardado($aluno),
             'expira_em' => Carbon::now()->addMinutes(10),
         ]);
         RateLimit2fa::create([
@@ -271,7 +468,8 @@ class PortalTest extends TestCase
             'bloqueado_ate' => Carbon::now()->addMinutes(30),
         ]);
 
-        $response = $this->post('/portal/verificar', ['cpf' => $aluno->cpf, 'codigo' => '123456']);
+        $this->primeiroFator($aluno);
+        $response = $this->post('/portal/verificar', ['codigo' => '123456']);
 
         $response->assertRedirect(route('portal.consulta'));
         $response->assertSessionHasErrors(['cpf' => 'Muitas tentativas deste dispositivo. Tente novamente em 1 hora.']);
@@ -282,11 +480,12 @@ class PortalTest extends TestCase
         $aluno = $this->aluno();
         VerificacaoEmail::create([
             'cpf' => $aluno->cpf,
-            'codigo' => '123456',
+            'codigo' => $this->codigoGuardado($aluno),
             'expira_em' => Carbon::now()->subMinute(),
         ]);
 
-        $response = $this->post('/portal/verificar', ['cpf' => $aluno->cpf, 'codigo' => '123456']);
+        $this->primeiroFator($aluno);
+        $response = $this->post('/portal/verificar', ['codigo' => '123456']);
 
         $response->assertRedirect(route('portal.consulta'));
         $response->assertSessionHasErrors(['cpf' => 'Código expirado. Solicite um novo código.']);
@@ -297,11 +496,12 @@ class PortalTest extends TestCase
         $aluno = $this->aluno(['email' => 'aluno@example.com']);
         VerificacaoEmail::create([
             'cpf' => $aluno->cpf,
-            'codigo' => '123456',
+            'codigo' => $this->codigoGuardado($aluno),
             'expira_em' => Carbon::now()->addMinutes(10),
         ]);
 
-        $response = $this->post('/portal/reenviar', ['cpf' => $aluno->cpf]);
+        $this->primeiroFator($aluno);
+        $response = $this->post('/portal/reenviar');
 
         $response->assertOk();
         $response->assertSee('Aguarde');
@@ -312,7 +512,7 @@ class PortalTest extends TestCase
         $aluno = $this->aluno(['email' => 'aluno@example.com']);
         $verificacao = VerificacaoEmail::create([
             'cpf' => $aluno->cpf,
-            'codigo' => '123456',
+            'codigo' => $this->codigoGuardado($aluno),
             'expira_em' => Carbon::now()->addMinutes(10),
         ]);
         $verificacao->forceFill(['criado_em' => Carbon::now()->subMinutes(2)])->save();
@@ -321,7 +521,8 @@ class PortalTest extends TestCase
             $mock->shouldReceive('enviar')->once();
         });
 
-        $response = $this->post('/portal/reenviar', ['cpf' => $aluno->cpf]);
+        $this->primeiroFator($aluno);
+        $response = $this->post('/portal/reenviar');
 
         $response->assertOk();
         $response->assertSee('Código reenviado com sucesso.');

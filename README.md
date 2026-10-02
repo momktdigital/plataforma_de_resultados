@@ -459,6 +459,16 @@ concentra o cálculo — mesma correção de performance da EstatisticaErroServi
 acima: a nota de cada respondente e a média por disciplina são agregadas em
 SQL, não varrendo um Collection do PHP com todas as respostas da avaliação.
 
+**Estrutura da view.** `admin/avaliacoes/bi.blade.php` só compõe as seções:
+cada bloco de HTML vive em `bi/_*.blade.php` e o JavaScript de cada gráfico em
+`bi/scripts/_*.blade.php` (antes eram ~1.700 linhas num arquivo só). Regra que
+custou um bug: **variáveis atribuídas num `@php` de um partial NÃO existem nos
+outros** (cada `@include` tem escopo próprio). O que mais de um partial precisa
+sai de um helper PHP testável — ex.: `App\Support\EvolucaoDoDashboard::periodosComEvolucao()`
+alimenta tanto o HTML da evolução por categoria quanto o `porPeriodo` do script
+(`tests/Feature/BiEvolucaoTurmaTest.php` lê todos os partials e tem um teste de
+regressão para isso).
+
 **Alunos da avaliação:** lista nominal com foto de perfil (a mesma do portal,
 via `cod_perfil`; sem foto, a inicial), nome, RA, curso, período, turma e total
 (acertos/total e %), ordenada pelo percentual — ausentes (prova inteira em
@@ -497,10 +507,15 @@ direto na tela de consulta; um administrador já logado é redirecionado
 para `/avaliacoes`. O acesso à área administrativa (`/login`) fica só num link
 discreto no rodapé das telas do portal — não é destacado na página.
 
-Fluxo, igual ao legado até a verificação (o CPF circula pelos passos via
-campo oculto, sem sessão de autenticação); só depois de CPF+Data de
-Nascimento (e 2FA, se ativo) confirmados é que entra uma sessão — só pra
-permitir uma URL própria do boletim (item 5 abaixo), nunca antes disso:
+Fluxo, igual ao legado até a verificação — mas o 2FA **não** é mais um
+formulário solto que aceita qualquer CPF: depois do primeiro fator (CPF + Data
+de Nascimento) o servidor guarda uma *pré-autenticação* na sessão
+(`portal_pre_auth`: aluno, momento, validade de 15 min) e é ela que autoriza
+`/portal/verificar` e `/portal/reenviar`. Esses dois ignoram qualquer `cpf`
+enviado no corpo e não exigem (nem aceitam) o CPF em campo oculto. Sem o
+primeiro fator, ou com ele expirado, voltam para `/portal`. Só depois do
+segundo fator confirmado (ou direto, sem 2FA) entra a sessão do boletim
+(`portal_aluno_id`) — para permitir uma URL própria do boletim (item 5 abaixo):
 
 1. **`GET /portal`** — formulário de CPF + Data de Nascimento (ambos com
    máscara via IMask, igual ao cadastro manual de aluno) + CAPTCHA se ativo
@@ -513,7 +528,14 @@ permitir uma URL própria do boletim (item 5 abaixo), nunca antes disso:
    Mailer usado no teste de envio de Configurações); senão, mostra o
    boletim direto.
 3. **`POST /portal/verificar`** — valida o código; 3 erros seguidos ou
-   código expirado manda de volta para `/portal`. Bloqueio por IP após 10
+   código expirado manda de volta para `/portal`. O código é guardado como
+   **HMAC-SHA256 com a `APP_KEY`** (`VerificacaoEmail::hashDoCodigo`, coluna
+   `codigo` de 64 caracteres) e comparado com `hash_equals` — um dump da tabela
+   não entrega códigos válidos. Além do bloqueio por IP abaixo há um **limite
+   por CPF**: 10 falhas em 1 h bloqueiam aquele CPF a partir de qualquer IP
+   (um atacante com muitos IPs, ou testando CPFs que não existem, também é
+   contado; o contador zera no acesso bem-sucedido), checado antes do CAPTCHA.
+   Bloqueio por IP após 10
    tentativas falhas em 1h (`App\Services\Portal\RateLimit2faService`,
    tabela `rate_limit_2fa`) — reescrito com Eloquent em vez do
    `ON DUPLICATE KEY ... IF(...)` só-MySQL do legado, para funcionar também
@@ -522,8 +544,10 @@ permitir uma URL própria do boletim (item 5 abaixo), nunca antes disso:
    confiar cegamente em `CF-Connecting-IP`/`X-Forwarded-For` — o legado
    permitia um cliente falsificar esses cabeçalhos para escapar do (ou
    incriminar outro IP no) rate limit.
-4. **`POST /portal/reenviar`** — reenvia o mesmo código (só estende a
-   validade), respeitando o cooldown progressivo (1, 2, 5, 10 min).
+4. **`POST /portal/reenviar`** — gera e envia um **código novo** (o anterior
+   deixa de valer, porque só o hash é guardado e o texto original não existe
+   mais), zera as tentativas erradas e respeita o cooldown progressivo
+   (1, 2, 5, 10 min).
 5. **Boletim** (`GET /portal/resultados`) — depois que `consultar()`/
    `verificar()` confirmam CPF+Data de Nascimento (e o código de 2FA, se
    ativo), o controller grava `session(['portal_aluno_id' => $aluno->id])`
@@ -603,6 +627,37 @@ tela (`resources/views/partials/accessibility-*.blade.php`):
   (ajustam a página por fora, sem corrigir HTML semântico/ARIA/foco de
   teclado); foi incluído a pedido, como complemento à barra própria, não
   como solução única de acessibilidade.
+
+**Acessibilidade do próprio HTML** (o que não depende do widget):
+
+- **Teclado e leitor de tela.** Todas as telas têm o link *Pular para o
+  conteúdo* (aparece ao receber foco) e `<main id="conteudo-principal">`. No
+  admin, o menu lateral tem `aria-label`, marca a página atual com
+  `aria-current="page"`, e o botão do menu no celular declara `aria-controls`/
+  `aria-expanded`/`aria-label` e fecha com Esc devolvendo o foco. A barra lateral
+  escondida usa `visibility: hidden`, então sai da ordem de tabulação. O menu de
+  temas da barra de acessibilidade abre por Enter/Espaço (não só no *hover*),
+  navega com as setas, fecha com Esc e indica o tema atual com `aria-pressed`.
+- **Ponto de quebra.** O CSS do menu lateral usa `max-width: 767.98px`, não
+  `768px`: o `md:` do Tailwind começa *em* 768 px, onde o botão do menu some —
+  com `768px` a barra ficava escondida e sem botão para abri-la.
+- **Erros de formulário.** O resumo de erros (`partials/flash`, e as quatro
+  telas de `auth/*`) é `role="alert"` com `id="erros-do-formulario"`; quando há
+  erros, `partials/erros-de-campo` marca cada campo recusado com `aria-invalid`,
+  liga-o ao resumo via `aria-describedby` e leva o foco ao primeiro. Mensagens
+  de sucesso são `role="status"`.
+- **Gráficos.** `public/assets/js/graficos-acessiveis.js` dá a cada `<canvas>` do
+  Chart.js `role="img"` e um `aria-label` montado do título da seção e dos dados
+  desenhados (até 14 pontos por série), atualizado depois de cliques/alterações
+  que redesenham o gráfico. Para um título específico, use `data-titulo` no canvas.
+- **Contraste (WCAG 1.4.3, 4,5:1).** Em fundo claro o texto pequeno usa
+  `text-slate-500`/`text-emerald-700`/`text-amber-700`/`text-red-600`, nunca
+  `text-slate-400`/`-emerald-600`/`-amber-600`/`-red-500`/`text-primary` (ficam
+  entre 2,5:1 e 3,8:1); em fundo escuro (login, instalador, barra lateral) o
+  inverso: `text-slate-400` em vez de `-500`. Ícones decorativos (`<i>`) ficam
+  de fora. `AcessibilidadeTest` varre as views e falha se uma dessas cores
+  voltar. **Decisão em aberto:** texto branco sobre `bg-primary` (#00b48d) dá
+  2,5:1 — é a cor da marca e não foi trocada.
 
 ## Autenticação
 
@@ -822,17 +877,35 @@ php artisan sistema:atualizar           # verifica e aplica
 ```
 
 Também disponível para o administrador pela interface, em **Atualizações**.
-O processo busca a última *Release* pública do repositório configurado em
-**Configurações** (ou `ATUALIZACAO_REPOSITORIO` no `.env`, se nunca tiver
-sido definido pela interface — formato `owner/repo`) e, se houver uma versão
-mais nova que a instalada:
+O processo busca a última *Release* pública do repositório definido em
+`ATUALIZACAO_REPOSITORIO` no `.env` (formato `owner/repo`) e, se houver uma
+versão mais nova que a instalada:
 
 1. Gera um backup completo (ver seção abaixo) — sempre, sem exceção.
 2. Coloca a aplicação em modo de manutenção.
 3. Baixa e extrai a Release, copiando por cima os arquivos do repositório
    — preservando `.env` e `storage/` intocados.
-4. Roda `composer install --no-dev` e as migrations pendentes.
+4. Roda `composer install --no-dev --no-scripts --no-plugins` (o código baixado
+   não executa nada durante a instalação das dependências), depois
+   `package:discover` e as migrations pendentes.
 5. Grava a nova versão em `VERSION` e sai do modo de manutenção.
+
+**O que a atualização confia.** Ela substitui o código da aplicação, então o
+repositório de onde vem é uma fronteira de confiança:
+
+- O repositório só se define no **`.env`** — não existe mais campo na tela de
+  Configurações (que o mostra somente leitura). Quem só alcança o painel não
+  consegue apontar o atualizador para um repositório próprio. Um valor antigo
+  de `repositorio_atualizacao` em `configuracoes_sistema` é ignorado, e a tela
+  Atualizações avisa que ele existe.
+- `ATUALIZACAO_EXIGIR_ASSINATURA=true` só aplica releases cujo commit tenha
+  **assinatura verificada pelo GitHub** (`commit.verification.verified`); com
+  `ATUALIZACAO_ASSINANTES=login1,login2` o autor da assinatura também precisa
+  estar na lista. A tela mostra o estado da assinatura da versão disponível.
+  Desligado por padrão (não quebra quem ainda não assina as releases).
+- Aplicar exige **a senha do próprio administrador** (`senha_atual`), com limite
+  de 5 tentativas por 15 min; baixar, aplicar, senha recusada e falha ficam em
+  `atividades` (`sistema.atualizacao_baixada`/`_aplicada`/`_senha_recusada`/`_falhou`).
 
 Se qualquer passo falhar **depois** que os arquivos já começaram a ser
 substituídos, o atualizador tenta reverter automaticamente a aplicação a
@@ -882,9 +955,11 @@ já exista antes de prosseguir.
 
 Tela para ajustar, sem precisar de acesso ao servidor:
 
-- **Repositório do GitHub para atualizações** (`owner/repositorio`).
 - **Quantos backups manter** (os mais antigos além desse número são apagados
   a cada novo backup).
+
+O repositório de atualização aparece só para leitura: vem de
+`ATUALIZACAO_REPOSITORIO` no `.env` (ver "Atualização" acima).
 
 Guardado na tabela `configuracoes_sistema` (chave/valor — nome escolhido
 para não colidir com a tabela `configuracoes` da aplicação legada, que tem

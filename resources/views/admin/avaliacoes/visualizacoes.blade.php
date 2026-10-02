@@ -6,7 +6,7 @@
 <a href="{{ route('avaliacoes.show', $avaliacao) }}" class="text-sm text-slate-500 hover:underline">&larr; Avaliação #{{ $avaliacao->codigo }}</a>
 <h1 class="text-2xl font-bold mt-2 mb-1">Configurar visualizações</h1>
 <p class="text-sm text-slate-500 mb-6">
-    Escolha quais gráficos e painéis aparecem no boletim do aluno (Portal) e no painel administrativo (BI) desta
+    Escolha quais gráficos e painéis aparecem no boletim do aluno (Portal) e no Dashboard administrativo desta
     avaliação. Um visual só pode ser habilitado quando a avaliação já tem os dados necessários para calculá-lo —
     quando faltar algo, o motivo aparece ao lado da opção desabilitada.
 </p>
@@ -52,7 +52,7 @@
                                            {{ $item['visivelAluno'] ? 'checked' : '' }}
                                            {{ $item['disponivel'] ? '' : 'disabled' }}
                                            title="{{ $item['disponivel'] ? '' : $item['pendencia'] }}"
-                                           class="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 disabled:opacity-30 disabled:cursor-not-allowed">
+                                           class="w-4 h-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-500 disabled:opacity-30 disabled:cursor-not-allowed">
                                 @else
                                     <span class="text-slate-300">—</span>
                                 @endif
@@ -63,7 +63,7 @@
                                            {{ $item['visivelAdmin'] ? 'checked' : '' }}
                                            {{ $item['disponivel'] ? '' : 'disabled' }}
                                            title="{{ $item['disponivel'] ? '' : $item['pendencia'] }}"
-                                           class="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 disabled:opacity-30 disabled:cursor-not-allowed">
+                                           class="w-4 h-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-500 disabled:opacity-30 disabled:cursor-not-allowed">
                                 @else
                                     <span class="text-slate-300">—</span>
                                 @endif

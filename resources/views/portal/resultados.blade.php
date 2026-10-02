@@ -86,7 +86,7 @@
 
 @if (! empty($resumoPorCategoria))
     <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 mb-6 fade-in">
-        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+        <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
             <i class="ph-bold ph-chart-bar-horizontal text-primary"></i> Desempenho por categoria
         </p>
         <div class="grid sm:grid-cols-2 gap-x-6 gap-y-3">
@@ -149,7 +149,7 @@
             </div>
             @if (! empty($periodosDisponiveis) && $periodoSelecionado !== '')
                 <p class="text-slate-500 mb-3">Nenhum resultado encontrado para o período letivo "{{ $periodoSelecionado }}".</p>
-                <a href="{{ route('portal.resultados', ['periodo_letivo' => '']) }}" class="text-primary font-semibold hover:underline text-sm">
+                <a href="{{ route('portal.resultados', ['periodo_letivo' => '']) }}" class="text-emerald-700 font-semibold hover:underline text-sm">
                     Ver todos os períodos
                 </a>
             @else
