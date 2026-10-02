@@ -82,6 +82,21 @@ class Admin extends Authenticatable
         return $this->papel() === self::ROLE_COORDENADOR;
     }
 
+    /**
+     * Primeiro nome para a saudação do painel ("Bom dia, Matheus"). Não há coluna de nome na tabela legada: sai do
+     * usuário (`matheus.oliveira`, `maria_souza`, `joao-silva@faa.edu.br` → Matheus, Maria, Joao). Usuário sem
+     * letras devolve o usuário como está.
+     */
+    public function nomeParaSaudacao(): string
+    {
+        $usuario = trim((string) $this->username);
+        $primeiro = preg_split('/[\s._\-@+]+/u', $usuario, -1, PREG_SPLIT_NO_EMPTY)[0] ?? '';
+
+        return preg_match('/\p{L}/u', $primeiro) === 1
+            ? mb_convert_case(mb_strtolower($primeiro, 'UTF-8'), MB_CASE_TITLE, 'UTF-8')
+            : $usuario;
+    }
+
     public function scopeCoordenadores(Builder $query): Builder
     {
         return $query->whereRaw('LOWER(TRIM(role)) = ?', [self::ROLE_COORDENADOR]);
@@ -114,6 +129,34 @@ class Admin extends Authenticatable
         }
 
         return $this->cursosCache = $cursos;
+    }
+
+    /**
+     * Quantas notificações este usuário ainda não leu (o número do sino). Zero se a tabela ainda não existe
+     * (migração pendente) — o menu nunca deve quebrar por causa disso.
+     */
+    public function notificacoesNaoLidas(): int
+    {
+        try {
+            return Notificacao::doUsuario($this->id)->naoLidas()->count();
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    /**
+     * Notificações não lidas mais recentes (para a visão geral). Vazio se a tabela ainda não existe (migração
+     * pendente) — o painel não pode cair por causa dos avisos.
+     *
+     * @return \Illuminate\Support\Collection<int, Notificacao>
+     */
+    public function notificacoesRecentesNaoLidas(int $limite = 3): \Illuminate\Support\Collection
+    {
+        try {
+            return Notificacao::doUsuario($this->id)->naoLidas()->orderByDesc('created_at')->orderByDesc('id')->limit($limite)->get();
+        } catch (\Throwable) {
+            return collect();
+        }
     }
 
     /** @param array<int, string> $cursos */

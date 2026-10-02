@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Avaliacao;
+use App\Services\NotificacaoCoordenadorService;
 use App\Services\ResultadoImportService;
 use App\Services\ResumoResultadoService;
 use App\Support\AtividadeLogger;
@@ -61,6 +62,13 @@ class ImportarResultadosJob implements ShouldQueue
 
             if (! $this->dryRun) {
                 $resumos->recalcular($avaliacao->codigo);
+
+                // Avisa os coordenadores dos cursos envolvidos. Um erro aqui nunca pode derrubar um import já gravado.
+                try {
+                    app(NotificacaoCoordenadorService::class)->gerarParaAvaliacao($avaliacao->codigo);
+                } catch (Throwable $e) {
+                    report($e);
+                }
 
                 AtividadeLogger::registrarComoAdmin($this->adminId, $this->adminUsername, 'import.resultados', 'Avaliacao', $avaliacao->codigo, [
                     'arquivo' => $this->nomeOriginal,

@@ -63,9 +63,16 @@ class CoordenadorDashboardService
     private const MINIMO_PRESENTES_PERIODO = 10;
 
     /**
+     * Onde o coordenador está olhando: cursos em foco, a lista de avaliações desses cursos (com período letivo e
+     * categoria) e o semestre escolhido. Compartilhado por todas as telas do painel (visão geral, alunos,
+     * desempenho, ficha do aluno), para que todas concordem sobre o recorte.
+     *
+     * Sem `semCurso`/`semResultados`, traz também: `variantes` (grafias do curso), `avaliacoes` (todas, de todos os
+     * períodos), `doPeriodo` (as do semestre escolhido), `periodosDisponiveis` e `periodoSelecionado`.
+     *
      * @return array<string, mixed>
      */
-    public function gerar(Admin $coordenador, string $cursoSelecionado = '', ?string $periodoLetivo = null): array
+    public function escopo(Admin $coordenador, string $cursoSelecionado = '', ?string $periodoLetivo = null): array
     {
         $meusCursos = $coordenador->cursos();
         $cursos = $meusCursos;
@@ -90,7 +97,7 @@ class CoordenadorDashboardService
         $avaliacoes = $this->avaliacoesDoCurso($variantes);
 
         if ($avaliacoes->isEmpty()) {
-            return [...$base, 'semResultados' => true];
+            return [...$base, 'variantes' => $variantes, 'semResultados' => true];
         }
 
         $periodos = $avaliacoes->pluck('periodoLetivo')->filter()->unique()->sortDesc()->values()->all();
@@ -99,9 +106,37 @@ class CoordenadorDashboardService
             $periodoSelecionado = $periodos[0] ?? '';
         }
 
-        $doPeriodo = $periodoSelecionado === ''
-            ? $avaliacoes
-            : $avaliacoes->filter(fn ($a) => $a['periodoLetivo'] === $periodoSelecionado)->values();
+        return [
+            ...$base,
+            'variantes' => $variantes,
+            'avaliacoes' => $avaliacoes,
+            'periodosDisponiveis' => $periodos,
+            'periodoSelecionado' => $periodoSelecionado,
+            'doPeriodo' => $periodoSelecionado === ''
+                ? $avaliacoes
+                : $avaliacoes->filter(fn ($a) => $a['periodoLetivo'] === $periodoSelecionado)->values(),
+        ];
+    }
+
+    /**
+     * @param  ?array<string, mixed>  $escopo  saída já calculada de escopo() (evita repetir as consultas)
+     * @return array<string, mixed>
+     */
+    public function gerar(Admin $coordenador, string $cursoSelecionado = '', ?string $periodoLetivo = null, ?array $escopo = null): array
+    {
+        $escopo ??= $this->escopo($coordenador, $cursoSelecionado, $periodoLetivo);
+
+        if (! empty($escopo['semCurso']) || ! empty($escopo['semResultados'])) {
+            return array_diff_key($escopo, ['variantes' => 1]);
+        }
+
+        $cursos = $escopo['cursosEmFoco'];
+        $variantes = $escopo['variantes'];
+        $avaliacoes = $escopo['avaliacoes'];
+        $periodos = $escopo['periodosDisponiveis'];
+        $periodoSelecionado = $escopo['periodoSelecionado'];
+        $doPeriodo = $escopo['doPeriodo'];
+        $base = array_intersect_key($escopo, array_flip(['meusCursos', 'cursosEmFoco', 'cursoSelecionado']));
 
         // Histórico das categorias presentes no período: inclui períodos
         // anteriores, que é de onde vem a "avaliação anterior" de cada uma.
@@ -225,7 +260,7 @@ class CoordenadorDashboardService
     }
 
     /** @return Collection<int, array{codigo: int, nome: string, data: ?string, periodoLetivo: string, categoriaId: ?int}> */
-    private function avaliacoesDoCurso(array $variantes): Collection
+    public function avaliacoesDoCurso(array $variantes): Collection
     {
         $linhas = $this->resumos($variantes)
             ->groupBy('av.codigo', 'av.nome', 'av.data_avaliacao', 'av.categoria_id')
@@ -289,8 +324,14 @@ class CoordenadorDashboardService
         return array_map(fn ($m) => $m['periodo_letivo'], $melhor);
     }
 
+    /** Número no padrão brasileiro, sem casa decimal sobrando: 57.9 → "57,9"; 52.0 → "52". */
+    public static function pct(float|int|null $valor): string
+    {
+        return $valor === null ? '—' : rtrim(rtrim(number_format((float) $valor, 1, ',', ''), '0'), ',');
+    }
+
     /** @return array<int, string> id => caminho completo ("Pai › Filha") */
-    private function nomesDeCategoria(): array
+    public function nomesDeCategoria(): array
     {
         $todas = Categoria::all(['id', 'nome', 'categoria_pai_id'])->keyBy('id');
 
@@ -456,7 +497,7 @@ class CoordenadorDashboardService
      *
      * @return array<int, array{area: string, percentual: float, respostas: int}> do mais fraco pro mais forte
      */
-    private function desempenhoPorArea(array $variantes, array $cursos, array $codigos): array
+    public function desempenhoPorArea(array $variantes, array $cursos, array $codigos): array
     {
         if ($codigos === []) {
             return [];
@@ -521,7 +562,7 @@ class CoordenadorDashboardService
             return [[
                 'tom' => 'atencao',
                 'icone' => 'ph-user-minus',
-                'texto' => "Presença de {$geral['presenca']}%: {$geral['ausentes']} ausência(s) em {$geral['inscritos']} participações esperadas no período.",
+                'texto' => "Presença de ".self::pct($geral['presenca'])."%: {$geral['ausentes']} ausência(s) em {$geral['inscritos']} participações esperadas no período.",
             ]];
         }
 
@@ -549,7 +590,7 @@ class CoordenadorDashboardService
             $cartoes[] = [
                 'tom' => $subiu ? 'positivo' : 'atencao',
                 'icone' => $subiu ? 'ph-trend-up' : 'ph-trend-down',
-                'texto' => "Em {$categoria}, a média na avaliação mais recente ({$ultima['nome']}) ".($subiu ? 'subiu ' : 'caiu ').abs($ultima['delta'])." pontos frente à anterior da mesma categoria ({$anterior['nome']}{$quando}): {$anterior['media']}% → {$ultima['media']}%.",
+                'texto' => "Em {$categoria}, a média na avaliação mais recente ({$ultima['nome']}) ".($subiu ? 'subiu ' : 'caiu ').self::pct(abs($ultima['delta']))." pontos frente à anterior da mesma categoria ({$anterior['nome']}{$quando}): ".self::pct($anterior['media']).'% → '.self::pct($ultima['media']).'%.',
             ];
         }
 
@@ -557,7 +598,7 @@ class CoordenadorDashboardService
             $cartoes[] = [
                 'tom' => 'atencao',
                 'icone' => 'ph-warning-circle',
-                'texto' => "{$totais['abaixoPct']}% dos alunos presentes ficaram abaixo de ".(int) self::LIMIAR_ADEQUADO."% de acerto ({$totais['abaixo']} de {$totais['comNota']}).",
+                'texto' => self::pct($totais['abaixoPct']).'% dos alunos presentes ficaram abaixo de '.(int) self::LIMIAR_ADEQUADO."% de acerto ({$totais['abaixo']} de {$totais['comNota']}).",
             ];
         }
 
@@ -567,7 +608,7 @@ class CoordenadorDashboardService
             $cartoes[] = [
                 'tom' => $pior['percentual'] < self::LIMIAR_ADEQUADO ? 'atencao' : 'neutro',
                 'icone' => 'ph-target',
-                'texto' => "Área com menor desempenho: {$pior['area']} ({$pior['percentual']}%). A mais forte é {$melhor['area']} ({$melhor['percentual']}%).",
+                'texto' => "Área com menor desempenho: {$pior['area']} (".self::pct($pior['percentual'])."%). A mais forte é {$melhor['area']} (".self::pct($melhor['percentual']).'%).',
             ];
         }
 
@@ -579,7 +620,7 @@ class CoordenadorDashboardService
             $cartoes[] = [
                 'tom' => 'neutro',
                 'icone' => 'ph-graduation-cap',
-                'texto' => "O {$pior['rotulo']} tem a menor média nesta categoria ({$pior['media']}%); o {$melhor['rotulo']}, a maior ({$melhor['media']}%).",
+                'texto' => "O {$pior['rotulo']} tem a menor média nesta categoria (".self::pct($pior['media'])."%); o {$melhor['rotulo']}, a maior (".self::pct($melhor['media']).'%).',
             ];
         }
 
@@ -589,7 +630,7 @@ class CoordenadorDashboardService
             $cartoes[] = [
                 'tom' => 'neutro',
                 'icone' => 'ph-books',
-                'texto' => "Entre os seus cursos, {$melhor['curso']} tem a maior média ({$melhor['media']}%) e {$pior['curso']} a menor ({$pior['media']}%).",
+                'texto' => "Entre os seus cursos, {$melhor['curso']} tem a maior média (".self::pct($melhor['media'])."%) e {$pior['curso']} a menor (".self::pct($pior['media']).'%).',
             ];
         }
 

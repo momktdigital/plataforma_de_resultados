@@ -7,8 +7,11 @@ use App\Http\Controllers\Admin\BiController;
 use App\Http\Controllers\Admin\BiListaController;
 use App\Http\Controllers\Admin\BuscaGlobalController;
 use App\Http\Controllers\Admin\CategoriaController;
+use App\Http\Controllers\Admin\CoordenadorAlunosController;
+use App\Http\Controllers\Admin\CoordenadorComparativoController;
 use App\Http\Controllers\Admin\CoordenadorController;
 use App\Http\Controllers\Admin\LixeiraController;
+use App\Http\Controllers\Admin\NotificacaoController;
 use App\Http\Controllers\Admin\MatriculaImportController;
 use App\Http\Controllers\Admin\PerfilController;
 use App\Http\Controllers\Admin\QuestaoController;
@@ -116,10 +119,22 @@ Route::middleware('instalado')->group(function () {
         // a listagem e o BI já filtram/validam pelos cursos dele (ver
         // AvaliacaoController::index e BiController::index).
         Route::get('/painel', [CoordenadorController::class, 'painel'])->name('coordenador.painel');
+        Route::get('/painel/desempenho', [CoordenadorController::class, 'desempenho'])->name('coordenador.desempenho');
+        Route::get('/painel/comparativo', [CoordenadorComparativoController::class, 'index'])->name('coordenador.comparativo');
+        Route::get('/painel/alunos', [CoordenadorAlunosController::class, 'index'])->name('coordenador.alunos');
+        // Segmento literal ANTES do coringa {aluno} — senão o coringa casa com "exportar.xlsx" primeiro.
+        Route::get('/painel/alunos/exportar.xlsx', [CoordenadorAlunosController::class, 'xlsx'])->name('coordenador.alunos.xlsx');
+        Route::get('/painel/alunos/{aluno}', [CoordenadorAlunosController::class, 'show'])->whereNumber('aluno')->name('coordenador.alunos.show');
         Route::get('/avaliacoes', [AvaliacaoController::class, 'index'])->name('avaliacoes.index');
         Route::get('/avaliacoes/{avaliacao}/bi', [BiController::class, 'index'])->name('avaliacoes.bi');
         Route::get('/avaliacoes/{avaliacao}/bi/alunos.xlsx', [BiListaController::class, 'xlsx'])->name('avaliacoes.bi.alunos.xlsx');
         Route::get('/avaliacoes/{avaliacao}/bi/alunos/linhas', [BiListaController::class, 'linhas'])->name('avaliacoes.bi.alunos.linhas');
+        // Notificações do coordenador (cada um só enxerga as próprias; administrador volta para as avaliações).
+        Route::get('/notificacoes', [NotificacaoController::class, 'index'])->name('notificacoes.index');
+        Route::get('/notificacoes/resumo', [NotificacaoController::class, 'resumo'])->middleware('throttle:60,1')->name('notificacoes.resumo');
+        Route::post('/notificacoes/lidas', [NotificacaoController::class, 'marcarTodasLidas'])->name('notificacoes.lidas');
+        Route::get('/notificacoes/{notificacao}/abrir', [NotificacaoController::class, 'abrir'])->whereNumber('notificacao')->name('notificacoes.abrir');
+        Route::post('/notificacoes/{notificacao}/lida', [NotificacaoController::class, 'marcarLida'])->whereNumber('notificacao')->name('notificacoes.lida');
         Route::redirect('/administradores', '/usuarios');
         Route::get('/perfil', [PerfilController::class, 'edit'])->name('perfil.edit');
         Route::put('/perfil/senha', [PerfilController::class, 'updateSenha'])->name('perfil.senha');

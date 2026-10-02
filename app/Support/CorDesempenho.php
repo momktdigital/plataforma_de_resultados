@@ -42,4 +42,14 @@ final class CorDesempenho
             default => 'text-amber-600',
         };
     }
+
+    /** Cor de texto com contraste suficiente (4,5:1) para texto PEQUENO em fundo claro — números de tabelas e listas. */
+    public static function classeTextoLegivel(?float $percentual): string
+    {
+        return match (true) {
+            $percentual === null => 'text-slate-500',
+            $percentual >= self::LIMIAR_VERDE => 'text-emerald-700',
+            default => 'text-amber-700',
+        };
+    }
 }

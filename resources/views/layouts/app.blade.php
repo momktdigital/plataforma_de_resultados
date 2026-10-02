@@ -56,7 +56,11 @@
                 @endif
             </div>
 
-            @php $usuarioLogado = auth('admin')->user(); $ehCoordenador = $usuarioLogado->ehCoordenador(); @endphp
+            @php
+                $usuarioLogado = auth('admin')->user();
+                $ehCoordenador = $usuarioLogado->ehCoordenador();
+                $naoLidas = $ehCoordenador ? $usuarioLogado->notificacoesNaoLidas() : 0;
+            @endphp
 
             {{-- Busca global procura alunos de qualquer curso: só administrador. --}}
             @unless ($ehCoordenador)
@@ -76,8 +80,12 @@
                     @php
                         $itensMenu = $ehCoordenador
                             ? [
-                                ['rota' => 'coordenador.painel', 'padrao' => 'coordenador.*', 'icone' => 'ph-chart-line-up', 'label' => 'Painel do curso'],
+                                ['rota' => 'coordenador.painel', 'padrao' => 'coordenador.painel', 'icone' => 'ph-squares-four', 'label' => 'Visão geral'],
+                                ['rota' => 'coordenador.alunos', 'padrao' => 'coordenador.alunos*', 'icone' => 'ph-users-three', 'label' => 'Alunos do curso'],
+                                ['rota' => 'coordenador.desempenho', 'padrao' => 'coordenador.desempenho', 'icone' => 'ph-chart-line-up', 'label' => 'Desempenho'],
+                                ['rota' => 'coordenador.comparativo', 'padrao' => 'coordenador.comparativo', 'icone' => 'ph-arrows-left-right', 'label' => 'Comparar semestres'],
                                 ['rota' => 'avaliacoes.index', 'padrao' => 'avaliacoes.*', 'icone' => 'ph-exam', 'label' => 'Avaliações'],
+                                ['rota' => 'notificacoes.index', 'padrao' => 'notificacoes.*', 'icone' => 'ph-bell', 'label' => 'Notificações'],
                                 ['rota' => 'perfil.edit', 'padrao' => 'perfil.*', 'icone' => 'ph-user-circle', 'label' => 'Meu Perfil'],
                             ]
                             : [
@@ -95,7 +103,10 @@
                         <li>
                             <a href="{{ route($item['rota']) }}" @if ($ativo) aria-current="page" @endif
                                class="flex items-center px-3 py-2.5 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary {{ $ativo ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-slate-800 hover:text-white' }}">
-                                <i class="ph {{ $item['icone'] }} text-xl mr-3 {{ $ativo ? 'text-primary' : '' }}"></i> {{ $item['label'] }}
+                                <i class="ph {{ $item['icone'] }} text-xl mr-3 {{ $ativo ? 'text-primary' : '' }}" aria-hidden="true"></i> {{ $item['label'] }}
+                                @if ($item['rota'] === 'notificacoes.index')
+                                    <span data-notificacoes-contagem class="ml-auto min-w-[1.4rem] rounded-full bg-primary px-1.5 py-0.5 text-center text-xs font-bold text-slate-900 {{ $naoLidas > 0 ? '' : 'hidden' }}"><span aria-hidden="true">{{ $naoLidas > 99 ? '99+' : $naoLidas }}</span><span class="sr-only">{{ $naoLidas }} não lida(s)</span></span>
+                                @endif
                             </a>
                         </li>
                     @endforeach
@@ -116,9 +127,15 @@
             <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:hidden shrink-0">
                 <div class="flex items-center">
                     <i class="ph-fill ph-exam text-primary text-2xl mr-2"></i>
-                    <span class="font-bold text-slate-800">Admin</span>
+                    <span class="font-bold text-slate-800">{{ $ehCoordenador ? 'Coordenação' : 'Admin' }}</span>
                 </div>
                 <div class="flex items-center gap-2">
+                    @if ($ehCoordenador)
+                        <a href="{{ route('notificacoes.index') }}" class="relative rounded p-1 text-slate-600 hover:text-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" aria-label="Notificações" title="Notificações">
+                            <i class="ph ph-bell text-2xl" aria-hidden="true"></i>
+                            <span data-notificacoes-ponto class="absolute right-0 top-0 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white {{ $naoLidas > 0 ? '' : 'hidden' }}" aria-hidden="true"></span>
+                        </a>
+                    @endif
                     <div class="accessibility-container"></div>
                     <button type="button" id="botao-menu" onclick="toggleSidebar()" aria-label="Abrir o menu" aria-controls="sidebar" aria-expanded="false"
                             class="text-slate-600 hover:text-emerald-700 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
@@ -130,8 +147,16 @@
             <div class="bg-white border-b border-slate-200 px-6 h-14 shrink-0 hidden md:flex items-center justify-between">
                 <span class="text-sm text-slate-500">{{ $siteTitle }}</span>
                 <div class="flex items-center gap-4">
+                    @if ($ehCoordenador)
+                        <a href="{{ route('notificacoes.index') }}" class="relative rounded p-1 text-slate-600 hover:text-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" aria-label="Notificações" title="Notificações">
+                            <i class="ph ph-bell text-2xl" aria-hidden="true"></i>
+                            <span data-notificacoes-ponto class="absolute right-0 top-0 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white {{ $naoLidas > 0 ? '' : 'hidden' }}" aria-hidden="true"></span>
+                        </a>
+                    @endif
                     <div class="accessibility-container"></div>
-                    <span class="text-sm text-slate-500 border-l border-slate-200 pl-4">{{ auth('admin')->user()->username }}</span>
+                    <div class="border-l border-slate-200 pl-4">
+                        @include('partials.menu-usuario')
+                    </div>
                 </div>
             </div>
 
@@ -173,5 +198,8 @@
     });
 </script>
 @include('partials.accessibility-scripts')
+@if (! empty($ehCoordenador))
+    @include('partials.notificacoes-scripts', ['adminId' => $usuarioLogado->id])
+@endif
 </body>
 </html>

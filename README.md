@@ -248,7 +248,8 @@ A tela tem duas abas, distinguidas pela coluna legada `admins.role`:
 
 - **Administradores** (`superadmin`, ou sem role): acesso total.
 - **Coordenadores** (`coordinator`): acesso limitado aos cursos a que estão
-  vinculados. Veem só o **Painel do curso** (`/painel`), a lista de
+  vinculados. Veem só o **painel da coordenação** (`/painel`: visão geral,
+  alunos do curso e desempenho), a lista de
   avaliações (`/avaliacoes`, sem criar/editar/excluir), o **Dashboard** de
   cada uma (somente leitura, só com os alunos dos cursos dele) e o próprio
   perfil. Todo o resto responde 403 (middleware `somente-admin`, ver
@@ -358,21 +359,77 @@ naquele curso**. Por isso:
 
 ### Painel do coordenador (`/painel`)
 
-Tudo é analisado **por categoria de avaliação** — provas de categorias
-diferentes não são comparáveis (o mesmo vale para a "Comparação entre
-avaliações" do BI, que só oferece avaliações da mesma categoria). A
-"avaliação anterior" é a anterior **da mesma categoria**, mesmo de outro
-período letivo. Equivalente ao boletim do aluno, para o curso: filtro por **período letivo**
-(2026/1, 2026/2 — derivado da data da avaliação, igual ao portal; padrão = o
-mais recente; avaliação **sem data** usa o período do início do nome —
-`2026/2 - Diagnóstico...` — ou, sem isso, o período letivo em que a maioria
-dos alunos dela estava matriculada, em vez de aparecer só em "Todos") e, com mais de um curso, por curso. Mostra insights em texto,
-média do curso, presença, % de alunos abaixo de 60%, evolução da média por
-avaliação, desempenho por período do curso e por área. **Ausentes** (prova
-inteira em branco) ficam fora das médias e entram só na presença.
+Painel de gestão do curso, com saudação (Bom dia/Boa tarde/Boa noite, como no
+boletim do aluno) e quatro seções, todas com o mesmo recorte de **curso** (se
+tiver mais de um) e **período letivo** (2026/1, 2026/2 — derivado da data da
+avaliação, igual ao portal; padrão = o mais recente; avaliação **sem data** usa
+o início do nome — `2026/2 - Diagnóstico...` — ou o período letivo em que a
+maioria dos alunos dela estava matriculada):
+
+- **Visão geral** (`/painel`): alunos, quantos precisam de atenção, presença e
+  nº de avaliações; os alunos que mais precisam de atenção (com o motivo); a
+  divisão dos alunos por situação; destaques em texto; avaliações mais recentes;
+  alunos por período do curso; atalhos.
+- **Alunos do curso** (`/painel/alunos`): todos os alunos do semestre (quem
+  fez ao menos uma avaliação **mais** os matriculados nele, mesmo sem
+  resultado), com presença, média, última nota, tendência e **situação**. Busca
+  por nome/RA, filtro por situação, período do curso e categoria, ordenação
+  (inclusive "quem precisa de atenção primeiro") e **planilha .xlsx** do que
+  está filtrado (a exportação é registrada na atividade).
+- **Ficha do aluno** (`/painel/alunos/{id}`): trajetória do aluno no semestre —
+  situação e motivos, nota em cada avaliação **vs. média do curso** e posição,
+  gráfico de evolução por categoria, desempenho por área vs. curso e as
+  matrículas dele no curso. Aluno de outro curso responde 404; resultados de
+  provas feitas em OUTRO curso (aluno transferido) não aparecem.
+- **Desempenho** (`/painel/desempenho`): a análise detalhada, **por categoria
+  de avaliação** (provas de categorias diferentes não são comparáveis): média,
+  abaixo de 60%, presença, evolução, desempenho por período do curso e por
+  área. A "avaliação anterior" é a anterior **da mesma categoria**, mesmo de
+  outro período letivo.
+
+- **Comparar semestres** (`/painel/comparativo`): o período escolhido contra
+  outro (padrão: o anterior). Alunos, quem precisa de atenção, presença e nº de
+  avaliações dos dois períodos; e, **dentro de cada categoria** (que só se
+  compara com ela mesma), média, % abaixo de 60%, presença, desempenho por
+  área e por período do curso, com a variação. Os **mesmos alunos** nos dois
+  períodos são pareados pela pessoa: quantos subiram, ficaram estáveis ou
+  caíram (menos de 5 pontos é estável) e os que mais variaram, com link para a
+  ficha. Categoria que só existiu em um dos períodos é avisada, não comparada.
+
+**Notificações** (`/notificacoes`, só coordenador). Quando resultados de uma
+avaliação do curso são importados (`ImportarResultadosJob`),
+`NotificacaoCoordenadorService` avisa cada coordenador que enxerga a avaliação
+(`Avaliacao::visivelPara`), só com números do curso dele: *novos resultados*
+(presença e média, com a variação), *média caiu* (5 pontos ou mais frente à
+anterior da mesma categoria), *presença baixa* (abaixo de 85%) e *alunos que
+passaram a precisar de atenção* (quem está em atenção com a avaliação e não
+estava sem ela, no semestre, até a data dela). Cada aviso tem uma chave, então
+reimportar atualiza o aviso — e só o reabre como "não lido" se o conteúdo mudou.
+O coordenador abre o aviso (que já o marca como lido), marca um ou todos como
+lidos e vê o contador no sino e no menu; a visão geral destaca os não lidos.
+Para quem já tinha dados importados: `php artisan notificacoes:gerar [avaliacao]`.
+
+*Avisos do navegador:* o sino se atualiza sozinho (consulta `/notificacoes/resumo`
+a cada minuto) e, se o coordenador clicar em **Ativar avisos no navegador**, o
+navegador mostra um aviso quando chega notificação nova — **com o sistema aberto
+numa aba**. Aviso com o navegador **fechado** (Web Push de verdade) exige chaves
+VAPID, um service worker, uma tabela de inscrições, a biblioteca
+`minishlink/web-push` e HTTPS no servidor; não está implementado.
+
+**Situação do aluno** (`CoordenadorAlunosService::classificar`, sempre com os
+motivos à vista): *Em atenção* = média abaixo de 60%, 2 faltas ou mais, ou queda
+de 20 pontos ou mais entre as duas últimas avaliações da mesma categoria;
+*Ausente em tudo* = faltou em todas; *Destaque* = média ≥ 80% e nenhuma falta;
+*Regular* = o resto; *Sem resultado* = matriculado sem avaliação registrada.
+**Ausentes** (prova inteira em branco) ficam fora das médias e entram só em
+presença/faltas. Na lista, sem filtro de categoria, a média é a simples entre
+as avaliações do semestre (a "média geral" do boletim do aluno); a tendência só
+compara avaliações da mesma categoria.
+
 `CoordenadorDashboardService` agrega tudo em SQL sobre `resultado_resumos`
-(unido a `alunos` por `aluno_id`) e, para presença e áreas, sobre
-`respostas` restrito aos alunos do curso e ao período escolhido.
+e, para presença e áreas, sobre `respostas` restrito aos alunos do curso e ao
+período. `CoordenadorAlunosService` lê só `resultado_resumos` (uma linha por
+aluno×avaliação×período) e toca `respostas` apenas na ficha de UM aluno.
 
 ## Configurações do portal público (`/sistema/portal`)
 

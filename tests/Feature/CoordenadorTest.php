@@ -546,7 +546,7 @@ class CoordenadorTest extends TestCase
         $this->assertSame(['ADMINISTRACAO'], Admin::where('username', 'coord-adm')->firstOrFail()->cursos());
     }
 
-    public function test_titulo_vira_seletor_de_curso_quando_o_coordenador_tem_mais_de_um(): void
+    public function test_seletor_de_curso_aparece_quando_o_coordenador_tem_mais_de_um(): void
     {
         $categoria = Categoria::create(['nome' => 'Simulados']);
         $this->avaliacao('Prova mista', [['DIREITO', 'A'], ['DIREITO', 'A'], ['MEDICINA', 'B']], '2026-03-10', $categoria->id);
@@ -555,20 +555,21 @@ class CoordenadorTest extends TestCase
         $um = $this->coordenador('coord-um', ['DIREITO']);
         $this->actingAs($um, 'admin')->get('/painel')->assertOk()->assertDontSee('id="seletor-curso"', false);
 
-        // Dois cursos: seletor no título, com "todos" e cada curso, preservando o período letivo.
+        // Dois cursos: seletor de curso na barra de filtros, com "todos" e cada curso, preservando o período letivo.
         $dois = $this->coordenador('coord-dois', ['DIREITO', 'MEDICINA']);
         $this->actingAs($dois, 'admin')->get('/painel?periodo_letivo=2026/1')
             ->assertOk()
             ->assertSee('id="seletor-curso"', false)
             ->assertSee('Todos os meus cursos')
             ->assertSee('<option value="MEDICINA"', false)
-            ->assertSee('name="periodo_letivo" value="2026/1"', false)
+            ->assertSee('<option value="2026/1" selected', false)
+            ->assertSee('periodo_letivo=2026%2F1', false)
             ->assertViewHas('painel', fn ($p) => $p['cursoSelecionado'] === '' && $p['geral']['inscritos'] === 3);
 
         // Escolhendo um curso, só os alunos dele entram (e ele aparece selecionado).
         $this->actingAs($dois, 'admin')->get('/painel?curso=MEDICINA&periodo_letivo=2026/1')
             ->assertOk()
-            ->assertSee('<option value="MEDICINA" class="text-slate-800 text-base font-normal" selected', false)
+            ->assertSee('<option value="MEDICINA" selected', false)
             ->assertViewHas('painel', fn ($p) => $p['cursoSelecionado'] === 'MEDICINA' && $p['geral']['inscritos'] === 1);
     }
 
@@ -579,7 +580,7 @@ class CoordenadorTest extends TestCase
         $this->avaliacao('Segunda', [['DIREITO', 'A'], ['DIREITO', 'A']], '2026-04-10', $categoria->id);
         $coordenador = $this->coordenador('coord-direito', ['DIREITO']);
 
-        $this->actingAs($coordenador, 'admin')->get('/painel?periodo_letivo=')
+        $this->actingAs($coordenador, 'admin')->get('/painel/desempenho?periodo_letivo=')
             ->assertOk()
             ->assertSee('id="grafico-evolucao-0"', false)
             ->assertSee('window.LinhaDesempenho', false)
@@ -597,7 +598,7 @@ class CoordenadorTest extends TestCase
 
         // Poucos alunos: só o cartão de período do curso (área exige 30+ respostas) -> largura total.
         $this->avaliacao('Pequena', [['DIREITO', 'A'], ['DIREITO', 'B']], '2026-03-10', $categoria->id);
-        $html = $this->actingAs($coordenador, 'admin')->get('/painel')->assertOk()->getContent();
+        $html = $this->actingAs($coordenador, 'admin')->get('/painel/desempenho')->assertOk()->getContent();
         $this->assertStringContainsString('Desempenho por período do curso', $html);
         $this->assertStringNotContainsString('Desempenho por área', $html);
         $this->assertStringContainsString('sm:grid-cols-2 xl:grid-cols-3', $html, 'cartão sozinho: barras em colunas');
@@ -609,7 +610,7 @@ class CoordenadorTest extends TestCase
             $muitos[] = ['DIREITO', $i % 2 ? 'A' : 'B'];
         }
         $this->avaliacao('Grande', $muitos, '2026-03-11', $categoria->id);
-        $html = $this->actingAs($coordenador, 'admin')->get('/painel')->assertOk()->getContent();
+        $html = $this->actingAs($coordenador, 'admin')->get('/painel/desempenho')->assertOk()->getContent();
         $this->assertStringContainsString('Desempenho por área', $html);
         $this->assertStringContainsString('gap-4 lg:grid-cols-2 lg:[&>*:last-child:nth-child(odd)]:col-span-2', $html);
         $this->assertStringContainsString('space-y-3 max-h-96', $html, 'dois cartões: cada um em coluna única');

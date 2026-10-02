@@ -108,6 +108,17 @@ comum via `avaliacao_cursos`, ou acesso excepcional via `avaliacao_usuarios`)
 `somente-admin` em `routes/web.php` tem que fazer essa checagem. Dado nominal
 de aluno (ranking, respondentes, busca) fica só no grupo `somente-admin`.
 
+**Painel do coordenador (`/painel`, `/painel/alunos`, `/painel/alunos/{aluno}`,
+`/painel/desempenho`).** Ficam FORA do grupo `somente-admin` de propósito (o dado
+nominal é só dos alunos do curso dele), então cada controller (`PainelController`)
+manda administrador para `avaliacoes.index`. Todas as telas partem de
+`CoordenadorDashboardService::escopo()`; o curso do resultado é sempre
+`resultado_resumos.curso`. A ficha de um aluno de outro curso é **404** (não 403) e
+só mostra provas feitas nos cursos do coordenador. Ligar resultado a aluno é por
+`aluno_id`, depois RA e CPF — `aluno_chave` (CPF ou RA) pode mudar entre provas.
+O CPF nunca vai à tela nem à URL. Limiares da situação do aluno ficam em
+constantes de `CoordenadorAlunosService`.
+
 **Curso do aluno é por matrícula e por prova.** Nunca filtre/agrupe resultado
 por `alunos.curso` (é só a matrícula *atual*): use `resultado_resumos.curso` — o
 curso em que o aluno estava na data da prova (`CursoDoResultadoService`, a

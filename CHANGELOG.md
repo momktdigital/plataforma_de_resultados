@@ -88,3 +88,22 @@ linha, veja `git log`.
   Feature tests.
 - Páginas de erro (404/403/500) com a identidade visual do sistema, em vez
   da página padrão do Laravel.
+
+## Painel de gestão do coordenador
+
+- Saudação (Bom dia/Boa tarde/Boa noite) e navegação por abas: Visão geral,
+  Alunos do curso, Desempenho e Avaliações.
+- Visão geral com alunos que precisam de atenção (e o motivo), situação dos
+  alunos, avaliações recentes e alunos por período do curso.
+- Lista dos alunos do curso por semestre (busca, filtros, ordenação,
+  planilha .xlsx) e ficha individual (nota vs. média do curso, posição,
+  evolução, áreas e matrículas).
+- O detalhamento por categoria foi para a aba Desempenho.
+- Comparar semestres: média, abaixo de 60%, presença, áreas e período do curso
+  de dois períodos letivos, por categoria, e os mesmos alunos pareados (quem
+  subiu, ficou estável ou caiu).
+- Notificações do coordenador (novos resultados, média em queda, presença
+  baixa, alunos que passaram a precisar de atenção), com sino, marcar como lida
+  e avisos do navegador com o sistema aberto.
+- Destaques da visão geral agora agrupados por categoria, e números dos
+  insights no formato brasileiro (vírgula).
