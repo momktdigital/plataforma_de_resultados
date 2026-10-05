@@ -30,6 +30,26 @@
             <p class="text-xs text-slate-500 mt-1">Backups mais antigos que isso são apagados automaticamente a cada novo backup gerado.</p>
         </div>
 
+        <fieldset class="border-t border-slate-200 pt-5">
+            <legend class="text-sm font-semibold text-slate-800 pr-2">Painel da reitoria</legend>
+
+            <div class="mt-3">
+                <label class="block text-sm font-medium mb-1" for="reitor_corte_proficiencia">Critério de proficiência (% de acerto)</label>
+                <input id="reitor_corte_proficiencia" name="reitor_corte_proficiencia" type="number" min="30" max="90" step="1" required
+                       value="{{ old('reitor_corte_proficiencia', $reitorCorte) }}"
+                       class="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                <p class="text-xs text-slate-600 mt-1">O estudante é "proficiente" quando acerta esse percentual ou mais da prova. É um critério interno, sem validação contra exames externos (ENADE/ENAMED). Padrão: 60.</p>
+            </div>
+
+            <div class="mt-4">
+                <label class="block text-sm font-medium mb-1" for="reitor_meta_participacao">Meta de participação (% dos previstos)</label>
+                <input id="reitor_meta_participacao" name="reitor_meta_participacao" type="number" min="50" max="100" step="0.1" required
+                       value="{{ old('reitor_meta_participacao', $reitorMeta) }}"
+                       class="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                <p class="text-xs text-slate-600 mt-1">Quantos por cento dos estudantes previstos devem fazer a avaliação. Padrão: 98.</p>
+            </div>
+        </fieldset>
+
         <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-5 py-2 text-sm">
             Salvar
         </button>

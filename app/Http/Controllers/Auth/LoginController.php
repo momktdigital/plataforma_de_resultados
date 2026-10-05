@@ -63,7 +63,7 @@ class LoginController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route(Auth::guard('admin')->user()->ehCoordenador() ? 'coordenador.painel' : 'avaliacoes.index'));
+        return redirect()->intended(route(Auth::guard('admin')->user()->rotaInicial()));
     }
 
     public function destroy(Request $request): RedirectResponse

@@ -6,6 +6,7 @@ use App\Support\NomeCurso;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -14,8 +15,9 @@ use Illuminate\Support\Facades\DB;
  * cadastro de usuários.
  *
  * `role` é a coluna legada: 'superadmin' (acesso total; também é o que vale
- * para linhas sem role) ou 'coordinator' (vê só avaliações dos cursos a que
- * está vinculado — ver cursos()).
+ * para linhas sem role), 'coordinator' (vê só avaliações dos cursos a que
+ * está vinculado — ver cursos()) ou 'rector' (reitor: só leitura, enxerga os
+ * indicadores agregados de TODOS os cursos — nunca dado nominal de aluno).
  */
 class Admin extends Authenticatable
 {
@@ -27,6 +29,8 @@ class Admin extends Authenticatable
 
     public const ROLE_COORDENADOR = 'coordinator';
 
+    public const ROLE_REITOR = 'rector';
+
     protected $fillable = [
         'username',
         'email',
@@ -37,6 +41,9 @@ class Admin extends Authenticatable
 
     /** @var array<int, string>|null */
     private ?array $cursosCache = null;
+
+    /** true só na cópia criada por comoCoordenadorDe(): o reitor olhando UM curso como o coordenador dele vê. */
+    public bool $emVisaoDeCurso = false;
 
     protected $hidden = [
         'password_hash',
@@ -54,7 +61,7 @@ class Admin extends Authenticatable
 
     /**
      * Perfil normalizado (caixa/espaços não distinguem): ROLE_ADMIN (inclui linhas legadas sem role),
-     * ROLE_COORDENADOR, ou null quando o valor gravado não é nenhum dos dois. Null significa SEM acesso —
+     * ROLE_COORDENADOR, ROLE_REITOR, ou null quando o valor gravado não é nenhum dos três. Null significa SEM acesso —
      * antes, qualquer valor diferente de "coordinator" (ex.: "Coordinator", "coord", um erro de digitação)
      * caía no ramo "não é coordenador" e virava administrador completo (falha aberta).
      */
@@ -63,6 +70,7 @@ class Admin extends Authenticatable
         return match (strtolower(trim((string) $this->role))) {
             '', self::ROLE_ADMIN => self::ROLE_ADMIN,
             self::ROLE_COORDENADOR => self::ROLE_COORDENADOR,
+            self::ROLE_REITOR => self::ROLE_REITOR,
             default => null,
         };
     }
@@ -80,6 +88,21 @@ class Admin extends Authenticatable
     public function ehCoordenador(): bool
     {
         return $this->papel() === self::ROLE_COORDENADOR;
+    }
+
+    public function ehReitor(): bool
+    {
+        return $this->papel() === self::ROLE_REITOR;
+    }
+
+    /** Nome da rota em que este usuário começa (depois do login e na raiz do sistema). */
+    public function rotaInicial(): string
+    {
+        return match ($this->papel()) {
+            self::ROLE_COORDENADOR => 'coordenador.painel',
+            self::ROLE_REITOR => 'reitor.visao',
+            default => 'avaliacoes.index',
+        };
     }
 
     /**
@@ -100,6 +123,38 @@ class Admin extends Authenticatable
     public function scopeCoordenadores(Builder $query): Builder
     {
         return $query->whereRaw('LOWER(TRIM(role)) = ?', [self::ROLE_COORDENADOR]);
+    }
+
+    /**
+     * Cópia (só em memória, nunca salva) deste usuário com o perfil de coordenador dos cursos informados — é como o
+     * reitor abre a visão de um curso: todas as telas e consultas do coordenador (painel, alunos, BI das avaliações do
+     * curso) passam a valer, sem duplicar nada, e continuam SOMENTE LEITURA como para o coordenador. O id é o do
+     * próprio reitor (a auditoria registra quem foi). Ver App\Http\Middleware\VisaoDeCursoDoReitor.
+     *
+     * @param  array<int, string>  $cursos
+     */
+    public function comoCoordenadorDe(array $cursos): static
+    {
+        $copia = new static;
+        $copia->setRawAttributes($this->getAttributes(), true);
+        $copia->exists = true;
+        $copia->setAttribute('role', self::ROLE_COORDENADOR);
+        $copia->setAttribute('curso', $cursos[0] ?? null);
+        $copia->cursosCache = array_values($cursos);
+        $copia->emVisaoDeCurso = true;
+
+        return $copia;
+    }
+
+    public function scopeReitores(Builder $query): Builder
+    {
+        return $query->whereRaw('LOWER(TRIM(role)) = ?', [self::ROLE_REITOR]);
+    }
+
+    /** Quem entra por código enviado ao e-mail, sem senha obrigatória: coordenadores e reitores. */
+    public function scopeEntramPorCodigo(Builder $query): Builder
+    {
+        return $query->whereRaw('LOWER(TRIM(role)) IN (?, ?)', [self::ROLE_COORDENADOR, self::ROLE_REITOR]);
     }
 
     /** Administradores de fato: `superadmin` ou linha legada sem role. Perfil desconhecido não entra aqui. */
@@ -148,9 +203,9 @@ class Admin extends Authenticatable
      * Notificações não lidas mais recentes (para a visão geral). Vazio se a tabela ainda não existe (migração
      * pendente) — o painel não pode cair por causa dos avisos.
      *
-     * @return \Illuminate\Support\Collection<int, Notificacao>
+     * @return Collection<int, Notificacao>
      */
-    public function notificacoesRecentesNaoLidas(int $limite = 3): \Illuminate\Support\Collection
+    public function notificacoesRecentesNaoLidas(int $limite = 3): Collection
     {
         try {
             return Notificacao::doUsuario($this->id)->naoLidas()->orderByDesc('created_at')->orderByDesc('id')->limit($limite)->get();

@@ -24,11 +24,19 @@
             },
         };
     </script>
+    <script>
+        // Menu lateral recolhido (telas largas): a escolha fica guardada neste navegador e é aplicada ANTES de pintar a página.
+        try { if (localStorage.getItem('menuLateralOculto') === '1') document.documentElement.classList.add('menu-oculto'); } catch (e) {}
+    </script>
     @include('partials.accessibility-head')
     <style>
         body { font-family: 'Inter', sans-serif; }
         /* Abaixo de 768px (o `md:` do Tailwind começa EM 768px): com "max-width: 768px" a barra lateral ficava escondida
            justamente em 768px, onde o botão do menu (md:hidden) também some — o menu ficava inalcançável. */
+        /* Telas largas: o botão da barra superior recolhe/exibe o menu lateral (no celular ele já é uma gaveta). */
+        @media (min-width: 768px) {
+            html.menu-oculto #sidebar { display: none; }
+        }
         @media (max-width: 767.98px) {
             /* visibility: escondida fora da tela, a barra também sai da ordem de tabulação do teclado */
             .sidebar { transform: translateX(-100%); visibility: hidden; transition: transform .3s ease-in-out, visibility 0s linear .3s; z-index: 50; position: fixed; height: 100vh; }
@@ -59,11 +67,15 @@
             @php
                 $usuarioLogado = auth('admin')->user();
                 $ehCoordenador = $usuarioLogado->ehCoordenador();
+                $ehReitor = $usuarioLogado->ehReitor();
+                // O reitor olhando UM curso como o coordenador dele vê (Admin::comoCoordenadorDe): sem sino de notificações.
+                $emVisaoDeCurso = $usuarioLogado->emVisaoDeCurso;
+                $sino = $ehCoordenador && ! $emVisaoDeCurso;
                 $naoLidas = $ehCoordenador ? $usuarioLogado->notificacoesNaoLidas() : 0;
             @endphp
 
             {{-- Busca global procura alunos de qualquer curso: só administrador. --}}
-            @unless ($ehCoordenador)
+            @if ($usuarioLogado->ehAdministrador())
                 <div class="px-3 pt-4">
                     <form method="GET" action="{{ route('busca.index') }}">
                         <div class="relative">
@@ -73,12 +85,22 @@
                         </div>
                     </form>
                 </div>
-            @endunless
+            @endif
 
             <nav class="flex-1 overflow-y-auto py-4" aria-label="Menu principal">
                 <ul class="space-y-1 px-3">
                     @php
-                        $itensMenu = $ehCoordenador
+                        $itensMenu = $ehReitor
+                            ? [
+                                ['rota' => 'reitor.visao', 'padrao' => 'reitor.visao', 'icone' => 'ph-squares-four', 'label' => 'Visão institucional'],
+                                ['rota' => 'reitor.desempenho', 'padrao' => 'reitor.desempenho', 'icone' => 'ph-chart-bar', 'label' => 'Desempenho'],
+                                ['rota' => 'reitor.trajetoria', 'padrao' => 'reitor.trajetoria', 'icone' => 'ph-path', 'label' => 'Trajetória no curso'],
+                                ['rota' => 'reitor.competencias', 'padrao' => 'reitor.competencias', 'icone' => 'ph-brain', 'label' => 'Competências'],
+                                ['rota' => 'reitor.evolucao', 'padrao' => 'reitor.evolucao', 'icone' => 'ph-chart-line-up', 'label' => 'Evolução entre semestres'],
+                                ['rota' => 'reitor.cursos', 'padrao' => 'reitor.cursos', 'icone' => 'ph-graduation-cap', 'label' => 'Análise do curso'],
+                                ['rota' => 'perfil.edit', 'padrao' => 'perfil.*', 'icone' => 'ph-user-circle', 'label' => 'Meu Perfil'],
+                            ]
+                            : ($ehCoordenador
                             ? [
                                 ['rota' => 'coordenador.painel', 'padrao' => 'coordenador.painel', 'icone' => 'ph-squares-four', 'label' => 'Visão geral'],
                                 ['rota' => 'coordenador.alunos', 'padrao' => 'coordenador.alunos*', 'icone' => 'ph-users-three', 'label' => 'Alunos do curso'],
@@ -90,14 +112,21 @@
                             ]
                             : [
                                 ['rota' => 'avaliacoes.index', 'padrao' => 'avaliacoes.*', 'icone' => 'ph-exam', 'label' => 'Avaliações'],
+                                ['rota' => 'reitor.visao', 'padrao' => 'reitor.*', 'icone' => 'ph-student', 'label' => 'Painel da reitoria'],
                                 ['rota' => 'alunos.index', 'padrao' => 'alunos.*', 'icone' => 'ph-identification-card', 'label' => 'Alunos'],
                                 ['rota' => 'categorias.index', 'padrao' => 'categorias.*', 'icone' => 'ph-tree-structure', 'label' => 'Categorias'],
                                 ['rota' => 'lixeira.index', 'padrao' => 'lixeira.*', 'icone' => 'ph-trash', 'label' => 'Lixeira'],
                                 ['rota' => 'usuarios.index', 'padrao' => 'usuarios.*', 'icone' => 'ph-users', 'label' => 'Usuários'],
                                 ['rota' => 'sistema.configuracoes.index', 'padrao' => 'sistema.*', 'icone' => 'ph-gear', 'label' => 'Configurações'],
                                 ['rota' => 'perfil.edit', 'padrao' => 'perfil.*', 'icone' => 'ph-user-circle', 'label' => 'Meu Perfil'],
-                            ];
+                            ]);
                     @endphp
+                    @if ($emVisaoDeCurso)
+                        @php
+                            $itensMenu = array_values(array_filter($itensMenu, fn ($i) => $i['rota'] !== 'notificacoes.index'));
+                            array_unshift($itensMenu, ['rota' => 'reitor.curso.sair', 'padrao' => 'reitor.curso.sair', 'icone' => 'ph-arrow-u-up-left', 'label' => 'Voltar à reitoria']);
+                        @endphp
+                    @endif
                     @foreach ($itensMenu as $item)
                         @php($ativo = request()->routeIs($item['padrao']))
                         <li>
@@ -127,10 +156,10 @@
             <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:hidden shrink-0">
                 <div class="flex items-center">
                     <i class="ph-fill ph-exam text-primary text-2xl mr-2"></i>
-                    <span class="font-bold text-slate-800">{{ $ehCoordenador ? 'Coordenação' : 'Admin' }}</span>
+                    <span class="font-bold text-slate-800">{{ $ehReitor ? 'Reitoria' : ($ehCoordenador ? 'Coordenação' : 'Admin') }}</span>
                 </div>
                 <div class="flex items-center gap-2">
-                    @if ($ehCoordenador)
+                    @if ($sino)
                         <a href="{{ route('notificacoes.index') }}" class="relative rounded p-1 text-slate-600 hover:text-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" aria-label="Notificações" title="Notificações">
                             <i class="ph ph-bell text-2xl" aria-hidden="true"></i>
                             <span data-notificacoes-ponto class="absolute right-0 top-0 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white {{ $naoLidas > 0 ? '' : 'hidden' }}" aria-hidden="true"></span>
@@ -145,9 +174,15 @@
             </header>
 
             <div class="bg-white border-b border-slate-200 px-6 h-14 shrink-0 hidden md:flex items-center justify-between">
-                <span class="text-sm text-slate-500">{{ $siteTitle }}</span>
+                <div class="flex items-center gap-3 min-w-0">
+                    <button type="button" id="botao-menu-lateral" aria-controls="sidebar" aria-expanded="true" aria-label="Ocultar o menu lateral" title="Ocultar o menu lateral"
+                            class="shrink-0 rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 hover:text-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                        <i class="ph ph-sidebar-simple text-xl" aria-hidden="true"></i>
+                    </button>
+                    <span class="truncate text-sm text-slate-500">{{ $siteTitle }}</span>
+                </div>
                 <div class="flex items-center gap-4">
-                    @if ($ehCoordenador)
+                    @if ($sino)
                         <a href="{{ route('notificacoes.index') }}" class="relative rounded p-1 text-slate-600 hover:text-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" aria-label="Notificações" title="Notificações">
                             <i class="ph ph-bell text-2xl" aria-hidden="true"></i>
                             <span data-notificacoes-ponto class="absolute right-0 top-0 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white {{ $naoLidas > 0 ? '' : 'hidden' }}" aria-hidden="true"></span>
@@ -160,7 +195,18 @@
                 </div>
             </div>
 
-            <main id="conteudo-principal" tabindex="-1" class="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 p-4 sm:p-6 lg:p-8 focus:outline-none">
+            {{-- `relative`: texto só para leitor de tela (`sr-only` = position absolute) sem ancestral posicionado ficava
+                 ancorado na janela, fora do overflow-hidden do layout, e esticava a rolagem da PÁGINA (área vazia no fim). --}}
+            <main id="conteudo-principal" tabindex="-1" class="relative flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 p-4 sm:p-6 lg:p-8 focus:outline-none">
+                @if ($emVisaoDeCurso)
+                    <div class="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900" role="note">
+                        <i class="ph-bold ph-eye text-lg" aria-hidden="true"></i>
+                        <span>Você está vendo <strong>como o coordenador</strong> de <strong>{{ implode(' · ', $usuarioLogado->cursos()) }}</strong> (somente leitura). Esta visão mostra dados de alunos do curso e fica registrada na auditoria.</span>
+                        <a href="{{ route('reitor.curso.sair') }}" class="ml-auto inline-flex items-center gap-2 rounded-lg border border-sky-300 bg-white px-3 py-1.5 font-semibold text-sky-900 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                            <i class="ph-bold ph-arrow-u-up-left" aria-hidden="true"></i> Voltar ao painel da reitoria
+                        </a>
+                    </div>
+                @endif
                 @include('partials.flash')
                 @yield('content')
             </main>
@@ -191,6 +237,27 @@
             botao.focus();
         }
     }
+    // Telas largas: recolher/exibir o menu lateral (guardado em localStorage; o <html> ganha .menu-oculto).
+    (function () {
+        var botao = document.getElementById('botao-menu-lateral');
+        if (!botao) return;
+        var raiz = document.documentElement;
+        function refletir() {
+            var oculto = raiz.classList.contains('menu-oculto');
+            var texto = oculto ? 'Mostrar o menu lateral' : 'Ocultar o menu lateral';
+            botao.setAttribute('aria-expanded', oculto ? 'false' : 'true');
+            botao.setAttribute('aria-label', texto);
+            botao.title = texto;
+        }
+        botao.addEventListener('click', function () {
+            var oculto = raiz.classList.toggle('menu-oculto');
+            try { localStorage.setItem('menuLateralOculto', oculto ? '1' : '0'); } catch (e) {}
+            refletir();
+            // gráficos e tabelas se ajustam à nova largura
+            window.dispatchEvent(new Event('resize'));
+        });
+        refletir();
+    })();
     // Esc fecha o menu no celular e devolve o foco ao botão.
     document.addEventListener('keydown', function (e) {
         var barra = document.getElementById('sidebar');
@@ -198,7 +265,7 @@
     });
 </script>
 @include('partials.accessibility-scripts')
-@if (! empty($ehCoordenador))
+@if (! empty($sino))
     @include('partials.notificacoes-scripts', ['adminId' => $usuarioLogado->id])
 @endif
 </body>

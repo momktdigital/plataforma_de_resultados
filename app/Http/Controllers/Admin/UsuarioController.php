@@ -17,17 +17,23 @@ use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 /**
- * Gestão de usuários do sistema: administradores (acesso total) e
- * coordenadores (acesso limitado aos cursos vinculados). Mesma tabela
- * (`admins`), diferenciados por `role` — duas abas na mesma tela.
+ * Gestão de usuários do sistema: administradores (acesso total),
+ * coordenadores (acesso limitado aos cursos vinculados) e reitores (só
+ * leitura, indicadores agregados de todos os cursos). Mesma tabela
+ * (`admins`), diferenciados por `role` — uma aba por perfil na mesma tela.
  */
 class UsuarioController extends Controller
 {
     public function index(Request $request): View
     {
-        $aba = $request->query('aba') === 'coordenadores' ? 'coordenadores' : 'administradores';
+        $aba = in_array($request->query('aba'), ['coordenadores', 'reitores'], true) ? $request->query('aba') : 'administradores';
 
-        $usuarios = ($aba === 'coordenadores' ? Admin::coordenadores() : Admin::administradores())
+        $usuarios = match ($aba) {
+            'coordenadores' => Admin::coordenadores(),
+            'reitores' => Admin::reitores(),
+            default => Admin::administradores(),
+        };
+        $usuarios = $usuarios
             ->orderBy('id')
             ->paginate(50)
             ->withQueryString();
@@ -43,6 +49,7 @@ class UsuarioController extends Controller
             'cursosPorCoordenador' => $cursosPorCoordenador,
             'totalAdministradores' => Admin::administradores()->count(),
             'totalCoordenadores' => Admin::coordenadores()->count(),
+            'totalReitores' => Admin::reitores()->count(),
             'opcoesCurso' => Curso::nomesDisponiveis(),
         ]);
     }
@@ -50,28 +57,33 @@ class UsuarioController extends Controller
     public function store(StoreUsuarioRequest $request): RedirectResponse
     {
         $coordenador = $request->validated('papel') === 'coordenador';
+        $reitor = $request->validated('papel') === 'reitor';
 
         $usuario = Admin::create([
             'username' => $request->validated('username'),
             'email' => $request->validated('email'),
-            // Coordenador pode não ter senha: `password_hash` é NOT NULL no schema legado, então vai um
+            // Coordenador e reitor podem não ter senha: `password_hash` é NOT NULL no schema legado, então vai um
             // hash de um valor aleatório que ninguém conhece — o login por senha dele simplesmente nunca passa.
             'password_hash' => Hash::make($request->validated('password') ?: Str::random(64)),
-            'role' => $coordenador ? Admin::ROLE_COORDENADOR : Admin::ROLE_ADMIN,
+            'role' => match (true) {
+                $coordenador => Admin::ROLE_COORDENADOR,
+                $reitor => Admin::ROLE_REITOR,
+                default => Admin::ROLE_ADMIN,
+            },
         ]);
 
         if ($coordenador) {
             $usuario->sincronizarCursos($request->validated('cursos'));
         }
 
-        AtividadeLogger::registrar($coordenador ? 'coordenador.criado' : 'administrador.criado', 'Admin', $usuario->id, array_filter([
+        AtividadeLogger::registrar($reitor ? 'reitor.criado' : ($coordenador ? 'coordenador.criado' : 'administrador.criado'), 'Admin', $usuario->id, array_filter([
             'username' => $usuario->username,
             'cursos' => $coordenador ? $request->validated('cursos') : null,
         ]));
 
         return redirect()
-            ->route('usuarios.index', ['aba' => $coordenador ? 'coordenadores' : 'administradores'])
-            ->with('status', ($coordenador ? 'Coordenador' : 'Administrador')." '{$usuario->username}' criado com sucesso.");
+            ->route('usuarios.index', ['aba' => $this->abaDo($usuario)])
+            ->with('status', $this->rotuloDoPerfil($usuario)." '{$usuario->username}' criado com sucesso.");
     }
 
     public function edit(Admin $admin): View
@@ -102,7 +114,7 @@ class UsuarioController extends Controller
             $admin->sincronizarCursos($request->validated('cursos'));
         }
 
-        AtividadeLogger::registrar($admin->ehCoordenador() ? 'coordenador.editado' : 'administrador.editado', 'Admin', $admin->id, array_filter([
+        AtividadeLogger::registrar($admin->ehReitor() ? 'reitor.editado' : ($admin->ehCoordenador() ? 'coordenador.editado' : 'administrador.editado'), 'Admin', $admin->id, array_filter([
             'username_antes' => $usernameAntes,
             'username_depois' => $admin->username,
             'senha_redefinida' => $senhaRedefinida,
@@ -111,8 +123,8 @@ class UsuarioController extends Controller
         ], fn ($v) => $v !== null));
 
         return redirect()
-            ->route('usuarios.index', ['aba' => $admin->ehCoordenador() ? 'coordenadores' : 'administradores'])
-            ->with('status', ($admin->ehCoordenador() ? 'Coordenador' : 'Administrador')." '{$admin->username}' atualizado com sucesso.");
+            ->route('usuarios.index', ['aba' => $this->abaDo($admin)])
+            ->with('status', $this->rotuloDoPerfil($admin)." '{$admin->username}' atualizado com sucesso.");
     }
 
     public function destroy(Admin $admin): RedirectResponse
@@ -122,13 +134,33 @@ class UsuarioController extends Controller
         }
 
         $username = $admin->username;
-        $coordenador = $admin->ehCoordenador();
+        $aba = $this->abaDo($admin);
+        $rotulo = $this->rotuloDoPerfil($admin);
+        $acao = $admin->ehReitor() ? 'reitor.excluido' : ($admin->ehCoordenador() ? 'coordenador.excluido' : 'administrador.excluido');
         $admin->delete();
 
-        AtividadeLogger::registrar($coordenador ? 'coordenador.excluido' : 'administrador.excluido', 'Admin', $admin->id, ['username' => $username]);
+        AtividadeLogger::registrar($acao, 'Admin', $admin->id, ['username' => $username]);
 
         return redirect()
-            ->route('usuarios.index', ['aba' => $coordenador ? 'coordenadores' : 'administradores'])
-            ->with('status', ($coordenador ? 'Coordenador' : 'Administrador').' excluído com sucesso.');
+            ->route('usuarios.index', ['aba' => $aba])
+            ->with('status', $rotulo.' excluído com sucesso.');
+    }
+
+    private function abaDo(Admin $usuario): string
+    {
+        return match (true) {
+            $usuario->ehReitor() => 'reitores',
+            $usuario->ehCoordenador() => 'coordenadores',
+            default => 'administradores',
+        };
+    }
+
+    private function rotuloDoPerfil(Admin $usuario): string
+    {
+        return match (true) {
+            $usuario->ehReitor() => 'Reitor',
+            $usuario->ehCoordenador() => 'Coordenador',
+            default => 'Administrador',
+        };
     }
 }

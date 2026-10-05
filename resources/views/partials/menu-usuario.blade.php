@@ -6,7 +6,7 @@
 @php
     $nomeMenu = $usuarioLogado->username;
     $inicialMenu = mb_strtoupper(mb_substr($nomeMenu, 0, 1));
-    $papelMenu = $usuarioLogado->ehCoordenador() ? 'Coordenador' : 'Administrador';
+    $papelMenu = $usuarioLogado->emVisaoDeCurso ? 'Reitor (visão do curso)' : ($usuarioLogado->ehReitor() ? 'Reitor' : ($usuarioLogado->ehCoordenador() ? 'Coordenador' : 'Administrador'));
 @endphp
 <div class="relative" id="menu-usuario">
     <button type="button" id="menu-usuario-botao" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-usuario-lista"
@@ -29,7 +29,7 @@
             <a href="{{ route('perfil.edit') }}" role="menuitem" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none">
                 <i class="ph ph-user-circle text-lg text-slate-500" aria-hidden="true"></i> Meu perfil
             </a>
-            @if ($usuarioLogado->ehCoordenador())
+            @if ($usuarioLogado->ehCoordenador() && ! $usuarioLogado->emVisaoDeCurso)
                 <a href="{{ route('notificacoes.index') }}" role="menuitem" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none">
                     <i class="ph ph-bell text-lg text-slate-500" aria-hidden="true"></i> Notificações
                     <span data-notificacoes-contagem class="ml-auto min-w-[1.4rem] rounded-full bg-primary px-1.5 py-0.5 text-center text-xs font-bold text-slate-900 {{ $naoLidas > 0 ? '' : 'hidden' }}"><span aria-hidden="true">{{ $naoLidas > 99 ? '99+' : $naoLidas }}</span><span class="sr-only">{{ $naoLidas }} não lida(s)</span></span>

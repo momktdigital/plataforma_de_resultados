@@ -89,6 +89,35 @@ linha, veja `git log`.
 - Páginas de erro (404/403/500) com a identidade visual do sistema, em vez
   da página padrão do Laravel.
 
+## Perfil de reitor e painel da reitoria
+
+- Novo perfil **reitor** (`admins.role = rector`): só leitura, todos os cursos,
+  sem dado nominal de aluno. Entra por código no e-mail (como o coordenador) ou
+  por senha. Cadastro na aba **Reitoria** de Usuários (a migration
+  `allow_rector_role_on_admins_table` acrescenta `rector` ao ENUM legado de
+  `admins.role` no MySQL — sem ela o cadastro dava erro 500). Middleware `perfil:`
+  (lista positiva de perfis) separa as áreas; o reitor não alcança avaliações,
+  alunos nem o BI.
+- **Painel da reitoria** (`/reitoria`) em cinco telas — Visão institucional,
+  Desempenho, Trajetória no curso, Competências e Evolução entre semestres:
+  participação por curso × meta, proficiência institucional e patamares,
+  média/mediana, faixas de acerto, dispersão (quartis), mapa participação ×
+  proficiência, mapa de calor curso × período, crescimento ao longo do curso,
+  cobertura da aplicação, Bloom e áreas, evolução entre semestres, e planilha
+  .xlsx. Cada quadro com "Sobre este quadro" e "Ver leitura".
+- Seletores com busca e árvore para categoria e avaliação; "Todos os períodos"
+  no filtro de período.
+- **Visão do coordenador de um curso** para o reitor: abre as telas do coordenador
+  (painel, alunos, desempenho, comparar semestres, avaliações/Dashboard) de um
+  curso à escolha, somente leitura, com aviso na tela e registro na auditoria.
+- Filtros **período letivo / categoria / avaliação**: como cada avaliação costuma
+  ser de um curso, escolher a categoria reúne os cursos (o campo Avaliação só
+  lista as da categoria); "todas" é o padrão, com aviso quando categorias
+  diferentes se misturam. A evolução entre semestres soma as avaliações da
+  categoria em cada semestre.
+- Critério de proficiência e meta de participação configuráveis em
+  Configurações do sistema.
+
 ## Painel de gestão do coordenador
 
 - Saudação (Bom dia/Boa tarde/Boa noite) e navegação por abas: Visão geral,

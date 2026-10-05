@@ -244,7 +244,7 @@ herdada do schema da aplicação legada, então uma conta já cadastrada
 antes de o app legado ser removido continua funcionando aqui normalmente.
 (`/administradores` antigo redireciona para `/usuarios`.)
 
-A tela tem duas abas, distinguidas pela coluna legada `admins.role`:
+A tela tem três abas, distinguidas pela coluna legada `admins.role`:
 
 - **Administradores** (`superadmin`, ou sem role): acesso total.
 - **Coordenadores** (`coordinator`): acesso limitado aos cursos a que estão
@@ -254,9 +254,19 @@ A tela tem duas abas, distinguidas pela coluna legada `admins.role`:
   cada uma (somente leitura, só com os alunos dos cursos dele) e o próprio
   perfil. Todo o resto responde 403 (middleware `somente-admin`, ver
   `routes/web.php`) e a busca global some do menu.
+- **Reitoria** (`rector`): só leitura, **todos os cursos**. O **painel da reitoria**
+  (`/reitoria`, ver abaixo) é **agregado, sem dado nominal de aluno**. Não tem curso
+  vinculado, nem acesso direto a avaliações, questões, alunos ou ao Dashboard de
+  uma avaliação: o middleware `perfil:` (lista positiva de perfis,
+  `PerfilPermitido`) leva um GET dele em `/avaliacoes`, `/painel`... de volta ao
+  painel da reitoria, e o resto responde 403. A exceção é a **visão do
+  coordenador de um curso** (próximo parágrafo), aberta de propósito para
+  análise aprofundada.
+  Cadastro: e-mail obrigatório (é para ele que vai o código de acesso), senha
+  opcional, nenhum curso.
 
 **Login.** A tela de login tem duas abas. **Administrador**: usuário e senha
-(a senha é obrigatória só para ele). **Coordenador**: informa usuário ou e-mail
+(a senha é obrigatória só para ele). **Coordenação / Reitoria** (coordenador e reitor): informa usuário ou e-mail
 e recebe um **código de 6 dígitos** no e-mail cadastrado (`/login/codigo`,
 `LoginPorCodigoService`) — sem senha. O código vale 10 minutos e uma única vez,
 3 erros o invalidam, o reenvio tem espera crescente (1, 2, 5, 10 min) e só o
@@ -269,16 +279,17 @@ por código. Um coordenador que tenha senha cadastrada também pode entrar por e
 aba **Coordenador** há o botão **Entrar com senha** (`/login?modo=coordenador`,
 usuário + senha — a mesma rota `login` do administrador) e, na tela de senha, o
 botão **Receber código por e-mail** para voltar. Entrando por senha ou por código,
-o coordenador cai direto no seu **painel** (`/painel`). Quem não tem senha
+o coordenador cai direto no seu **painel** (`/painel`) e o reitor no **painel da reitoria**
+(`Admin::rotaInicial()`). Quem não tem senha
 cadastrada vê a mesma mensagem genérica de "usuário ou senha inválidos".
 
 **Perfil desconhecido não acessa nada.** `Admin::papel()` normaliza `admins.role`
 (caixa e espaços não distinguem): `superadmin` ou vazio ⇒ administrador,
-`coordinator` ⇒ coordenador, **qualquer outro valor ⇒ sem perfil**. Antes,
+`coordinator` ⇒ coordenador, `rector` ⇒ reitor, **qualquer outro valor ⇒ sem perfil**. Antes,
 tudo que não fosse exatamente `coordinator` virava administrador completo
 (falha aberta). Agora o login recusa a conta, o middleware `papel-valido`
 (grupo `auth:admin` de `routes/web.php`) encerra uma sessão que ficou com perfil
-inválido e `somente-admin` exige `ehAdministrador()`. Contas assim somem das duas
+inválido e `somente-admin` exige `ehAdministrador()`. Contas assim somem das
 abas da tela de usuários — corrija o `role` direto no banco.
 
 Os cursos do coordenador ficam em `admin_cursos` (por **nome**, igual a
@@ -430,6 +441,99 @@ compara avaliações da mesma categoria.
 e, para presença e áreas, sobre `respostas` restrito aos alunos do curso e ao
 período. `CoordenadorAlunosService` lê só `resultado_resumos` (uma linha por
 aluno×avaliação×período) e toca `respostas` apenas na ficha de UM aluno.
+
+## Painel da reitoria (`/reitoria`)
+
+A visão **institucional**: todos os cursos lado a lado numa avaliação (em geral o
+Diagnóstico Institucional do semestre). Para o reitor (e, para conferência, o
+administrador); o coordenador não entra. **Só indicadores agregados**: nenhum
+nome, RA ou CPF passa por essas telas (`ReitorTest` confere).
+
+**Analisar um curso a fundo.** O item **Análise do curso** do menu lateral (e a aba
+de mesmo nome no cabeçalho) lista todos os cursos, com busca e os números do recorte,
+e o botão **Analisar** abre a **visão do coordenador daquele curso** (o nome do curso
+na tabela de participação da Visão institucional também é um atalho): painel, alunos do curso e ficha do aluno,
+desempenho, comparar semestres, lista de avaliações e Dashboard — exatamente as
+telas (e as restrições) do coordenador, **somente leitura**. Por baixo,
+`ReitorCursoController` grava o curso na sessão e o middleware
+`VisaoDeCursoDoReitor` (grupo de rotas do coordenador, antes de `perfil:`) troca,
+só naquela requisição, o usuário por uma cópia em memória com perfil de
+coordenador desse curso (`Admin::comoCoordenadorDe()`; nada é gravado no banco).
+Um aviso azul em toda tela e o item **Voltar à reitoria** no menu encerram a
+visão; abrir o painel da reitoria também a encerra. Diferente do painel
+agregado, essa visão **traz dados nominais** dos alunos do curso (CPF segue fora
+da tela), por isso cada abertura vai para a auditoria (`reitor.visao_de_curso`).
+Só o reitor tem essa entrada (o administrador já enxerga tudo).
+
+**O recorte** vem da barra de filtros e fica na URL: **período letivo**
+(`periodo=`, padrão o mais recente; "Todos os períodos" soma os semestres — útil
+para categorias com avaliações em vários semestres, como os simulados — e cada
+semestre usa os previstos das matrículas dele), **categoria** (`categoria=`, padrão "todas") e
+**avaliação** (`avaliacao=`, padrão "todas" as da categoria; o campo só lista as
+avaliações da categoria escolhida) e, se quiser, um **subconjunto de cursos**
+(`cursos[]`, chaves de `NomeCurso::chave()`). Como em geral **cada avaliação é de um
+curso** (a mesma prova aplicada a vários cursos vira várias avaliações da mesma
+categoria), escolher a categoria reúne os cursos: os resultados das avaliações do
+recorte são somados por curso. **As categorias são uma árvore** (ex.: "Diagnóstico
+Institucional (DI) › Direito", "DI › Medicina"...): escolher o **pai** reúne as
+avaliações de todas as filhas, e cada filha continua escolhível (o seletor mostra o
+pai com o total e as filhas recolhíveis; os seletores de categoria e de avaliação
+têm busca sem acento e teclado). Escolher uma avaliação mostra só o curso
+dela. Se o recorte reúne **famílias de categoria diferentes** (categoria "todas" com
+mais de uma raiz no período — "DI" e "Simulado", mas não "DI › Direito" e
+"DI › Medicina"), as telas avisam: essas provas não são comparáveis em desempenho — a
+participação segue valendo, mas proficiência, média e evolução devem ser lidas
+com uma categoria escolhida. "Estudante" = um resultado (se a mesma pessoa tiver
+resultado em duas avaliações do recorte, conta duas vezes). O curso de cada
+resultado é `resultado_resumos.curso` (o curso na data da prova), nunca
+`alunos.curso`.
+
+Cinco telas sobre o mesmo recorte:
+
+| Tela | O que mostra |
+| --- | --- |
+| **Visão institucional** | pontos de atenção; cartões (proficiência, acerto médio, participação, cursos na meta, com variação frente ao semestre anterior); **participação por curso** (previstos × fizeram × ausentes, dif. da média, distância e "alunos a mais" para a meta, períodos avaliados, ativos sem aplicação; ordenável e filtrável); **proficiência por curso**; **patamares** (60–80%, também por período de um curso); **mapa participação × proficiência** (bolhas, quadrante de atenção) |
+| **Desempenho** | média e mediana; distribuição por faixa de acerto; **dispersão** (quartis e P10–P90 — caixa e haste); histograma do conjunto (com um curso à escolha); tabela estatística |
+| **Trajetória no curso** | proficiência e acerto médio por período do curso (1º, 2º...); **mapa de calor curso × período** (média, proficientes, participação ou participantes); **crescimento** (pp por período, ajuste ponderado); **cobertura da aplicação** (onde a prova chegou e onde há aluno ativo sem aplicação) |
+| **Competências** | níveis de **Bloom** (proficientes × não proficientes, mapa por curso, radar curso × conjunto) e **áreas** de conhecimento (ranking e mapa curso × área) |
+| **Evolução entre semestres** | série institucional (proficiência, média, participação), **variação de cada curso** frente a um semestre à escolha, curso × semestre |
+
+Cada quadro tem **Sobre este quadro** (o que mede e como ler) e **Ver leitura** (o que os
+números de agora dizem, com o tom bom/atenção/precisa de ação) — textos em
+`ReitorLeituraService`. A planilha `.xlsx` (por curso e por período do curso) sai
+em `/reitoria/exportar.xlsx` e a exportação é registrada na auditoria.
+
+**Definições** (ficam nas telas também):
+
+- **Proficiente** = acertou o **critério** (padrão 60%) ou mais. É um critério
+  interno, **sem validação contra ENADE/ENAMED** — as telas dizem isso. As faixas
+  e os patamares se ancoram nele (60% ⇒ <40, 40–49, 50–59, 60–69, ≥70).
+- **Previstos** = matrículas **vigentes** (ativa ou período cumprido) no período
+  letivo da avaliação, só nos períodos do curso em que ela foi aplicada
+  (`Previstos`). Alunos ativos em períodos **sem aplicação** ficam à parte ("ativos
+  sem aplicação") — a prova não chegou lá, o aluno não faltou. Nunca abaixo de quem
+  tem resultado; sem matrícula importada, os previstos são os resultados (a
+  participação vira presença, e a tela avisa). **Participação** = fizeram ÷ previstos.
+- **Ausente** = prova inteira em branco (`resultado_resumos.ausente`): fora de
+  média, mediana, faixas e proficiência.
+- **Evolução**: acompanha o mesmo filtro de categoria nos outros períodos letivos
+  (cada semestre reúne as avaliações dela); com uma avaliação escolhida, vale a
+  escolhida no semestre dela e a de mais participantes da mesma categoria nos outros.
+  É uma foto de cada semestre, não o acompanhamento dos mesmos estudantes — idem
+  para a trajetória por período do curso (cada período é uma turma diferente).
+
+**Parâmetros** (Configurações do sistema → *Painel da reitoria*, só administrador;
+`configuracoes_sistema`): `reitor_corte_proficiencia` (inteiro 30–90, padrão 60) e
+`reitor_meta_participacao` (50–100, padrão 98).
+
+**Como é calculado.** Tudo em SQL sobre `resultado_resumos`: um `GROUP BY` por curso ×
+período × percentual (`percentual` tem 1 casa, então no máximo ~1000 linhas por
+grupo) vira um **histograma** (`App\Support\Histograma`) e dele saem média, mediana,
+quartis, faixas e patamares **exatos** em PHP — nada de trazer resultados um a um.
+Bloom e área são a única varredura de `respostas` (`ReitorCompetenciasService`: um
+`JOIN` + `GROUP BY curso × proficiente × Bloom × área`, regra de `Anulacao`),
+cacheada por avaliação com `CacheDeAnalise` (só arrays). Os previstos vêm de
+`aluno_matriculas` a cada visita (não entram no cache, que não enxerga matrícula).
 
 ## Configurações do portal público (`/sistema/portal`)
 
@@ -1014,6 +1118,8 @@ Tela para ajustar, sem precisar de acesso ao servidor:
 
 - **Quantos backups manter** (os mais antigos além desse número são apagados
   a cada novo backup).
+- **Painel da reitoria**: critério de proficiência (% de acerto) e meta de
+  participação (ver "Painel da reitoria").
 
 O repositório de atualização aparece só para leitura: vem de
 `ATUALIZACAO_REPOSITORIO` no `.env` (ver "Atualização" acima).

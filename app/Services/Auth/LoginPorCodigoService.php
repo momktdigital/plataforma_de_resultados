@@ -9,7 +9,7 @@ use App\Services\Portal\SmtpEmailSender;
 use Illuminate\Support\Carbon;
 
 /**
- * Login de COORDENADOR sem senha: o sistema envia um código de 6 dígitos para
+ * Login de COORDENADOR (e REITOR) sem senha: o sistema envia um código de 6 dígitos para
  * o e-mail cadastrado e o coordenador o digita. (Administrador continua
  * entrando com usuário e senha — para ele a senha é obrigatória.)
  *
@@ -46,7 +46,7 @@ class LoginPorCodigoService
         return Configuracao::valor('smtp_ativo', '0') === '1';
     }
 
-    /** Coordenador com e-mail cadastrado, pelo usuário OU pelo e-mail digitado. */
+    /** Coordenador ou reitor com e-mail cadastrado, pelo usuário OU pelo e-mail digitado. */
     public function localizar(string $identificador): ?Admin
     {
         $identificador = trim($identificador);
@@ -54,7 +54,7 @@ class LoginPorCodigoService
             return null;
         }
 
-        return Admin::coordenadores()
+        return Admin::entramPorCodigo()
             ->whereNotNull('email')->where('email', '!=', '')
             ->where(fn ($q) => $q->where('username', $identificador)->orWhere('email', $identificador))
             ->first();

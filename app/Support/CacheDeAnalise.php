@@ -29,7 +29,7 @@ use Illuminate\Support\Facades\DB;
  */
 final class CacheDeAnalise
 {
-    private const VERSAO = 'v2';
+    private const VERSAO = 'v3';
 
     /**
      * @param  array<string, mixed>  $parametros  tudo que, além da avaliação, muda o resultado (período, escopo, filtro...)

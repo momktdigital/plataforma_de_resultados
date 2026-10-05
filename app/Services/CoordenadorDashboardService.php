@@ -249,18 +249,24 @@ class CoordenadorDashboardService
         ];
     }
 
-    /** Resumos de avaliações ativas cujo curso (na época da prova) é um dos informados. */
-    private function resumos(array $variantesDoCurso): Builder
+    /**
+     * Resumos de avaliações ativas cujo curso (na época da prova) é um dos informados. `null` = todos os cursos
+     * (painel da reitoria): qualquer resultado com curso conhecido.
+     */
+    private function resumos(?array $variantesDoCurso): Builder
     {
-        return DB::table('resultado_resumos as rr')
+        $consulta = DB::table('resultado_resumos as rr')
             ->join('avaliacoes as av', 'av.codigo', '=', 'rr.avaliacao_codigo')
             ->whereNull('av.deleted_at')
-            ->where(fn ($q) => $q->whereNull('av.status')->orWhere('av.status', '!=', Avaliacao::STATUS_ANULADA))
-            ->whereIn('rr.curso', $variantesDoCurso);
+            ->where(fn ($q) => $q->whereNull('av.status')->orWhere('av.status', '!=', Avaliacao::STATUS_ANULADA));
+
+        return $variantesDoCurso === null
+            ? $consulta->whereNotNull('rr.curso')->where('rr.curso', '!=', '')
+            : $consulta->whereIn('rr.curso', $variantesDoCurso);
     }
 
     /** @return Collection<int, array{codigo: int, nome: string, data: ?string, periodoLetivo: string, categoriaId: ?int}> */
-    public function avaliacoesDoCurso(array $variantes): Collection
+    public function avaliacoesDoCurso(?array $variantes): Collection
     {
         $linhas = $this->resumos($variantes)
             ->groupBy('av.codigo', 'av.nome', 'av.data_avaliacao', 'av.categoria_id')
@@ -304,7 +310,7 @@ class CoordenadorDashboardService
      * @param  array<int, int>  $codigos
      * @return array<int, string> codigo => período letivo
      */
-    private function periodoLetivoPelasMatriculas(array $codigos, array $variantes): array
+    private function periodoLetivoPelasMatriculas(array $codigos, ?array $variantes): array
     {
         $melhor = [];
 

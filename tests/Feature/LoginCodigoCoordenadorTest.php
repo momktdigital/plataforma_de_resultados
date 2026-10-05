@@ -140,7 +140,7 @@ class LoginCodigoCoordenadorTest extends TestCase
     {
         $this->coordenador();
 
-        $mensagem = 'Se houver um coordenador com esse usuário ou e-mail, enviamos um código de acesso para o e-mail cadastrado. Ele vale por 10 minutos.';
+        $mensagem = 'Se houver um coordenador ou reitor com esse usuário ou e-mail, enviamos um código de acesso para o e-mail cadastrado. Ele vale por 10 minutos.';
 
         $existente = $this->post('/login/codigo', ['identificador' => 'coord']);
         $existente->assertRedirect(route('login.codigo.form'))->assertSessionHas('status', $mensagem);
@@ -215,7 +215,7 @@ class LoginCodigoCoordenadorTest extends TestCase
 
     public function test_pagina_de_login_tem_as_duas_abas(): void
     {
-        $this->get('/login')->assertOk()->assertSee('Administrador')->assertSee('Coordenador')->assertSee('name="password"', false);
+        $this->get('/login')->assertOk()->assertSee('Administrador')->assertSee('Coordenação / Reitoria')->assertSee('name="password"', false);
         $this->get('/login?modo=codigo')->assertOk()->assertSee('Enviar código')->assertDontSee('name="password"', false);
     }
 
@@ -284,7 +284,7 @@ class LoginCodigoCoordenadorTest extends TestCase
 
         // A aba "Coordenador" é a selecionada (aria-selected="true") e a de administrador não.
         $this->assertMatchesRegularExpression('/aria-selected="false"[^>]*>\s*Administrador/s', $html);
-        $this->assertMatchesRegularExpression('/aria-selected="true"[^>]*>\s*Coordenador/s', $html);
+        $this->assertMatchesRegularExpression('/aria-selected="true"[^>]*>\s*Coordenação \/ Reitoria/s', $html);
     }
 
     public function test_aba_do_administrador_nao_mostra_o_botao_do_coordenador(): void

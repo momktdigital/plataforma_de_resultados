@@ -42,6 +42,27 @@ class AcessibilidadeTest extends TestCase
         $this->assertStringContainsString('aria-label="Menu principal"', $html);
     }
 
+    public function test_main_e_posicionado_para_o_texto_so_de_leitor_de_tela_nao_esticar_a_pagina(): void
+    {
+        $html = $this->actingAs($this->admin(), 'admin')->get('/avaliacoes')->assertOk()->getContent();
+
+        // `sr-only` é position:absolute; sem ancestral posicionado ele escapa do overflow-hidden do layout e a página
+        // rola além do fim do conteúdo (área vazia)
+        $this->assertMatchesRegularExpression('/<main[^>]*id="conteudo-principal"[^>]*class="relative /', $html);
+    }
+
+    public function test_menu_lateral_pode_ser_recolhido_em_telas_largas(): void
+    {
+        $html = $this->actingAs($this->admin(), 'admin')->get('/avaliacoes')->assertOk()->getContent();
+
+        // botão com nome, estado e o que controla; a regra só vale a partir de 768px (no celular o menu já é uma gaveta)
+        $this->assertMatchesRegularExpression('/<button[^>]*id="botao-menu-lateral"[^>]*aria-controls="sidebar"[^>]*aria-expanded="true"[^>]*aria-label="Ocultar o menu lateral"/', $html);
+        $this->assertStringContainsString('@media (min-width: 768px)', $html);
+        $this->assertStringContainsString('html.menu-oculto #sidebar { display: none; }', $html);
+        // a escolha guardada é aplicada antes de pintar (sem o menu "piscar" aberto)
+        $this->assertStringContainsString("localStorage.getItem('menuLateralOculto')", $html);
+    }
+
     public function test_barra_lateral_so_some_abaixo_de_768px_onde_o_botao_do_menu_aparece(): void
     {
         $html = $this->actingAs($this->admin(), 'admin')->get('/avaliacoes')->getContent();

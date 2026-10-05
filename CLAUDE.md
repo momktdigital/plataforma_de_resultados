@@ -89,6 +89,46 @@ objeto/stdClass — o cache não desserializa classes), e bump em `VERSAO` ao mu
 - `resultado_resumos.curso` nunca é zerado por falta de aluno: sem aluno conhecido
   o curso já gravado fica (ver `CursoDoResultadoService`).
 
+## Painel da reitoria: só agregado, por categoria ou avaliação
+
+O **painel** do reitor (`role = rector`, `/reitoria/*`) enxerga todos os cursos, então
+é só agregado — nunca nome, RA ou CPF (`ReitorTest` procura nome de aluno nas telas).
+Não ligue o reitor a `Avaliacao::visivelPara` nem ao BI/lista de alunos. As rotas dele
+ficam em `perfil:reitor,administrador` e as de coordenador/administrador em
+`perfil:administrador,coordenador` (lista **positiva**).
+
+A única porta para dado nominal é a **visão do coordenador de um curso**: o reitor
+escolhe UM curso (`ReitorCursoController`, sessão `visao_de_curso`) e o middleware
+`VisaoDeCursoDoReitor` — antes de `perfil:`, só no grupo de rotas do coordenador —
+troca o usuário da requisição por `Admin::comoCoordenadorDe([curso])`, uma cópia em
+memória (nunca salva) com perfil de coordenador. Não reescreva controller para o
+reitor: tudo que o coordenador vê já passa por `cursos()`/`visivelPara`. É só leitura,
+auditada (`reitor.visao_de_curso`), com aviso fixo no layout; e só vale para o reitor
+(não para administrador, que perderia as telas de gestão). `/reitoria` solta a visão.
+
+- Não use o atributo `hidden` sozinho em elemento com classe de display do Tailwind
+  (`flex`, `block`...): a classe vence. `reitor/_base.blade.php` define
+  `[hidden] { display: none !important }` por isso — mantenha. Idem o `relative` do
+  `<main>` em `layouts/app.blade.php`: sem ele, os `sr-only` (position absolute) das
+  tabelas esticam a rolagem da PÁGINA e sobra uma área vazia no fim (em qualquer tela).
+- O recorte (`ReitorDashboardService::contexto()`) é período letivo (ou "todos") + categoria
+  ("todas" por padrão) + avaliação ("todas" da categoria). Em geral uma avaliação é de
+  um curso, então a categoria reúne os cursos. "Todas as categorias" mistura provas não
+  comparáveis: `avaliacao.mistura` liga o aviso nas telas — não esconda esse aviso.
+  Categorias são uma árvore: escolher o pai vale para as filhas (`cadeia` de cada
+  avaliação), e "mistura" olha a RAIZ — filhas do mesmo pai são a mesma prova.
+  Só a evolução (`ReitorEvolucaoService`) cruza semestres, seguindo o mesmo filtro.
+- Estatística de percentual (média, mediana, quartis, faixas, patamares) sai de um
+  histograma em décimos de ponto (`Histograma`), vindo de um `GROUP BY percentual`
+  — não carregue resultados para o PHP e não aproxime por faixas de 1 ponto (59,9%
+  não é proficiente).
+- **Previstos** (`Previstos`) vêm das matrículas vigentes e NÃO entram no cache
+  (`CacheDeAnalise` não enxerga matrícula); só o que depende de resumos/respostas é
+  cacheado, e só como array.
+- Corte de proficiência e meta de participação ficam em `ConfiguracaoSistema`
+  (`reitor_corte_proficiencia`, `reitor_meta_participacao`) — o corte entra na chave
+  do cache.
+
 ## Perfil (`admins.role`) falha fechado
 
 Nunca escreva `! $usuario->ehCoordenador()` para decidir "então é administrador":
@@ -215,6 +255,9 @@ renderizado antes/depois, não só se a página abre.
   qual aba estava ativa (`workbookView`/`activeTab`) e `getActiveSheet()`
   cai pra aba 0, errado justamente pro caso comum de planilha de exemplo
   com aba de instruções antes da aba de dados.
+- **`admins.role` é ENUM no MySQL legado**: um valor novo de perfil exige migration que
+  acrescente o valor ao ENUM (ver `allow_rector_role_on_admins_table`); o SQLite dos
+  testes usa VARCHAR e NÃO pega esse erro.
 - **FK pra `admins`/`alunos`**: use
   `$table->integer('coluna')->nullable()` + `$table->foreign(...)`, nunca
   `$table->foreignId()` (gera `BIGINT UNSIGNED`, mas o `database.sql`

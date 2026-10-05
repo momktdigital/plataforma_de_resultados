@@ -18,17 +18,19 @@ class StoreUsuarioRequest extends FormRequest
     public function rules(): array
     {
         $coordenador = $this->input('papel') === 'coordenador';
+        // Coordenador e reitor entram por código enviado ao e-mail (sem senha obrigatória).
+        $entraPorCodigo = in_array($this->input('papel'), ['coordenador', 'reitor'], true);
 
         return [
-            'papel' => ['nullable', Rule::in(['administrador', 'coordenador'])],
+            'papel' => ['nullable', Rule::in(['administrador', 'coordenador', 'reitor'])],
             'username' => ['required', 'string', 'max:50', 'unique:admins,username'],
-            // Coordenador entra por código enviado ao e-mail: sem e-mail não há como entrar.
-            'email' => [$coordenador ? 'required' : 'nullable', 'email', 'max:255', 'unique:admins,email'],
+            // Coordenador e reitor entram por código enviado ao e-mail: sem e-mail não há como entrar.
+            'email' => [$entraPorCodigo ? 'required' : 'nullable', 'email', 'max:255', 'unique:admins,email'],
             // O sistema legado aceitava min:4 — não seguimos essa política
             // aqui: uma conta de admin tem acesso total aos dados de todos
             // os alunos, então o mínimo é elevado independente do legado.
-            // A senha só é obrigatória para administrador; coordenador pode não ter (entra pelo código).
-            'password' => [$coordenador ? 'nullable' : 'required', 'string', Password::min(10)],
+            // A senha só é obrigatória para administrador; coordenador e reitor podem não ter (entram pelo código).
+            'password' => [$entraPorCodigo ? 'nullable' : 'required', 'string', Password::min(10)],
             // Coordenador sem curso não enxerga nada — exige ao menos um.
             'cursos' => [$coordenador ? 'required' : 'nullable', 'array', $coordenador ? 'min:1' : 'max:0'],
             'cursos.*' => ['string', fn ($atributo, $valor, $falhar) => NomeCurso::estaEm($valor, Curso::nomesDisponiveis()) || $falhar('Curso inválido.')],
@@ -40,7 +42,7 @@ class StoreUsuarioRequest extends FormRequest
         return [
             'username.required' => 'Informe o nome de usuário.',
             'username.unique' => 'Já existe um usuário com este nome de usuário.',
-            'email.required' => 'Informe o e-mail do coordenador — é para ele que enviamos o código de acesso.',
+            'email.required' => 'Informe o e-mail — é para ele que enviamos o código de acesso do coordenador ou do reitor.',
             'email.email' => 'Informe um e-mail válido.',
             'email.unique' => 'Já existe um usuário com este e-mail.',
             'password.required' => 'Informe a senha.',

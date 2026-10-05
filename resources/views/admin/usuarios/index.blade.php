@@ -5,16 +5,25 @@
 @section('content')
 <h1 class="text-2xl font-bold mb-4">Usuários</h1>
 
-@php $coordenadores = $aba === 'coordenadores'; @endphp
+@php
+    $coordenadores = $aba === 'coordenadores';
+    $reitores = $aba === 'reitores';
+    $entraPorCodigo = $coordenadores || $reitores;
+    $papelForm = $coordenadores ? 'coordenador' : ($reitores ? 'reitor' : 'administrador');
+@endphp
 
 <div class="flex gap-1 border-b border-slate-200 mb-6" role="tablist">
-    <a href="{{ route('usuarios.index', ['aba' => 'administradores']) }}" role="tab" aria-selected="{{ $coordenadores ? 'false' : 'true' }}"
-       class="px-4 py-2 text-sm font-medium -mb-px border-b-2 {{ $coordenadores ? 'border-transparent text-slate-500 hover:text-slate-700' : 'border-emerald-600 text-emerald-700' }}">
+    <a href="{{ route('usuarios.index', ['aba' => 'administradores']) }}" role="tab" aria-selected="{{ $entraPorCodigo ? 'false' : 'true' }}"
+       class="px-4 py-2 text-sm font-medium -mb-px border-b-2 {{ $entraPorCodigo ? 'border-transparent text-slate-500 hover:text-slate-700' : 'border-emerald-600 text-emerald-700' }}">
         Administradores <span class="ml-1 text-xs text-slate-500">{{ $totalAdministradores }}</span>
     </a>
     <a href="{{ route('usuarios.index', ['aba' => 'coordenadores']) }}" role="tab" aria-selected="{{ $coordenadores ? 'true' : 'false' }}"
        class="px-4 py-2 text-sm font-medium -mb-px border-b-2 {{ $coordenadores ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700' }}">
         Coordenadores <span class="ml-1 text-xs text-slate-500">{{ $totalCoordenadores }}</span>
+    </a>
+    <a href="{{ route('usuarios.index', ['aba' => 'reitores']) }}" role="tab" aria-selected="{{ $reitores ? 'true' : 'false' }}"
+       class="px-4 py-2 text-sm font-medium -mb-px border-b-2 {{ $reitores ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700' }}">
+        Reitoria <span class="ml-1 text-xs text-slate-500">{{ $totalReitores }}</span>
     </a>
 </div>
 
@@ -24,6 +33,12 @@
             <p class="px-4 pt-4 text-sm text-slate-500">
                 Coordenadores têm acesso limitado: veem o painel do(s) curso(s) vinculado(s) e as avaliações que tenham alunos desses cursos
                 (ou às quais receberam acesso excepcional na configuração da avaliação).
+            </p>
+        @elseif ($reitores)
+            <p class="px-4 pt-4 text-sm text-slate-500">
+                A reitoria acompanha os indicadores institucionais de <strong>todos os cursos</strong> (participação, proficiência, desempenho,
+                trajetória e evolução entre semestres). O painel é <strong>agregado, sem dados nominais</strong>. Para analisar um curso a fundo, o reitor
+                pode abrir a <strong>visão do coordenador</strong> daquele curso (somente leitura, com os alunos do curso); cada abertura fica registrada na auditoria.
             </p>
         @endif
         <table class="w-full text-sm">
@@ -78,7 +93,7 @@
                 @empty
                     <tr>
                         <td colspan="6" class="px-4 py-8 text-center text-slate-500">
-                            {{ $coordenadores ? 'Nenhum coordenador cadastrado ainda.' : 'Nenhum administrador cadastrado.' }}
+                            {{ $coordenadores ? 'Nenhum coordenador cadastrado ainda.' : ($reitores ? 'Nenhum usuário da reitoria cadastrado ainda.' : 'Nenhum administrador cadastrado.') }}
                         </td>
                     </tr>
                 @endforelse
@@ -90,34 +105,34 @@
     </div>
 
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-        <h2 class="font-semibold mb-4">{{ $coordenadores ? 'Novo coordenador' : 'Novo administrador' }}</h2>
+        <h2 class="font-semibold mb-4">{{ $coordenadores ? 'Novo coordenador' : ($reitores ? 'Novo usuário da reitoria' : 'Novo administrador') }}</h2>
         <form method="POST" action="{{ route('usuarios.store') }}" class="space-y-4">
             @csrf
-            <input type="hidden" name="papel" value="{{ $coordenadores ? 'coordenador' : 'administrador' }}">
+            <input type="hidden" name="papel" value="{{ $papelForm }}">
             <div>
                 <label class="block text-sm font-medium mb-1" for="username">Nome de usuário</label>
                 <input id="username" name="username" type="text" required value="{{ old('username') }}"
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
             </div>
             <div>
-                <label class="block text-sm font-medium mb-1" for="email">{{ $coordenadores ? 'E-mail' : 'E-mail (opcional)' }}</label>
-                <input id="email" name="email" type="email" value="{{ old('email') }}" @required($coordenadores)
+                <label class="block text-sm font-medium mb-1" for="email">{{ $entraPorCodigo ? 'E-mail' : 'E-mail (opcional)' }}</label>
+                <input id="email" name="email" type="email" value="{{ old('email') }}" @required($entraPorCodigo)
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
                 <p class="text-xs text-slate-500 mt-1">
-                    @if ($coordenadores)
-                        É para este e-mail que enviamos o código de acesso do coordenador.
+                    @if ($entraPorCodigo)
+                        É para este e-mail que enviamos o código de acesso.
                     @else
                         Necessário pra esta conta poder usar "esqueci minha senha".
                     @endif
                 </p>
             </div>
             <div>
-                <label class="block text-sm font-medium mb-1" for="password">{{ $coordenadores ? 'Senha (opcional)' : 'Senha' }}</label>
-                <input id="password" name="password" type="password" @required(! $coordenadores) minlength="10" autocomplete="new-password"
+                <label class="block text-sm font-medium mb-1" for="password">{{ $entraPorCodigo ? 'Senha (opcional)' : 'Senha' }}</label>
+                <input id="password" name="password" type="password" @required(! $entraPorCodigo) minlength="10" autocomplete="new-password"
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
                 <p class="text-xs text-slate-500 mt-1">
-                    @if ($coordenadores)
-                        Deixe em branco: o coordenador entra só com o código enviado ao e-mail. Se preencher, mínimo de 10 caracteres.
+                    @if ($entraPorCodigo)
+                        Deixe em branco: a pessoa entra só com o código enviado ao e-mail. Se preencher, mínimo de 10 caracteres.
                     @else
                         Mínimo de 10 caracteres. Administrador sempre entra com senha.
                     @endif

@@ -13,7 +13,7 @@ use Illuminate\View\View;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 /**
- * Login de coordenador por código enviado ao e-mail (sem senha). Em nenhuma
+ * Login de coordenador (ou reitor) por código enviado ao e-mail (sem senha). Em nenhuma
  * etapa a resposta revela se o usuário existe, se tem e-mail ou se o envio
  * falhou: mesma mensagem sempre (evita enumeração de contas). Administradores
  * não entram por aqui — para eles a senha é obrigatória (LoginController).
@@ -24,7 +24,7 @@ class LoginCodigoController extends Controller
 
     private const SESSAO_ULTIMO_ENVIO = 'login_codigo_ultimo_envio';
 
-    private const MENSAGEM_ENVIO = 'Se houver um coordenador com esse usuário ou e-mail, enviamos um código de acesso para o e-mail cadastrado. Ele vale por 10 minutos.';
+    private const MENSAGEM_ENVIO = 'Se houver um coordenador ou reitor com esse usuário ou e-mail, enviamos um código de acesso para o e-mail cadastrado. Ele vale por 10 minutos.';
 
     public function solicitar(Request $request, LoginPorCodigoService $servico): RedirectResponse
     {
@@ -92,7 +92,7 @@ class LoginCodigoController extends Controller
         Auth::guard('admin')->login($coordenador);
         $request->session()->regenerate();
 
-        return redirect()->intended(route('coordenador.painel'));
+        return redirect()->intended(route($coordenador->rotaInicial()));
     }
 
     public function reenviar(Request $request, LoginPorCodigoService $servico): RedirectResponse
@@ -120,6 +120,6 @@ class LoginCodigoController extends Controller
 
         $request->session()->put(self::SESSAO_ULTIMO_ENVIO, now()->timestamp);
 
-        return back()->with('status', 'Se houver um coordenador com esse usuário ou e-mail, enviamos um novo código. Os reenvios têm espera crescente entre eles.');
+        return back()->with('status', 'Se houver um coordenador ou reitor com esse usuário ou e-mail, enviamos um novo código. Os reenvios têm espera crescente entre eles.');
     }
 }

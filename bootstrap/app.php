@@ -3,8 +3,10 @@
 use App\Http\Middleware\EnsureInstalled;
 use App\Http\Middleware\EnsureNotInstalled;
 use App\Http\Middleware\PapelValido;
+use App\Http\Middleware\PerfilPermitido;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\SomenteAdministrador;
+use App\Http\Middleware\VisaoDeCursoDoReitor;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
 use Illuminate\Foundation\Application;
@@ -33,6 +35,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'instalado' => EnsureInstalled::class,
             'nao-instalado' => EnsureNotInstalled::class,
             'papel-valido' => PapelValido::class,
+            'perfil' => PerfilPermitido::class,
+            'visao-de-curso' => VisaoDeCursoDoReitor::class,
             'somente-admin' => SomenteAdministrador::class,
         ]);
 

@@ -12,6 +12,8 @@ use App\Http\Controllers\Admin\CoordenadorComparativoController;
 use App\Http\Controllers\Admin\CoordenadorController;
 use App\Http\Controllers\Admin\LixeiraController;
 use App\Http\Controllers\Admin\NotificacaoController;
+use App\Http\Controllers\Admin\ReitorController;
+use App\Http\Controllers\Admin\ReitorCursoController;
 use App\Http\Controllers\Admin\MatriculaImportController;
 use App\Http\Controllers\Admin\PerfilController;
 use App\Http\Controllers\Admin\QuestaoController;
@@ -50,7 +52,7 @@ Route::middleware('instalado')->group(function () {
             return redirect()->route('portal.consulta');
         }
 
-        return redirect()->route(Auth::guard('admin')->user()->ehCoordenador() ? 'coordenador.painel' : 'avaliacoes.index');
+        return redirect()->route(Auth::guard('admin')->user()->rotaInicial());
     });
 
     Route::prefix('portal')->name('portal.')->group(function () {
@@ -115,26 +117,48 @@ Route::middleware('instalado')->group(function () {
     Route::middleware(['auth:admin', 'papel-valido'])->group(function () {
         Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
 
-        // Acessível a administradores E coordenadores. Para o coordenador,
-        // a listagem e o BI já filtram/validam pelos cursos dele (ver
-        // AvaliacaoController::index e BiController::index).
-        Route::get('/painel', [CoordenadorController::class, 'painel'])->name('coordenador.painel');
-        Route::get('/painel/desempenho', [CoordenadorController::class, 'desempenho'])->name('coordenador.desempenho');
-        Route::get('/painel/comparativo', [CoordenadorComparativoController::class, 'index'])->name('coordenador.comparativo');
-        Route::get('/painel/alunos', [CoordenadorAlunosController::class, 'index'])->name('coordenador.alunos');
-        // Segmento literal ANTES do coringa {aluno} — senão o coringa casa com "exportar.xlsx" primeiro.
-        Route::get('/painel/alunos/exportar.xlsx', [CoordenadorAlunosController::class, 'xlsx'])->name('coordenador.alunos.xlsx');
-        Route::get('/painel/alunos/{aluno}', [CoordenadorAlunosController::class, 'show'])->whereNumber('aluno')->name('coordenador.alunos.show');
-        Route::get('/avaliacoes', [AvaliacaoController::class, 'index'])->name('avaliacoes.index');
-        Route::get('/avaliacoes/{avaliacao}/bi', [BiController::class, 'index'])->name('avaliacoes.bi');
-        Route::get('/avaliacoes/{avaliacao}/bi/alunos.xlsx', [BiListaController::class, 'xlsx'])->name('avaliacoes.bi.alunos.xlsx');
-        Route::get('/avaliacoes/{avaliacao}/bi/alunos/linhas', [BiListaController::class, 'linhas'])->name('avaliacoes.bi.alunos.linhas');
-        // Notificações do coordenador (cada um só enxerga as próprias; administrador volta para as avaliações).
-        Route::get('/notificacoes', [NotificacaoController::class, 'index'])->name('notificacoes.index');
-        Route::get('/notificacoes/resumo', [NotificacaoController::class, 'resumo'])->middleware('throttle:60,1')->name('notificacoes.resumo');
-        Route::post('/notificacoes/lidas', [NotificacaoController::class, 'marcarTodasLidas'])->name('notificacoes.lidas');
-        Route::get('/notificacoes/{notificacao}/abrir', [NotificacaoController::class, 'abrir'])->whereNumber('notificacao')->name('notificacoes.abrir');
-        Route::post('/notificacoes/{notificacao}/lida', [NotificacaoController::class, 'marcarLida'])->whereNumber('notificacao')->name('notificacoes.lida');
+        // `visao-de-curso` ANTES de `perfil`: o reitor com um curso escolhido entra aqui como coordenador DAQUELE curso.
+        Route::middleware(['visao-de-curso', 'perfil:administrador,coordenador'])->group(function () {
+            // Acessível a administradores E coordenadores. Para o coordenador,
+            // a listagem e o BI já filtram/validam pelos cursos dele (ver
+            // AvaliacaoController::index e BiController::index).
+            Route::get('/painel', [CoordenadorController::class, 'painel'])->name('coordenador.painel');
+            Route::get('/painel/desempenho', [CoordenadorController::class, 'desempenho'])->name('coordenador.desempenho');
+            Route::get('/painel/comparativo', [CoordenadorComparativoController::class, 'index'])->name('coordenador.comparativo');
+            Route::get('/painel/alunos', [CoordenadorAlunosController::class, 'index'])->name('coordenador.alunos');
+            // Segmento literal ANTES do coringa {aluno} — senão o coringa casa com "exportar.xlsx" primeiro.
+            Route::get('/painel/alunos/exportar.xlsx', [CoordenadorAlunosController::class, 'xlsx'])->name('coordenador.alunos.xlsx');
+            Route::get('/painel/alunos/{aluno}', [CoordenadorAlunosController::class, 'show'])->whereNumber('aluno')->name('coordenador.alunos.show');
+            Route::get('/avaliacoes', [AvaliacaoController::class, 'index'])->name('avaliacoes.index');
+            Route::get('/avaliacoes/{avaliacao}/bi', [BiController::class, 'index'])->name('avaliacoes.bi');
+            Route::get('/avaliacoes/{avaliacao}/bi/alunos.xlsx', [BiListaController::class, 'xlsx'])->name('avaliacoes.bi.alunos.xlsx');
+            Route::get('/avaliacoes/{avaliacao}/bi/alunos/linhas', [BiListaController::class, 'linhas'])->name('avaliacoes.bi.alunos.linhas');
+            // Notificações do coordenador (cada um só enxerga as próprias; administrador volta para as avaliações).
+            Route::get('/notificacoes', [NotificacaoController::class, 'index'])->name('notificacoes.index');
+            Route::get('/notificacoes/resumo', [NotificacaoController::class, 'resumo'])->middleware('throttle:60,1')->name('notificacoes.resumo');
+            Route::post('/notificacoes/lidas', [NotificacaoController::class, 'marcarTodasLidas'])->name('notificacoes.lidas');
+            Route::get('/notificacoes/{notificacao}/abrir', [NotificacaoController::class, 'abrir'])->whereNumber('notificacao')->name('notificacoes.abrir');
+            Route::post('/notificacoes/{notificacao}/lida', [NotificacaoController::class, 'marcarLida'])->whereNumber('notificacao')->name('notificacoes.lida');
+        });
+
+        // Painel da reitoria: indicadores AGREGADOS de todos os cursos (nunca dado nominal de aluno). O administrador
+        // também entra, para ver o que o reitor vê; o coordenador não (o painel dele é o do curso).
+        // Abrir/fechar a visão do coordenador de um curso (só o reitor; ver VisaoDeCursoDoReitor).
+        Route::middleware('perfil:reitor')->prefix('reitoria')->name('reitor.')->group(function () {
+            Route::get('/analise-do-curso', [ReitorController::class, 'cursos'])->name('cursos');
+            Route::get('/curso', [ReitorCursoController::class, 'abrir'])->name('curso.abrir');
+            Route::get('/curso/sair', [ReitorCursoController::class, 'sair'])->name('curso.sair');
+        });
+
+        Route::middleware('perfil:reitor,administrador')->prefix('reitoria')->name('reitor.')->group(function () {
+            Route::get('/', [ReitorController::class, 'visao'])->name('visao');
+            Route::get('/desempenho', [ReitorController::class, 'desempenho'])->name('desempenho');
+            Route::get('/trajetoria', [ReitorController::class, 'trajetoria'])->name('trajetoria');
+            Route::get('/competencias', [ReitorController::class, 'competencias'])->name('competencias');
+            Route::get('/evolucao', [ReitorController::class, 'evolucao'])->name('evolucao');
+            Route::get('/exportar.xlsx', [ReitorController::class, 'xlsx'])->name('xlsx');
+        });
+
         Route::redirect('/administradores', '/usuarios');
         Route::get('/perfil', [PerfilController::class, 'edit'])->name('perfil.edit');
         Route::put('/perfil/senha', [PerfilController::class, 'updateSenha'])->name('perfil.senha');
