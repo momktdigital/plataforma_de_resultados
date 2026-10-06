@@ -27,6 +27,10 @@ class VisaoDeCursoDoReitor
         $curso = $request->session()->get(self::SESSAO);
 
         if ($usuario?->ehReitor() && is_string($curso) && $curso !== '') {
+            // Só leitura de verdade: o coordenador pode gravar coisas (acompanhamento de alunos, notificações lidas...),
+            // o reitor olhando o curso NÃO — qualquer requisição que não seja de leitura é recusada aqui.
+            abort_unless($request->isMethodSafe(), 403, 'A visão do curso é somente leitura.');
+
             Auth::guard('admin')->setUser($usuario->comoCoordenadorDe([$curso]));
         }
 

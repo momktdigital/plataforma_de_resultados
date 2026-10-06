@@ -127,7 +127,7 @@
             <tbody>
                 @foreach ($cursos as $c)
                     <tr class="border-b border-slate-100">
-                        <td data-valor="{{ $c['nome'] }}" class="px-3 py-2.5 font-medium text-slate-800">{{ $c['nome'] }}</td>
+                        <td data-valor="{{ $c['nome'] }}" class="px-3 py-2.5 font-medium text-slate-800">@include('reitor._nome-curso', ['chave' => $c['chave'], 'nome' => $c['nome']])</td>
                         @foreach ([$c['n'], $c['media'], $c['mediana'], $c['q1'], $c['q3'], $c['p10'], $c['p90'], $c['minimo'], $c['maximo']] as $i => $valor)
                             <td data-valor="{{ $valor }}" class="px-3 py-2.5 text-right font-mono">{{ $i === 0 ? $fmt($valor, 0) : $fmt($valor) }}{{ $i === 0 ? '' : '%' }}</td>
                         @endforeach
@@ -270,6 +270,11 @@
         },
     });
 
+    // Drill-down (reitor): clicar abre a análise do curso.
+    V.habilitarDrill(Chart.getChart('grafico-media'), function (el) { return porMedia[el.index] ? { chave: porMedia[el.index].chave } : null; });
+    V.habilitarDrill(Chart.getChart('grafico-faixas'), function (el) { return ordenados[el.index] ? { chave: ordenados[el.index].chave } : null; });
+    V.habilitarDrill(Chart.getChart('grafico-dispersao'), function (el) { return porMediana[el.index] ? { chave: porMediana[el.index].chave } : null; });
+
     // 4 · Histograma do conjunto (+ curso à escolha), em % dos estudantes de cada um.
     function pcts(distribuicao, n) { return distribuicao.map(function (q) { return n > 0 ? Math.round(q / n * 1000) / 10 : 0; }); }
     var rotulosBaldes = [];
@@ -279,7 +284,7 @@
         type: 'bar',
         data: {
             labels: rotulosBaldes,
-            datasets: [{ label: 'Total da visão', data: pcts(total.distribuicao, total.n), backgroundColor: V.cores.marinho, categoryPercentage: 0.95, barPercentage: 0.95 }],
+            datasets: [{ label: 'Total da visão', data: pcts(total.distribuicao, total.n), backgroundColor: V.cores.marinho, categoryPercentage: 0.95, barPercentage: 0.95, order: 1 }],
         },
         options: {
             maintainAspectRatio: false,
@@ -305,7 +310,7 @@
                 var c = cursos[parseInt(seletor.value, 10)];
                 histograma.data.datasets.push({
                     type: 'line', label: c.nome, data: pcts(c.distribuicao, c.n), borderColor: V.cores.verde, backgroundColor: V.cores.verde,
-                    pointBackgroundColor: V.cores.verde, tension: 0.3,
+                    pointBackgroundColor: V.cores.verde, tension: 0.3, order: 0,
                 });
             }
             histograma.update();

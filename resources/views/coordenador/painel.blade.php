@@ -132,6 +132,7 @@
                                         RA {{ $a['ra'] ?: '—' }}@if ($a['periodoCursoRotulo']) &middot; {{ $a['periodoCursoRotulo'] }}@endif
                                     </p>
                                     <p class="text-xs text-slate-600 mt-0.5">{{ $a['motivos'][0] ?? '' }}@if (count($a['motivos']) > 1) <span class="text-slate-500">(+{{ count($a['motivos']) - 1 }})</span>@endif</p>
+                                    @if (! empty($a['acompanhamento']))<p class="mt-1">@include('coordenador._acompanhamento', ['acompanhamento' => $a['acompanhamento']])</p>@endif
                                 </div>
                                 <div class="text-right shrink-0">
                                     <p class="font-bold {{ CorDesempenho::classeTextoLegivel($a['media']) }}">{{ $a['media'] !== null ? $fmt($a['media']).'%' : '—' }}</p>

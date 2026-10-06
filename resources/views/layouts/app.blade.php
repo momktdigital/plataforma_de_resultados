@@ -52,10 +52,10 @@
     Pular para o conteúdo
 </a>
 @auth('admin')
-    <div class="h-screen flex overflow-hidden">
+    <div class="h-screen flex overflow-hidden print:h-auto print:block print:overflow-visible">
         <div id="sidebar-overlay" class="overlay" onclick="toggleSidebar()"></div>
 
-        <aside id="sidebar" class="sidebar w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0" aria-label="Barra lateral">
+        <aside id="sidebar" class="sidebar w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 print:hidden" aria-label="Barra lateral">
             <div class="h-16 flex items-center px-6 border-b border-slate-800 bg-slate-950">
                 @if ($siteLogoDark || $siteLogo)
                     <img src="{{ asset('uploads/logos/'.basename($siteLogoDark ?: $siteLogo)) }}" alt="{{ $siteTitle }}" class="h-8 object-contain">
@@ -97,6 +97,8 @@
                                 ['rota' => 'reitor.trajetoria', 'padrao' => 'reitor.trajetoria', 'icone' => 'ph-path', 'label' => 'Trajetória no curso'],
                                 ['rota' => 'reitor.competencias', 'padrao' => 'reitor.competencias', 'icone' => 'ph-brain', 'label' => 'Competências'],
                                 ['rota' => 'reitor.evolucao', 'padrao' => 'reitor.evolucao', 'icone' => 'ph-chart-line-up', 'label' => 'Evolução entre semestres'],
+                                ['rota' => 'reitor.itens', 'padrao' => 'reitor.itens', 'icone' => 'ph-list-checks', 'label' => 'Análise dos itens'],
+                                ['rota' => 'reitor.risco', 'padrao' => 'reitor.risco', 'icone' => 'ph-warning-diamond', 'label' => 'Estudantes em risco'],
                                 ['rota' => 'reitor.cursos', 'padrao' => 'reitor.cursos', 'icone' => 'ph-graduation-cap', 'label' => 'Análise do curso'],
                                 ['rota' => 'perfil.edit', 'padrao' => 'perfil.*', 'icone' => 'ph-user-circle', 'label' => 'Meu Perfil'],
                             ]
@@ -152,8 +154,8 @@
             </div>
         </aside>
 
-        <div class="flex-1 flex flex-col h-screen overflow-hidden">
-            <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:hidden shrink-0">
+        <div class="flex-1 flex flex-col h-screen overflow-hidden print:h-auto print:overflow-visible">
+            <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:hidden shrink-0 print:hidden">
                 <div class="flex items-center">
                     <i class="ph-fill ph-exam text-primary text-2xl mr-2"></i>
                     <span class="font-bold text-slate-800">{{ $ehReitor ? 'Reitoria' : ($ehCoordenador ? 'Coordenação' : 'Admin') }}</span>
@@ -173,7 +175,7 @@
                 </div>
             </header>
 
-            <div class="bg-white border-b border-slate-200 px-6 h-14 shrink-0 hidden md:flex items-center justify-between">
+            <div class="bg-white border-b border-slate-200 px-6 h-14 shrink-0 hidden md:flex items-center justify-between print:hidden">
                 <div class="flex items-center gap-3 min-w-0">
                     <button type="button" id="botao-menu-lateral" aria-controls="sidebar" aria-expanded="true" aria-label="Ocultar o menu lateral" title="Ocultar o menu lateral"
                             class="shrink-0 rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 hover:text-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
@@ -197,7 +199,7 @@
 
             {{-- `relative`: texto só para leitor de tela (`sr-only` = position absolute) sem ancestral posicionado ficava
                  ancorado na janela, fora do overflow-hidden do layout, e esticava a rolagem da PÁGINA (área vazia no fim). --}}
-            <main id="conteudo-principal" tabindex="-1" class="relative flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 p-4 sm:p-6 lg:p-8 focus:outline-none">
+            <main id="conteudo-principal" tabindex="-1" class="relative flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 p-4 sm:p-6 lg:p-8 focus:outline-none print:overflow-visible print:bg-white print:p-0">
                 @if ($emVisaoDeCurso)
                     <div class="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900" role="note">
                         <i class="ph-bold ph-eye text-lg" aria-hidden="true"></i>

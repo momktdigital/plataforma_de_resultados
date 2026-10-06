@@ -101,7 +101,13 @@
                 @php $e = $estiloInsight($alerta['tom']); @endphp
                 <div class="{{ $e['bg'] }} border {{ $e['borda'] }} rounded-xl p-4 flex items-start gap-3">
                     <i class="ph-bold {{ $alerta['icone'] }} {{ $e['icone'] }} text-xl shrink-0 mt-0.5" aria-hidden="true"></i>
-                    <p class="text-sm text-slate-700">{{ $alerta['texto'] }}</p>
+                    <div class="min-w-0">
+                        <p class="text-sm text-slate-700">{{ $alerta['texto'] }}</p>
+                        @if (! empty($alerta['ver']))
+                            <a href="{{ route($alerta['ver'][0], array_filter($ctx['filtro'], fn ($v) => $v !== '') + ($ctx['filtrando'] ? ['cursos' => $ctx['cursosSelecionados']] : [])) }}#{{ $alerta['ver'][1] }}"
+                               class="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded">{{ $alerta['ver'][2] }} <i class="ph-bold ph-arrow-right" aria-hidden="true"></i></a>
+                        @endif
+                    </div>
                 </div>
             @endforeach
         </div>
@@ -170,11 +176,8 @@
                     @php $abaixo = $abaixoDaMedia($c); @endphp
                     <tr data-nome="{{ $c['nome'] }}" class="border-b border-slate-100 {{ $abaixo ? 'bg-red-50' : '' }}">
                         <td data-valor="{{ $c['nome'] }}" class="px-3 py-2.5 font-medium text-slate-800 border-l-4 {{ $abaixo ? 'border-red-700' : 'border-transparent' }}">
-                            @if ($usuario->ehReitor())
-                                <a href="{{ route('reitor.curso.abrir', ['curso' => $c['chave']]) }}" class="hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded" title="Analisar {{ $c['nome'] }} com a visão do coordenador">{{ $c['nome'] }} <i class="ph ph-arrow-square-out text-slate-500" aria-hidden="true"></i></a>
-                            @else
-                                {{ $c['nome'] }}
-                            @endif
+                            @include('reitor._nome-curso', ['chave' => $c['chave'], 'nome' => $c['nome']])
+                            @if ($usuario->ehReitor())<i class="ph ph-arrow-square-out text-slate-500" aria-hidden="true"></i>@endif
                         </td>
                         <td data-valor="{{ $c['previstos'] }}" class="px-3 py-2.5 text-right font-mono">{{ $fmt($c['previstos'], 0) }}</td>
                         <td data-valor="{{ $c['fizeram'] }}" class="px-3 py-2.5 text-right font-mono">{{ $fmt($c['fizeram'], 0) }}</td>
@@ -302,7 +305,7 @@
             <tbody>
                 @foreach ($cursos as $c)
                     <tr>
-                        <th scope="row" class="px-3 py-2 text-left font-medium text-slate-800">{{ $c['nome'] }}</th>
+                        <th scope="row" class="px-3 py-2 text-left font-medium text-slate-800">@include('reitor._nome-curso', ['chave' => $c['chave'], 'nome' => $c['nome']])</th>
                         <td class="px-3 py-2 text-right font-mono text-slate-600">{{ $fmt($c['n'], 0) }}</td>
                         @foreach ($patamares as $p)
                             @php $cor = $corPatamar($c['patamares'][$p] ?? null); @endphp
@@ -343,7 +346,7 @@
 {{-- 3 · Participação × proficiência --}}
 @include('reitor._secao', ['numero' => 3, 'titulo' => 'Onde agir primeiro: participação × proficiência', 'id' => 'secao-quadrante'])
 <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5" aria-labelledby="secao-quadrante">
-    <p class="text-sm text-slate-600 mb-3">Cada bolha é um curso; o tamanho é o número de previstos. A área rosada é o quadrante de atenção: participação abaixo da meta e proficiência abaixo da do conjunto.</p>
+    <p class="text-sm text-slate-600 mb-3">Cada bolha é um curso; o tamanho é o número de previstos. A área rosada é o quadrante de atenção: participação abaixo da meta e proficiência abaixo da geral do conjunto.</p>
     <div class="relative h-96"><canvas id="grafico-quadrante" data-titulo="Participação e proficiência por curso"></canvas></div>
     @include('reitor._rodape-quadro', ['id' => 'quadrante', 'sobre' => $sobre['quadrante'], 'leitura' => $leituras['quadrante'] ?? null])
 </section>
@@ -367,8 +370,8 @@
                 backgroundColor: cursos.map(function (c) { return c.proficiencia !== null && totalProf !== null && c.proficiencia >= totalProf ? V.cores.verde : V.cores.marinho; }),
                 maxBarThickness: 64,
             }, {
-                // entrada só para a legenda ("Total da visão" é a linha tracejada desenhada pelo plugin)
-                label: 'Total da visão (' + V.pct(totalProf) + ')',
+                // entrada só para a legenda (a "proficiência geral do conjunto" é a linha tracejada desenhada pelo plugin)
+                label: 'Proficiência geral do conjunto (' + V.pct(totalProf) + ')',
                 data: [],
                 type: 'line',
                 borderColor: V.cores.vermelho,
@@ -445,7 +448,7 @@
             },
             plugins: {
                 legend: { display: false },
-                linhaReferencia: { linhas: [{ valor: dados.total.proficiencia, cor: V.cores.vermelho, rotulo: 'Proficiência do conjunto' }] },
+                linhaReferencia: { linhas: [{ valor: dados.total.proficiencia, cor: V.cores.vermelho, rotulo: 'Proficiência geral do conjunto' }] },
                 linhaReferenciaX: { linhas: [{ valor: dados.meta, cor: V.cores.verdeEscuro, rotulo: 'Meta' }] },
                 tooltip: { callbacks: {
                     title: function (itens) { return itens[0].raw.curso.nome; },
@@ -456,6 +459,13 @@
                 } },
             },
         },
+    });
+
+    // Drill-down (reitor): clicar numa barra ou bolha abre a análise do curso.
+    V.habilitarDrill(Chart.getChart('grafico-proficiencia'), function (el) { return el.datasetIndex === 0 && cursos[el.index] ? { chave: cursos[el.index].chave } : null; });
+    V.habilitarDrill(Chart.getChart('grafico-quadrante'), function (el, grafico) {
+        var ponto = grafico.data.datasets[0].data[el.index];
+        return ponto && ponto.curso ? { chave: ponto.curso.chave } : null;
     });
 
     // Patamares por período do curso (tabela montada ao escolher o curso).

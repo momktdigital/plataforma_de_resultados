@@ -83,6 +83,16 @@
                     </div>
                 @endif
                 <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1" for="filtro-acompanhamento">Acompanhamento</label>
+                    <select id="filtro-acompanhamento" name="acompanhamento" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm bg-white min-w-[150px]">
+                        <option value="">Todos</option>
+                        <option value="sem_registro" {{ ($filtros['acompanhamento'] ?? '') === 'sem_registro' ? 'selected' : '' }}>Sem registro</option>
+                        @foreach (\App\Models\Acompanhamento::STATUS as $chaveAcomp => $rotuloAcomp)
+                            <option value="{{ $chaveAcomp }}" {{ ($filtros['acompanhamento'] ?? '') === $chaveAcomp ? 'selected' : '' }}>{{ $rotuloAcomp }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
                     <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1" for="filtro-ordem">Ordenar por</label>
                     <select id="filtro-ordem" name="ordem" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm bg-white min-w-[170px]">
                         @foreach (['nome' => 'Nome (A–Z)', 'prioridade' => 'Quem precisa de atenção primeiro', 'media_asc' => 'Menor média', 'media_desc' => 'Maior média', 'presenca_asc' => 'Menor presença', 'faltas' => 'Mais faltas'] as $valor => $rotulo)
@@ -215,6 +225,7 @@
                                 </td>
                                 <td class="px-4 py-3">
                                     @include('coordenador._situacao', ['situacao' => $a['situacao']])
+                                    @include('coordenador._acompanhamento', ['acompanhamento' => $a['acompanhamento'] ?? null])
                                     @if (! empty($a['motivos']) && $a['situacao'] !== 'sem_resultado')
                                         <ul class="mt-1.5 space-y-0.5 text-xs text-slate-600 max-w-[260px]">
                                             @foreach ($a['motivos'] as $motivo)

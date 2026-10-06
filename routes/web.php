@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\BiController;
 use App\Http\Controllers\Admin\BiListaController;
 use App\Http\Controllers\Admin\BuscaGlobalController;
 use App\Http\Controllers\Admin\CategoriaController;
+use App\Http\Controllers\Admin\CoordenadorAcompanhamentoController;
 use App\Http\Controllers\Admin\CoordenadorAlunosController;
 use App\Http\Controllers\Admin\CoordenadorComparativoController;
 use App\Http\Controllers\Admin\CoordenadorController;
@@ -129,6 +130,7 @@ Route::middleware('instalado')->group(function () {
             // Segmento literal ANTES do coringa {aluno} — senão o coringa casa com "exportar.xlsx" primeiro.
             Route::get('/painel/alunos/exportar.xlsx', [CoordenadorAlunosController::class, 'xlsx'])->name('coordenador.alunos.xlsx');
             Route::get('/painel/alunos/{aluno}', [CoordenadorAlunosController::class, 'show'])->whereNumber('aluno')->name('coordenador.alunos.show');
+            Route::post('/painel/alunos/{aluno}/acompanhamento', [CoordenadorAcompanhamentoController::class, 'store'])->whereNumber('aluno')->name('coordenador.alunos.acompanhamento');
             Route::get('/avaliacoes', [AvaliacaoController::class, 'index'])->name('avaliacoes.index');
             Route::get('/avaliacoes/{avaliacao}/bi', [BiController::class, 'index'])->name('avaliacoes.bi');
             Route::get('/avaliacoes/{avaliacao}/bi/alunos.xlsx', [BiListaController::class, 'xlsx'])->name('avaliacoes.bi.alunos.xlsx');
@@ -156,6 +158,9 @@ Route::middleware('instalado')->group(function () {
             Route::get('/trajetoria', [ReitorController::class, 'trajetoria'])->name('trajetoria');
             Route::get('/competencias', [ReitorController::class, 'competencias'])->name('competencias');
             Route::get('/evolucao', [ReitorController::class, 'evolucao'])->name('evolucao');
+            Route::get('/risco', [ReitorController::class, 'risco'])->name('risco');
+            Route::get('/itens', [ReitorController::class, 'itens'])->name('itens');
+            Route::get('/relatorio', [ReitorController::class, 'relatorio'])->name('relatorio');
             Route::get('/exportar.xlsx', [ReitorController::class, 'xlsx'])->name('xlsx');
         });
 

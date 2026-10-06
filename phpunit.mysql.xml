@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+        <testsuite name="Mysql">
+            <directory>tests/Mysql</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>app</directory>
+        </include>
+    </source>
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <!-- Modo de manutenção em memória: com "file", os testes do atualizador faziam `artisan down` de verdade
+             (storage/framework/down) e, se interrompidos, deixavam o site real em 503. -->
+        <env name="APP_MAINTENANCE_DRIVER" value="cache"/>
+        <env name="APP_MAINTENANCE_STORE" value="array"/>
+        <!-- Backups e uploads dos testes vão para um diretório descartável (storage/framework/testing é ignorado
+             pelo git e fica fora dos backups), nunca para storage/app/backups ou public/uploads reais. -->
+        <env name="BACKUP_DIR" value="storage/framework/testing/backups"/>
+        <env name="UPLOADS_DIR" value="storage/framework/testing/uploads"/>
+        <env name="LOG_CHANNEL" value="null"/>
+        <env name="BCRYPT_ROUNDS" value="4"/>
+        <env name="BROADCAST_CONNECTION" value="null"/>
+        <env name="CACHE_STORE" value="array"/>
+        <env name="INSTALL_MARKER" value=""/>
+        <env name="DB_CONNECTION" value="mysql" force="true"/>
+        <env name="DB_HOST" value="127.0.0.1"/>
+        <env name="DB_PORT" value="3306"/>
+        <env name="DB_USERNAME" value="root"/>
+        <env name="DB_PASSWORD" value=""/>
+        <!-- SEMPRE um banco só de testes: RefreshDatabase apaga todas as tabelas. tests/TestCase.php recusa rodar em
+             banco que não termine em "_testes". -->
+        <env name="DB_DATABASE" value="resultados_di_testes" force="true"/>
+        <env name="DB_URL" value=""/>
+        <env name="MAIL_MAILER" value="array"/>
+        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="SESSION_DRIVER" value="array"/>
+        <env name="PULSE_ENABLED" value="false"/>
+        <env name="TELESCOPE_ENABLED" value="false"/>
+        <env name="NIGHTWATCH_ENABLED" value="false"/>
+    </php>
+</phpunit>

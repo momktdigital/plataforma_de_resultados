@@ -65,7 +65,7 @@
             'part' => array_map(fn ($s) => $s['cursos'][$c['chave']]['participacao'] ?? null, $semestres),
             'n' => array_map(fn ($s) => $s['cursos'][$c['chave']]['n'] ?? 0, $semestres),
         ], $cursos),
-        'variacao' => array_values(array_filter(array_map(fn ($l) => $l['dProf'] === null ? null : ['nome' => $l['nome'], 'delta' => $l['dProf'], 'de' => $l['antes']['proficienciaPct'], 'para' => $l['agora']['proficienciaPct']], $porCurso))),
+        'variacao' => array_values(array_filter(array_map(fn ($l) => $l['dProf'] === null ? null : ['chave' => $l['chave'], 'nome' => $l['nome'], 'delta' => $l['dProf'], 'de' => $l['antes']['proficienciaPct'], 'para' => $l['agora']['proficienciaPct']], $porCurso))),
         'referencia' => $referencia['periodoLetivo'] ?? null,
         'atual' => $atual['periodoLetivo'] ?? null,
         'limiar' => $limiar,
@@ -166,7 +166,7 @@
                         <tbody>
                             @foreach ($porCurso as $l)
                                 <tr class="border-b border-slate-100">
-                                    <td data-valor="{{ $l['nome'] }}" class="px-3 py-2.5 font-medium text-slate-800">{{ $l['nome'] }}</td>
+                                    <td data-valor="{{ $l['nome'] }}" class="px-3 py-2.5 font-medium text-slate-800">@include('reitor._nome-curso', ['chave' => $l['chave'], 'nome' => $l['nome']])</td>
                                     @foreach ([['proficienciaPct', 'dProf'], ['media', 'dMedia'], ['participacao', 'dPart']] as [$campo, $dCampo])
                                         <td data-valor="{{ $l[$dCampo] }}" class="px-3 py-2.5 text-right">
                                             <span class="block font-mono">{{ $fmt($l['antes'][$campo] ?? null) }}% → <strong>{{ $fmt($l['agora'][$campo] ?? null) }}%</strong></span>
@@ -276,6 +276,11 @@
         });
     }
 
+    // Drill-down (reitor): clicar numa barra de variação abre a análise do curso.
+    if (dados.variacao.length && document.getElementById('grafico-variacao')) {
+        V.habilitarDrill(Chart.getChart('grafico-variacao'), function (el) { return ordenada[el.index] ? { chave: ordenada[el.index].chave } : null; });
+    }
+
     // 3 · Cada curso, semestre a semestre: linhas + tabela, com troca de indicador.
     var metrica = 'prof';
     var grafico = null;
@@ -334,6 +339,11 @@
         });
     });
     desenharGrafico();
+    // clicar num ponto abre a análise do curso naquele semestre
+    V.habilitarDrill(grafico, function (el) {
+        var curso = dados.cursos[el.datasetIndex];
+        return curso ? { chave: curso.chave, extra: { periodo_letivo: dados.rotulos[el.index] } } : null;
+    });
     desenharTabela();
 })();
 </script>

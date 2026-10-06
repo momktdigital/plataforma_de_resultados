@@ -110,6 +110,18 @@ linha, veja `git log`.
 - **Visão do coordenador de um curso** para o reitor: abre as telas do coordenador
   (painel, alunos, desempenho, comparar semestres, avaliações/Dashboard) de um
   curso à escolha, somente leitura, com aviso na tela e registro na auditoria.
+- **Trajetória no curso**: os dois gráficos de linhas ganham seletor para ver todos os
+  cursos juntos, em **minigráficos** (um por curso, mesma escala) ou **um curso** só.
+- **Análise dos itens** (institucional): mapa acerto × discriminação, gabarito
+  suspeito, problema da questão × lacuna de formação, por área e por avaliação.
+- **Estudantes em risco** (agregado): ausência recorrente e baixo desempenho
+  persistente por curso e período do curso, com tendência.
+- **Drill-down** nos gráficos e tabelas (abre a análise do curso no recorte
+  clicado) e pontos de atenção que apontam para o quadro de origem.
+- **Ver como tabela** em todos os gráficos, com cópia para planilha.
+- **Relatório institucional** (`/reitoria/relatorio`): capa, resumo, quadros e
+  leituras; imprime em A4 / salvar como PDF e exporta PowerPoint. As telas
+  agora imprimem sem o menu lateral.
 - Filtros **período letivo / categoria / avaliação**: como cada avaliação costuma
   ser de um curso, escolher a categoria reúne os cursos (o campo Avaliação só
   lista as da categoria); "todas" é o padrão, com aviso quando categorias
@@ -119,6 +131,10 @@ linha, veja `git log`.
   Configurações do sistema.
 
 ## Painel de gestão do coordenador
+
+- **Acompanhamento de alunos** (contatado / em acompanhamento / resolvido, com
+  observação e data; histórico que só se acrescenta; selo e filtro na lista; coluna
+  na planilha). Restrito ao curso; o reitor na visão do curso só lê.
 
 - Saudação (Bom dia/Boa tarde/Boa noite) e navegação por abas: Visão geral,
   Alunos do curso, Desempenho e Avaliações.

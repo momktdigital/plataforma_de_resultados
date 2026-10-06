@@ -437,6 +437,16 @@ presença/faltas. Na lista, sem filtro de categoria, a média é a simples entre
 as avaliações do semestre (a "média geral" do boletim do aluno); a tendência só
 compara avaliações da mesma categoria.
 
+**Acompanhamento de alunos.** Na ficha do aluno (e em "Alunos do curso") o coordenador registra **contatado**,
+**em acompanhamento** ou **resolvido**, com observação (até 1000 caracteres) e data (`acompanhamentos`,
+`AcompanhamentoService`). Cada registro é um evento que só se acrescenta: o estado atual é o último e a ficha mostra o
+histórico (data, situação, quem registrou). A lista de alunos mostra o selo do último registro e filtra por
+**Acompanhamento** (sem registro / contatado / em acompanhamento / resolvido); o painel mostra o selo nos alunos em
+atenção; a planilha de alunos leva duas colunas. O registro pertence ao **curso** em que foi feito e só é visível a quem
+coordena esse curso; a observação nunca vai para a auditoria (só o fato do registro) e some junto com o cadastro do
+aluno (FK `ON DELETE CASCADE`, então também na anonimização LGPD). O reitor na visão do curso **vê** o histórico, mas
+não registra: essa visão é só leitura de verdade (o middleware recusa qualquer requisição que não seja de leitura).
+
 `CoordenadorDashboardService` agrega tudo em SQL sobre `resultado_resumos`
 e, para presença e áreas, sobre `respostas` restrito aos alunos do curso e ao
 período. `CoordenadorAlunosService` lê só `resultado_resumos` (uma linha por
@@ -488,15 +498,31 @@ resultado em duas avaliações do recorte, conta duas vezes). O curso de cada
 resultado é `resultado_resumos.curso` (o curso na data da prova), nunca
 `alunos.curso`.
 
-Cinco telas sobre o mesmo recorte:
+Sete telas sobre o mesmo recorte (mais a lista **Análise do curso**, abaixo):
 
 | Tela | O que mostra |
 | --- | --- |
 | **Visão institucional** | pontos de atenção; cartões (proficiência, acerto médio, participação, cursos na meta, com variação frente ao semestre anterior); **participação por curso** (previstos × fizeram × ausentes, dif. da média, distância e "alunos a mais" para a meta, períodos avaliados, ativos sem aplicação; ordenável e filtrável); **proficiência por curso**; **patamares** (60–80%, também por período de um curso); **mapa participação × proficiência** (bolhas, quadrante de atenção) |
 | **Desempenho** | média e mediana; distribuição por faixa de acerto; **dispersão** (quartis e P10–P90 — caixa e haste); histograma do conjunto (com um curso à escolha); tabela estatística |
-| **Trajetória no curso** | proficiência e acerto médio por período do curso (1º, 2º...); **mapa de calor curso × período** (média, proficientes, participação ou participantes); **crescimento** (pp por período, ajuste ponderado); **cobertura da aplicação** (onde a prova chegou e onde há aluno ativo sem aplicação) |
+| **Trajetória no curso** | proficiência e acerto médio por período do curso (1º, 2º...), com seletor **Todos juntos / Minigráficos** (um gráfico pequeno por curso, mesma escala, total da visão como referência) **/ Um curso**; **mapa de calor curso × período** (média, proficientes, participação ou participantes); **crescimento** (pp por período, ajuste ponderado); **cobertura da aplicação** (onde a prova chegou e onde há aluno ativo sem aplicação) |
 | **Competências** | níveis de **Bloom** (proficientes × não proficientes, mapa por curso, radar curso × conjunto) e **áreas** de conhecimento (ranking e mapa curso × área) |
 | **Evolução entre semestres** | série institucional (proficiência, média, participação), **variação de cada curso** frente a um semestre à escolha, curso × semestre |
+| **Análise dos itens** | análise **institucional** das questões (`ReitorItensService`): mapa acerto × discriminação, itens a revisar — **gabarito suspeito** (discriminação negativa e uma alternativa errada mais marcada que o gabarito), **problema da questão** (acerto muito baixo e não discrimina) × **lacuna de formação** (acerto muito baixo, mas discrimina bem), item fraco, baixo em todos os cursos —, por área e por avaliação (KR-20). O item é sempre (avaliação × número): cada avaliação cadastra as suas questões. Usa `PsicometriaService` e `RelatorioAdminService::analiseAlternativas()` (com cache próprio) e, quando a avaliação tem estudantes de vários cursos, calcula o item por curso |
+| **Estudantes em risco** | **só agregado** (`ReitorRiscoService`): quem faltou a 2+ aplicações ("ausência recorrente") ou ficou abaixo do critério em TODAS as aplicações a que compareceu ("baixo desempenho persistente"), por curso e por período do curso, com tendência frente ao semestre anterior. Pede várias aplicações no recorte (os simulados, ou "Todos os períodos"); grupos com menos de 5 elegíveis não mostram percentual. A lista nominal é do coordenador (o nome do curso abre a lista de alunos em atenção) |
+
+**Drill-down.** Para o reitor, clicar numa barra/ponto/célula, ou no nome de um curso em qualquer tabela,
+abre a análise **daquele curso, naquele recorte** (período letivo, período do curso, avaliação) na visão do
+coordenador — `reitor.curso.abrir?curso=...&destino=alunos|desempenho|comparativo|bi&periodo_letivo=...`, com
+destinos e valores validados. Cada **ponto de atenção** da Visão institucional tem o link para o quadro de onde saiu.
+
+**Ver como tabela.** Todo gráfico tem, logo abaixo, **Ver como tabela** (os mesmos números, montados a partir do que o
+gráfico mostra no momento — acessível e com **Copiar para planilha**).
+
+**Relatório institucional.** O botão **Relatório (PDF / PowerPoint)** (`/reitoria/relatorio`) monta, para o recorte
+atual, capa, resumo, participação, proficiência, desempenho, trajetória, competências e evolução, cada um com a
+leitura. **PDF**: *Imprimir / salvar como PDF* (A4 retrato; o layout esconde menu e botões ao imprimir — qualquer tela
+imprime sem o menu lateral). **PowerPoint**: gerado no navegador (PptxGenJS, via CDN), com os gráficos como imagem e as
+leituras em cada slide. Cada abertura vai para a auditoria (`reitor.relatorio_aberto`).
 
 Cada quadro tem **Sobre este quadro** (o que mede e como ler) e **Ver leitura** (o que os
 números de agora dizem, com o tom bom/atenção/precisa de ação) — textos em
@@ -889,6 +915,18 @@ php artisan tinker --execute="App\Models\Admin::create(['username' => 'admin', '
 ```
 
 ## Testes
+
+**MySQL.** Além do SQLite em memória, toda a suíte (e os testes de esquema legado de `tests/Mysql`) roda em
+MySQL/MariaDB: `composer test:mysql` (ou `vendor/bin/phpunit -c phpunit.mysql.xml`). É um segundo ambiente porque o
+SQLite não enxerga o que o banco herdado da aplicação legada tem de diferente — `admins.role` como ENUM e `alunos`/`admins`
+em `utf8mb4_general_ci` contra `utf8mb4_unicode_ci` das tabelas novas — e dois erros reais só apareceram no MySQL
+(o ENUM do perfil de reitor e o "Illegal mix of collations"). `tests/Mysql/BancoLegadoMysqlTest` reproduz esse formato
+(altera as tabelas, exercita o painel da reitoria, a visão do coordenador e o cadastro de usuários e depois restaura o
+esquema). Requer um banco de testes vazio, que **precisa se chamar `*_testes`** (o padrão é `resultados_di_testes`,
+usuário `root` sem senha em `127.0.0.1` — ajustável pelas variáveis `DB_HOST`/`DB_USERNAME`/`DB_PASSWORD`):
+`RefreshDatabase` apaga todas as tabelas, então `tests/TestCase.php` **recusa** rodar em MySQL num banco com outro nome.
+Crie-o uma vez: `CREATE DATABASE resultados_di_testes CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`. A primeira
+execução leva uns 40 s (migra o banco inteiro); a suíte toda, alguns minutos.
 
 ```bash
 php artisan test

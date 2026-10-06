@@ -31,7 +31,7 @@
             'cor' => $ctx['cores'][$c['chave']] ?? '#64748b',
             'periodos' => array_map($celula, $c['periodos']),
         ], $cursos),
-        'crescimentos' => array_map(fn ($c) => ['nome' => $c['nome'], 'inclinacao' => $c['inclinacao'], 'cor' => $ctx['cores'][$c['chave']] ?? '#64748b'], $crescimentos),
+        'crescimentos' => array_map(fn ($c) => ['chave' => $c['chave'], 'nome' => $c['nome'], 'inclinacao' => $c['inclinacao'], 'cor' => $ctx['cores'][$c['chave']] ?? '#64748b'], $crescimentos),
     ];
 @endphp
 
@@ -52,18 +52,40 @@
     Períodos com menos de {{ $minimo }} participantes ficam fora das linhas.
 </div>
 
+{{-- Como ver os cursos nos dois gráficos de linhas --}}
+@if (count($cursos) > 1)
+    <div class="mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3" role="group" aria-label="Como ver os cursos nos gráficos de trajetória">
+        <span class="mr-1 text-xs font-bold uppercase tracking-wide text-slate-600">Ver os cursos</span>
+        @foreach ([['juntos', 'Todos juntos', 'ph-chart-line'], ['mini', 'Minigráficos', 'ph-squares-four']] as $i => [$valor, $rotulo, $icone])
+            <button type="button" data-modo="{{ $valor }}" aria-pressed="{{ $i === 0 ? 'true' : 'false' }}"
+                    class="rounded-full border px-4 py-1.5 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-primary {{ $i === 0 ? 'border-[#1e3a5f] bg-[#1e3a5f] text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50' }}">
+                <i class="ph-bold {{ $icone }} mr-1" aria-hidden="true"></i>{{ $rotulo }}
+            </button>
+        @endforeach
+        <label for="traj-um-curso" class="ml-2 text-sm font-semibold text-slate-700">Um curso:</label>
+        <select id="traj-um-curso" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+            <option value="">—</option>
+            @foreach ($cursos as $i => $c)
+                <option value="{{ $i }}">{{ $c['nome'] }}</option>
+            @endforeach
+        </select>
+    </div>
+@endif
+
 {{-- 1 · Proficiência ao longo do curso --}}
 @include('reitor._secao', ['numero' => 1, 'titulo' => 'Proficiência ao longo do curso', 'id' => 'secao-traj-prof'])
 <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5" aria-labelledby="secao-traj-prof">
     <p class="text-xs font-bold uppercase tracking-wide text-emerald-800 mb-3">% de estudantes proficientes (≥ {{ $corteTxt }}%) em cada período do curso</p>
-    <div class="relative h-96"><canvas id="grafico-traj-prof" data-titulo="Proficiência ao longo do curso, por curso"></canvas></div>
+    <div id="traj-prof-grande" class="relative h-96"><canvas id="grafico-traj-prof" data-titulo="Proficiência ao longo do curso, por curso"></canvas></div>
+    <div id="traj-prof-mini" hidden class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"></div>
     @include('reitor._rodape-quadro', ['id' => 'traj-prof', 'sobre' => $sobre['trajetoria_proficiencia'], 'leitura' => $leituras['trajetoria_proficiencia'] ?? null])
 </section>
 
 {{-- 2 · Acerto por período --}}
 @include('reitor._secao', ['numero' => 2, 'titulo' => 'Percentual de acerto por período — quanto cada curso cresce', 'id' => 'secao-traj-acerto'])
 <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5" aria-labelledby="secao-traj-acerto">
-    <div class="relative h-96"><canvas id="grafico-traj-acerto" data-titulo="Percentual de acerto médio por período do curso"></canvas></div>
+    <div id="traj-acerto-grande" class="relative h-96"><canvas id="grafico-traj-acerto" data-titulo="Percentual de acerto médio por período do curso"></canvas></div>
+    <div id="traj-acerto-mini" hidden class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"></div>
     @include('reitor._rodape-quadro', ['id' => 'traj-acerto', 'sobre' => $sobre['trajetoria_acerto'], 'leitura' => $leituras['trajetoria_acerto'] ?? null])
 </section>
 
@@ -102,7 +124,7 @@
                     <tbody>
                         @foreach ($crescimentos as $c)
                             <tr class="border-b border-slate-100">
-                                <td data-valor="{{ $c['nome'] }}" class="px-3 py-2.5 font-medium text-slate-800">{{ $c['nome'] }}</td>
+                                <td data-valor="{{ $c['nome'] }}" class="px-3 py-2.5 font-medium text-slate-800">@include('reitor._nome-curso', ['chave' => $c['chave'], 'nome' => $c['nome']])</td>
                                 <td data-valor="{{ $c['inclinacao'] }}" class="px-3 py-2.5 text-right font-mono font-bold {{ $c['inclinacao'] < 0 ? 'text-red-700' : 'text-emerald-700' }}">{{ ($c['inclinacao'] > 0 ? '+' : ($c['inclinacao'] < 0 ? '−' : '')).$fmt(abs($c['inclinacao'])) }}</td>
                                 <td data-valor="{{ $c['delta'] }}" class="px-3 py-2.5 text-right font-mono">{{ ($c['delta'] > 0 ? '+' : ($c['delta'] < 0 ? '−' : '')).$fmt(abs($c['delta'])) }} pp <span class="text-xs text-slate-500">({{ $c['de'] }}→{{ $c['ate'] }})</span></td>
                             </tr>
@@ -146,11 +168,11 @@
             <tbody>
                 @foreach ($cursos as $c)
                     <tr>
-                        <th scope="row" class="px-3 py-2 text-left font-medium text-slate-800">{{ $c['nome'] }}</th>
+                        <th scope="row" class="px-3 py-2 text-left font-medium text-slate-800">@include('reitor._nome-curso', ['chave' => $c['chave'], 'nome' => $c['nome']])</th>
                         @foreach ($ordinais as $o)
                             @if (isset($c['periodos'][$o]))
                                 @php $p = $c['periodos'][$o]; @endphp
-                                <td class="px-3 py-2 text-center font-mono" style="background:#d8f3ec;color:#0b4f3f" title="{{ $p['fizeram'] }} de {{ $p['previstos'] }} previstos fizeram a prova">{{ $fmt($p['participacao'], 0) }}%</td>
+                                <td class="px-3 py-2 text-center font-mono" style="background:#d8f3ec;color:#0b4f3f" title="{{ $p['fizeram'] }} de {{ $p['previstos'] }} previstos fizeram a prova">@include('reitor._nome-curso', ['chave' => $c['chave'], 'nome' => $fmt($p['participacao'], 0).'%', 'destino' => 'alunos', 'extra' => ['periodo_curso' => $o]])</td>
                             @elseif (isset($c['ativosSemAplicacao'][$o]))
                                 <td class="px-3 py-2 text-center font-mono font-bold" style="background: repeating-linear-gradient(45deg,#fdf0cf,#fdf0cf 6px,#f9e2a0 6px,#f9e2a0 12px);color:#7a4b00" title="{{ $c['ativosSemAplicacao'][$o] }} aluno(s) ativo(s) sem aplicação da prova">{{ $c['ativosSemAplicacao'][$o] }} ativos</td>
                             @else
@@ -180,9 +202,14 @@
         });
     }
 
+    var graficos = {};   // id do canvas -> { chart, todos: todos os datasets }
+    var porChave = {};
+    dados.cursos.forEach(function (c) { porChave[c.chave] = c; });
+
     function linhas(id, campo, referencia) {
         var datasets = dados.cursos.map(function (c) {
             return {
+                chave: c.chave,
                 label: c.nome,
                 data: serie(c.periodos, campo),
                 borderColor: c.cor,
@@ -193,6 +220,7 @@
             };
         });
         datasets.push({
+            chave: null,
             label: 'Total da visão',
             data: serie(dados.total.periodos, campo),
             borderColor: V.cores.tinta,
@@ -202,9 +230,9 @@
             borderWidth: 3,
             tension: 0.35,
         });
-        V.criar(id, {
+        var chart = V.criar(id, {
             type: 'line',
-            data: { labels: ordinais.map(function (o) { return o + 'º'; }), datasets: datasets },
+            data: { labels: ordinais.map(function (o) { return o + 'º'; }), datasets: datasets.slice() },
             options: {
                 maintainAspectRatio: false,
                 interaction: { mode: 'nearest', intersect: true },
@@ -216,16 +244,134 @@
                     legend: V.legenda('top'),
                     linhaReferencia: referencia ? { linhas: [{ valor: dados.corte, cor: '#94a3b8', rotulo: 'Critério ' + V.fmt(dados.corte, 0) + '%' }] } : {},
                     tooltip: { callbacks: { label: function (item) {
-                        var origem = item.datasetIndex < dados.cursos.length ? dados.cursos[item.datasetIndex] : dados.total;
+                        var origem = item.dataset.chave === null ? dados.total : porChave[item.dataset.chave];
                         var p = origem.periodos[ordinais[item.dataIndex]];
                         return item.dataset.label + ': ' + V.pct(item.raw) + (p ? ' (n=' + p.n + ')' : '');
                     } } },
                 },
             },
         });
+        graficos[id] = { chart: chart, todos: datasets };
     }
     linhas('grafico-traj-prof', 'prof', false);
     linhas('grafico-traj-acerto', 'media', true);
+    // Drill-down (reitor): clicar num ponto abre a lista de alunos daquele período do curso.
+    ['grafico-traj-prof', 'grafico-traj-acerto'].forEach(function (id) {
+        V.habilitarDrill(Chart.getChart(id), function (el, chart) {
+            var chave = chart.data.datasets[el.datasetIndex].chave;
+            return chave ? { chave: chave, extra: { destino: 'alunos', periodo_curso: ordinais[el.index] } } : null;
+        });
+    });
+
+    // Minigráficos: um por curso, todos na mesma escala (0–100%), com o total da visão em cinza tracejado como referência.
+    var minisFeitos = {};
+    function ultimoValido(valores) {
+        for (var i = valores.length - 1; i >= 0; i--) { if (valores[i] !== null) return { valor: valores[i], ordinal: ordinais[i] }; }
+        return null;
+    }
+    function desenharMinis(secao, campo, referencia) {
+        var raiz = document.getElementById('traj-' + secao + '-mini');
+        if (!raiz || minisFeitos[secao]) return;
+        minisFeitos[secao] = true;
+        var totalSerie = serie(dados.total.periodos, campo);
+        dados.cursos.forEach(function (c, i) {
+            var valores = serie(c.periodos, campo);
+            var ultimo = ultimoValido(valores);
+            var cartao = document.createElement('div');
+            cartao.className = 'rounded-xl border border-slate-200 p-3';
+            var urlDoCurso = V.urlCurso(c.chave);
+            var nome = urlDoCurso
+                ? '<a href="' + V.esc(urlDoCurso) + '" title="' + V.esc(c.nome) + '" class="truncate font-semibold text-slate-800 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded">' + V.esc(c.nome) + '</a>'
+                : '<span class="truncate font-semibold text-slate-800" title="' + V.esc(c.nome) + '">' + V.esc(c.nome) + '</span>';
+            cartao.innerHTML = '<div class="mb-1 flex items-baseline justify-between gap-2 text-sm">'
+                + '<span class="flex min-w-0 items-center gap-1.5"><span class="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style="background:' + c.cor + '" aria-hidden="true"></span>' + nome + '</span>'
+                + '<span class="shrink-0 font-mono text-xs text-slate-600">' + (ultimo ? V.pct(ultimo.valor) + ' no ' + ultimo.ordinal + 'º' : 'sem dados') + '</span></div>';
+            if (!ultimo) {
+                var vazio = document.createElement('p');
+                vazio.className = 'py-8 text-center text-xs text-slate-500';
+                vazio.textContent = 'Nenhum período com ' + minimo + ' ou mais participantes.';
+                cartao.appendChild(vazio);
+                raiz.appendChild(cartao);
+                return;
+            }
+            var caixa = document.createElement('div');
+            caixa.className = 'relative h-36';
+            var canvas = document.createElement('canvas');
+            canvas.id = 'mini-' + secao + '-' + i;
+            canvas.setAttribute('data-titulo', (campo === 'prof' ? 'Proficiência ao longo do curso' : 'Percentual de acerto médio por período') + ' — ' + c.nome);
+            caixa.appendChild(canvas);
+            cartao.appendChild(caixa);
+            raiz.appendChild(cartao);
+            var chart = V.criar(canvas.id, {
+                type: 'line',
+                data: {
+                    labels: ordinais.map(function (o) { return o + 'º'; }),
+                    datasets: [
+                        { chave: null, label: 'Total da visão', data: totalSerie, borderColor: '#94a3b8', backgroundColor: '#94a3b8', borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 3, tension: 0.35, order: 1 },
+                        { chave: c.chave, label: c.nome, data: valores, borderColor: c.cor, backgroundColor: c.cor + '22', pointBackgroundColor: c.cor, borderWidth: 2.5, pointRadius: 3, pointHoverRadius: 5, tension: 0.35, fill: true, order: 0 },
+                    ],
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'nearest', intersect: true },
+                    scales: {
+                        y: V.eixoPct({ ticks: { stepSize: 50, font: { size: 10 }, callback: function (v) { return v + '%'; } } }),
+                        x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0, autoSkipPadding: 6 } },
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        linhaReferencia: referencia ? { linhas: [{ valor: dados.corte, cor: '#94a3b8', largura: 1 }] } : {},
+                        tooltip: { callbacks: { label: function (item) {
+                            var origem = (item.datasetIndex === 0 ? dados.total.periodos : c.periodos)[ordinais[item.dataIndex]];
+                            return item.dataset.label + ': ' + V.pct(item.raw) + (origem ? ' (n=' + origem.n + ')' : '');
+                        } } },
+                    },
+                },
+            });
+            V.habilitarDrill(chart, function (el) {
+                return el.datasetIndex === 1 ? { chave: c.chave, extra: { destino: 'alunos', periodo_curso: ordinais[el.index] } } : null;
+            });
+        });
+    }
+
+    // Seletor: todos juntos · minigráficos · um curso.
+    var botoesModo = document.querySelectorAll('[data-modo]');
+    var seletorCurso = document.getElementById('traj-um-curso');
+    var secoesDeLinhas = [
+        { secao: 'prof', canvas: 'grafico-traj-prof', campo: 'prof', referencia: false },
+        { secao: 'acerto', canvas: 'grafico-traj-acerto', campo: 'media', referencia: true },
+    ];
+    function aplicarModo(modo, indiceCurso) {
+        var escolhido = modo === 'um' ? dados.cursos[indiceCurso].chave : null;
+        secoesDeLinhas.forEach(function (s) {
+            var grande = document.getElementById('traj-' + s.secao + '-grande');
+            var mini = document.getElementById('traj-' + s.secao + '-mini');
+            grande.hidden = modo === 'mini';
+            mini.hidden = modo !== 'mini';
+            if (modo === 'mini') {
+                desenharMinis(s.secao, s.campo, s.referencia);
+                return;
+            }
+            var g = graficos[s.canvas];
+            g.chart.data.datasets = g.todos.filter(function (d) { return escolhido === null || d.chave === null || d.chave === escolhido; });
+            g.chart.data.datasets.forEach(function (d) { if (d.chave !== null) d.borderWidth = escolhido === null ? 3 : 4; });
+            g.chart.resize();
+            g.chart.update();
+        });
+        botoesModo.forEach(function (b) {
+            var ativo = b.getAttribute('data-modo') === modo;
+            b.setAttribute('aria-pressed', ativo ? 'true' : 'false');
+            b.className = 'rounded-full border px-4 py-1.5 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-primary '
+                + (ativo ? 'border-[#1e3a5f] bg-[#1e3a5f] text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50');
+        });
+        if (seletorCurso) seletorCurso.value = modo === 'um' ? String(indiceCurso) : '';
+    }
+    botoesModo.forEach(function (b) { b.addEventListener('click', function () { aplicarModo(b.getAttribute('data-modo')); }); });
+    if (seletorCurso) {
+        seletorCurso.addEventListener('change', function () {
+            aplicarModo(seletorCurso.value === '' ? 'juntos' : 'um', parseInt(seletorCurso.value, 10));
+        });
+    }
 
     // 3 · Mapa de calor com troca de indicador.
     var tabela = document.getElementById('mapa-periodos');
@@ -250,7 +396,9 @@
                 var escala = metrica === 'n' ? valor / maiorN * 100 : valor;
                 var texto = metrica === 'n' ? String(valor) : V.fmt(valor, 0) + '%';
                 var dica = V.esc(c.nome) + ' · ' + o + 'º período: média ' + V.pct(p.media) + ', proficientes ' + V.pct(p.prof) + ', participação ' + V.pct(p.part) + ', ' + p.n + ' participantes';
-                html += '<td class="px-3 py-2 text-center font-mono font-semibold" style="background:' + Viz.corSequencial(escala) + ';color:' + Viz.tintaSobreSequencial(escala) + '" title="' + dica + '">' + texto + '</td>';
+                var destino = V.urlCurso(c.chave, { destino: 'alunos', periodo_curso: o });
+                var conteudo = destino ? '<a href="' + V.esc(destino) + '" class="block hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded">' + texto + '</a>' : texto;
+                html += '<td class="px-3 py-2 text-center font-mono font-semibold" style="background:' + Viz.corSequencial(escala) + ';color:' + Viz.tintaSobreSequencial(escala) + '" title="' + dica + '">' + conteudo + '</td>';
             });
             html += '</tr>';
         });
@@ -295,6 +443,7 @@
                 layout: { padding: { right: 60 } },
             },
         });
+        V.habilitarDrill(Chart.getChart('grafico-crescimento'), function (el) { return dados.crescimentos[el.index] ? { chave: dados.crescimentos[el.index].chave } : null; });
     }
 })();
 </script>

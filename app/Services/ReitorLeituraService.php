@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Support\Psicometria;
+
 /**
  * Os textos do painel da reitoria: o que cada quadro mede ("Sobre este quadro", fixo) e a LEITURA do que está na
  * tela agora ("Ver leitura", gerada dos números, com o tom: bom / atenção / ruim) — mais os pontos de atenção da
@@ -21,6 +23,19 @@ class ReitorLeituraService
     {
         return ($v > 0 ? '+' : ($v < 0 ? '−' : '')).self::pct(abs($v)).' pp';
     }
+
+    /** Ícone do ponto de atenção => quadro de origem [rota, âncora, rótulo do link]. */
+    private const ORIGEM_DOS_PONTOS = [
+        'ph-user-minus' => ['reitor.visao', 'secao-participacao', 'Ver participação por curso'],
+        'ph-user-check' => ['reitor.visao', 'secao-participacao', 'Ver participação por curso'],
+        'ph-prohibit' => ['reitor.visao', 'secao-participacao', 'Ver participação por curso'],
+        'ph-warning-circle' => ['reitor.visao', 'secao-quadrante', 'Ver o mapa participação × proficiência'],
+        'ph-calendar-x' => ['reitor.trajetoria', 'secao-cobertura', 'Ver a cobertura da aplicação'],
+        'ph-target' => ['reitor.visao', 'secao-proficiencia', 'Ver proficiência por curso'],
+        'ph-trend-up' => ['reitor.evolucao', 'secao-evolucao-inst', 'Ver a evolução entre semestres'],
+        'ph-trend-down' => ['reitor.evolucao', 'secao-evolucao-inst', 'Ver a evolução entre semestres'],
+        'ph-minus' => ['reitor.evolucao', 'secao-evolucao-inst', 'Ver a evolução entre semestres'],
+    ];
 
     /** @param array<int, string> $nomes */
     private static function lista(array $nomes, int $limite = 4): string
@@ -54,7 +69,7 @@ class ReitorLeituraService
             'media' => 'Média e mediana do percentual de acerto de quem fez a prova. A mediana é o valor do meio: metade dos estudantes fica abaixo dela. Quando a média é bem diferente da mediana, poucos resultados muito altos ou muito baixos estão puxando a média.',
             'faixas' => 'Distribui os estudantes de cada curso em cinco faixas de acerto, de 100%: a soma de cada barra é toda a turma. Mostra o formato do desempenho que a média esconde — dois cursos de mesma média podem ter perfis opostos.',
             'dispersao' => 'Para cada curso: a caixa vai do 1º ao 3º quartil (metade central dos estudantes), a linha fina vai do 10º ao 90º percentil, e o losango é a mediana. Caixa larga = turma heterogênea; caixa estreita = turma homogênea.',
-            'quadrante' => 'Cruza participação (horizontal) com proficiência (vertical). O tamanho da bolha é o número de previstos. As linhas marcam a meta de participação e a proficiência do conjunto: cursos abaixo das duas são o quadrante de atenção. Proficiência com baixa participação pode estar medindo só quem se dispôs a fazer a prova.',
+            'quadrante' => 'Cruza participação (horizontal) com proficiência (vertical). O tamanho da bolha é o número de previstos. As linhas marcam a meta de participação e a proficiência geral do conjunto: cursos abaixo das duas são o quadrante de atenção. Proficiência com baixa participação pode estar medindo só quem se dispôs a fazer a prova.',
             'trajetoria_proficiencia' => 'Percentual de proficientes em cada período do curso (1º, 2º...). É uma FOTO do semestre — estudantes de períodos diferentes são pessoas diferentes —, não o acompanhamento da mesma turma ao longo do curso. Períodos com menos de {minimo} participantes não aparecem na linha.',
             'trajetoria_acerto' => 'Média de acerto em cada período do curso. Leitura transversal (cada período é uma turma diferente): uma linha que sobe sugere que quem está mais adiantado sabe mais; uma linha plana, que o curso não está produzindo ganho visível entre períodos. Períodos com menos de {minimo} participantes não aparecem.',
             'mapa_periodo' => 'Mapa de calor da média de acerto por curso e período do curso. Células vazias são períodos sem aplicação ou com menos de {minimo} participantes; passe o mouse (ou veja a tabela) para ver o número de participantes de cada célula.',
@@ -65,6 +80,13 @@ class ReitorLeituraService
             'areas_ranking' => 'Percentual de acerto por área de conhecimento (campo "área" das questões) no conjunto da visão, da mais fraca para a mais forte, com a distância entre proficientes e não proficientes em cada área.',
             'areas_mapa' => 'Percentual de acerto de cada curso nas áreas com mais respostas. Células com menos de {minimo_respostas} respostas aparecem como "—".',
             'evolucao_institucional' => 'Participação, média e proficiência da instituição em cada período letivo, sempre na mesma categoria de avaliação. Cada ponto é uma foto do semestre: os estudantes de um semestre e de outro são, em parte, pessoas diferentes.',
+            'itens_mapa' => 'Cada ponto é um item (questão de uma avaliação): acerto (%) no eixo horizontal e discriminação (D, diferença de acerto entre os 27% de melhor e de pior desempenho) no vertical. D abaixo de {d_minimo} não separa quem sabe de quem não sabe; acerto abaixo de {acerto_baixo}% é muito baixo. O diagnóstico combina os dois: baixo acerto E baixa discriminação aponta a QUESTÃO; baixo acerto com boa discriminação aponta uma LACUNA DE FORMAÇÃO; discriminação negativa com uma alternativa errada mais marcada que o gabarito aponta possível ERRO DE GABARITO.',
+            'itens_lista' => 'Os itens com diagnóstico, do mais urgente (gabarito suspeito) ao menos. Em avaliações com estudantes de vários cursos, o acerto por curso mostra se o problema é da questão (baixo em todos) ou de um curso. O nome da avaliação abre o Dashboard dela (visão do coordenador). Itens com menos de {minimo_itens} respostas não são diagnosticados.',
+            'itens_areas' => 'Percentual de itens com diagnóstico em cada área (campo "área" da questão). Uma área com muitos itens a revisar pede revisão das questões ou reforço do conteúdo, conforme o diagnóstico predominante.',
+            'itens_avaliacoes' => 'Para cada avaliação do recorte: cursos com respondentes, confiabilidade (KR-20, de 0 a 1: acima de 0,70 é aceitável para a prova como um todo) e quantos itens têm diagnóstico.',
+            'risco_cursos' => 'Estudantes em risco, só em agregado (os nomes ficam com o coordenador do curso). "Elegível" é o estudante com resultado em duas ou mais aplicações do recorte: sem isso não dá para falar em recorrência. "Ausência recorrente": prova inteira em branco em duas ou mais aplicações. "Baixo desempenho persistente": presente em duas ou mais e abaixo do critério ({corte}%) em todas em que esteve presente. "Em risco" é um ou outro. Grupos com menos de {minimo_risco} elegíveis não mostram percentual (identificaria gente). O estudante é contado pelo cadastro; sem vínculo com o cadastro, chaves diferentes (CPF e RA) contam como pessoas diferentes, o que subestima a recorrência.',
+            'risco_grafico' => 'Compara os cursos nas duas situações de risco: ausência recorrente (faltou a duas ou mais aplicações) e baixo desempenho persistente (abaixo do critério em todas as aplicações a que compareceu). Os dois podem coexistir na mesma pessoa; o "em risco" da tabela conta cada pessoa uma vez.',
+            'risco_mapa' => 'Percentual de estudantes em risco por curso e período do curso. Células vazias: menos de {minimo_risco} estudantes elegíveis. Mostra em que ponto da trajetória o risco se concentra.',
             'evolucao_cursos' => 'Variação de cada curso entre o período letivo anterior e o selecionado, em pontos percentuais. Verde: melhorou; vermelho: piorou. Variações pequenas (menos de 3 pp) ficam em cinza: numa turma de poucas dezenas de estudantes, isso é ruído.',
         ];
 
@@ -73,6 +95,10 @@ class ReitorLeituraService
             '{meta}' => $m,
             '{minimo}' => (string) ReitorDashboardService::MINIMO_PERIODO,
             '{minimo_respostas}' => (string) ReitorCompetenciasService::MINIMO_RESPOSTAS,
+            '{minimo_risco}' => (string) ReitorRiscoService::MINIMO_ELEGIVEIS,
+            '{d_minimo}' => number_format(Psicometria::D_MINIMO_ACEITAVEL, 2, ',', ''),
+            '{acerto_baixo}' => (string) (int) ReitorItensService::ACERTO_MUITO_BAIXO,
+            '{minimo_itens}' => (string) ReitorItensService::MINIMO_RESPOSTAS,
         ]), $textos);
     }
 
@@ -154,8 +180,8 @@ class ReitorLeituraService
         // Quadrante participação × proficiência
         $criticos = collect($cursos)->filter(fn ($x) => $x['participacao'] !== null && $x['proficienciaPct'] !== null && $x['participacao'] < $meta && $total['proficienciaPct'] !== null && $x['proficienciaPct'] < $total['proficienciaPct'])->map($nome)->all();
         $leituras['quadrante'] = ['tom' => $criticos === [] ? 'bom' : 'atencao', 'texto' => $criticos === []
-            ? 'Nenhum curso está, ao mesmo tempo, abaixo da meta de participação e abaixo da proficiência do conjunto.'
-            : count($criticos).' curso(s) estão abaixo da meta de participação E abaixo da proficiência do conjunto: '.self::lista($criticos).'. Nesses, o resultado tem dois problemas somados: parte da turma não fez a prova e quem fez foi pior que a média.'];
+            ? 'Nenhum curso está, ao mesmo tempo, abaixo da meta de participação e abaixo da proficiência geral do conjunto.'
+            : count($criticos).' curso(s) estão abaixo da meta de participação E abaixo da proficiência geral do conjunto: '.self::lista($criticos).'. Nesses, o resultado tem dois problemas somados: parte da turma não fez a prova e quem fez foi pior que a média.'];
 
         // Trajetória
         $leituras += $this->leiturasDeTrajetoria($cursos, $total, $corte);
@@ -384,6 +410,84 @@ class ReitorLeituraService
         return self::pct($v);
     }
 
+    /**
+     * @param  array<string, mixed>  $analise  saída de ReitorItensService::gerar()
+     * @return array<string, array{texto: string, tom: ?string}>
+     */
+    public function leiturasDeItens(array $analise): array
+    {
+        $t = $analise['total'];
+        if ($t['itens'] === 0) {
+            return [];
+        }
+
+        $c = $analise['contagem'];
+        $tom = $t['pctARevisar'] < 10 ? 'bom' : ($t['pctARevisar'] < 25 ? 'atencao' : 'ruim');
+        $mapa = self::pct($t['pctARevisar']).'% dos itens ('.$t['aRevisar'].' de '.$t['itens'].') têm algum diagnóstico: '
+            .$c['gabarito'].' com gabarito suspeito, '.$c['questao'].' com provável problema da questão, '.$c['formacao'].' com lacuna de formação, '
+            .$c['fraco'].' fracos e '.$c['todos_cursos'].' baixos em todos os cursos. (Referência do tom: abaixo de 10% bom, 10–24% atenção, acima disso precisa de ação.)';
+
+        $leituras = ['itens_mapa' => ['tom' => $tom, 'texto' => $mapa]];
+
+        if ($analise['criticos'] !== []) {
+            $i = $analise['criticos'][0];
+            $leituras['itens_lista'] = ['tom' => ReitorItensService::DIAGNOSTICOS[$i['diagnostico']][2], 'texto' => 'O item mais urgente é a questão '.$i['numero'].' de '.$i['avaliacaoNome'].' ('.ReitorItensService::DIAGNOSTICOS[$i['diagnostico']][0].', acerto de '.self::pct($i['dificuldade']).'%). '.$i['explicacao']];
+        }
+
+        $areas = array_values(array_filter($analise['areas'], fn ($a) => $a['itens'] >= 5));
+        if (count($areas) >= 2) {
+            $pior = $areas[0];
+            $melhor = $areas[count($areas) - 1];
+            $leituras['itens_areas'] = ['tom' => null, 'texto' => "A área com maior proporção de itens a revisar é {$pior['area']} (".self::pct($pior['pctARevisar'])."% de {$pior['itens']} itens) e a menor é {$melhor['area']} (".self::pct($melhor['pctARevisar']).'% de '.$melhor['itens'].' itens).'];
+        }
+
+        return $leituras;
+    }
+
+    /**
+     * @param  array<string, mixed>  $risco  saída de ReitorRiscoService::gerar()
+     * @return array<string, array{texto: string, tom: ?string}>
+     */
+    public function leiturasDeRisco(array $risco): array
+    {
+        $total = $risco['total'];
+        if (! $risco['temRecorrencia']) {
+            return ['risco_cursos' => ['tom' => 'atencao', 'texto' => 'Neste recorte quase nenhum estudante tem resultado em duas ou mais aplicações ('.$total['elegiveis'].' elegíveis), então não há como medir recorrência. Escolha uma categoria com várias aplicações (como os simulados) ou "Todos os períodos".']];
+        }
+
+        $cursos = collect($risco['cursos'])->filter(fn ($c) => $c['pctRisco'] !== null)->sortByDesc('pctRisco')->values();
+        $tom = $total['pctRisco'] === null ? null : ($total['pctRisco'] < 10 ? 'bom' : ($total['pctRisco'] < 25 ? 'atencao' : 'ruim'));
+        $texto = self::pct($total['pctRisco']).'% dos estudantes elegíveis ('.$total['risco'].' de '.$total['elegiveis'].') estão em risco: '
+            .self::pct($total['pctRecorrente']).'% com ausência recorrente e '.self::pct($total['pctPersistente']).'% com baixo desempenho persistente.';
+        if ($cursos->count() >= 2) {
+            $texto .= " O maior risco é o de {$cursos->first()['nome']} (".self::pct($cursos->first()['pctRisco'])."%) e o menor o de {$cursos->last()['nome']} (".self::pct($cursos->last()['pctRisco']).'%).';
+        }
+        if ($total['deltaRisco'] !== null && abs($total['deltaRisco']) >= 1) {
+            $texto .= ' Frente a '.$risco['semestreAnterior'].', o risco '.($total['deltaRisco'] > 0 ? 'subiu ' : 'caiu ').self::pct(abs($total['deltaRisco'])).' pp.';
+        }
+        $texto .= ' (Referência do tom: abaixo de 10% bom, 10–24% atenção, acima disso precisa de ação.)';
+
+        $recorrente = collect($risco['cursos'])->filter(fn ($c) => $c['pctRecorrente'] !== null)->sortByDesc('pctRecorrente')->first();
+        $persistente = collect($risco['cursos'])->filter(fn ($c) => $c['pctPersistente'] !== null)->sortByDesc('pctPersistente')->first();
+        $grafico = ($recorrente !== null ? "A maior ausência recorrente é a de {$recorrente['nome']} (".self::pct($recorrente['pctRecorrente']).'%)' : 'Sem curso com elegíveis suficientes')
+            .($persistente !== null ? "; o maior baixo desempenho persistente, o de {$persistente['nome']} (".self::pct($persistente['pctPersistente']).'%).' : '.');
+
+        $maior = null;
+        foreach ($risco['cursos'] as $c) {
+            foreach ($c['periodos'] as $p) {
+                if ($p['pctRisco'] !== null && ($maior === null || $p['pctRisco'] > $maior['pct'])) {
+                    $maior = ['curso' => $c['nome'], 'rotulo' => $p['rotulo'], 'pct' => $p['pctRisco']];
+                }
+            }
+        }
+
+        return [
+            'risco_cursos' => ['tom' => $tom, 'texto' => $texto],
+            'risco_grafico' => ['tom' => null, 'texto' => $grafico],
+            'risco_mapa' => ['tom' => null, 'texto' => $maior === null ? 'Sem períodos do curso com elegíveis suficientes.' : "O maior risco do mapa é o de {$maior['curso']} no {$maior['rotulo']} período (".self::pct($maior['pct']).'%).'],
+        ];
+    }
+
     // ------------------------------------------------------------------------------------------------------------
     // Pontos de atenção da visão geral
     // ------------------------------------------------------------------------------------------------------------
@@ -392,7 +496,7 @@ class ReitorLeituraService
      * @param  array<string, mixed>  $ctx
      * @param  array<string, mixed>  $est
      * @param  ?array{categoria: string, semestres: array<int, array<string, mixed>>}  $evolucao
-     * @return array<int, array{tom: string, icone: string, texto: string}>
+     * @return array<int, array{tom: string, icone: string, texto: string, ver: ?array{0: string, 1: string, 2: string}}>
      */
     public function pontosDeAtencao(array $ctx, array $est, ?array $evolucao = null): array
     {
@@ -460,6 +564,7 @@ class ReitorLeituraService
             }
         }
 
-        return $cartoes;
+        // Cada ponto de atenção aponta para o quadro de onde saiu (rota + âncora), para o reitor conferir os números.
+        return array_map(fn ($c) => $c + ['ver' => self::ORIGEM_DOS_PONTOS[$c['icone']] ?? null], $cartoes);
     }
 }

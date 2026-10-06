@@ -9,7 +9,9 @@ use App\Services\ReitorCompetenciasService;
 use App\Services\ReitorDashboardService;
 use App\Services\ReitorEvolucaoService;
 use App\Services\ReitorExportService;
+use App\Services\ReitorItensService;
 use App\Services\ReitorLeituraService;
+use App\Services\ReitorRiscoService;
 use App\Support\AtividadeLogger;
 use App\Support\NomeCurso;
 use Illuminate\Http\Request;
@@ -123,6 +125,65 @@ class ReitorController extends Controller
             'est' => $est ?? [],
             'aba' => 'cursos',
             'cursos' => collect(Curso::nomesDisponiveis())->map(fn ($nome) => ['nome' => $nome, 'chave' => NomeCurso::chave($nome)])->all(),
+        ]);
+    }
+
+    /**
+     * Relatório institucional do recorte para reunião: capa, resumo, participação, proficiência, desempenho, trajetória,
+     * competências e evolução, cada um com a leitura. Imprime em A4 (salvar como PDF) e exporta PowerPoint (no navegador).
+     */
+    public function relatorio(Request $request, ReitorEvolucaoService $evolucaoServico, ReitorCompetenciasService $competenciasServico): View
+    {
+        [$ctx, $est] = $this->recorte($request);
+        if ($est === null) {
+            return $this->semResultados($ctx, 'visao');
+        }
+
+        $evolucao = $evolucaoServico->serie($ctx);
+        $competencias = $competenciasServico->gerar($ctx);
+
+        AtividadeLogger::registrar('reitor.relatorio_aberto', 'Admin', Auth::guard('admin')->id(), [
+            'avaliacoes' => $ctx['avaliacao']['codigos'],
+            'periodo_letivo' => $ctx['avaliacao']['periodoLetivo'],
+        ]);
+
+        return view('reitor.relatorio', $this->comuns($ctx, $est, 'relatorio') + [
+            'evolucao' => $evolucao,
+            'competencias' => $competencias,
+            'alertas' => $this->leitura->pontosDeAtencao($ctx, $est, $evolucao),
+            'leituras' => $this->leitura->leituras($ctx, $est, $competencias, $evolucao),
+        ]);
+    }
+
+    /** Análise institucional dos itens: acerto × discriminação, possíveis erros de gabarito, problema da questão × lacuna de formação. */
+    public function itens(Request $request, ReitorItensService $itensServico): View
+    {
+        [$ctx, $est] = $this->recorte($request);
+        if ($est === null) {
+            return $this->semResultados($ctx, 'itens');
+        }
+
+        $analise = $itensServico->gerar($ctx);
+
+        return view('reitor.itens', $this->comuns($ctx, $est, 'itens') + [
+            'analise' => $analise,
+            'leituras' => $this->leitura->leiturasDeItens($analise),
+        ]);
+    }
+
+    /** Estudantes em risco, só em agregado: ausência recorrente e baixo desempenho persistente por curso e período. */
+    public function risco(Request $request, ReitorRiscoService $riscoServico): View
+    {
+        [$ctx, $est] = $this->recorte($request);
+        if ($est === null) {
+            return $this->semResultados($ctx, 'risco');
+        }
+
+        $risco = $riscoServico->gerar($ctx);
+
+        return view('reitor.risco', $this->comuns($ctx, $est, 'risco') + [
+            'risco' => $risco,
+            'leituras' => $this->leitura->leiturasDeRisco($risco),
         ]);
     }
 

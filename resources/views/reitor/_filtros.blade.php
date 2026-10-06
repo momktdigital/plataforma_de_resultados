@@ -78,7 +78,10 @@
     @endif
 
     @if (! empty($exportar))
-        <a href="{{ route('reitor.xlsx', $manterExport) }}" class="ml-auto inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+        <a href="{{ route('reitor.relatorio', $manterExport) }}" class="ml-auto inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+            <i class="ph ph-presentation-chart text-lg" aria-hidden="true"></i> Relatório (PDF / PowerPoint)
+        </a>
+        <a href="{{ route('reitor.xlsx', $manterExport) }}" class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
             <i class="ph ph-microsoft-excel-logo text-lg" aria-hidden="true"></i> Baixar planilha (.xlsx)
         </a>
     @endif

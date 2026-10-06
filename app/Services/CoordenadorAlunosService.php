@@ -124,6 +124,9 @@ class CoordenadorAlunosService
             collect($pessoas)->flatMap(fn ($p) => array_column($p['avals'], 'matricula'))->filter()->unique()->values()->all()
         );
 
+        // Acompanhamento do coordenador (último registro de cada aluno, só dos cursos dele).
+        $acompanhamentos = app(AcompanhamentoService::class)->ultimos(array_keys($cadastro), $variantes);
+
         $resultado = [];
         foreach ($pessoas as $p) {
             $aluno = $p['id'] !== null ? ($cadastro[$p['id']] ?? null) : null;
@@ -143,6 +146,7 @@ class CoordenadorAlunosService
                 'periodoCurso' => $ordinal,
                 'periodoCursoRotulo' => $ordinal !== null ? PeriodoCurso::rotulo($ordinal) : null,
                 'turma' => ($matricula['turma'] ?? null) ?: $aluno?->turma,
+                'acompanhamento' => $aluno !== null ? ($acompanhamentos[$aluno->id] ?? null) : null,
                 ...$metricas,
                 'situacao' => $situacao,
                 'motivos' => $motivos,
@@ -197,7 +201,7 @@ class CoordenadorAlunosService
 
     /**
      * @param  array<int, array<string, mixed>>  $alunos
-     * @param  array{busca?: string, situacao?: string, periodo_curso?: string, ordem?: string}  $filtros
+     * @param  array{busca?: string, situacao?: string, periodo_curso?: string, ordem?: string, acompanhamento?: string}  $filtros
      * @return array<int, array<string, mixed>>
      */
     public function filtrar(array $alunos, array $filtros): array
@@ -205,8 +209,16 @@ class CoordenadorAlunosService
         $busca = self::normalizar($filtros['busca'] ?? '');
         $situacao = $filtros['situacao'] ?? '';
         $periodoCurso = $filtros['periodo_curso'] ?? '';
+        $acompanhamento = $filtros['acompanhamento'] ?? '';
 
-        $alunos = array_filter($alunos, function ($a) use ($busca, $situacao, $periodoCurso) {
+        $alunos = array_filter($alunos, function ($a) use ($busca, $situacao, $periodoCurso, $acompanhamento) {
+            // 'sem_registro' = nenhum acompanhamento ainda; ou um dos status (último registro).
+            if ($acompanhamento === 'sem_registro' && $a['acompanhamento'] !== null) {
+                return false;
+            }
+            if ($acompanhamento !== '' && $acompanhamento !== 'sem_registro' && ($a['acompanhamento']['status'] ?? null) !== $acompanhamento) {
+                return false;
+            }
             if ($situacao === 'atencao' && ! in_array($a['situacao'], ['atencao', 'ausente'], true)) {
                 return false;
             }

@@ -24,6 +24,8 @@
         ['id' => 'trajetoria', 'rota' => 'reitor.trajetoria', 'icone' => 'ph-path', 'rotulo' => 'Trajetória no curso'],
         ['id' => 'competencias', 'rota' => 'reitor.competencias', 'icone' => 'ph-brain', 'rotulo' => 'Competências'],
         ['id' => 'evolucao', 'rota' => 'reitor.evolucao', 'icone' => 'ph-chart-line-up', 'rotulo' => 'Evolução entre semestres'],
+        ['id' => 'itens', 'rota' => 'reitor.itens', 'icone' => 'ph-list-checks', 'rotulo' => 'Análise dos itens'],
+        ['id' => 'risco', 'rota' => 'reitor.risco', 'icone' => 'ph-warning-diamond', 'rotulo' => 'Estudantes em risco'],
     ];
     if ($usuario->ehReitor()) {
         $abas[] = ['id' => 'cursos', 'rota' => 'reitor.cursos', 'icone' => 'ph-graduation-cap', 'rotulo' => 'Análise do curso'];

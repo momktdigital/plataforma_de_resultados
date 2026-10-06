@@ -15,6 +15,8 @@ use App\Services\Auth\LoginPorCodigoService;
 use App\Services\ReitorCompetenciasService;
 use App\Services\ReitorDashboardService;
 use App\Services\ReitorEvolucaoService;
+use App\Services\ReitorItensService;
+use App\Services\ReitorRiscoService;
 use App\Services\ResumoResultadoService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -855,6 +857,61 @@ class ReitorTest extends TestCase
         $this->actingAs($reitor, 'admin')->get(route('coordenador.comparativo'))->assertOk();
     }
 
+    public function test_drill_down_abre_o_curso_na_tela_e_no_recorte_clicado(): void
+    {
+        [, $direito] = $this->categoriaPorCurso();
+        $reitor = $this->reitor();
+
+        $this->actingAs($reitor, 'admin')->get(route('reitor.curso.abrir', ['curso' => 'DIREITO', 'destino' => 'alunos', 'periodo_letivo' => '2026/1', 'periodo_curso' => '3']))
+            ->assertRedirect(route('coordenador.alunos', ['periodo_letivo' => '2026/1', 'periodo_curso' => '3']));
+        $this->actingAs($reitor, 'admin')->get(route('reitor.curso.abrir', ['curso' => 'DIREITO', 'destino' => 'desempenho', 'periodo_letivo' => '2026/1', 'periodo_curso' => '3']))
+            ->assertRedirect(route('coordenador.desempenho', ['periodo_letivo' => '2026/1']));
+        $this->actingAs($reitor, 'admin')->get(route('reitor.curso.abrir', ['curso' => 'DIREITO', 'destino' => 'bi', 'avaliacao' => $direito->codigo]))
+            ->assertRedirect(route('avaliacoes.bi', $direito->codigo));
+        $this->actingAs($reitor, 'admin')->get(route('reitor.curso.abrir', ['curso' => 'DIREITO', 'destino' => 'comparativo']))
+            ->assertRedirect(route('coordenador.comparativo'));
+
+        // valores estranhos não são repassados
+        $this->actingAs($reitor, 'admin')->get(route('reitor.curso.abrir', ['curso' => 'DIREITO', 'periodo_letivo' => 'x"><script>', 'destino' => 'http://evil.test']))
+            ->assertRedirect(route('coordenador.painel'));
+    }
+
+    public function test_nomes_de_curso_e_graficos_levam_ao_drill_down_so_para_o_reitor(): void
+    {
+        $this->categoriaPorCurso();
+        $reitor = $this->reitor();
+
+        foreach (['reitor.visao', 'reitor.desempenho', 'reitor.trajetoria', 'reitor.competencias', 'reitor.evolucao'] as $rota) {
+            $html = $this->actingAs($reitor, 'admin')->get(route($rota, ['categoria' => Categoria::first()->id]))->assertOk()->getContent();
+            $this->assertStringContainsString('window.ReitorDrill = {', $html, $rota);
+        }
+        $this->assertStringContainsString(route('reitor.curso.abrir'), $this->actingAs($reitor, 'admin')->get(route('reitor.desempenho'))->getContent());
+
+        $admin = $this->admin();
+        $htmlAdmin = $this->actingAs($admin, 'admin')->get(route('reitor.desempenho'))->getContent();
+        $this->assertStringNotContainsString('window.ReitorDrill = {', $htmlAdmin);
+        $this->assertStringNotContainsString('title="Abrir a análise de', $htmlAdmin);
+    }
+
+    public function test_pontos_de_atencao_apontam_para_o_quadro_de_origem(): void
+    {
+        $this->cenario();
+
+        $html = $this->actingAs($this->reitor(), 'admin')->get(route('reitor.visao'))->assertOk()->getContent();
+
+        $this->assertStringContainsString('Ver participação por curso', $html);
+        $this->assertStringContainsString('#secao-participacao', $html);
+    }
+
+    public function test_visao_de_curso_recusa_qualquer_escrita(): void
+    {
+        $this->categoriaPorCurso();
+        $reitor = $this->reitor();
+        $this->actingAs($reitor, 'admin')->get(route('reitor.curso.abrir', ['curso' => 'DIREITO']));
+
+        $this->actingAs($reitor, 'admin')->post('/notificacoes/lidas')->assertForbidden();
+    }
+
     public function test_visao_de_curso_continua_sendo_so_leitura_e_sem_area_de_gestao(): void
     {
         [, $direito] = $this->categoriaPorCurso();
@@ -954,6 +1011,330 @@ class ReitorTest extends TestCase
     }
 
     // ------------------------------------------------------------------------------------------------------------
+    // Estudantes em risco (agregado): ausência recorrente e baixo desempenho persistente
+    // ------------------------------------------------------------------------------------------------------------
+
+    /**
+     * Os MESMOS estudantes em várias aplicações (como nos simulados). `$resultados[i]` = acertos (0–10) de cada aluno na
+     * aplicação i, ou null para ausente; `$alunos` é a lista de alunos (criados uma vez).
+     *
+     * @param  array<int, Aluno>  $alunos
+     * @param  array<int, array<int, ?int>>  $resultados  aplicação => [índice do aluno => acertos|null]
+     * @return array<int, Avaliacao>
+     */
+    private function aplicacoes(array $alunos, array $resultados, int $categoriaId, string $periodoLetivo, string $datas): array
+    {
+        $avaliacoes = [];
+        foreach ($resultados as $i => $porAluno) {
+            $avaliacao = Avaliacao::create(['nome' => "$periodoLetivo - Simulado ".($i + 1), 'data_avaliacao' => $datas, 'categoria_id' => $categoriaId]);
+            foreach (range(1, 10) as $n) {
+                Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => $n, 'gabarito' => 'A', 'area' => 'Clínica', 'bloom_nivel' => 'Lembrar']);
+            }
+            foreach ($porAluno as $indice => $acertos) {
+                if ($acertos === false) {
+                    continue; // não aparece nesta aplicação
+                }
+                $aluno = $alunos[$indice];
+                foreach (range(1, 10) as $n) {
+                    Resposta::create([
+                        'avaliacao_codigo' => $avaliacao->codigo, 'aluno_id' => $aluno->id, 'ra' => $aluno->ra, 'periodo' => '3º',
+                        'questao_numero' => $n, 'resposta' => $acertos === null ? '' : ($n <= $acertos ? 'A' : 'B'),
+                    ]);
+                }
+            }
+            app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+            $avaliacoes[] = $avaliacao;
+        }
+
+        return $avaliacoes;
+    }
+
+    /** @return array<int, Aluno> seis alunos de DIREITO (3º período) matriculados em $periodoLetivo */
+    private function seisAlunos(string $periodoLetivo): array
+    {
+        return array_map(fn () => $this->aluno('DIREITO', '3º', $periodoLetivo), range(0, 5));
+    }
+
+    /**
+     * a0 faltou a 2 de 3 (recorrente) · a1 abaixo do critério nas 3 (persistente) · a2 sempre bem · a3 faltou a 1 ·
+     * a4 abaixo em 2 mas acima em 1 (não é persistente) · a5 só fez 1 aplicação (não é elegível).
+     *
+     * @return array<int, array<int, ?int>>
+     */
+    private function matrizDeRisco(): array
+    {
+        return [
+            [0 => null, 1 => 3, 2 => 8, 3 => 8, 4 => 5, 5 => 5],
+            [0 => null, 1 => 4, 2 => 9, 3 => null, 4 => 7, 5 => false],
+            [0 => 8, 1 => 2, 2 => 7, 3 => 8, 4 => 4, 5 => false],
+        ];
+    }
+
+    public function test_risco_conta_ausencia_recorrente_e_baixo_desempenho_persistente_por_curso(): void
+    {
+        $categoria = Categoria::create(['nome' => 'Simulado']);
+        $alunos = $this->seisAlunos('2026/1');
+        $this->aplicacoes($alunos, $this->matrizDeRisco(), $categoria->id, '2026/1', '2026-03-10');
+
+        $servico = app(ReitorDashboardService::class);
+        $ctx = $servico->contexto(['categoria' => (string) $categoria->id], []);
+        $risco = app(ReitorRiscoService::class)->gerar($ctx);
+        $direito = $risco['cursos']['DIREITO'];
+
+        $this->assertTrue($risco['temRecorrencia']);
+        $this->assertSame(6, $direito['pessoas']);
+        $this->assertSame(5, $direito['elegiveis']);        // a5 só tem uma aplicação
+        $this->assertSame(1, $direito['recorrente']);       // a0
+        $this->assertSame(1, $direito['persistente']);      // a1 (a4 teve uma acima do critério)
+        $this->assertSame(2, $direito['risco']);
+        $this->assertSame(20.0, $direito['pctRecorrente']);
+        $this->assertSame(20.0, $direito['pctPersistente']);
+        $this->assertSame(40.0, $direito['pctRisco']);
+        $this->assertSame(40.0, $risco['total']['pctRisco']);
+        $this->assertNull($risco['semestreAnterior']);
+        $this->assertSame([3], $risco['periodos']);
+        $this->assertSame(40.0, $direito['periodos'][3]['pctRisco']);
+    }
+
+    public function test_grupo_pequeno_nao_mostra_percentual(): void
+    {
+        $categoria = Categoria::create(['nome' => 'Simulado']);
+        $alunos = $this->seisAlunos('2026/1');
+        // só 3 alunos têm duas aplicações: abaixo do mínimo de elegíveis
+        $this->aplicacoes($alunos, [[0 => null, 1 => 3, 2 => 8, 3 => false, 4 => false, 5 => false], [0 => null, 1 => 4, 2 => 9, 3 => false, 4 => false, 5 => false]], $categoria->id, '2026/1', '2026-03-10');
+
+        $risco = app(ReitorRiscoService::class)->gerar(app(ReitorDashboardService::class)->contexto(['categoria' => (string) $categoria->id], []));
+
+        $this->assertFalse($risco['temRecorrencia']);
+        $this->assertSame(3, $risco['cursos']['DIREITO']['elegiveis']);
+        $this->assertNull($risco['cursos']['DIREITO']['pctRisco']);
+        $this->assertNull($risco['total']['pctRisco']);
+
+        $this->actingAs($this->reitor(), 'admin')->get(route('reitor.risco', ['categoria' => $categoria->id]))
+            ->assertOk()->assertSee('poucos estudantes com duas ou mais aplicações');
+    }
+
+    public function test_risco_com_uma_aplicacao_so_avisa_e_nao_quebra(): void
+    {
+        $this->cenario();
+
+        $this->actingAs($this->reitor(), 'admin')->get(route('reitor.risco'))
+            ->assertOk()->assertSee('Estudantes em risco')->assertSee('Na faixa mais baixa');
+    }
+
+    public function test_risco_compara_com_o_semestre_anterior_da_serie(): void
+    {
+        $categoria = Categoria::create(['nome' => 'Simulado']);
+        // semestre anterior: ninguém em risco (todos presentes e bem)
+        $antes = $this->seisAlunos('2025/2');
+        $this->aplicacoes($antes, [array_fill(0, 6, 9), array_fill(0, 6, 9)], $categoria->id, '2025/2', '2025-10-10');
+        $alunos = $this->seisAlunos('2026/1');
+        $this->aplicacoes($alunos, $this->matrizDeRisco(), $categoria->id, '2026/1', '2026-03-10');
+
+        $risco = app(ReitorRiscoService::class)->gerar(app(ReitorDashboardService::class)->contexto(['periodo' => '2026/1', 'categoria' => (string) $categoria->id], []));
+
+        $this->assertSame('2025/2', $risco['semestreAnterior']);
+        $this->assertSame(0.0, $risco['total']['anterior']['pctRisco']);
+        $this->assertSame(40.0, $risco['total']['deltaRisco']);
+        $this->assertSame(40.0, $risco['cursos']['DIREITO']['deltaRisco']);
+    }
+
+    public function test_tela_de_risco_nao_mostra_nome_de_aluno_e_oferece_o_drill_down(): void
+    {
+        $categoria = Categoria::create(['nome' => 'Simulado']);
+        $alunos = $this->seisAlunos('2026/1');
+        $this->aplicacoes($alunos, $this->matrizDeRisco(), $categoria->id, '2026/1', '2026-03-10');
+
+        $html = $this->actingAs($this->reitor(), 'admin')->get(route('reitor.risco', ['categoria' => $categoria->id]))
+            ->assertOk()
+            ->assertSee('Ausência recorrente')
+            ->assertSee('Baixo desempenho persistente')
+            ->assertDontSee('Fulano Sigiloso')
+            ->getContent();
+
+        $this->assertStringContainsString('situacao=atencao', $html);
+        $this->assertStringContainsString('40,0%', $html);
+    }
+
+    public function test_drill_down_do_risco_abre_a_lista_de_alunos_em_atencao(): void
+    {
+        $this->categoriaPorCurso();
+
+        $this->actingAs($this->reitor(), 'admin')->get(route('reitor.curso.abrir', ['curso' => 'DIREITO', 'destino' => 'alunos', 'situacao' => 'atencao']))
+            ->assertRedirect(route('coordenador.alunos', ['situacao' => 'atencao', 'ordem' => 'prioridade']));
+    }
+
+    // ------------------------------------------------------------------------------------------------------------
+    // Análise institucional dos itens
+    // ------------------------------------------------------------------------------------------------------------
+
+    /**
+     * 40 estudantes (índice = "habilidade") e 10 questões de gabarito A:
+     *  Q1, Q5–Q10 acertam os de índice acima de um limiar (bons itens);
+     *  Q2 só os 4 melhores acertam (difícil, mas discrimina → lacuna de formação);
+     *  Q3 5 acertos espalhados (difícil e não discrimina → problema da questão);
+     *  Q4 acertam só os MAIS FRACOS e os fortes marcam B (gabarito suspeito).
+     * Quem erra marca B.
+     */
+    private function avaliacaoDeItens(string $nome = '2026/1 - Itens', ?int $categoriaId = null): Avaliacao
+    {
+        $avaliacao = Avaliacao::create(['nome' => $nome, 'data_avaliacao' => '2026-03-10', 'categoria_id' => $categoriaId]);
+        foreach (range(1, 10) as $n) {
+            Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => $n, 'gabarito' => 'A', 'area' => $n <= 5 ? 'Clínica' : 'Ética', 'tema' => "Tema $n"]);
+        }
+
+        $limiares = [1 => 6, 5 => 8, 6 => 12, 7 => 16, 8 => 20, 9 => 24, 10 => 28];
+        foreach (range(0, 39) as $i) {
+            $aluno = $this->aluno('DIREITO', '3º', '2026/1');
+            foreach (range(1, 10) as $n) {
+                $acertou = match (true) {
+                    isset($limiares[$n]) => $i >= $limiares[$n],
+                    $n === 2 => $i >= 36,
+                    $n === 3 => in_array($i, [5, 15, 25, 35, 38], true),
+                    $n === 4 => $i <= 8,
+                };
+                Resposta::create([
+                    'avaliacao_codigo' => $avaliacao->codigo, 'aluno_id' => $aluno->id, 'ra' => $aluno->ra, 'periodo' => '3º',
+                    'questao_numero' => $n, 'resposta' => $acertou ? 'A' : 'B',
+                ]);
+            }
+        }
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+
+        return $avaliacao;
+    }
+
+    public function test_itens_distingue_problema_da_questao_lacuna_de_formacao_e_gabarito_suspeito(): void
+    {
+        $avaliacao = $this->avaliacaoDeItens();
+        $servico = app(ReitorDashboardService::class);
+
+        $analise = app(ReitorItensService::class)->gerar($servico->contexto(['avaliacao' => (string) $avaliacao->codigo], []));
+        $porNumero = collect($analise['itens'])->keyBy('numero');
+
+        $this->assertSame(10, $analise['total']['itens']);
+        $this->assertSame('formacao', $porNumero[2]['diagnostico']);   // 10% de acerto, mas separa os fortes dos fracos
+        $this->assertSame('questao', $porNumero[3]['diagnostico']);    // 12,5% de acerto e quase não discrimina
+        $this->assertSame('gabarito', $porNumero[4]['diagnostico']);   // D negativo e B mais marcada que o gabarito
+        $this->assertSame('B', $porNumero[4]['distrator']);
+        $this->assertGreaterThan($porNumero[4]['gabaritoPct'], $porNumero[4]['distratorPct']);
+        foreach ([1, 5, 6, 7, 8, 9, 10] as $numero) {
+            $this->assertNull($porNumero[$numero]['diagnostico'], "questão $numero");
+        }
+
+        $this->assertSame(3, $analise['total']['aRevisar']);
+        $this->assertSame(30.0, $analise['total']['pctARevisar']);
+        $this->assertSame(['gabarito' => 1, 'questao' => 1, 'formacao' => 1, 'fraco' => 0, 'todos_cursos' => 0], $analise['contagem']);
+        // do mais urgente (gabarito) para o menos
+        $this->assertSame([4, 3, 2], array_column($analise['criticos'], 'numero'));
+        // por área: Clínica tem as 3 questões problemáticas (Q2, Q3, Q4) de 5
+        $clinica = collect($analise['areas'])->firstWhere('area', 'Clínica');
+        $this->assertSame(3, $clinica['aRevisar']);
+        $this->assertSame(60.0, $clinica['pctARevisar']);
+        $this->assertSame(40, $analise['avaliacoes'][0]['respondentes']);
+    }
+
+    public function test_tela_de_itens_mostra_os_diagnosticos_sem_nome_de_aluno(): void
+    {
+        $avaliacao = $this->avaliacaoDeItens();
+
+        $this->actingAs($this->reitor(), 'admin')->get(route('reitor.itens', ['avaliacao' => $avaliacao->codigo]))
+            ->assertOk()
+            ->assertSee('Revisar o gabarito')
+            ->assertSee('Provável problema da questão')
+            ->assertSee('Lacuna de formação')
+            ->assertSee('Mapa dos itens')
+            ->assertDontSee('Fulano Sigiloso');
+    }
+
+    public function test_itens_de_avaliacao_pequena_ou_sem_questoes_nao_quebram(): void
+    {
+        $this->cenario(); // 7 respondentes: abaixo do mínimo da psicometria
+
+        $analise = app(ReitorItensService::class)->gerar(app(ReitorDashboardService::class)->contexto(null, []));
+        $this->assertSame(0, $analise['total']['itens']);
+
+        $this->actingAs($this->reitor(), 'admin')->get(route('reitor.itens'))->assertOk()->assertSee('Nenhum item analisável');
+    }
+
+    public function test_itens_com_dois_cursos_na_mesma_avaliacao_mostram_o_acerto_por_curso(): void
+    {
+        $avaliacao = $this->avaliacaoDeItens();
+        // metade dos estudantes passa a ser de outro curso (o curso do resultado é o da matrícula na época da prova)
+        $metade = Aluno::orderBy('id')->limit(20)->pluck('id')->all();
+        AlunoMatricula::whereIn('aluno_id', $metade)->update(['curso' => 'MEDICINA']);
+        Aluno::whereIn('id', $metade)->update(['curso' => 'MEDICINA']);
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+
+        $analise = app(ReitorItensService::class)->gerar(app(ReitorDashboardService::class)->contexto(['avaliacao' => (string) $avaliacao->codigo], []));
+
+        // por curso só aparece onde o curso tem respondentes suficientes (mínimo da psicometria: 10) — aqui 20 em cada
+        $this->assertCount(2, collect($analise['itens'])->firstWhere('numero', 5)['porCurso']);
+    }
+
+    // ------------------------------------------------------------------------------------------------------------
+    // Relatório institucional (PDF / PowerPoint)
+    // ------------------------------------------------------------------------------------------------------------
+
+    public function test_relatorio_institucional_traz_capa_resumo_secoes_e_leituras_sem_dado_nominal(): void
+    {
+        $this->cenario();
+        $reitor = $this->reitor();
+
+        $html = $this->actingAs($reitor, 'admin')->get(route('reitor.relatorio'))
+            ->assertOk()
+            ->assertSee('Relatório institucional')
+            ->assertSee('1. Resumo')
+            ->assertSee('2. Participação por curso')
+            ->assertSee('3. Proficiência institucional')
+            ->assertSee('4. Desempenho na prova')
+            ->assertSee('5. Trajetória ao longo do curso')
+            ->assertSee('6. Competências')
+            ->assertSee('Imprimir / salvar como PDF')
+            ->assertSee('Baixar PowerPoint')
+            ->assertSee('Participação de 75% (6 de 8 previstos)')
+            ->assertSee('Gerado por')
+            ->assertDontSee('Fulano Sigiloso')
+            ->getContent();
+
+        $this->assertStringContainsString('pptxgenjs', $html);
+        $this->assertTrue(Atividade::where('acao', 'reitor.relatorio_aberto')->where('admin_id', $reitor->id)->exists());
+    }
+
+    public function test_relatorio_mostra_a_evolucao_so_com_dois_semestres_e_acompanha_o_filtro(): void
+    {
+        [$categoria] = $this->categoriaPorCurso('2026/1', '2026-03-10');
+        $reitor = $this->reitor();
+
+        $this->actingAs($reitor, 'admin')->get(route('reitor.relatorio', ['categoria' => $categoria->id]))
+            ->assertOk()->assertDontSee('7. Evolução entre semestres');
+
+        $this->categoriaPorCurso('2025/2', '2025-10-10');
+        $this->actingAs($reitor, 'admin')->get(route('reitor.relatorio', ['periodo' => '2026/1', 'categoria' => $categoria->id]))
+            ->assertOk()->assertSee('7. Evolução entre semestres')->assertSee('Período letivo 2026/1');
+    }
+
+    public function test_relatorio_sem_resultados_e_o_botao_no_painel(): void
+    {
+        $reitor = $this->reitor();
+        $this->actingAs($reitor, 'admin')->get(route('reitor.relatorio'))->assertOk()->assertSee('Ainda não há resultados');
+
+        $this->cenario();
+        $this->actingAs($reitor, 'admin')->get(route('reitor.visao'))->assertSee('Relatório (PDF / PowerPoint)')->assertSee(route('reitor.relatorio'), false);
+        $this->actingAs($this->usuario('coord2', Admin::ROLE_COORDENADOR), 'admin')->get(route('reitor.relatorio'))->assertForbidden();
+    }
+
+    public function test_layout_tem_regras_de_impressao_para_esconder_o_menu(): void
+    {
+        $this->cenario();
+
+        $html = $this->actingAs($this->reitor(), 'admin')->get(route('reitor.visao'))->getContent();
+
+        $this->assertMatchesRegularExpression('/<aside[^>]*id="sidebar"[^>]*print:hidden/', $html);
+        $this->assertStringContainsString('print:overflow-visible', $html);
+    }
+
+    // ------------------------------------------------------------------------------------------------------------
     // Trajetória, evolução e competências
     // ------------------------------------------------------------------------------------------------------------
 
@@ -972,6 +1353,19 @@ class ReitorTest extends TestCase
         $this->assertSame(90.0, $periodos[2]['media']);
         $this->assertSame(100.0, $periodos[2]['proficienciaPct']);
         $this->assertSame('1º, 2º', $est['cursos']['DIREITO']['periodosAvaliadosRotulo']);
+    }
+
+    public function test_trajetoria_oferece_minigraficos_e_um_curso_so_com_mais_de_um_curso(): void
+    {
+        $this->avaliacao('2026/1 - Diagnóstico', '2026-03-10', [['DIREITO', '1º', 4], ['DIREITO', '1º', 6], ['MEDICINA', '2º', 8], ['MEDICINA', '2º', 10]]);
+        $reitor = $this->reitor();
+
+        $this->actingAs($reitor, 'admin')->get(route('reitor.trajetoria'))
+            ->assertOk()
+            ->assertSee('Minigráficos')
+            ->assertSee('id="traj-um-curso"', false)
+            ->assertSee('id="traj-prof-mini"', false)
+            ->assertSee('id="traj-acerto-mini"', false);
     }
 
     public function test_evolucao_compara_semestres_da_mesma_categoria(): void

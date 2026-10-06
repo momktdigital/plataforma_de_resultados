@@ -118,7 +118,7 @@ class ReitorEvolucaoService
      * @param  array<string, mixed>  $ctx
      * @return array<int, array{periodoLetivo: string, codigos: array<int, int>, nome: string, selecionada: bool}>
      */
-    private function semestresDaSerie(array $ctx): array
+    public function semestresDaSerie(array $ctx): array
     {
         $avaliacao = $ctx['avaliacao'];
         $propria = [['periodoLetivo' => (string) $avaliacao['periodoLetivo'], 'codigos' => $avaliacao['codigos'], 'nome' => $avaliacao['nome'], 'selecionada' => true]];

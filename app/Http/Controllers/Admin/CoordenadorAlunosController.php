@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Models\Acompanhamento;
 use App\Models\Aluno;
+use App\Services\AcompanhamentoService;
 use App\Services\AlunosDoCursoExportService;
 use App\Services\CoordenadorAlunosService;
 use App\Services\CoordenadorDashboardService;
@@ -101,6 +103,7 @@ class CoordenadorAlunosController extends PainelController
         Aluno $aluno,
         CoordenadorDashboardService $dashboard,
         CoordenadorAlunosService $servico,
+        AcompanhamentoService $acompanhamento,
     ): View|RedirectResponse {
         if (($usuario = $this->coordenador()) === null) {
             return redirect()->route('avaliacoes.index');
@@ -117,11 +120,12 @@ class CoordenadorAlunosController extends PainelController
             'usuario' => $usuario,
             'painel' => $escopo,
             'ficha' => $ficha,
+            'acompanhamentos' => $acompanhamento->historico($aluno, $escopo['variantes']),
         ]);
     }
 
     /**
-     * @return array{busca: string, situacao: string, periodo_curso: string, ordem: string}
+     * @return array{busca: string, situacao: string, periodo_curso: string, ordem: string, acompanhamento: string}
      */
     private function filtros(Request $request): array
     {
@@ -134,6 +138,7 @@ class CoordenadorAlunosController extends PainelController
             'situacao' => $situacao === 'atencao' || isset(CoordenadorAlunosService::SITUACOES[$situacao]) ? $situacao : '',
             'periodo_curso' => ctype_digit($periodoCurso) ? $periodoCurso : '',
             'ordem' => in_array($ordem, self::ORDENS, true) ? $ordem : 'nome',
+            'acompanhamento' => in_array((string) $request->query('acompanhamento', ''), ['sem_registro', ...array_keys(Acompanhamento::STATUS)], true) ? (string) $request->query('acompanhamento') : '',
         ];
     }
 

@@ -129,6 +129,13 @@ auditada (`reitor.visao_de_curso`), com aviso fixo no layout; e só vale para o 
   (`reitor_corte_proficiencia`, `reitor_meta_participacao`) — o corte entra na chave
   do cache.
 
+## Acompanhamento de alunos e visão do reitor
+
+`acompanhamentos` é um LOG de eventos: nunca atualize nem apague um registro (o estado atual é o último). A observação é
+dado sensível — vai só para quem coordena o `curso` do registro (`AcompanhamentoService::ultimos()/historico()` filtram
+por `NomeCurso::variantes`) e NUNCA para `AtividadeLogger`. Qualquer rota nova que GRAVE algo no grupo do coordenador
+já é bloqueada para o reitor pelo middleware `VisaoDeCursoDoReitor` (só métodos seguros); não crie atalho em volta disso.
+
 ## Perfil (`admins.role`) falha fechado
 
 Nunca escreva `! $usuario->ehCoordenador()` para decidir "então é administrador":
@@ -234,6 +241,11 @@ renderizado antes/depois, não só se a página abre.
 
 ## Convenções de teste
 
+- **Roda também em MySQL** (`composer test:mysql`, banco `*_testes` obrigatório — `tests/TestCase.php` recusa outro
+  nome, porque `RefreshDatabase` apaga tudo). O SQLite não enxerga o banco legado: ENUM em `admins.role`, collations
+  `general_ci` vs `unicode_ci`. Mudou perfil de usuário, coluna de texto juntada entre tabelas legadas e novas, ou
+  migration em `admins`/`alunos`? Rode o MySQL também e estenda `tests/Mysql/BancoLegadoMysqlTest`. Teste que usa
+  recurso só de SQLite (TRIGGER...) precisa de `markTestSkipped` fora do SQLite.
 - `tests/Unit/`: `PHPUnit\Framework\TestCase` puro, sem Laravel — pra
   classes sem dependência de banco/container (`Anulacao`, `EnvFileWriter`,
   `SpreadsheetReader`, `AlunoVinculoResolver`).

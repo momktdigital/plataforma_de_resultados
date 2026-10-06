@@ -369,6 +369,11 @@ class QuestaoImportTest extends TestCase
 
     public function test_uma_linha_com_gabarito_invalido_para_o_banco_nao_derruba_o_import_inteiro(): void
     {
+        // Simula o limite de varchar do MySQL com um TRIGGER de SQLite: no MySQL/MariaDB o próprio banco já aplica o limite.
+        if (\Illuminate\Support\Facades\DB::getDriverName() !== 'sqlite') {
+            $this->markTestSkipped('Usa TRIGGER de SQLite.');
+        }
+
         // SQLite (usado nos testes) não aplica limite de varchar nem modo
         // estrito como o MySQL de produção — um trigger reproduz a mesma
         // falha real (gabarito varchar(5) rejeitando um valor mais longo)

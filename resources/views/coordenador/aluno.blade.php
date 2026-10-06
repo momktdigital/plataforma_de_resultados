@@ -57,6 +57,58 @@
     </div>
 </div>
 
+{{-- Acompanhamento do aluno pelo coordenador --}}
+@php
+    $ultimoAcomp = $acompanhamentos->first();
+    $emVisaoDeCurso = (bool) ($usuario->emVisaoDeCurso ?? false);
+@endphp
+<section class="bg-white border border-slate-200 rounded-xl shadow-sm p-5 mb-6" aria-labelledby="titulo-acompanhamento">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <h2 id="titulo-acompanhamento" class="font-bold flex items-center gap-2"><i class="ph-bold ph-notebook text-primary" aria-hidden="true"></i> Acompanhamento</h2>
+        @if ($ultimoAcomp)
+            @include('coordenador._acompanhamento', ['acompanhamento' => ['status' => $ultimoAcomp->status, 'rotulo' => $ultimoAcomp->rotulo(), 'em' => (string) $ultimoAcomp->created_at]])
+        @else
+            <span class="text-sm text-slate-500">Nenhum registro ainda</span>
+        @endif
+    </div>
+
+    @if (! $emVisaoDeCurso)
+        <form method="POST" action="{{ route('coordenador.alunos.acompanhamento', array_filter(['aluno' => $aluno->id, 'curso' => $painel['cursoSelecionado'] ?? ''], fn ($v) => $v !== '')) }}" class="grid gap-3 sm:grid-cols-[14rem_1fr_auto] sm:items-end">
+            @csrf
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1" for="acomp-status">Situação</label>
+                <select id="acomp-status" name="status" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white">
+                    @foreach (\App\Models\Acompanhamento::STATUS as $chaveAcomp => $rotuloAcomp)
+                        <option value="{{ $chaveAcomp }}" @selected(old('status', $ultimoAcomp?->status === 'contatado' ? 'em_acompanhamento' : ($ultimoAcomp ? 'resolvido' : 'contatado')) === $chaveAcomp)>{{ $rotuloAcomp }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1" for="acomp-observacao">Observação (opcional)</label>
+                <textarea id="acomp-observacao" name="observacao" rows="2" maxlength="{{ \App\Services\AcompanhamentoService::MAXIMO_OBSERVACAO }}" placeholder="O que foi conversado ou combinado" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">{{ old('observacao') }}</textarea>
+            </div>
+            <button type="submit" class="rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-semibold px-4 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">Registrar</button>
+        </form>
+        <p class="mt-2 text-xs text-slate-600">As anotações ficam visíveis só para quem coordena este curso. Os registros não são editados: cada novo registro entra no histórico.</p>
+    @endif
+
+    @if ($acompanhamentos->isNotEmpty())
+        <ol class="mt-4 space-y-3 border-t border-slate-100 pt-4" aria-label="Histórico de acompanhamento">
+            @foreach ($acompanhamentos as $registro)
+                <li class="flex gap-3">
+                    <span class="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-600" aria-hidden="true"></span>
+                    <div class="min-w-0">
+                        <p class="text-sm font-semibold text-slate-800">{{ $registro->rotulo() }} <span class="font-normal text-slate-500">&middot; {{ $registro->created_at?->format('d/m/Y H:i') }} &middot; {{ $registro->admin?->username ?? 'usuário removido' }}</span></p>
+                        @if ($registro->observacao)
+                            <p class="text-sm text-slate-700 whitespace-pre-line break-words">{{ $registro->observacao }}</p>
+                        @endif
+                    </div>
+                </li>
+            @endforeach
+        </ol>
+    @endif
+</section>
+
 {{-- Semestre --}}
 @if (! empty($ficha['periodosDoAluno']))
     <form method="GET" action="{{ route('coordenador.alunos.show', $aluno->id) }}" class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-6 flex flex-wrap items-end gap-3">

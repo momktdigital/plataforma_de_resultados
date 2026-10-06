@@ -9,6 +9,23 @@ use Illuminate\Support\Facades\Cache;
 
 abstract class TestCase extends BaseTestCase
 {
+    /**
+     * Rede de segurança: RefreshDatabase APAGA todas as tabelas do banco da conexão. Rodando em MySQL/MariaDB
+     * (phpunit.mysql.xml), só aceita um banco de testes — nome terminado em "_testes" — e nunca o banco de verdade.
+     */
+    protected function refreshApplication(): void
+    {
+        parent::refreshApplication();
+
+        $conexao = config('database.default');
+        if (in_array(config("database.connections.{$conexao}.driver"), ['mysql', 'mariadb'], true)) {
+            $banco = (string) config("database.connections.{$conexao}.database");
+            if (! str_ends_with($banco, '_testes')) {
+                throw new \RuntimeException("Os testes recusam rodar no banco \"{$banco}\": use um banco de testes (nome terminado em _testes). Nada foi apagado.");
+            }
+        }
+    }
+
     protected function setUp(): void
     {
         parent::setUp();

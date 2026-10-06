@@ -16,7 +16,7 @@ class AlunosDoCursoExportService
 {
     private const CABECALHO = [
         'Nome', 'RA', 'Período do curso', 'Turma', 'Avaliações', 'Faltas', 'Presença (%)',
-        'Média (%)', 'Abaixo de 60% (nº)', 'Última avaliação', 'Última nota (%)', 'Variação (pp)', 'Situação', 'Motivos',
+        'Média (%)', 'Abaixo de 60% (nº)', 'Última avaliação', 'Última nota (%)', 'Variação (pp)', 'Situação', 'Motivos', 'Acompanhamento', 'Acompanhamento em',
     ];
 
     /**
@@ -60,6 +60,8 @@ class AlunosDoCursoExportService
             $numero(12, $linha, $a['tendencia']['delta'] ?? null);
             $texto(13, $linha, CoordenadorAlunosService::SITUACOES[$a['situacao']] ?? $a['situacao']);
             $texto(14, $linha, implode(' ', $a['motivos']));
+            $texto(15, $linha, $a['acompanhamento']['rotulo'] ?? '');
+            $texto(16, $linha, isset($a['acompanhamento']['em']) ? \Illuminate\Support\Carbon::parse($a['acompanhamento']['em'])->format('d/m/Y') : '');
             $linha++;
         }
 
@@ -70,8 +72,10 @@ class AlunosDoCursoExportService
             $sheet->getColumnDimension($coluna)->setAutoSize(true);
         }
         $sheet->getColumnDimension('N')->setWidth(70);
+        $sheet->getColumnDimension('O')->setAutoSize(true);
+        $sheet->getColumnDimension('P')->setAutoSize(true);
         $sheet->freezePane('A2');
-        $sheet->setAutoFilter("A1:N{$fim}");
+        $sheet->setAutoFilter("A1:P{$fim}");
 
         $spreadsheet->getProperties()->setTitle('Alunos do curso — '.$rotuloSemestre);
 

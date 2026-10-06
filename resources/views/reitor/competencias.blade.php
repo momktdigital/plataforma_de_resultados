@@ -95,7 +95,7 @@
                 <tbody>
                     @foreach ($cursos as $c)
                         <tr>
-                            <th scope="row" class="px-3 py-2 text-left font-medium text-slate-800">{{ $c['nome'] }}</th>
+                            <th scope="row" class="px-3 py-2 text-left font-medium text-slate-800">@include('reitor._nome-curso', ['chave' => $c['chave'], 'nome' => $c['nome']])</th>
                             @foreach ($bloom['niveis'] as $n)
                                 @php
                                     $celula = $bloom['porCurso'][$c['chave']][$n['chave']] ?? ['pct' => null, 'respostas' => 0];
@@ -190,7 +190,7 @@
                 <tbody>
                     @foreach ($cursos as $c)
                         <tr>
-                            <th scope="row" class="px-3 py-2 text-left font-medium text-slate-800 whitespace-nowrap">{{ $c['nome'] }}</th>
+                            <th scope="row" class="px-3 py-2 text-left font-medium text-slate-800 whitespace-nowrap">@include('reitor._nome-curso', ['chave' => $c['chave'], 'nome' => $c['nome']])</th>
                             @foreach ($areas['mapa'] as $area)
                                 @php
                                     $valor = $areas['porCurso'][$c['chave']][$area] ?? null;

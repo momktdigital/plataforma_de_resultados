@@ -7,6 +7,12 @@
 {{-- O atributo hidden perde para classes de display do Tailwind (flex, block...): sem esta regra, seletor com setas
      "escondidas" e filhas "recolhidas" continuariam aparecendo. --}}
 <style>[hidden] { display: none !important; }</style>
+@if (auth('admin')->user()?->ehReitor())
+    <script>
+        // Atalho de drill-down (ver ReitorViz.habilitarDrill): o período letivo em foco vai junto quando é de um semestre só.
+        window.ReitorDrill = { url: @json(route('reitor.curso.abrir')), periodo: @json(! empty($ctx['avaliacao']) && empty($ctx['avaliacao']['todosPeriodos']) && ($ctx['avaliacao']['periodoLetivo'] ?? '') !== '' ? $ctx['avaliacao']['periodoLetivo'] : null) };
+    </script>
+@endif
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"></script>
 @include('_viz')
 <script>
@@ -106,7 +112,8 @@ window.ReitorViz = (function () {
     var rotulosValores = {
         id: 'rotulosValores',
         afterDatasetsDraw: function (chart, args, opcoes) {
-            if (!opcoes) return;
+            // só desenha quando o gráfico configurou o plugin (sem isso as opções chegam vazias e saía um "—" em cada ponto)
+            if (!opcoes || opcoes.dataset === undefined) return;
             var indice = opcoes.dataset || 0;
             var meta = chart.getDatasetMeta(indice);
             var dados = chart.data.datasets[indice].data;
@@ -136,6 +143,34 @@ window.ReitorViz = (function () {
         Chart.register(linhaReferencia, linhaReferenciaX, rotulosValores);
     }
 
+    /**
+     * Drill-down (só para o reitor): clicar numa barra/ponto abre a análise daquele curso (a visão do coordenador).
+     * `resolver(elemento, grafico)` devolve { chave, extra? } ou null. Sem permissão (window.ReitorDrill ausente) não faz nada.
+     */
+    function urlCurso(chave, extra) {
+        var drill = window.ReitorDrill;
+        if (!drill || !chave) return null;
+        var params = new URLSearchParams({ curso: chave });
+        if (drill.periodo && !(extra && extra.periodo_letivo === null)) params.set('periodo_letivo', drill.periodo);
+        Object.keys(extra || {}).forEach(function (k) { if (extra[k] !== null && extra[k] !== undefined) params.set(k, extra[k]); });
+        return drill.url + '?' + params.toString();
+    }
+    function habilitarDrill(chart, resolver) {
+        if (!chart || !window.ReitorDrill) return;
+        chart.options.onClick = function (evento, elementos) {
+            if (!elementos.length) return;
+            var alvo = resolver(elementos[0], chart);
+            var url = alvo ? urlCurso(alvo.chave, alvo.extra) : null;
+            if (url) window.location.href = url;
+        };
+        chart.options.onHover = function (evento, elementos) {
+            var el = evento.native && evento.native.target;
+            if (el) el.style.cursor = elementos.length && resolver(elementos[0], chart) ? 'pointer' : 'default';
+        };
+        chart.canvas.setAttribute('title', 'Clique para abrir a análise do curso');
+        chart.update('none');
+    }
+
     function criar(id, config) {
         var el = document.getElementById(id);
         if (!el || !window.Chart) return null;
@@ -152,7 +187,7 @@ window.ReitorViz = (function () {
         return { position: posicao || 'top', labels: { usePointStyle: true, boxWidth: 8, padding: 12 } };
     }
 
-    return { cores: cores, fmt: fmt, esc: esc, pct: pct, pp: pp, criar: criar, eixoPct: eixoPct, legenda: legenda };
+    return { urlCurso: urlCurso, habilitarDrill: habilitarDrill, cores: cores, fmt: fmt, esc: esc, pct: pct, pp: pp, criar: criar, eixoPct: eixoPct, legenda: legenda };
 })();
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -215,7 +250,9 @@ document.addEventListener('click', function (evento) {
         campo.addEventListener('input', function () {
             var termo = normalizar(campo.value);
             Array.prototype.forEach.call(tabela.tBodies[0].rows, function (linha) {
-                linha.hidden = termo !== '' && normalizar(linha.getAttribute('data-nome') || linha.textContent).indexOf(termo) === -1;
+                // outros filtros da tela (data-filtrada="1") continuam valendo junto com a busca por texto
+                linha.hidden = (termo !== '' && normalizar(linha.getAttribute('data-nome') || linha.textContent).indexOf(termo) === -1)
+                    || linha.getAttribute('data-filtrada') === '1';
             });
         });
     });
@@ -427,6 +464,129 @@ document.addEventListener('click', function (evento) {
             itens.forEach(function (li) {
                 var nome = (li.getAttribute('data-curso-item') || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
                 li.hidden = termo !== '' && nome.indexOf(termo) === -1;
+            });
+        });
+    });
+})();
+// ---------------------------------------------------------------------------------------------------------------
+// "Ver como tabela": cada gráfico ganha, logo abaixo, um botão que mostra os mesmos números em uma tabela (alternativa
+// acessível ao <canvas> e útil para copiar para planilha/relatório). A tabela é montada no clique a partir do que o
+// gráfico mostra naquele momento (inclusive depois de trocar curso/indicador).
+// ---------------------------------------------------------------------------------------------------------------
+(function () {
+    var V = window.ReitorViz;
+    var contador = 0;
+
+    function numero(v) {
+        if (v === null || v === undefined || isNaN(v)) return '—';
+        return V.fmt(v, Number.isInteger(v) ? 0 : 1);
+    }
+
+    function celula(v) {
+        if (Array.isArray(v)) return v.length === 2 && v[0] !== null ? numero(v[0]) + ' a ' + numero(v[1]) : '—';
+        return numero(v);
+    }
+
+    /** { cabecalho: [..], linhas: [[..]] } a partir do estado atual do gráfico. */
+    function dadosDoGrafico(chart) {
+        var tipo = chart.config.type;
+        var conjuntos = chart.data.datasets.filter(function (d) { return d.data && d.data.length; });
+        if (tipo === 'bubble' || tipo === 'scatter') {
+            var escalas = chart.options.scales || {};
+            var rotuloX = (escalas.x && escalas.x.title && escalas.x.title.text) || 'x';
+            var rotuloY = (escalas.y && escalas.y.title && escalas.y.title.text) || 'y';
+            var linhas = [];
+            conjuntos.forEach(function (d) {
+                d.data.forEach(function (p) {
+                    var nome = (p.curso && p.curso.nome) || p.nome || d.label || '';
+                    linhas.push([nome, numero(p.x), numero(p.y)]);
+                });
+            });
+            return { cabecalho: ['', rotuloX, rotuloY], linhas: linhas };
+        }
+        var rotulos = chart.data.labels || [];
+        return {
+            cabecalho: [''].concat(conjuntos.map(function (d) { return d.label || ''; })),
+            linhas: rotulos.map(function (rotulo, i) {
+                return [rotulo].concat(conjuntos.map(function (d) { return celula(d.data[i]); }));
+            }),
+        };
+    }
+
+    function montar(painel, chart, titulo) {
+        var d = dadosDoGrafico(chart);
+        var tabela = document.createElement('table');
+        tabela.className = 'w-full text-sm';
+        var caption = document.createElement('caption');
+        caption.className = 'sr-only';
+        caption.textContent = 'Dados do gráfico: ' + titulo;
+        tabela.appendChild(caption);
+        var cab = tabela.createTHead().insertRow();
+        d.cabecalho.forEach(function (t) {
+            var th = document.createElement('th');
+            th.scope = 'col';
+            th.className = 'px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wide text-slate-600';
+            th.textContent = t;
+            cab.appendChild(th);
+        });
+        var corpo = tabela.createTBody();
+        d.linhas.forEach(function (linha) {
+            var tr = corpo.insertRow();
+            tr.className = 'border-t border-slate-100';
+            linha.forEach(function (valor, j) {
+                var td = tr.insertCell();
+                if (j === 0) {
+                    var th = document.createElement('th');
+                    th.scope = 'row';
+                    th.className = 'px-3 py-1.5 text-left font-medium text-slate-800';
+                    th.textContent = valor;
+                    tr.replaceChild(th, td);
+                } else {
+                    td.className = 'px-3 py-1.5 font-mono';
+                    td.textContent = valor;
+                }
+            });
+        });
+        var rolagem = painel.querySelector('[data-tabela-corpo]');
+        rolagem.innerHTML = '';
+        rolagem.appendChild(tabela);
+        painel._tsv = [d.cabecalho].concat(d.linhas).map(function (l) { return l.join('\t'); }).join('\n');
+    }
+
+    window.addEventListener('load', function () {
+        document.querySelectorAll('canvas').forEach(function (canvas) {
+            var chart = window.Chart && Chart.getChart(canvas);
+            if (!chart) return;
+            var titulo = canvas.getAttribute('data-titulo') || 'gráfico';
+            var id = 'tabela-do-grafico-' + (++contador);
+
+            var envoltorio = document.createElement('div');
+            envoltorio.className = 'mt-3 print:hidden';
+            envoltorio.innerHTML =
+                '<button type="button" aria-expanded="false" aria-controls="' + id + '" class="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"><i class="ph ph-table text-sm" aria-hidden="true"></i> <span>Ver como tabela</span></button>'
+                + '<div id="' + id + '" hidden class="mt-2 rounded-lg border border-slate-200 bg-white p-3">'
+                + '<div class="mb-2 flex justify-end"><button type="button" data-copiar class="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"><i class="ph ph-copy" aria-hidden="true"></i> <span>Copiar para planilha</span></button></div>'
+                + '<div data-tabela-corpo class="max-h-96 overflow-auto"></div></div>';
+            var caixa = canvas.closest('.relative') || canvas.parentElement;
+            caixa.insertAdjacentElement('afterend', envoltorio);
+
+            var botao = envoltorio.querySelector('button');
+            var painel = envoltorio.querySelector('#' + id);
+            botao.addEventListener('click', function () {
+                var abrir = painel.hidden;
+                if (abrir) montar(painel, Chart.getChart(canvas), titulo);
+                painel.hidden = !abrir;
+                botao.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+                botao.querySelector('span').textContent = abrir ? 'Ocultar tabela' : 'Ver como tabela';
+            });
+            envoltorio.querySelector('[data-copiar]').addEventListener('click', function (e) {
+                var alvo = e.currentTarget.querySelector('span');
+                if (navigator.clipboard && painel._tsv) {
+                    navigator.clipboard.writeText(painel._tsv).then(function () {
+                        alvo.textContent = 'Copiado!';
+                        setTimeout(function () { alvo.textContent = 'Copiar para planilha'; }, 1500);
+                    });
+                }
             });
         });
     });
