@@ -508,9 +508,9 @@ precisa existir como curso para poder ser marcado.
 
 ## Plano de ação (`/painel/planos`, `/colaboracao/planos`)
 
-O resultado do DI vira **ação pedagógica** dentro da própria plataforma. O coordenador inicia um plano a partir de um dado do
+O resultado da avaliação vira **ação pedagógica** dentro da própria plataforma. O coordenador inicia um plano a partir de um dado do
 painel, percorre o roteiro **dado → causa → ação**, envia ao **colaborador** (que aprova, pede ajustes ou recusa, sempre com
-justificativa) e, depois de aprovado, acompanha a execução até o encerramento. O roteiro é o do "Assistente interativo DI"
+justificativa) e, depois de aprovado, acompanha a execução até o encerramento. O roteiro é o do "Assistente interativo" (Do dashboard à ação pedagógica)
 (leitura orientada, Ishikawa, 5 Porquês, ação com verbo no infinitivo).
 
 **Onde começa.** Cada visual e cada dado do painel tem o ícone de prancheta (`resources/views/plano/_botao.blade.php`, só para o
@@ -540,7 +540,7 @@ funciona igual): 1 *Ponto de partida* · 2 *Leitura do dado* (recorte, resultado
 4 *Ações* (uma ou mais: verbo no infinitivo, como será executada, responsável, prazo, como se verifica a execução e os sinais de
 aprendizagem) · 5 *Síntese e envio* (resumo ao vivo e lista do que falta). Cada etapa tem "Dúvidas desta etapa" (texto fixo do
 roteiro, sem IA). "Salvar rascunho" a qualquer momento. `PlanoAcaoChecagem` é a fonte única do que **bloqueia o envio** (campo
-vazio, ação sem verbo no infinitivo, prazo no passado, falta meta) e do que só **alerta** (ação depois do próximo DI, plano só de
+vazio, ação sem verbo no infinitivo, prazo no passado, falta meta) e do que só **alerta** (ação depois da próxima avaliação, plano só de
 reuniões, sem 5 Porquês, causa com pontuação baixa).
 
 **Estados** (`PlanoAcao::STATUS`, transições só em `PlanoAcaoService`):

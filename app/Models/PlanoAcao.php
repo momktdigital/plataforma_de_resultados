@@ -81,7 +81,7 @@ class PlanoAcao extends Model
 
     protected $fillable = [
         'admin_id', 'curso', 'periodo_letivo', 'categoria_id', 'avaliacao_codigo', 'origem_visual', 'origem_item', 'origem_rotulo', 'contexto',
-        'participacao_atual', 'meta_participacao', 'proficiencia_atual', 'meta_proficiencia', 'data_proximo_di',
+        'participacao_atual', 'meta_participacao', 'proficiencia_atual', 'meta_proficiencia', 'data_proxima_avaliacao',
         'recorte', 'resultado', 'fragilidades', 'evidencias',
         'causas', 'causa_priorizada', 'nota_impacto', 'nota_evidencia', 'nota_governabilidade', 'porques', 'causa_raiz',
         'status', 'envios', 'enviado_em', 'decidido_em', 'decidido_por', 'encerrado_em', 'conclusao',
@@ -97,7 +97,7 @@ class PlanoAcao extends Model
             'meta_participacao' => 'float',
             'proficiencia_atual' => 'float',
             'meta_proficiencia' => 'float',
-            'data_proximo_di' => 'date',
+            'data_proxima_avaliacao' => 'date',
             'enviado_em' => 'datetime',
             'decidido_em' => 'datetime',
             'encerrado_em' => 'datetime',

@@ -11,7 +11,7 @@ use App\Models\PlanoAcaoAcao;
  * pode contribuir para a meta?").
  *
  * É a fonte única dessa regra: o coordenador a vê na síntese antes de enviar, o envio a exige e o colaborador a vê ao
- * analisar. Só olha o que dá para conferir por máquina (campo vazio, verbo, prazo, data do DI); a qualidade do raciocínio
+ * analisar. Só olha o que dá para conferir por máquina (campo vazio, verbo, prazo, data da próxima avaliação); a qualidade do raciocínio
  * é do colaborador.
  */
 final class PlanoAcaoChecagem
@@ -31,7 +31,7 @@ final class PlanoAcaoChecagem
         $vazio = fn (?string $texto) => mb_strlen(trim((string) $texto)) < self::MINIMO;
 
         if ($plano->meta_proficiencia === null) {
-            $falta(1, 'Defina a meta de proficiência para o próximo DI.');
+            $falta(1, 'Defina a meta de proficiência para a próxima avaliação.');
         }
 
         foreach ([
@@ -79,7 +79,7 @@ final class PlanoAcaoChecagem
                 $falta(4, "Ação {$n}: o prazo já passou — informe uma data a partir de hoje.");
             }
             if ($vazio($acao->verificacao)) {
-                $falta(4, "Ação {$n}: diga como a execução e os sinais de aprendizagem serão verificados antes do próximo DI.");
+                $falta(4, "Ação {$n}: diga como a execução e os sinais de aprendizagem serão verificados antes da próxima avaliação.");
             }
         }
 
@@ -96,12 +96,12 @@ final class PlanoAcaoChecagem
         $alertas = [];
         $acoes = $plano->acoes->reject(fn (PlanoAcaoAcao $a) => $a->status === PlanoAcaoAcao::CANCELADA)->values();
 
-        if ($plano->data_proximo_di === null) {
-            $alertas[] = 'A data do próximo DI não foi informada: não dá para conferir se as ações cabem no ciclo.';
+        if ($plano->data_proxima_avaliacao === null) {
+            $alertas[] = 'A data da próxima avaliação não foi informada: não dá para conferir se as ações cabem no ciclo.';
         } else {
-            $fora = $acoes->filter(fn (PlanoAcaoAcao $a) => $a->prazo !== null && $a->prazo->isAfter($plano->data_proximo_di))->count();
+            $fora = $acoes->filter(fn (PlanoAcaoAcao $a) => $a->prazo !== null && $a->prazo->isAfter($plano->data_proxima_avaliacao))->count();
             if ($fora > 0) {
-                $alertas[] = ($fora === 1 ? '1 ação tem' : "{$fora} ações têm").' prazo depois do próximo DI ('.$plano->data_proximo_di->format('d/m/Y').'): o plano precisa produzir efeito ainda neste ciclo.';
+                $alertas[] = ($fora === 1 ? '1 ação tem' : "{$fora} ações têm").' prazo depois da próxima avaliação ('.$plano->data_proxima_avaliacao->format('d/m/Y').'): o plano precisa produzir efeito ainda neste ciclo.';
             }
         }
 

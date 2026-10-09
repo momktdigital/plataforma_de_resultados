@@ -7,7 +7,7 @@ use App\Support\NomeCurso;
 
 /**
  * "Funcionou?": compara a linha de base do plano (a foto dos indicadores quando ele foi criado) com o que o curso
- * alcançou no DI seguinte — o primeiro período letivo POSTERIOR ao do plano que tem resultado na mesma categoria — e com
+ * alcançou na avaliação seguinte — o primeiro período letivo POSTERIOR ao do plano que tem resultado na mesma categoria — e com
  * as metas pactuadas.
  *
  * É um sinal, não uma prova: o grupo de estudantes muda de um período para outro e o resultado tem muitas causas. As telas

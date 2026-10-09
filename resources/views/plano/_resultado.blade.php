@@ -1,5 +1,5 @@
 {{--
-    "Funcionou?": a linha de base do plano, as metas e — quando já houve o DI seguinte — o que o curso alcançou.
+    "Funcionou?": a linha de base do plano, as metas e — quando já houve a avaliação seguinte — o que o curso alcançou.
     Variáveis: $resultado (PlanoAcaoResultadoService::calcular).
 --}}
 @php
@@ -11,20 +11,20 @@
     <h2 id="titulo-resultado" class="text-lg font-bold mb-1">Resultado frente à linha de base</h2>
     <p class="text-sm text-slate-600 mb-4">
         @if ($p === null)
-            Ainda não há resultado de um DI posterior ao do plano. Quando houver, a comparação aparece aqui automaticamente.
+            Ainda não há resultado de uma avaliação posterior à do plano. Quando houver, a comparação aparece aqui automaticamente.
         @else
-            Comparação com o DI do período letivo <strong>{{ $p['periodo_letivo'] }}</strong>.
+            Comparação com o período letivo <strong>{{ $p['periodo_letivo'] }}</strong>.
         @endif
     </p>
     <div class="overflow-x-auto rounded-xl border border-slate-200">
         <table class="w-full text-sm">
-            <caption class="sr-only">Participação e proficiência: linha de base, metas e resultado no DI seguinte</caption>
+            <caption class="sr-only">Participação e proficiência: linha de base, metas e resultado na avaliação seguinte</caption>
             <thead class="bg-slate-50 text-left text-slate-600">
                 <tr>
                     <th scope="col" class="px-4 py-2.5">Indicador</th>
                     <th scope="col" class="px-4 py-2.5">Linha de base</th>
                     <th scope="col" class="px-4 py-2.5">Meta</th>
-                    <th scope="col" class="px-4 py-2.5">DI seguinte</th>
+                    <th scope="col" class="px-4 py-2.5">Avaliação seguinte</th>
                     <th scope="col" class="px-4 py-2.5">Variação</th>
                 </tr>
             </thead>

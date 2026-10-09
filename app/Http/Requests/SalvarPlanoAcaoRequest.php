@@ -35,7 +35,7 @@ class SalvarPlanoAcaoRequest extends FormRequest
             'etapa_atual' => ['nullable', 'integer', 'between:1,5'],
 
             'meta_proficiencia' => ['nullable', 'numeric', 'between:0,100'],
-            'data_proximo_di' => $data,
+            'data_proxima_avaliacao' => $data,
 
             'recorte' => $texto,
             'resultado' => $texto,
@@ -67,7 +67,7 @@ class SalvarPlanoAcaoRequest extends FormRequest
         return [
             'meta_proficiencia.numeric' => 'A meta de proficiência deve ser um número de 0 a 100.',
             'meta_proficiencia.between' => 'A meta de proficiência deve ficar entre 0% e 100%.',
-            'data_proximo_di.date_format' => 'Informe a data do próximo DI no formato dia/mês/ano.',
+            'data_proxima_avaliacao.date_format' => 'Informe a data da próxima avaliação no formato dia/mês/ano.',
             'acoes.max' => 'Um plano pode ter no máximo 15 ações.',
             'acoes.*.prazo.date_format' => 'Informe o prazo das ações como uma data válida.',
             '*.max' => 'Um dos textos passou do tamanho máximo permitido.',
