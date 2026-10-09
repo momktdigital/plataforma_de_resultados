@@ -111,7 +111,7 @@
         });
     }
 
-    document.getElementById('adicionar-acao').addEventListener('click', function () {
+    function adicionarAcao() {
         var html = modelo.innerHTML.replace(/__I__/g, String(proximoIndice++));
         var caixa = document.createElement('div');
         caixa.innerHTML = html;
@@ -121,6 +121,27 @@
         var primeiro = q('textarea', nova);
         if (primeiro) primeiro.focus();
         sujo = true;
+
+        return nova;
+    }
+
+    document.getElementById('adicionar-acao').addEventListener('click', adicionarAcao);
+
+    // Banco de ações: "Usar esta ação" preenche uma ação (a única linha em branco, se for o caso; senão uma nova).
+    qa('[data-usar-ideia]', form).forEach(function (botao) {
+        botao.addEventListener('click', function () {
+            var ideia = botao.closest('[data-ideia-descricao]');
+            var linhas = qa('[data-acao]', lista);
+            var vazia = linhas.length === 1 && qa('textarea, input[type="text"]', linhas[0]).every(function (el) { return !String(el.value).trim(); });
+            var alvo = vazia ? linhas[0] : adicionarAcao();
+            function de(sufixo, valor) { var el = q('[name$="[' + sufixo + ']"]', alvo); if (el) el.value = valor; }
+            de('descricao', ideia.getAttribute('data-ideia-descricao'));
+            de('execucao', ideia.getAttribute('data-ideia-execucao'));
+            de('verificacao', ideia.getAttribute('data-ideia-verificacao'));
+            sujo = true;
+            var primeiro = q('textarea', alvo);
+            if (primeiro) primeiro.focus();
+        });
     });
 
     lista.addEventListener('click', function (e) {

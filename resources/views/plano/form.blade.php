@@ -337,6 +337,8 @@
                         <p class="text-sm text-slate-600">Transforme a análise em intervenção: uma mudança concreta na experiência de aprendizagem, ligada à causa-raiz e executável antes da próxima avaliação. Um plano pode ter mais de uma ação.</p>
                     </div>
 
+                    @include('plano._banco-de-acoes', ['bancoDeAcoes' => $bancoDeAcoes ?? []])
+
                     <div id="lista-acoes" class="space-y-4">
                         @foreach ($acoes as $i => $acao)
                             @include('plano._acao-linha', ['i' => $i, 'acao' => $acao, 'campo' => $campo, 'etiqueta' => $etiqueta, 'dica' => $dica])

@@ -131,6 +131,12 @@ linha, veja `git log`.
   administrador), mais "Ver este dado no painel". O colaborador vê o nome, a data e o código.
 - **Melhorias do processo**: e-mail ao colaborador (plano enviado, comentário) e ao coordenador (decisão, comentário) quando o SMTP
   está ativo; aviso de plano repetido no mesmo recorte; imprimir / salvar em PDF.
+- **Colaborador enxerga as avaliações**: lista de avaliações e Dashboard de cada uma, só leitura (já tem acesso às planilhas importadas), com o
+  link no plano; busca, quadro por curso e "outros planos deste curso" na análise.
+- **Evidências anexas** (link ou arquivo, em disco privado) nas atualizações de ação e no encerramento; **banco de ações** de planos
+  concluídos (anônimo) na etapa de ações; **o que mudou no reenvio** para o colaborador; **selo "já existe plano"** nos ícones dos visuais.
+- **Lembretes** de rascunho parado, plano devolvido sem reenvio e análise atrasada (e-mail aos colaboradores); **exportação .xlsx** dos planos
+  e **visão da reitoria** (`/reitoria/planos`, só números por curso).
 - **Roteiro em cinco etapas** (ponto de partida, leitura do dado, causas com Ishikawa e 5 Porquês, ações, síntese e envio) já
   preenchido com o curso, a participação atual, a meta de participação e a proficiência atual, mais o dado do visual e sugestões de
   texto. Os números são recalculados no servidor, nunca vêm do navegador.

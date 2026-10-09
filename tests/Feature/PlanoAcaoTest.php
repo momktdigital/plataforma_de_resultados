@@ -19,7 +19,9 @@ use App\Services\PlanoAcaoResultadoService;
 use App\Services\ResumoResultadoService;
 use App\Support\PlanoAcaoChecagem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -48,9 +50,11 @@ class PlanoAcaoTest extends TestCase
         return $coordenador;
     }
 
+    private ?Admin $colaboradorCriado = null;
+
     private function colaborador(): Admin
     {
-        return Admin::create(['username' => 'colab', 'email' => 'colab@example.test', 'password_hash' => bcrypt('x'), 'role' => Admin::ROLE_COLABORADOR]);
+        return $this->colaboradorCriado ??= Admin::create(['username' => 'colab', 'email' => 'colab@example.test', 'password_hash' => bcrypt('x'), 'role' => Admin::ROLE_COLABORADOR]);
     }
 
     private function reitor(): Admin
@@ -695,9 +699,14 @@ class PlanoAcaoTest extends TestCase
         // o administrador também abre
         $admin = Admin::create(['username' => 'adm', 'password_hash' => bcrypt('x'), 'role' => Admin::ROLE_ADMIN]);
         $this->actingAs($admin, 'admin')->get("/colaboracao/planos/{$plano->id}")->assertOk()->assertSee($link, false);
-        // o colaborador vê a avaliação, mas o Dashboard (com alunos) não abre para ele: sem link
+        // o colaborador também abre o Dashboard (já tem acesso às planilhas importadas), só leitura
         $this->actingAs($this->colaborador(), 'admin')->get("/colaboracao/planos/{$plano->id}")->assertOk()
-            ->assertSee('D1')->assertSee('#'.$d1->codigo)->assertDontSee($link, false)->assertSee('só abre para o coordenador do curso e o administrador');
+            ->assertSee('D1')->assertSee('#'.$d1->codigo)->assertSee($link, false);
+        $this->get($link)->assertOk();
+        $this->get('/avaliacoes')->assertOk();
+        // ...mas não gerencia: tela de edição da avaliação e dados do aluno continuam fora
+        $this->get("/avaliacoes/{$d1->codigo}")->assertForbidden();
+        $this->get('/alunos')->assertForbidden();
     }
 
     public function test_formulario_mostra_as_avaliacoes_do_recorte_com_link(): void
@@ -814,6 +823,394 @@ class PlanoAcaoTest extends TestCase
         $this->remetenteFalso(falha: true);
         $this->actingAs($colaborador, 'admin')->post("/colaboracao/planos/{$plano->id}/decisao", ['decisao' => 'aprovar'])->assertSessionHasNoErrors();
         $this->assertSame(PlanoAcao::APROVADO, $plano->fresh()->status);
+    }
+
+    // ---- evidências anexas ----
+
+    public function test_evidencia_em_link_e_arquivo_acompanha_a_atualizacao_e_aparece_no_historico(): void
+    {
+        Storage::fake('local');
+        [$plano, $coordenador] = $this->aprovado();
+        $acao = $plano->acoes->first();
+
+        $this->put("/painel/planos/{$plano->id}/acoes/{$acao->id}", [
+            'status' => 'concluida',
+            'nota' => 'Oficina realizada com as quatro turmas.',
+            'link_url' => 'https://drive.example.test/pasta-oficina',
+            'link_titulo' => 'Fotos da oficina',
+            'arquivo' => UploadedFile::fake()->create('lista-de-presenca.pdf', 120, 'application/pdf'),
+        ])->assertSessionHasNoErrors();
+
+        $anexos = $plano->anexos()->get();
+        $this->assertCount(2, $anexos);
+        $link = $anexos->firstWhere('tipo', 'link');
+        $arquivo = $anexos->firstWhere('tipo', 'arquivo');
+        $this->assertSame('Fotos da oficina', $link->titulo);
+        $this->assertSame($acao->id, $arquivo->acao_id);
+        $this->assertSame('lista-de-presenca.pdf', $arquivo->nome_original);
+        // disco PRIVADO: nada em public/
+        Storage::disk('local')->assertExists($arquivo->caminho);
+        $this->assertStringStartsWith('planos/'.$plano->id.'/', $arquivo->caminho);
+        // ligado ao evento do histórico
+        $this->assertSame(PlanoAcaoEvento::ACAO_STATUS, $plano->eventos()->latest('id')->first()->tipo);
+        $this->assertSame($plano->eventos()->latest('id')->first()->id, $arquivo->evento_id);
+
+        $this->get("/painel/planos/{$plano->id}")->assertOk()->assertSee('Fotos da oficina')->assertSee('lista-de-presenca.pdf')
+            ->assertSee(route('coordenador.planos.anexos.show', [$plano, $arquivo]), false);
+    }
+
+    public function test_anexo_sozinho_vale_como_registro_de_andamento(): void
+    {
+        Storage::fake('local');
+        [$plano] = $this->aprovado();
+        $acao = $plano->acoes->first();
+
+        $this->put("/painel/planos/{$plano->id}/acoes/{$acao->id}", ['link_url' => 'https://exemplo.test/video'])->assertSessionHasNoErrors();
+
+        $this->assertSame(PlanoAcaoEvento::ANDAMENTO, $plano->eventos()->first()->tipo);
+        $this->assertSame(1, $plano->anexos()->count());
+    }
+
+    public function test_arquivo_baixa_por_rota_autenticada_para_coordenador_e_colaborador_e_nao_para_outro_curso(): void
+    {
+        Storage::fake('local');
+        [$plano, $coordenador] = $this->aprovado();
+        $acao = $plano->acoes->first();
+        $this->put("/painel/planos/{$plano->id}/acoes/{$acao->id}", ['nota' => 'Primeiro registro.', 'arquivo' => UploadedFile::fake()->create('relatorio.docx', 50)]);
+        $anexo = $plano->anexos()->firstOrFail();
+
+        $this->get("/painel/planos/{$plano->id}/anexos/{$anexo->id}")->assertOk()->assertDownload('relatorio.docx');
+        $this->actingAs($this->colaborador(), 'admin')->get("/colaboracao/planos/{$plano->id}/anexos/{$anexo->id}")->assertOk()->assertDownload('relatorio.docx');
+
+        // outro curso: 404; sem login: login; o anexo de outro plano não abre por este plano
+        $this->actingAs($this->coordenador('direito', 'DIREITO'), 'admin')->get("/painel/planos/{$plano->id}/anexos/{$anexo->id}")->assertNotFound();
+        $outro = PlanoAcao::create(['admin_id' => $coordenador->id, 'curso' => 'MEDICINA', 'origem_visual' => 'geral', 'origem_rotulo' => 'x', 'status' => PlanoAcao::APROVADO]);
+        $this->actingAs($coordenador, 'admin')->get("/painel/planos/{$outro->id}/anexos/{$anexo->id}")->assertNotFound();
+    }
+
+    public function test_so_aceita_link_http_e_arquivo_de_tipo_permitido(): void
+    {
+        Storage::fake('local');
+        [$plano] = $this->aprovado();
+        $acao = $plano->acoes->first();
+        $url = "/painel/planos/{$plano->id}/acoes/{$acao->id}";
+
+        $this->put($url, ['nota' => 'Registro de andamento.', 'link_url' => 'javascript:alert(1)'])->assertSessionHasErrors('link_url');
+        $this->put($url, ['nota' => 'Registro de andamento.', 'arquivo' => UploadedFile::fake()->create('virus.exe', 10)])->assertSessionHasErrors('arquivo');
+        $this->put($url, ['nota' => 'Registro de andamento.', 'arquivo' => UploadedFile::fake()->create('enorme.pdf', 20000, 'application/pdf')])->assertSessionHasErrors('arquivo');
+
+        $this->assertSame(0, $plano->anexos()->count());
+    }
+
+    public function test_encerramento_aceita_evidencia_e_ela_aparece_na_sintese(): void
+    {
+        Storage::fake('local');
+        [$plano] = $this->aprovado();
+        $acao = $plano->acoes->first();
+        $this->put("/painel/planos/{$plano->id}/acoes/{$acao->id}", ['status' => 'concluida', 'nota' => 'Casos aplicados em todas as turmas.']);
+
+        $this->post("/painel/planos/{$plano->id}/encerrar", [
+            'conclusao' => 'Casos aplicados em todas as turmas; docentes querem manter.',
+            'link_url' => 'https://exemplo.test/relatorio-final', 'link_titulo' => 'Relatório final',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame(PlanoAcao::CONCLUIDO, $plano->fresh()->status);
+        $this->get("/painel/planos/{$plano->id}")->assertOk()->assertSee('Síntese do encerramento')->assertSee('Relatório final');
+        $this->actingAs($this->colaborador(), 'admin')->get("/colaboracao/planos/{$plano->id}")->assertOk()->assertSee('Relatório final');
+    }
+
+    // ---- banco de ações ----
+
+    public function test_banco_de_acoes_sugere_acoes_concluidas_de_planos_concluidos_sem_identificar_o_curso(): void
+    {
+        $this->avaliacao('D1', '2026-03-10');
+        $outroCurso = $this->coordenador('direito', 'DIREITO');
+        $concluido = PlanoAcao::create(['admin_id' => $outroCurso->id, 'curso' => 'DIREITO', 'origem_visual' => 'area', 'origem_item' => 'Clínica', 'origem_rotulo' => 'x', 'status' => PlanoAcao::CONCLUIDO, 'categoria_id' => $this->categoria->id]);
+        $concluido->acoes()->createMany([
+            ['descricao' => 'Implementar casos clínicos semanais', 'execucao' => 'Um caso por semana', 'verificacao' => 'Mini-teste', 'responsavel' => 'Profa. Secreta', 'status' => 'concluida', 'concluida_em' => now()],
+            ['descricao' => 'Criar monitoria', 'status' => 'nao_iniciada'], // não concluída: fora
+        ]);
+        // plano ainda em execução ou de outro item: fora
+        $emExecucao = PlanoAcao::create(['admin_id' => $outroCurso->id, 'curso' => 'DIREITO', 'origem_visual' => 'area', 'origem_item' => 'Clínica', 'origem_rotulo' => 'y', 'status' => PlanoAcao::APROVADO]);
+        $emExecucao->acoes()->create(['descricao' => 'Ação ainda em andamento', 'status' => 'concluida', 'concluida_em' => now()]);
+        $outroItem = PlanoAcao::create(['admin_id' => $outroCurso->id, 'curso' => 'DIREITO', 'origem_visual' => 'area', 'origem_item' => 'Pediatria', 'origem_rotulo' => 'z', 'status' => PlanoAcao::CONCLUIDO]);
+        $outroItem->acoes()->create(['descricao' => 'Ação de outra área', 'status' => 'concluida', 'concluida_em' => now()]);
+
+        $url = '/painel/planos/novo?visual=area&item=Clínica&periodo_letivo=2026/1&categoria='.$this->categoria->id;
+        $resposta = $this->actingAs($this->coordenador(), 'admin')->get($url)->assertOk();
+
+        $resposta->assertSee('Ideias de planos já concluídos (1)')->assertSee('Implementar casos clínicos semanais')->assertSee('Um caso por semana');
+        $resposta->assertDontSee('Criar monitoria')->assertDontSee('Ação ainda em andamento')->assertDontSee('Ação de outra área');
+        // anônimo: nem o curso do plano de origem, nem o responsável
+        $resposta->assertDontSee('Profa. Secreta')->assertDontSee('DIREITO');
+        $this->assertSame(1, count($resposta->viewData('bancoDeAcoes')));
+    }
+
+    public function test_banco_de_acoes_junta_acoes_iguais_e_conta_quantas_vezes_foram_usadas(): void
+    {
+        $banco = app(\App\Services\PlanoAcaoBancoDeAcoes::class);
+        $autor = $this->coordenador();
+        foreach (['MEDICINA', 'DIREITO'] as $curso) {
+            $p = PlanoAcao::create(['admin_id' => $autor->id, 'curso' => $curso, 'origem_visual' => 'bloom', 'origem_item' => 'Analisar', 'origem_rotulo' => 'x', 'status' => PlanoAcao::CONCLUIDO]);
+            $p->acoes()->create(['descricao' => '  Aplicar   estudos de caso ', 'status' => 'concluida', 'concluida_em' => now()]);
+        }
+
+        $ideias = $banco->sugerir('bloom', 'Analisar');
+
+        $this->assertCount(1, $ideias);
+        $this->assertSame(2, $ideias[0]['vezes']);
+        $this->assertSame([], $banco->sugerir('bloom', 'Lembrar'));
+    }
+
+    // ---- o que mudou no reenvio ----
+
+    public function test_reenvio_mostra_ao_colaborador_so_o_que_mudou(): void
+    {
+        $coordenador = $this->coordenador();
+        $plano = $this->enviado($coordenador);
+
+        // primeiro envio: nada para comparar
+        $this->actingAs($this->colaborador(), 'admin')->get("/colaboracao/planos/{$plano->id}")->assertOk()->assertDontSee('O que mudou desde o envio anterior');
+
+        $this->post("/colaboracao/planos/{$plano->id}/decisao", ['decisao' => 'ajustes', 'justificativa' => 'Detalhe melhor a causa-raiz e a verificação.']);
+
+        $acaoId = $plano->acoes()->first()->id;
+        $this->actingAs($coordenador, 'admin')->put("/painel/planos/{$plano->id}", [
+            ...$this->dados([
+                'causa_raiz' => 'Causa-raiz reescrita com mais evidências',
+                'acoes' => [
+                    ['id' => $acaoId, 'descricao' => 'Implementar casos clínicos integrados nas aulas', 'execucao' => 'Um caso por quinzena, com devolutiva',
+                        'responsavel' => 'Profa. Ana', 'prazo' => now()->addDays(30)->toDateString(), 'verificacao' => 'Rubrica de avaliação de cada caso'],
+                    ['descricao' => 'Criar monitoria de casos', 'execucao' => 'Duas vezes por semana', 'responsavel' => 'Monitor', 'prazo' => now()->addDays(40)->toDateString(), 'verificacao' => 'Lista de presença'],
+                ],
+            ]),
+            'acao' => 'enviar',
+        ])->assertSessionHasNoErrors();
+
+        $plano->refresh();
+        $this->assertSame(2, $plano->envios);
+
+        $this->actingAs($this->colaborador(), 'admin')->get("/colaboracao/planos/{$plano->id}")->assertOk()
+            ->assertSee('O que mudou desde o envio anterior')
+            ->assertSee('Causa-raiz')->assertSee('Causa-raiz reescrita com mais evidências')->assertSee('Plano de ensino sem casos clínicos integrados')
+            ->assertSee('Rubrica de avaliação de cada caso')->assertSee('Criar monitoria de casos')->assertSee('Nova');
+        // o que não mudou não aparece como mudança
+        $comparacao = \App\Support\PlanoAcaoComparacao::doUltimoEnvio($plano->load('eventos'));
+        $rotulos = array_column($comparacao['mudancas'], 'rotulo');
+        $this->assertSame(['Causa-raiz'], $rotulos);
+        $this->assertSame(['alterada', 'nova'], array_column($comparacao['acoes'], 'situacao'));
+    }
+
+    public function test_reenvio_sem_alteracao_avisa_que_o_conteudo_e_o_mesmo(): void
+    {
+        $coordenador = $this->coordenador();
+        $plano = $this->enviado($coordenador);
+        $this->actingAs($this->colaborador(), 'admin')->post("/colaboracao/planos/{$plano->id}/decisao", ['decisao' => 'ajustes', 'justificativa' => 'Não concordo com a meta.']);
+
+        // reenvia sem mexer em nada
+        $this->actingAs($coordenador, 'admin')->put("/painel/planos/{$plano->id}", [
+            ...$this->dados(['acoes' => [['id' => $plano->acoes()->first()->id, ...$this->dados()['acoes'][0]]]]), 'acao' => 'enviar',
+        ]);
+
+        $this->actingAs($this->colaborador(), 'admin')->get("/colaboracao/planos/{$plano->id}")->assertOk()->assertSee('O conteúdo do plano é o mesmo do envio anterior');
+    }
+
+    // ---- selo "já existe plano" nos visuais ----
+
+    public function test_icone_do_visual_ganha_selo_quando_ja_existe_plano_sobre_o_dado(): void
+    {
+        $this->avaliacao('D1', '2026-03-10');
+        $coordenador = $this->coordenador();
+        $url = '/painel/desempenho?periodo_letivo=2026/1&categoria='.$this->categoria->id;
+
+        $antes = $this->actingAs($coordenador, 'admin')->get($url)->assertOk()->getContent();
+        $this->assertStringNotContainsString('Já existe', $antes);
+        $this->assertStringNotContainsString('já tem plano', $antes);
+
+        $this->criar($coordenador); // visual=area, item=Clínica, período e categoria deste recorte
+
+        $depois = $this->get($url)->assertOk()->getContent();
+        // o ícone do gráfico de área ganha o selo e o item Clínica marca o plano; os demais visuais seguem sem selo
+        $this->assertStringContainsString('Já existe 1 plano sobre este dado', $depois);
+        $this->assertStringContainsString("rascunho</span>", $depois);
+        $this->assertSame(1, substr_count($depois, 'title="Já existe 1 plano sobre este dado"'));
+        $this->assertStringNotContainsString('já tem plano', $depois);
+
+        // plano encerrado/recusado não conta; outro período letivo também não
+        PlanoAcao::query()->update(['status' => PlanoAcao::RECUSADO]);
+        $this->get($url)->assertDontSee('Já existe 1 plano');
+    }
+
+    public function test_selo_so_considera_planos_do_proprio_curso_e_recorte(): void
+    {
+        $this->avaliacao('D1', '2026-03-10');
+        $coordenador = $this->coordenador();
+        $this->criar($coordenador);
+        PlanoAcao::query()->update(['periodo_letivo' => '2025/2']);
+
+        $this->get('/painel/desempenho?periodo_letivo=2026/1&categoria='.$this->categoria->id)->assertOk()->assertDontSee('Já existe 1 plano');
+    }
+
+    // ---- mais lembretes ----
+
+    public function test_lembra_do_rascunho_parado_e_do_plano_devolvido_que_espera_ajustes(): void
+    {
+        $this->avaliacao('D1', '2026-03-10');
+        $coordenador = $this->coordenador();
+        $rascunho = $this->criar($coordenador);
+        $devolvido = $this->enviado($coordenador);
+        $this->actingAs($this->colaborador(), 'admin')->post("/colaboracao/planos/{$devolvido->id}/decisao", ['decisao' => 'ajustes', 'justificativa' => 'Detalhe melhor a verificação.']);
+        Notificacao::query()->delete();
+
+        // novos demais: nada
+        $this->assertSame(0, app(PlanoAcaoLembreteService::class)->gerar());
+
+        $this->travel(PlanoAcaoLembreteService::DIAS_RASCUNHO + 1)->days();
+        $this->assertSame(2, app(PlanoAcaoLembreteService::class)->gerar());
+        $titulos = Notificacao::where('admin_id', $coordenador->id)->pluck('titulo')->all();
+        $this->assertContains('Rascunho de plano parado', $titulos);
+        $this->assertContains('Plano aguardando os seus ajustes', $titulos);
+
+        // uma vez só por mês
+        $this->assertSame(0, app(PlanoAcaoLembreteService::class)->gerar());
+        $this->assertNotNull($rascunho->fresh());
+    }
+
+    public function test_colaborador_recebe_resumo_por_email_dos_planos_que_passaram_do_prazo_de_analise(): void
+    {
+        $this->configurarSmtp();
+        $falso = $this->remetenteFalso();
+        $this->colaborador();
+        $plano = $this->enviado();
+        $falso->enviados = []; // descarta o e-mail do envio
+
+        $this->travel(PlanoAcaoLembreteService::PRAZO_ANALISE_DIAS - 1)->days();
+        $this->assertSame(0, app(PlanoAcaoLembreteService::class)->gerar());
+
+        $this->travel(2)->days();
+        $this->assertSame(1, app(PlanoAcaoLembreteService::class)->gerar());
+        $this->assertCount(1, $falso->enviados);
+        $this->assertSame('colab@example.test', $falso->enviados[0][0]);
+        $this->assertStringContainsString('aguardando análise há mais de 7 dias', $falso->enviados[0][1]);
+        $this->assertStringContainsString(route('colaborador.planos.show', $plano), $falso->enviados[0][2]);
+        $this->assertContains(PlanoAcaoEvento::LEMBRETE, $plano->eventos()->pluck('tipo')->all());
+
+        // não repete antes de outro prazo
+        $this->travel(1)->days();
+        $this->assertSame(0, app(PlanoAcaoLembreteService::class)->gerar());
+        $this->travel(PlanoAcaoLembreteService::PRAZO_ANALISE_DIAS)->days();
+        $this->assertSame(1, app(PlanoAcaoLembreteService::class)->gerar());
+    }
+
+    // ---- exportação, quadro por curso, reitoria, busca ----
+
+    /** @return \PhpOffice\PhpSpreadsheet\Spreadsheet a planilha baixada */
+    private function planilhaBaixada(\Illuminate\Testing\TestResponse $resposta): \PhpOffice\PhpSpreadsheet\Spreadsheet
+    {
+        $resposta->assertOk();
+        $caminho = tempnam(sys_get_temp_dir(), 'plano').'.xlsx';
+        file_put_contents($caminho, $resposta->streamedContent());
+
+        return \PhpOffice\PhpSpreadsheet\IOFactory::load($caminho);
+    }
+
+    public function test_coordenador_e_colaborador_exportam_planos_em_xlsx_sem_executar_formulas(): void
+    {
+        $this->avaliacao('D1', '2026-03-10');
+        $coordenador = $this->coordenador();
+        $this->criar($coordenador, ['causa_raiz' => '=HYPERLINK("http://evil.test","clique")'], 'enviar');
+        $rascunho = $this->criar($coordenador);
+
+        // coordenador: os planos do curso dele, rascunho incluído
+        $planilha = $this->planilhaBaixada($this->actingAs($coordenador, 'admin')->get('/painel/planos/exportar.xlsx'));
+        $planos = $planilha->getSheetByName('Planos');
+        $this->assertSame(3, $planos->getHighestRow()); // cabeçalho + 2
+        $this->assertSame('Curso', $planos->getCell('B1')->getValue());
+        $this->assertSame('MEDICINA', $planos->getCell('B2')->getValue());
+        // a causa-raiz que parece fórmula virou TEXTO (coluna R)
+        $celula = $planos->getCell('R2');
+        $this->assertSame(\PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING, $celula->getDataType());
+        $this->assertStringStartsWith('=HYPERLINK', $celula->getValue());
+        $acoes = $planilha->getSheetByName('Ações');
+        $this->assertSame('Implementar casos clínicos integrados nas aulas', $acoes->getCell('E2')->getValue());
+
+        // colaborador: só os enviados, de todos os cursos; filtro por situação
+        $this->actingAs($this->colaborador(), 'admin');
+        $todos = $this->planilhaBaixada($this->get('/colaboracao/planos/exportar.xlsx'))->getSheetByName('Planos');
+        $this->assertSame(2, $todos->getHighestRow()); // o rascunho não sai
+        $vazia = $this->planilhaBaixada($this->get('/colaboracao/planos/exportar.xlsx?aba=execucao'))->getSheetByName('Planos');
+        $this->assertSame(1, $vazia->getHighestRow());
+        $this->assertNotNull($rascunho);
+    }
+
+    public function test_coordenador_de_outro_curso_nao_exporta_planos_alheios(): void
+    {
+        $this->enviado();
+
+        $planilha = $this->planilhaBaixada($this->actingAs($this->coordenador('direito', 'DIREITO'), 'admin')->get('/painel/planos/exportar.xlsx'));
+
+        $this->assertSame(1, $planilha->getSheetByName('Planos')->getHighestRow());
+    }
+
+    public function test_reitoria_ve_so_numeros_por_curso_e_nunca_o_texto_dos_planos(): void
+    {
+        [$plano] = $this->aprovado();
+        $acao = $plano->acoes->first();
+        $this->put("/painel/planos/{$plano->id}/acoes/{$acao->id}", ['status' => 'concluida', 'nota' => 'Casos aplicados em todas as turmas.']);
+        $plano->update(['causa_raiz' => 'TEXTO CONFIDENCIAL DA CAUSA-RAIZ']);
+
+        $html = $this->actingAs($this->reitor(), 'admin')->get('/reitoria/planos')->assertOk()
+            ->assertSee('Planos de ação')->assertSee('MEDICINA')->assertSee('1/1 (100%)')->assertSee('Aprovados dos decididos')
+            ->getContent();
+
+        $this->assertStringNotContainsString('TEXTO CONFIDENCIAL', $html);
+        $this->assertStringNotContainsString('Implementar casos clínicos', $html);
+        $this->assertStringNotContainsString('Profa. Ana', $html);
+
+        // o menu do reitor tem o link; coordenador e colaborador não entram
+        $this->assertStringContainsString(route('reitor.planos'), $html);
+        $this->actingAs($plano->autor, 'admin')->get('/reitoria/planos')->assertForbidden();
+        $this->actingAs($this->colaborador(), 'admin')->get('/reitoria/planos')->assertRedirect(route('colaborador.index'));
+    }
+
+    public function test_quadro_por_curso_conta_situacoes_acoes_atrasadas_e_tempo_de_analise(): void
+    {
+        $this->avaliacao('D1', '2026-03-10');
+        $coordenador = $this->coordenador();
+        $this->criar($coordenador, [], 'enviar'); // em análise
+        $aprovado = $this->criar($coordenador, [], 'enviar');
+        $this->travel(3)->days();
+        $this->actingAs($this->colaborador(), 'admin')->post("/colaboracao/planos/{$aprovado->id}/decisao", ['decisao' => 'aprovar']);
+        $aprovado->acoes()->update(['prazo' => now()->subDay()->toDateString()]);
+
+        $planos = PlanoAcao::enviados()->with(['acoes', 'eventos'])->get();
+        $quadro = app(\App\Services\PlanoAcaoQuadroService::class);
+        $linhas = $quadro->porCurso($planos);
+
+        $this->assertCount(1, $linhas);
+        $this->assertSame(2, $linhas[0]['total']);
+        $this->assertSame(1, $linhas[0]['em_analise']);
+        $this->assertSame(1, $linhas[0]['em_execucao']);
+        $this->assertSame(1, $linhas[0]['acoes_atrasadas']);
+        $this->assertSame(3.0, $linhas[0]['dias_analise']);
+        $totais = $quadro->totais($linhas, $planos);
+        $this->assertSame(100, $totais['taxa_aprovacao']);
+
+        $this->get('/colaboracao/planos')->assertOk()->assertSee('Quadro por curso');
+    }
+
+    public function test_busca_na_fila_e_outros_planos_do_curso_na_analise(): void
+    {
+        $this->avaliacao('D1', '2026-03-10');
+        $coordenador = $this->coordenador();
+        $a = $this->criar($coordenador, ['causa_raiz' => 'Falta de monitoria em casos clínicos'], 'enviar');
+        $b = $this->criar($coordenador, ['causa_raiz' => 'Calendário de provas apertado'], 'enviar');
+
+        $this->actingAs($this->colaborador(), 'admin');
+        $this->get('/colaboracao/planos?aba=todos&q=monitoria')->assertOk()->assertSee(route('colaborador.planos.show', $a), false)->assertDontSee(route('colaborador.planos.show', $b), false);
+        $this->get('/colaboracao/planos?aba=todos&q=100%25')->assertOk()->assertDontSee(route('colaborador.planos.show', $a), false);
+
+        $this->get("/colaboracao/planos/{$a->id}")->assertOk()->assertSee('Outros planos deste curso')->assertSee('Calendário de provas apertado');
     }
 
     // ---- resultado, lembretes, menu ----

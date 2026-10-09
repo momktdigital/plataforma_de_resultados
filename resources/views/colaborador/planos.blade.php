@@ -25,16 +25,27 @@
         @endforeach
     </div>
 
+    @if (count($quadro) > 1 || $curso === '')
+        <details class="mb-5">
+            <summary class="cursor-pointer text-sm font-bold text-slate-700 mb-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded">Quadro por curso</summary>
+            <div class="mt-2">@include('plano._quadro', ['linhas' => $quadro])</div>
+        </details>
+    @endif
+
     <div class="flex flex-wrap items-end justify-between gap-3 mb-4">
         <nav class="flex flex-wrap gap-2" aria-label="Filtrar planos por situação">
             @foreach ($abas as $chave => $definicao)
                 @php $ativa = $aba === $chave; @endphp
-                <a href="{{ route('colaborador.planos.index', array_filter(['aba' => $chave, 'curso' => $curso])) }}" @if ($ativa) aria-current="true" @endif
+                <a href="{{ route('colaborador.planos.index', array_filter(['aba' => $chave, 'curso' => $curso, 'q' => $busca])) }}" @if ($ativa) aria-current="true" @endif
                    class="rounded-full border px-3.5 py-1.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-primary {{ $ativa ? 'bg-slate-800 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50' }}">{{ $definicao['rotulo'] }} ({{ $contagens[$chave] }})</a>
             @endforeach
         </nav>
-        <form method="GET" action="{{ route('colaborador.planos.index') }}" class="flex items-end gap-2">
+        <form method="GET" action="{{ route('colaborador.planos.index') }}" class="flex flex-wrap items-end gap-2">
             <input type="hidden" name="aba" value="{{ $aba }}">
+            <div>
+                <label for="busca" class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Buscar</label>
+                <input id="busca" name="q" type="search" value="{{ $busca }}" maxlength="100" placeholder="Origem, causa-raiz, curso…" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm bg-white w-56 max-w-full">
+            </div>
             <div>
                 <label for="filtro-curso" class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Curso</label>
                 <select id="filtro-curso" name="curso" onchange="this.form.submit()" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm bg-white min-w-[180px] max-w-full">
@@ -44,7 +55,8 @@
                     @endforeach
                 </select>
             </div>
-            <noscript><button type="submit" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white">Filtrar</button></noscript>
+            <button type="submit" class="rounded-lg bg-slate-800 hover:bg-slate-900 px-4 py-1.5 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">Filtrar</button>
+            <a href="{{ route('colaborador.planos.exportar', array_filter(['aba' => $aba, 'curso' => $curso, 'q' => $busca])) }}" class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"><i class="ph-bold ph-file-xls" aria-hidden="true"></i> Exportar .xlsx</a>
         </form>
     </div>
 
@@ -84,7 +96,7 @@
                             <td class="px-4 py-3 whitespace-nowrap">
                                 @if ($aba === 'analise')
                                     @php $dias = $plano->enviado_em ? (int) $plano->enviado_em->diffInDays(now()) : 0; @endphp
-                                    <span class="font-semibold {{ $dias >= 7 ? 'text-red-700' : '' }}">{{ $dias === 0 ? 'hoje' : $dias.' '.($dias === 1 ? 'dia' : 'dias') }}</span>
+                                    <span class="font-semibold {{ $dias >= \App\Services\PlanoAcaoLembreteService::PRAZO_ANALISE_DIAS ? 'text-red-700' : '' }}">{{ $dias === 0 ? 'hoje' : $dias.' '.($dias === 1 ? 'dia' : 'dias') }}</span>
                                 @elseif ($p['total'] === 0)
                                     <span class="text-slate-500">—</span>
                                 @else

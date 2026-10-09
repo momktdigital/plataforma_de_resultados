@@ -89,6 +89,10 @@
         </div>
     @endif
 
+    @if ($plano->aguardandoAnalise() || $plano->status === PlanoAcao::AJUSTES)
+        @include('plano._mudancas', ['mudancasDoEnvio' => $mudancasDoEnvio])
+    @endif
+
     @if ($resultado)
         @include('plano._resultado', ['resultado' => $resultado])
     @endif
@@ -103,12 +107,13 @@
             <h2 id="titulo-encerrar" class="text-lg font-bold mb-1">Encerrar o plano</h2>
             <p class="text-sm text-slate-600 mb-3">Quando todas as ações estiverem concluídas (ou canceladas), registre a síntese do que foi feito e aprendido.
                 @if ($progresso['total'] - $progresso['concluidas'] > 0) Ainda há {{ $progresso['total'] - $progresso['concluidas'] }} ação(ões) aberta(s). @endif</p>
-            <form method="POST" action="{{ route('coordenador.planos.encerrar', $plano) }}" class="space-y-3">
+            <form method="POST" enctype="multipart/form-data" action="{{ route('coordenador.planos.encerrar', $plano) }}" class="space-y-3">
                 @csrf
                 <div>
                     <label for="conclusao" class="block text-sm font-semibold mb-1">Síntese do que foi feito e aprendido</label>
                     <textarea id="conclusao" name="conclusao" rows="4" maxlength="5000" class="{{ $campo }}">{{ old('conclusao') }}</textarea>
                 </div>
+                @include('plano._campos-evidencia', ['prefixo' => 'encerrar'])
                 <div class="flex flex-wrap gap-2">
                     <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 px-4 py-2 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"><i class="ph-bold ph-flag-checkered" aria-hidden="true"></i> Encerrar plano</button>
                 </div>
@@ -139,6 +144,7 @@
         <section class="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-900" aria-labelledby="titulo-conclusao">
             <h2 id="titulo-conclusao" class="font-bold flex items-center gap-2"><i class="ph-bold ph-flag-checkered" aria-hidden="true"></i> Síntese do encerramento ({{ $plano->encerrado_em?->format('d/m/Y') }})</h2>
             <p class="mt-1 whitespace-pre-line">{{ $plano->conclusao }}</p>
+            @include('plano._anexos', ['listaAnexos' => $plano->anexos->where('acao_id', null)->whereNotNull('evento_id'), 'plano' => $plano])
         </section>
     @endif
 

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Um acontecimento na vida de um plano (log só de acrescentar: nunca se edita nem se apaga). `admin_id` nulo = o próprio
@@ -41,6 +42,8 @@ class PlanoAcaoEvento extends Model
 
     public const CANCELADO = 'cancelado';
 
+    public const LEMBRETE = 'lembrete';
+
     /** @var array<string, array{rotulo: string, icone: string}> */
     public const TIPOS = [
         self::CRIADO => ['rotulo' => 'Plano criado', 'icone' => 'ph-file-plus'],
@@ -56,6 +59,7 @@ class PlanoAcaoEvento extends Model
         self::PRAZO => ['rotulo' => 'Prazo reprogramado', 'icone' => 'ph-calendar-dots'],
         self::ENCERRADO => ['rotulo' => 'Plano encerrado', 'icone' => 'ph-flag-checkered'],
         self::CANCELADO => ['rotulo' => 'Plano cancelado', 'icone' => 'ph-prohibit'],
+        self::LEMBRETE => ['rotulo' => 'Lembrete enviado', 'icone' => 'ph-bell-ringing'],
     ];
 
     protected $fillable = ['plano_id', 'acao_id', 'admin_id', 'tipo', 'texto', 'dados'];
@@ -69,6 +73,12 @@ class PlanoAcaoEvento extends Model
     public function plano(): BelongsTo
     {
         return $this->belongsTo(PlanoAcao::class, 'plano_id');
+    }
+
+    /** @return HasMany<PlanoAcaoAnexo, $this> */
+    public function anexos(): HasMany
+    {
+        return $this->hasMany(PlanoAcaoAnexo::class, 'evento_id')->orderBy('id');
     }
 
     /** @return BelongsTo<Admin, $this> */

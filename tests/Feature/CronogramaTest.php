@@ -97,7 +97,7 @@ class CronogramaTest extends TestCase
             ->assertSessionHasErrors('email');
     }
 
-    public function test_colaborador_so_alcanca_o_cronograma_e_o_perfil(): void
+    public function test_colaborador_alcanca_cronograma_planos_avaliacoes_e_perfil(): void
     {
         $this->actingAs($this->colaborador(), 'admin');
 
@@ -105,8 +105,8 @@ class CronogramaTest extends TestCase
         $this->get(route('colaborador.index'))->assertOk()->assertSee('Cronograma de atividades');
         $this->get(route('perfil.edit'))->assertOk();
 
-        // Nada de avaliação, aluno ou gestão: GET nas telas do coordenador volta para o cronograma; o resto é 403.
-        $this->get('/avaliacoes')->assertRedirect(route('colaborador.index'));
+        // Avaliações e Dashboard: só leitura. Nada de aluno ou gestão: GET nas telas do coordenador volta para o cronograma; o resto é 403.
+        $this->get('/avaliacoes')->assertOk();
         $this->get('/painel')->assertRedirect(route('colaborador.index'));
         $this->get('/usuarios')->assertForbidden();
         $this->get('/alunos')->assertForbidden();

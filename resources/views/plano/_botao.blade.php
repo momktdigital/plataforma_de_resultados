@@ -21,27 +21,37 @@
     $planoItens = $planoItens ?? [];
     $planoItem = $planoItem ?? null;
     $urlPlano = fn (?string $doItem) => route('coordenador.planos.novo', array_filter([...($ctx ?? []), 'visual' => $visual, 'item' => $doItem], fn ($v) => $v !== null));
-    $classePlano = 'inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary '.(! empty($planoLegenda) ? 'px-2.5 py-1.5 text-xs font-semibold' : 'h-8 w-8');
+    // Onde já existe plano vivo: selo no ícone (qualquer item do visual) e marca no item do menu. Uma consulta por requisição.
+    $planosDoVisual = $mostrarPlano ? \App\Support\PlanoAcaoMarcas::buscar($usuarioPlano, $ctx ?? [], $visual, $planoItem, $planoItens !== []) : collect();
+    $seloPlano = $planosDoVisual->isNotEmpty() ? ($planosDoVisual->count() === 1 ? 'Já existe 1 plano sobre este dado' : 'Já existem '.$planosDoVisual->count().' planos sobre este dado') : null;
+    $classePlano = 'relative inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary '.(! empty($planoLegenda) ? 'px-2.5 py-1.5 text-xs font-semibold' : 'h-8 w-8');
 @endphp
 @if ($mostrarPlano)
     @if ($planoItens === [])
-        <a href="{{ $urlPlano($planoItem) }}" class="{{ $classePlano }}" title="Iniciar plano de ação" aria-label="Iniciar plano de ação: {{ $titulo }}{{ $planoItem ? ' — '.$planoItem : '' }}">
+        <a href="{{ $urlPlano($planoItem) }}" class="{{ $classePlano }}" title="{{ $seloPlano ?? 'Iniciar plano de ação' }}" aria-label="Iniciar plano de ação: {{ $titulo }}{{ $planoItem ? ' — '.$planoItem : '' }}{{ $seloPlano ? '. '.$seloPlano : '' }}">
             <i class="ph-bold ph-clipboard-text text-base" aria-hidden="true"></i>@if (! empty($planoLegenda))<span>{{ $planoLegenda }}</span>@endif
+            @if ($seloPlano)<span class="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" aria-hidden="true"></span>@endif
         </a>
     @else
         <details class="plano-menu relative inline-block text-left">
-            <summary class="{{ $classePlano }} cursor-pointer list-none [&::-webkit-details-marker]:hidden" title="Iniciar plano de ação" aria-label="Iniciar plano de ação: {{ $titulo }} (escolher o que será o foco)">
+            <summary class="{{ $classePlano }} cursor-pointer list-none [&::-webkit-details-marker]:hidden" title="{{ $seloPlano ?? 'Iniciar plano de ação' }}" aria-label="Iniciar plano de ação: {{ $titulo }} (escolher o que será o foco){{ $seloPlano ? '. '.$seloPlano : '' }}">
                 <i class="ph-bold ph-clipboard-text text-base" aria-hidden="true"></i>@if (! empty($planoLegenda))<span>{{ $planoLegenda }}</span>@endif
+                @if ($seloPlano)<span class="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" aria-hidden="true"></span>@endif
             </summary>
             <div data-plano-lista class="absolute left-0 z-30 mt-1 w-72 max-w-[85vw] max-h-80 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
                 <p class="px-3 pt-2 pb-1 text-xs font-bold uppercase tracking-wide text-slate-500">Plano de ação sobre…</p>
                 <a href="{{ $urlPlano(null) }}" class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none">
                     <i class="ph-bold ph-squares-four text-emerald-700" aria-hidden="true"></i> {{ $titulo }} (visão inteira)
+                    @if ($planosDoVisual->contains(fn ($p) => $p->origem_item === null))<span class="ml-auto rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">já tem plano</span>@endif
                 </a>
                 @foreach ($planoItens as $linha)
+                    @php $doItem = $planosDoVisual->first(fn ($p) => $p->origem_item === ($linha['item'] ?? $linha['rotulo'])); @endphp
                     <a href="{{ $urlPlano($linha['item'] ?? $linha['rotulo']) }}" class="flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none">
                         <span class="min-w-0 truncate">{{ $linha['rotulo'] }}</span>
-                        @if (! empty($linha['valor']))<span class="shrink-0 text-xs font-semibold text-slate-600">{{ $linha['valor'] }}</span>@endif
+                        <span class="flex shrink-0 items-center gap-2">
+                            @if ($doItem)<span class="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800" title="Já existe um plano sobre este item"><i class="ph-bold ph-clipboard-text" aria-hidden="true"></i><span class="sr-only">plano: </span>{{ mb_strtolower($doItem->rotuloStatus()) }}</span>@endif
+                            @if (! empty($linha['valor']))<span class="text-xs font-semibold text-slate-600">{{ $linha['valor'] }}</span>@endif
+                        </span>
                     </a>
                 @endforeach
             </div>
