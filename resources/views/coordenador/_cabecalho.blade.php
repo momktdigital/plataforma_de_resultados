@@ -22,6 +22,7 @@
         ['id' => 'visao', 'rota' => 'coordenador.painel', 'icone' => 'ph-squares-four', 'rotulo' => 'Visão geral'],
         ['id' => 'desempenho', 'rota' => 'coordenador.desempenho', 'icone' => 'ph-chart-line-up', 'rotulo' => 'Desempenho'],
         ['id' => 'comparativo', 'rota' => 'coordenador.comparativo', 'icone' => 'ph-arrows-left-right', 'rotulo' => 'Comparar semestres'],
+        ['id' => 'planos', 'rota' => 'coordenador.planos.index', 'icone' => 'ph-clipboard-text', 'rotulo' => 'Planos de ação'],
         ['id' => 'alunos', 'rota' => 'coordenador.alunos', 'icone' => 'ph-users-three', 'rotulo' => 'Alunos'],
     ];
 @endphp

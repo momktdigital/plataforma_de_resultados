@@ -17,6 +17,8 @@
     // Dados dos gráficos por categoria (índice na tela → evolução, área, Bloom e tema), lidos por painel-desempenho.js.
     $dadosGraficos = [];
     $filtros = $painel['filtros'] ?? ['categoria' => '', 'periodoCurso' => null];
+    // Onde o coordenador está: o "ícone de plano de ação" de cada visual leva isso (curso, período letivo, categoria).
+    $ctxPlanoGeral = ['curso' => $painel['cursoSelecionado'] ?? '', 'periodo_letivo' => $painel['periodoSelecionado'] ?? ''];
 @endphp
 
 @section('content')
@@ -74,7 +76,10 @@
         {{-- Visão geral: só o que não depende da prova (presença e contagem) --}}
         <div class="grid gap-4 sm:grid-cols-3 mb-6">
             <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Presença</p>
+                <div class="flex items-start justify-between gap-2">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Presença</p>
+                    @include('plano._botao', ['visual' => 'participacao', 'titulo' => 'Participação', 'ctx' => $ctxPlanoGeral])
+                </div>
                 <p class="text-3xl font-bold mt-2 tracking-tight">{{ $fmt($g['presenca']) }}<span class="text-lg font-medium text-slate-500">%</span></p>
                 <p class="text-xs text-slate-500 mt-1">{{ $g['presentes'] }} de {{ $g['inscritos'] }} participações &middot; {{ $g['ausentes'] }} ausente(s)</p>
             </div>
@@ -95,7 +100,8 @@
             @php $e = $estiloInsight($insight['tom']); @endphp
             <div class="{{ $e['bg'] }} border {{ $e['borda'] }} rounded-xl p-4 flex items-start gap-3 mb-6">
                 <i class="ph-bold {{ $insight['icone'] }} {{ $e['icone'] }} text-xl shrink-0 mt-0.5" aria-hidden="true"></i>
-                <p class="text-sm text-slate-700">{{ $insight['texto'] }}</p>
+                <p class="text-sm text-slate-700 flex-1">{{ $insight['texto'] }}</p>
+                @include('plano._botao', ['visual' => 'destaque', 'titulo' => 'Destaque do painel', 'ctx' => $ctxPlanoGeral, 'planoItem' => $insight['texto']])
             </div>
         @endforeach
 
@@ -107,6 +113,7 @@
                 $det = $cat['detalhe'];
                 $comMeta = $det['comMeta'];
                 $abrir = $filtros['categoria'] !== '' || count($painel['categorias']) === 1;
+                $ctxPlano = [...$ctxPlanoGeral, 'categoria' => $cat['id']];
 
                 // --- dados dos gráficos desta categoria (ver painel-desempenho.js) ---
                 $evolucaoJs = null;
@@ -152,7 +159,8 @@
                                 @php $e = $estiloInsight($insight['tom']); @endphp
                                 <div class="{{ $e['bg'] }} border {{ $e['borda'] }} rounded-xl p-4 flex items-start gap-3">
                                     <i class="ph-bold {{ $insight['icone'] }} {{ $e['icone'] }} text-xl shrink-0 mt-0.5" aria-hidden="true"></i>
-                                    <p class="text-sm text-slate-700">{{ $insight['texto'] }}</p>
+                                    <p class="text-sm text-slate-700 flex-1">{{ $insight['texto'] }}</p>
+                                    @include('plano._botao', ['visual' => 'destaque', 'titulo' => 'Destaque do painel', 'ctx' => $ctxPlano, 'planoItem' => $insight['texto']])
                                 </div>
                             @endforeach
                         </div>
@@ -160,24 +168,36 @@
 
                     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-                            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Média da categoria</p>
+                            <div class="flex items-start justify-between gap-2">
+                                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Média da categoria</p>
+                                @include('plano._botao', ['visual' => 'proficiencia', 'titulo' => 'Média e proficiência da categoria', 'ctx' => $ctxPlano])
+                            </div>
                             <p class="text-3xl font-bold mt-2 tracking-tight {{ CorDesempenho::classeTexto($t['media']) }}">{{ $fmt($t['media']) }}<span class="text-lg font-medium text-slate-500">%</span></p>
                             <p class="text-xs text-slate-500 mt-1">só alunos presentes</p>
                         </div>
                         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
                             @if ($comMeta)
                                 @php $ae = $det['abaixoEsperado']; @endphp
-                                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Alunos abaixo do desempenho esperado</p>
+                                <div class="flex items-start justify-between gap-2">
+                                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Alunos abaixo do desempenho esperado</p>
+                                    @include('plano._botao', ['visual' => 'proficiencia', 'titulo' => 'Alunos abaixo do desempenho esperado', 'ctx' => $ctxPlano])
+                                </div>
                                 <p class="text-3xl font-bold mt-2 tracking-tight">{{ $fmt($ae['pct']) }}<span class="text-lg font-medium text-slate-500">%</span></p>
                                 <p class="text-xs text-slate-500 mt-1">{{ $ae['abaixo'] }} de {{ $ae['total'] }} resultados &middot; esperado para o período de cada aluno</p>
                             @else
-                                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Abaixo de 60%</p>
+                                <div class="flex items-start justify-between gap-2">
+                                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Abaixo de 60%</p>
+                                    @include('plano._botao', ['visual' => 'proficiencia', 'titulo' => 'Alunos abaixo de 60%', 'ctx' => $ctxPlano])
+                                </div>
                                 <p class="text-3xl font-bold mt-2 tracking-tight">{{ $fmt($t['abaixoPct']) }}<span class="text-lg font-medium text-slate-500">%</span></p>
                                 <p class="text-xs text-slate-500 mt-1">{{ $t['abaixo'] }} de {{ $t['comNota'] }} resultados</p>
                             @endif
                         </div>
                         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-                            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Presença</p>
+                            <div class="flex items-start justify-between gap-2">
+                                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Presença</p>
+                                @include('plano._botao', ['visual' => 'participacao', 'titulo' => 'Participação', 'ctx' => $ctxPlano])
+                            </div>
                             <p class="text-3xl font-bold mt-2 tracking-tight">{{ $fmt($t['presenca']) }}<span class="text-lg font-medium text-slate-500">%</span></p>
                             <p class="text-xs text-slate-500 mt-1">{{ $t['presentes'] }} de {{ $t['inscritos'] }} &middot; {{ $t['ausentes'] }} ausente(s)</p>
                         </div>
@@ -193,7 +213,7 @@
                         @if ($evolucaoJs !== null)
                             <div class="lg:col-span-2">
                                 @include('coordenador._grafico_abas', [
-                                    'cat' => $i, 'tipo' => 'evolucao',
+                                    'cat' => $i, 'tipo' => 'evolucao', 'planoCtx' => $ctxPlano, 'planoItens' => [],
                                     'titulo' => $comMeta ? 'Evolução dos alunos que atingiram o desempenho esperado' : 'Evolução da média nesta categoria',
                                     'subtitulo' => $comMeta
                                         ? 'Percentual de alunos presentes que alcançaram o mínimo esperado para o período do curso em que estão, a cada avaliação da categoria (inclusive de outros períodos letivos).'
@@ -210,6 +230,8 @@
                             @if (! empty($det['campos'][$tipo]['geral']))
                                 @include('coordenador._grafico_abas', [
                                     'cat' => $i, 'tipo' => $tipo, 'titulo' => $tituloGrafico, 'subtitulo' => $subtituloGrafico,
+                                    'planoCtx' => $ctxPlano,
+                                    'planoItens' => array_map(fn ($it) => ['rotulo' => $it['rotulo'], 'valor' => $fmt($it['percentual']).'%'], $det['campos'][$tipo]['geral']),
                                     'temPeriodo' => ! empty($det['campos'][$tipo]['periodos']),
                                 ])
                             @endif
@@ -222,6 +244,7 @@
                         $barras = [];
                         if (! empty($cat['porPeriodoDoCurso'])) {
                             $barras[] = [
+                                'visual' => 'periodo_curso',
                                 'titulo' => 'Desempenho por período do curso',
                                 'subtitulo' => 'Média de acerto de cada período (1º, 2º...), só presentes.',
                                 'itens' => array_map(fn ($p) => ['rotulo' => $p['rotulo'], 'extra' => '('.$p['presentes'].')', 'valor' => $p['media']], $cat['porPeriodoDoCurso']),
@@ -230,6 +253,7 @@
                         }
                         if (! empty($cat['porCurso'])) {
                             $barras[] = [
+                                'visual' => 'curso',
                                 'titulo' => 'Comparativo entre os seus cursos',
                                 'subtitulo' => 'Média de cada curso nesta categoria, só presentes.',
                                 'itens' => array_map(fn ($c) => ['rotulo' => $c['curso'], 'extra' => '('.$c['presentes'].' presentes · '.$fmt($c['abaixoPct']).'% abaixo de 60%)', 'valor' => $c['media']], $cat['porCurso']),
@@ -246,6 +270,7 @@
                                     'subtitulo' => $b['subtitulo'],
                                     'itens' => $b['itens'],
                                     'rodape' => $b['rodape'],
+                                    'planoBarras' => ['visual' => $b['visual'], 'ctx' => $ctxPlano],
                                     'larga' => $qtdBarras === 1 || ($loop->last && $qtdBarras % 2 === 1),
                                 ])
                             @endforeach
@@ -303,10 +328,13 @@
                                                 {{ $fmt($a['abaixoPct']) }}%
                                             @endif
                                         </td>
-                                        <td class="px-4 py-3 text-right">
-                                            @if (in_array($a['codigo'], $codigosAcessiveis, true))
-                                                <a href="{{ route('avaliacoes.bi', $a['codigo']) }}" class="text-emerald-700 font-semibold hover:underline">Dashboard</a>
-                                            @endif
+                                        <td class="px-4 py-3 text-right whitespace-nowrap">
+                                            <span class="inline-flex items-center gap-3">
+                                                @if (in_array($a['codigo'], $codigosAcessiveis, true))
+                                                    <a href="{{ route('avaliacoes.bi', $a['codigo']) }}" class="text-emerald-700 font-semibold hover:underline">Dashboard</a>
+                                                @endif
+                                                @include('plano._botao', ['visual' => 'avaliacao', 'titulo' => 'Avaliação '.$a['nome'], 'ctx' => [...$ctxPlano, 'avaliacao' => $a['codigo']], 'planoItem' => (string) $a['codigo']])
+                                            </span>
                                         </td>
                                     </tr>
                                 @endforeach

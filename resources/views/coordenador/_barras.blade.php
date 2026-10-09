@@ -6,10 +6,19 @@
       $larga   true quando o cartão ocupa a linha inteira: as barras então se distribuem em
                colunas, para a tela nunca ficar com um "buraco" ao lado de um cartão estreito
       $rodape  ?string (nota pequena no fim)
+      $planoBarras (opcional) ['visual' => chave de PlanoAcao::VISUAIS, 'ctx' => onde o coordenador está]: liga o ícone de plano de ação
 --}}
 @php use App\Support\CorDesempenho; @endphp
 <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-    <h3 class="font-semibold mb-1">{{ $titulo }}</h3>
+    <div class="flex items-start justify-between gap-3">
+        <h3 class="font-semibold mb-1">{{ $titulo }}</h3>
+        @if (! empty($planoBarras))
+            @include('plano._botao', [
+                'visual' => $planoBarras['visual'], 'titulo' => $titulo, 'ctx' => $planoBarras['ctx'],
+                'planoItens' => array_map(fn ($it) => ['rotulo' => $it['rotulo'], 'valor' => number_format($it['valor'], 1, ',', '.').'%'], $itens),
+            ])
+        @endif
+    </div>
     <p class="text-sm text-slate-500 mb-4">{{ $subtitulo }}</p>
     <div class="{{ $larga ? 'grid gap-x-10 gap-y-3 sm:grid-cols-2 xl:grid-cols-3' : 'space-y-3 max-h-96 overflow-y-auto pr-1' }}">
         @foreach ($itens as $item)

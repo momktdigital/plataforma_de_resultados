@@ -48,8 +48,8 @@ class CoordenadorController extends PainelController
                     ->all()),
                 // Os destaques, SEMPRE separados por categoria: provas de categorias diferentes não são comparáveis, e
                 // "área com menor desempenho" de uma categoria não pode parecer contradizer a de outra.
-                'destaques' => collect([['titulo' => 'Geral do curso', 'insights' => $painel['insights']]])
-                    ->concat(collect($painel['categorias'])->map(fn ($c) => ['titulo' => $c['nome'], 'insights' => $c['insights']]))
+                'destaques' => collect([['titulo' => 'Geral do curso', 'categoria' => null, 'insights' => $painel['insights']]])
+                    ->concat(collect($painel['categorias'])->map(fn ($c) => ['titulo' => $c['nome'], 'categoria' => $c['id'], 'insights' => $c['insights']]))
                     ->filter(fn ($grupo) => $grupo['insights'] !== [])
                     ->values()
                     ->all(),

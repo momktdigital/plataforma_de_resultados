@@ -73,6 +73,10 @@
                 $emVisaoDeCurso = $usuarioLogado->emVisaoDeCurso;
                 $sino = $ehCoordenador && ! $emVisaoDeCurso;
                 $naoLidas = $ehCoordenador ? $usuarioLogado->notificacoesNaoLidas() : 0;
+                // Planos de ação: o coordenador vê quantos foram devolvidos para ajustes; quem analisa (colaborador, administrador), quantos aguardam.
+                $planosPendentes = $ehCoordenador
+                    ? \App\Services\PlanoAcaoService::comAjustes($usuarioLogado)
+                    : (($ehColaborador || $usuarioLogado->ehAdministrador()) ? \App\Services\PlanoAcaoService::aguardandoAnalise() : 0);
             @endphp
 
             {{-- Busca global procura alunos de qualquer curso: só administrador. --}}
@@ -110,6 +114,7 @@
                                 ['rota' => 'avaliacoes.index', 'padrao' => 'avaliacoes.*', 'icone' => 'ph-exam', 'label' => 'Avaliações'],
                                 ['rota' => 'coordenador.comparativo', 'padrao' => 'coordenador.comparativo', 'icone' => 'ph-arrows-left-right', 'label' => 'Comparar semestres'],
                                 ['rota' => 'coordenador.alunos', 'padrao' => 'coordenador.alunos*', 'icone' => 'ph-users-three', 'label' => 'Alunos do curso'],
+                                ['rota' => 'coordenador.planos.index', 'padrao' => 'coordenador.planos.*', 'icone' => 'ph-clipboard-text', 'label' => 'Planos de ação', 'badge' => $planosPendentes],
                                 ['rota' => 'cronograma.index', 'padrao' => 'cronograma.*', 'icone' => 'ph-calendar-check', 'label' => 'Cronograma'],
                                 ['rota' => 'notificacoes.index', 'padrao' => 'notificacoes.*', 'icone' => 'ph-bell', 'label' => 'Notificações'],
                                 ['rota' => 'perfil.edit', 'padrao' => 'perfil.*', 'icone' => 'ph-user-circle', 'label' => 'Meu Perfil'],
@@ -118,12 +123,14 @@
                             ? [
                                 ['rota' => 'colaborador.index', 'padrao' => ['colaborador.index', 'colaborador.atividades.*'], 'icone' => 'ph-calendar-check', 'label' => 'Cronograma'],
                                 ['rota' => 'colaborador.pendencias.index', 'padrao' => 'colaborador.pendencias.*', 'icone' => 'ph-warning-circle', 'label' => 'Pendências'],
+                                ['rota' => 'colaborador.planos.index', 'padrao' => 'colaborador.planos.*', 'icone' => 'ph-clipboard-text', 'label' => 'Planos de ação', 'badge' => $planosPendentes],
                                 ['rota' => 'perfil.edit', 'padrao' => 'perfil.*', 'icone' => 'ph-user-circle', 'label' => 'Meu Perfil'],
                             ]
                             : [
                                 ['rota' => 'avaliacoes.index', 'padrao' => 'avaliacoes.*', 'icone' => 'ph-exam', 'label' => 'Avaliações'],
                                 ['rota' => 'reitor.visao', 'padrao' => 'reitor.*', 'icone' => 'ph-student', 'label' => 'Painel da reitoria'],
-                                ['rota' => 'colaborador.index', 'padrao' => 'colaborador.*', 'icone' => 'ph-calendar-check', 'label' => 'Cronograma de atividades'],
+                                ['rota' => 'colaborador.index', 'padrao' => ['colaborador.index', 'colaborador.atividades.*', 'colaborador.pendencias.*'], 'icone' => 'ph-calendar-check', 'label' => 'Cronograma de atividades'],
+                                ['rota' => 'colaborador.planos.index', 'padrao' => 'colaborador.planos.*', 'icone' => 'ph-clipboard-text', 'label' => 'Planos de ação', 'badge' => $planosPendentes],
                                 ['rota' => 'alunos.index', 'padrao' => 'alunos.*', 'icone' => 'ph-identification-card', 'label' => 'Alunos'],
                                 ['rota' => 'categorias.index', 'padrao' => 'categorias.*', 'icone' => 'ph-tree-structure', 'label' => 'Categorias'],
                                 ['rota' => 'lixeira.index', 'padrao' => 'lixeira.*', 'icone' => 'ph-trash', 'label' => 'Lixeira'],
@@ -144,6 +151,9 @@
                             <a href="{{ route($item['rota']) }}" @if ($ativo) aria-current="page" @endif
                                class="flex items-center px-3 py-2.5 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary {{ $ativo ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-slate-800 hover:text-white' }}">
                                 <i class="ph {{ $item['icone'] }} text-xl mr-3 {{ $ativo ? 'text-primary' : '' }}" aria-hidden="true"></i> {{ $item['label'] }}
+                                @if (! empty($item['badge']))
+                                    <span class="ml-auto min-w-[1.4rem] rounded-full bg-primary px-1.5 py-0.5 text-center text-xs font-bold text-slate-900"><span aria-hidden="true">{{ $item['badge'] > 99 ? '99+' : $item['badge'] }}</span><span class="sr-only">{{ $item['badge'] }} {{ $ehCoordenador ? 'devolvido(s) para ajustes' : 'aguardando análise' }}</span></span>
+                                @endif
                                 @if ($item['rota'] === 'notificacoes.index')
                                     <span data-notificacoes-contagem class="ml-auto min-w-[1.4rem] rounded-full bg-primary px-1.5 py-0.5 text-center text-xs font-bold text-slate-900 {{ $naoLidas > 0 ? '' : 'hidden' }}"><span aria-hidden="true">{{ $naoLidas > 99 ? '99+' : $naoLidas }}</span><span class="sr-only">{{ $naoLidas }} não lida(s)</span></span>
                                 @endif

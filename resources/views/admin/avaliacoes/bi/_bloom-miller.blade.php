@@ -5,6 +5,7 @@
                 <div class="flex items-center gap-2 mb-4">
             <h2 class="font-semibold">Desempenho médio por nível de Bloom</h2>
             @include('_explicacao', ['explicacao' => $explicacoes['desempenho_bloom'] ?? null])
+            <span class="ml-auto">@include('plano._botao', ['visual' => 'bloom', 'titulo' => 'Desempenho por nível de Bloom', 'ctx' => ['curso' => '', 'avaliacao' => $avaliacao->codigo]])</span>
         </div>
                 @if (empty($mediaPorBloom))
                     <p class="text-sm text-slate-500">Sem dados suficientes.</p>

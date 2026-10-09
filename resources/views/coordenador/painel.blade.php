@@ -19,6 +19,8 @@
         $manter['periodo_letivo'] = $painel['periodoSelecionado'];
     }
     $r = $resumoAlunos ?? null;
+    // Onde o coordenador está: o "ícone de plano de ação" de cada dado leva isso (curso e período letivo).
+    $ctxPlano = ['curso' => $painel['cursoSelecionado'] ?? '', 'periodo_letivo' => $painel['periodoSelecionado'] ?? ''];
 @endphp
 
 @section('content')
@@ -88,7 +90,10 @@
                 <p class="text-xs text-slate-500 mt-1">{{ ucfirst(\App\Support\RegraDeRisco::atual()->descricao()) }}.</p>
             </a>
             <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 flex items-center gap-1.5"><i class="ph-bold ph-user-check" aria-hidden="true"></i> Presença</p>
+                <div class="flex items-start justify-between gap-2">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 flex items-center gap-1.5"><i class="ph-bold ph-user-check" aria-hidden="true"></i> Presença</p>
+                    @include('plano._botao', ['visual' => 'participacao', 'titulo' => 'Participação', 'ctx' => $ctxPlano])
+                </div>
                 <p class="text-3xl font-bold mt-2 tracking-tight">{{ $fmt($g['presenca']) }}<span class="text-lg font-medium text-slate-500">%</span></p>
                 <p class="text-xs text-slate-500 mt-1">{{ $g['presentes'] }} de {{ $g['inscritos'] }} participações &middot; {{ $g['ausentes'] }} ausente(s)</p>
             </div>
@@ -111,12 +116,14 @@
                     @foreach ($destaques as $grupo)
                         <div>
                             <h3 class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2 flex items-center gap-1.5"><i class="ph-bold ph-folder-open" aria-hidden="true"></i> {{ $grupo['titulo'] }}</h3>
+                            @php $ctxGrupo = [...$ctxPlano, 'categoria' => $grupo['categoria'] ?? null]; @endphp
                             <div class="grid sm:grid-cols-2 gap-3 sm:[&>*:last-child:nth-child(odd)]:col-span-2">
                                 @foreach (array_slice($grupo['insights'], 0, 4) as $insight)
                                     @php $e = $estiloInsight($insight['tom']); @endphp
                                     <div class="{{ $e['bg'] }} border {{ $e['borda'] }} rounded-xl p-4 flex items-start gap-3">
                                         <i class="ph-bold {{ $insight['icone'] }} {{ $e['icone'] }} text-xl shrink-0 mt-0.5" aria-hidden="true"></i>
-                                        <p class="text-sm text-slate-700">{{ $insight['texto'] }}</p>
+                                        <p class="text-sm text-slate-700 flex-1">{{ $insight['texto'] }}</p>
+                                        @include('plano._botao', ['visual' => 'destaque', 'titulo' => 'Destaque do painel', 'ctx' => $ctxGrupo, 'planoItem' => $insight['texto']])
                                     </div>
                                 @endforeach
                             </div>
@@ -187,9 +194,12 @@
                                     @endif
                                 </td>
                                 <td class="px-4 py-3 text-right whitespace-nowrap">
-                                    @if (in_array($a['codigo'], $codigosAcessiveis, true))
-                                        <a href="{{ route('avaliacoes.bi', $a['codigo']) }}" class="text-emerald-700 font-semibold hover:underline">Dashboard</a>
-                                    @endif
+                                    <span class="inline-flex items-center gap-3">
+                                        @if (in_array($a['codigo'], $codigosAcessiveis, true))
+                                            <a href="{{ route('avaliacoes.bi', $a['codigo']) }}" class="text-emerald-700 font-semibold hover:underline">Dashboard</a>
+                                        @endif
+                                        @include('plano._botao', ['visual' => 'avaliacao', 'titulo' => 'Avaliação '.$a['nome'], 'ctx' => [...$ctxPlano, 'avaliacao' => $a['codigo']], 'planoItem' => (string) $a['codigo']])
+                                    </span>
                                 </td>
                             </tr>
                         @endforeach
