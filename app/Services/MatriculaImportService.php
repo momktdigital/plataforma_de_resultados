@@ -60,6 +60,12 @@ class MatriculaImportService
 
     private const COR_RACA_PATTERNS = ['/^cor\s*raca$/'];
 
+    /**
+     * Forma de ingresso (Vestibular, ENEM, PROUNI...). Só cabeçalhos que dizem "forma/tipo/modalidade de ingresso": uma
+     * coluna "Ingresso" sozinha costuma ser a DATA de ingresso, e leria a data como se fosse a forma.
+     */
+    private const FORMA_INGRESSO_PATTERNS = ['/^(forma|tipo|modalidade|via|meio)\s*(de\s*)?ingresso$/', '/^ingresso\s*(forma|tipo|modalidade)$/'];
+
     private const RELIGIAO_PATTERNS = ['/^religiao$/'];
 
     private const SEXO_PATTERNS = ['/^sexo$/'];
@@ -321,6 +327,7 @@ class MatriculaImportService
         $turma = HeaderResolver::findValue($row, self::TURMA_PATTERNS);
         $matriz = HeaderResolver::findValue($row, self::MATRIZ_PATTERNS);
         $corRaca = HeaderResolver::findValue($row, self::COR_RACA_PATTERNS);
+        $formaIngresso = HeaderResolver::findValue($row, self::FORMA_INGRESSO_PATTERNS);
         $religiao = HeaderResolver::findValue($row, self::RELIGIAO_PATTERNS);
         $sexo = HeaderResolver::findValue($row, self::SEXO_PATTERNS);
         $estadoCivil = HeaderResolver::findValue($row, self::ESTADO_CIVIL_PATTERNS);
@@ -345,6 +352,7 @@ class MatriculaImportService
                 'periodo' => $periodo,
                 'turma' => $turma,
                 'cor_raca' => $corRaca,
+                'forma_ingresso' => $formaIngresso,
                 'religiao' => $religiao,
                 'sexo' => $sexo,
                 'estado_civil' => $estadoCivil,
@@ -375,6 +383,7 @@ class MatriculaImportService
         $aluno->email = $email ?? $aluno->email;
         $aluno->cod_perfil = $codPerfil ?? $aluno->cod_perfil;
         $aluno->cor_raca = $corRaca ?? $aluno->cor_raca;
+        $aluno->forma_ingresso = $formaIngresso ?? $aluno->forma_ingresso;
         $aluno->religiao = $religiao ?? $aluno->religiao;
         $aluno->sexo = $sexo ?? $aluno->sexo;
         $aluno->estado_civil = $estadoCivil ?? $aluno->estado_civil;

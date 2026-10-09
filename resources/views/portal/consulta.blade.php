@@ -2,6 +2,9 @@
 
 @section('title', 'Consultar resultado')
 
+{{-- Única tela do aluno com o atalho para a área administrativa. Sem tour: o formulário é autoexplicativo. --}}
+@section('acesso-administrativo', '1')
+
 @section('content')
 <div class="w-full max-w-md mx-auto bg-white rounded-2xl shadow-xl border border-slate-100 p-8 sm:p-10 fade-in">
     <div class="text-center mb-8">

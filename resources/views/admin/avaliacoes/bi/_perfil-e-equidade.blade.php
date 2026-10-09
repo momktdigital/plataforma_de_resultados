@@ -8,11 +8,12 @@
         <h2 class="text-lg font-bold mb-1">Análise demográfica</h2>
         <p class="text-sm text-slate-500 mb-4">
             Quem fez esta avaliação e como cada recorte se saiu. O perfil descreve a composição do grupo;
-            a equidade logo abaixo mostra o desempenho de cada um desses mesmos recortes.
+            a equidade logo abaixo mostra o desempenho de cada um desses mesmos recortes — inclusive a
+            <strong>forma de ingresso</strong> (Vestibular, ENEM, PROUNI...), para ver se ela influencia o desempenho.
         </p>
 
         @if ($temPerfil)
-        <div class="grid lg:grid-cols-3 gap-6 mb-6">
+        <div class="grid lg:grid-cols-2 xl:grid-cols-4 gap-6 mb-6">
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
             <div class="flex items-center gap-2 mb-3">
                 <h3 class="font-semibold">Sexo</h3>
@@ -34,6 +35,17 @@
                 <p class="text-sm text-slate-500">Sem dados.</p>
             @else
                 <canvas id="grafico-cor-raca" height="200"></canvas>
+            @endif
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+            <div class="flex items-center gap-2 mb-3">
+                <h3 class="font-semibold">Forma de ingresso</h3>
+            </div>
+            @if (empty($perfilDemografico['forma_ingresso']))
+                <p class="text-sm text-slate-500">Sem dados. A forma de ingresso vem da planilha de alunos (coluna "Forma de ingresso").</p>
+            @else
+                <canvas id="grafico-forma-ingresso" height="200"></canvas>
             @endif
         </div>
 

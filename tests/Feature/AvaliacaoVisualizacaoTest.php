@@ -8,6 +8,7 @@ use App\Models\Avaliacao;
 use App\Models\Questao;
 use App\Models\QuestaoMatriz;
 use App\Models\Resposta;
+use App\Services\Portal\RelatorioAlunoService;
 use App\Services\ResumoResultadoService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -203,16 +204,19 @@ class AvaliacaoVisualizacaoTest extends TestCase
         app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
 
         $this->admin();
-        Aluno::create(['ra' => '2026001', 'cpf' => '12345678909', 'data_nascimento' => '2000-03-15', 'nome' => 'Fulano']);
+        $aluno = Aluno::create(['ra' => '2026001', 'cpf' => '12345678909', 'data_nascimento' => '2000-03-15', 'nome' => 'Fulano']);
 
-        $this->followingRedirects()->post('/portal/consultar', [
-            'cpf' => '123.456.789-09',
-            'data_nascimento' => '15/03/2000',
-        ]);
+        // A tela da avaliação não mostra mais a posição relativa (o boletim não compara o aluno com a turma), mas o
+        // cálculo continua sendo usado no consolidado — a regra de achar o aluno por RA ou CPF segue valendo.
+        $ranking = app(RelatorioAlunoService::class)->rankingPercentil($aluno, $avaliacao, '');
 
-        $detalhe = $this->get(route('portal.resultados.avaliacao', ['avaliacao' => $avaliacao->codigo, 'periodo' => '']));
-        $detalhe->assertOk();
-        $detalhe->assertSee('Posição relativa');
-        $detalhe->assertSee('posição 1 de 2', false);
+        $this->assertSame(1, $ranking['posicao']);
+        $this->assertSame(2, $ranking['totalRespondentes']);
+
+        $this->followingRedirects()->post('/portal/consultar', ['cpf' => '123.456.789-09', 'data_nascimento' => '15/03/2000'])
+            ->assertOk();
+        $this->get(route('portal.resultados.avaliacao', ['avaliacao' => $avaliacao->codigo, 'periodo' => '']))
+            ->assertOk()
+            ->assertDontSee('Posição relativa');
     }
 }

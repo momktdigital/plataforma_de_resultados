@@ -75,11 +75,11 @@ class InsightServiceTest extends TestCase
         $consultaService = app(ResultadoConsultaService::class);
         $resultados = $consultaService->buscarPorAluno($aluno);
 
-        $insights = app(InsightService::class)->gerar($aluno, $resultados, [], null, []);
+        $insights = app(InsightService::class)->gerar($aluno, $resultados, [], []);
 
         $textos = array_column($insights, 'texto');
         $this->assertTrue(
-            collect($textos)->contains(fn ($t) => str_contains($t, 'Farmacologia') && str_contains($t, 'caiu') && str_contains($t, '100')),
+            collect($textos)->contains(fn ($t) => str_contains($t, 'Farmacologia') && str_contains($t, 'caiu de 100% para 0%')),
             'Esperava um insight de queda em Farmacologia, recebi: '.json_encode($textos)
         );
     }
@@ -103,7 +103,7 @@ class InsightServiceTest extends TestCase
         $consultaService = app(ResultadoConsultaService::class);
         $resultados = $consultaService->buscarPorAluno($aluno);
 
-        $insights = app(InsightService::class)->gerar($aluno, $resultados, [], null, []);
+        $insights = app(InsightService::class)->gerar($aluno, $resultados, [], []);
 
         $this->assertSame([], $insights);
     }
@@ -122,38 +122,101 @@ class InsightServiceTest extends TestCase
             ],
         ];
 
-        $insights = app(InsightService::class)->gerar($this->aluno(), [], $evolucaoPorCategoria, null, []);
+        $insights = app(InsightService::class)->gerar($this->aluno(), [], $evolucaoPorCategoria, []);
 
         $textos = array_column($insights, 'texto');
         $this->assertTrue(collect($textos)->contains(fn ($t) => str_contains($t, 'Simulado MedCof') && str_contains($t, '3 avaliações seguidas')));
     }
 
-    public function test_comparativo_com_turma_gera_insight_positivo_e_negativo(): void
+    public function test_nenhum_card_compara_o_aluno_com_a_turma_nem_fala_em_pontos(): void
     {
         $aluno = $this->aluno();
+        $categoria = Categoria::create(['nome' => 'Simulado MedCof']);
 
-        $insightsPositivo = app(InsightService::class)->gerar($aluno, [], [], [
-            'turma' => 'A',
-            'suaMedia' => 80.0,
-            'mediaTurma' => 60.0,
-            'avaliacoesComparadas' => 3,
-        ], []);
-        $this->assertTrue(collect(array_column($insightsPositivo, 'texto'))->contains(fn ($t) => str_contains($t, 'acima da média')));
+        $this->avaliacaoComResposta($aluno, $categoria->id, '2026-05-01', 'Simulado 1', [
+            1 => ['gabarito' => 'A', 'resposta' => 'A', 'area' => 'Farmacologia'],
+            2 => ['gabarito' => 'B', 'resposta' => 'B', 'area' => 'Farmacologia'],
+        ]);
+        $this->avaliacaoComResposta($aluno, $categoria->id, '2026-06-01', 'Simulado 2', [
+            1 => ['gabarito' => 'A', 'resposta' => 'X', 'area' => 'Farmacologia'],
+            2 => ['gabarito' => 'B', 'resposta' => 'X', 'area' => 'Farmacologia'],
+        ]);
+        $resultados = app(ResultadoConsultaService::class)->buscarPorAluno($aluno);
 
-        $insightsNegativo = app(InsightService::class)->gerar($aluno, [], [], [
-            'turma' => 'A',
-            'suaMedia' => 40.0,
-            'mediaTurma' => 60.0,
-            'avaliacoesComparadas' => 3,
-        ], []);
-        $this->assertTrue(collect(array_column($insightsNegativo, 'texto'))->contains(fn ($t) => str_contains($t, 'abaixo da média')));
+        $textos = array_column(app(InsightService::class)->gerar($aluno, $resultados, [], ['Anamnese' => 30.0, 'Raciocínio' => 90.0]), 'texto');
+
+        $this->assertNotEmpty($textos);
+        foreach ($textos as $texto) {
+            $this->assertStringNotContainsString('turma', $texto);
+            $this->assertStringNotContainsString('melhores', $texto);
+            $this->assertStringNotContainsString('pontos', $texto);
+        }
     }
 
+    public function test_bloom_mais_dificil_vira_card_explicativo_com_dica_de_estudo(): void
+    {
+        $bloom = [
+            'Lembrar' => ['percentual' => 85.0, 'total' => 10],
+            'Análise' => ['percentual' => 40.0, 'total' => 8],
+        ];
+
+        $insights = app(InsightService::class)->gerar($this->aluno(), [], [], [], $bloom);
+
+        $this->assertCount(1, $insights);
+        $this->assertSame('atencao', $insights[0]['tom']);
+        $this->assertStringContainsString('relacionar dados de um caso', $insights[0]['texto']);
+        $this->assertStringContainsString('foram as mais difíceis para você', $insights[0]['texto']);
+        $this->assertStringContainsString('40%', $insights[0]['texto']);
+        $this->assertStringContainsString('casos', $insights[0]['texto']);
+    }
+
+    public function test_bloom_com_nivel_desconhecido_usa_texto_generico_com_o_nome_da_planilha(): void
+    {
+        $bloom = [
+            'Lembrar' => ['percentual' => 90.0, 'total' => 10],
+            'Nível Z' => ['percentual' => 30.0, 'total' => 10],
+        ];
+
+        $texto = app(InsightService::class)->gerar($this->aluno(), [], [], [], $bloom)[0]['texto'];
+
+        $this->assertStringContainsString('"Nível Z"', $texto);
+        $this->assertStringContainsString('30%', $texto);
+    }
+
+    public function test_bloom_ignora_nivel_com_poucas_questoes_diferenca_pequena_ou_nivel_unico(): void
+    {
+        $servico = app(InsightService::class);
+        $aluno = $this->aluno();
+
+        // O pior nível tem só 2 questões: sorte/azar, não padrão.
+        $this->assertSame([], $servico->gerar($aluno, [], [], [], [
+            'Lembrar' => ['percentual' => 90.0, 'total' => 10],
+            'Aplicar' => ['percentual' => 0.0, 'total' => 2],
+        ]));
+        // Diferença pequena entre os níveis.
+        $this->assertSame([], $servico->gerar($aluno, [], [], [], [
+            'Lembrar' => ['percentual' => 52.0, 'total' => 10],
+            'Aplicar' => ['percentual' => 48.0, 'total' => 10],
+        ]));
+        // Um nível só: não há "o mais difícil".
+        $this->assertSame([], $servico->gerar($aluno, [], [], [], ['Aplicar' => ['percentual' => 20.0, 'total' => 10]]));
+    }
+
+    public function test_bloom_bom_em_todos_os_niveis_vira_card_positivo(): void
+    {
+        $insights = app(InsightService::class)->gerar($this->aluno(), [], [], [], [
+            'Lembrar' => ['percentual' => 95.0, 'total' => 10],
+            'Aplicar' => ['percentual' => 75.0, 'total' => 10],
+        ]);
+
+        $this->assertCount(1, $insights);
+        $this->assertSame('positivo', $insights[0]['tom']);
+    }
     public function test_extremos_de_habilidade_geram_insight_de_ponto_fraco_e_forte(): void
     {
         $coberturaHabilidade = ['Anamnese' => 30.0, 'Exame físico' => 55.0, 'Raciocínio clínico' => 90.0];
 
-        $insights = app(InsightService::class)->gerar($this->aluno(), [], [], null, $coberturaHabilidade);
+        $insights = app(InsightService::class)->gerar($this->aluno(), [], [], $coberturaHabilidade);
 
         $textos = array_column($insights, 'texto');
         $this->assertTrue(collect($textos)->contains(fn ($t) => str_contains($t, 'Anamnese') && str_contains($t, 'menor aproveitamento')));
@@ -162,7 +225,7 @@ class InsightServiceTest extends TestCase
 
     public function test_sem_dados_suficientes_nao_gera_nenhum_insight(): void
     {
-        $insights = app(InsightService::class)->gerar($this->aluno(), [], [], null, []);
+        $insights = app(InsightService::class)->gerar($this->aluno(), [], [], []);
 
         $this->assertSame([], $insights);
     }

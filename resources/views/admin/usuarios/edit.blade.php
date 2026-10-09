@@ -6,10 +6,11 @@
 @php
     $coordenador = $admin->ehCoordenador();
     $reitor = $admin->ehReitor();
-    $entraPorCodigo = $coordenador || $reitor;
+    $colaborador = $admin->ehColaborador();
+    $entraPorCodigo = $coordenador || $reitor || $colaborador;
 @endphp
-<a href="{{ route('usuarios.index', ['aba' => $reitor ? 'reitores' : ($coordenador ? 'coordenadores' : 'administradores')]) }}" class="text-sm text-slate-500 hover:underline">&larr; Usuários</a>
-<h1 class="text-2xl font-bold mt-2 mb-6">Editar {{ $reitor ? 'usuário da reitoria' : ($coordenador ? 'coordenador' : 'administrador') }}</h1>
+<a href="{{ route('usuarios.index', ['aba' => $colaborador ? 'colaboradores' : ($reitor ? 'reitores' : ($coordenador ? 'coordenadores' : 'administradores'))]) }}" class="text-sm text-slate-500 hover:underline">&larr; Usuários</a>
+<h1 class="text-2xl font-bold mt-2 mb-6">Editar {{ $colaborador ? 'colaborador' : ($reitor ? 'usuário da reitoria' : ($coordenador ? 'coordenador' : 'administrador')) }}</h1>
 
 <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 max-w-xl">
     <form method="POST" action="{{ route('usuarios.update', $admin) }}" class="space-y-4">

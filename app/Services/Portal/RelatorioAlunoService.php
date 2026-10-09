@@ -6,6 +6,7 @@ use App\Models\Aluno;
 use App\Models\Avaliacao;
 use App\Support\AlunoVinculoResolver;
 use App\Support\Anulacao;
+use App\Support\PeriodoCurso;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -207,6 +208,38 @@ class RelatorioAlunoService
         return $this->desempenhoPorCampoDireto($respostas, $gabaritos, $avaliacao, 'bloom_nivel');
     }
 
+    /**
+     * Acerto por nível de Bloom COM a contagem de questões de cada nível (a leitura em texto só afirma "foram as que mais
+     * deram trabalho" com questões suficientes). Usa o nível; se a planilha só trouxe o verbo (Lembrar, Aplicar...), cai
+     * para ele.
+     *
+     * @return array<string, array{percentual: float, total: int}>
+     */
+    public function desempenhoPorBloomComContagem(Collection $respostas, Collection $gabaritos, Avaliacao $avaliacao): array
+    {
+        foreach (['bloom_nivel', 'bloom_verbo'] as $campo) {
+            $linhas = DB::table('questoes')
+                ->where('avaliacao_codigo', $avaliacao->codigo)
+                ->whereNull('deleted_at')
+                ->whereNotNull($campo)
+                ->where($campo, '!=', '')
+                ->select('numero', "{$campo} as valor", 'anulada_modo')
+                ->get()
+                ->keyBy('numero');
+
+            $contagem = $this->contagemPorAgrupamentoMultiplo($respostas, $gabaritos, $linhas->map(fn ($l) => [$l->valor]), $linhas->pluck('anulada_modo', 'numero'));
+
+            if ($contagem !== []) {
+                return array_map(fn ($s) => [
+                    'percentual' => $s['total'] > 0 ? round($s['acertos'] / $s['total'] * 100, 1) : 0.0,
+                    'total' => $s['total'],
+                ], $contagem);
+            }
+        }
+
+        return [];
+    }
+
     /** @return array<string, float> */
     public function desempenhoPorMiller(Collection $respostas, Collection $gabaritos, Avaliacao $avaliacao): array
     {
@@ -340,16 +373,20 @@ class RelatorioAlunoService
      * entre 3 variações (ver self::TEMPLATES_LACUNA/CONSOLIDADO) só pra não
      * repetir o mesmo texto quando a avaliação tem várias áreas.
      *
+     * Só entram as questões que o aluno PRECISAVA acertar pelo período dele: as marcadas para um período à frente
+     * (`questoes.periodo_minimo`) ficam de fora tanto das lacunas quanto dos consolidados — errar ou acertar o que ainda
+     * não foi estudado não diz nada sobre a base dele. Sem `$periodoAluno` (desconhecido), vale tudo.
+     *
      * @return array{lacunas: array<int, array{area: string, total: int, texto: string}>, consolidados: array<int, array{area: string, total: int, texto: string}>}
      */
-    public function lacunasEConsolidados(Collection $respostas, Collection $gabaritos, Avaliacao $avaliacao): array
+    public function lacunasEConsolidados(Collection $respostas, Collection $gabaritos, Avaliacao $avaliacao, ?int $periodoAluno = null): array
     {
         $metaPorNumero = DB::table('questoes')
             ->where('avaliacao_codigo', $avaliacao->codigo)
             ->whereNull('deleted_at')
             ->whereNotNull('area')->where('area', '!=', '')
             ->whereNotNull('tema')->where('tema', '!=', '')
-            ->select('numero', 'area', 'tema', 'anulada_modo')
+            ->select('numero', 'area', 'tema', 'anulada_modo', 'periodo_minimo')
             ->get()
             ->keyBy('numero');
 
@@ -367,6 +404,10 @@ class RelatorioAlunoService
             // nem como lacuna nem como conhecimento consolidado, pois não
             // reflete mais o conteúdo oficialmente avaliado.
             if (Anulacao::distribuida($meta->anulada_modo)) {
+                continue;
+            }
+
+            if (PeriodoCurso::aFrente($periodoAluno, $meta->periodo_minimo !== null ? (int) $meta->periodo_minimo : null)) {
                 continue;
             }
 
@@ -397,16 +438,20 @@ class RelatorioAlunoService
      *
      * @param  Collection<int, \App\Models\Resposta>  $respostas
      * @param  Collection<int, string>  $gabaritos
+     * Só vira passo da trilha o erro numa questão que o aluno PRECISAVA acertar pelo período dele (as de períodos à
+     * frente, `questoes.periodo_minimo`, não entram). O ganho continua sendo sobre a prova inteira — é quanto a NOTA
+     * subiria —, então essas questões ficam no denominador; só não são cobradas como erro.
+     *
      * @return array<int, array{area: string, tema: string, erros: int, ganho: float}>
      */
-    public function trilhaDeEstudo(Collection $respostas, Collection $gabaritos, Avaliacao $avaliacao, int $limite = 6): array
+    public function trilhaDeEstudo(Collection $respostas, Collection $gabaritos, Avaliacao $avaliacao, int $limite = 6, ?int $periodoAluno = null): array
     {
         $metaPorNumero = DB::table('questoes')
             ->where('avaliacao_codigo', $avaliacao->codigo)
             ->whereNull('deleted_at')
             ->whereNotNull('area')->where('area', '!=', '')
             ->whereNotNull('tema')->where('tema', '!=', '')
-            ->select('numero', 'area', 'tema', 'anulada_modo')
+            ->select('numero', 'area', 'tema', 'anulada_modo', 'periodo_minimo')
             ->get()
             ->keyBy('numero');
 
@@ -427,6 +472,10 @@ class RelatorioAlunoService
             }
 
             $consideradas++;
+
+            if (PeriodoCurso::aFrente($periodoAluno, $meta->periodo_minimo !== null ? (int) $meta->periodo_minimo : null)) {
+                continue;
+            }
 
             if (! Anulacao::acertou($resposta->resposta, $gabarito, $meta->anulada_modo)) {
                 $chave = $meta->area.'|'.$meta->tema;
@@ -453,14 +502,14 @@ class RelatorioAlunoService
 
     private const TEMPLATES_LACUNA = [
         'Foram %d questão(ões) sem acerto, envolvendo %s. Retomar esses conteúdos com revisão dirigida e questões comentadas tende a consolidar a compreensão.',
-        'Área com %d ponto(s) a recuperar — em especial %s. Vale priorizar a base conceitual antes dos exercícios de fixação.',
+        'Área com %d ponto(s) a recuperar — em especial %s. Convém priorizar a base conceitual antes dos exercícios de fixação.',
         'Concentração de dificuldades em %d questão(ões) (%s). Um plano de estudo com metas semanais nesses temas ajuda a fechar a lacuna.',
     ];
 
     private const TEMPLATES_CONSOLIDADO = [
         'Bom domínio em %d questão(ões), abrangendo %s. Esse resultado indica base sólida na área.',
         'Desempenho firme em %d questão(ões) — incluindo %s. Um ponto de apoio para avançar em conteúdos mais complexos.',
-        '%d acerto(s) demonstram segurança em %s. Vale aprofundar com desafios de maior nível.',
+        '%d acerto(s) demonstram segurança em %s. Convém aprofundar com desafios de maior nível.',
     ];
 
     /**
@@ -571,6 +620,64 @@ class RelatorioAlunoService
         }
 
         return $acumulado;
+    }
+
+    /**
+     * Acerto por ÁREA x META de cada área, para o gráfico "Desempenho por área" da avaliação. A meta de uma área é a
+     * fatia das questões dela que o aluno já deveria acertar pelo período dele (`questoes.periodo_minimo`; as de
+     * períodos à frente não contam) — esperadas ÷ total da área. Área sem nenhuma questão com meta (ou sem período do
+     * aluno reconhecível) fica com a meta padrão, `AnaliseConsolidadaService::MINIMO_PADRAO` (60%).
+     *
+     * Ordenado do mais distante da meta para o mais próximo — o que pede atenção vem primeiro.
+     *
+     * @return array<int, array{area: string, percentual: float, meta: float, comMeta: bool, acertos: int, total: int}>
+     */
+    public function desempenhoPorAreaComMeta(Collection $respostas, Collection $gabaritos, Avaliacao $avaliacao, ?int $periodoAluno): array
+    {
+        $questoes = DB::table('questoes')
+            ->where('avaliacao_codigo', $avaliacao->codigo)
+            ->whereNull('deleted_at')
+            ->whereNotNull('area')
+            ->where('area', '!=', '')
+            ->select('numero', 'area', 'periodo_minimo', 'anulada_modo')
+            ->get()
+            ->keyBy('numero');
+
+        $porArea = [];
+
+        foreach ($respostas as $resposta) {
+            $questao = $questoes->get($resposta->questao_numero);
+            $gabarito = $gabaritos->get($resposta->questao_numero);
+
+            if ($questao === null || $gabarito === null || $gabarito === '' || Anulacao::distribuida($questao->anulada_modo)) {
+                continue;
+            }
+
+            $minimo = $questao->periodo_minimo !== null ? (int) $questao->periodo_minimo : null;
+            $a = &$porArea[$questao->area];
+            $a ??= ['acertos' => 0, 'total' => 0, 'esperadas' => 0, 'comMeta' => false];
+            $a['total']++;
+            $a['acertos'] += Anulacao::acertou($resposta->resposta, $gabarito, $questao->anulada_modo) ? 1 : 0;
+            $a['esperadas'] += PeriodoCurso::aFrente($periodoAluno, $minimo) ? 0 : 1;
+            $a['comMeta'] = $a['comMeta'] || ($minimo !== null && $periodoAluno !== null);
+            unset($a);
+        }
+
+        $resultado = [];
+        foreach ($porArea as $area => $a) {
+            $resultado[] = [
+                'area' => (string) $area,
+                'percentual' => round($a['acertos'] / $a['total'] * 100, 1),
+                'meta' => $a['comMeta'] ? round($a['esperadas'] / $a['total'] * 100, 1) : AnaliseConsolidadaService::MINIMO_PADRAO,
+                'comMeta' => $a['comMeta'],
+                'acertos' => $a['acertos'],
+                'total' => $a['total'],
+            ];
+        }
+
+        usort($resultado, fn ($x, $y) => ($x['percentual'] - $x['meta']) <=> ($y['percentual'] - $y['meta']) ?: strcmp($x['area'], $y['area']));
+
+        return $resultado;
     }
 
     /**

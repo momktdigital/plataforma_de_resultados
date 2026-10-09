@@ -43,12 +43,12 @@ class BiListaController extends Controller
         $relatorioService = $relatorioService->paraCursos($usuario->ehCoordenador() ? $usuario->cursos() : null);
 
         // Pede uma a mais só para saber se ainda há o que carregar.
-        $linhas = $relatorioService->rankingCompleto($avaliacao, $periodo, $quantidade + 1, $inicio);
+        $linhas = $relatorioService->rankingCompleto($avaliacao, $periodo, $quantidade + 1, $inicio, true);
         $temMais = count($linhas) > $quantidade;
         $linhas = array_slice($linhas, 0, $quantidade);
 
         return response()->json([
-            'html' => view('admin.avaliacoes._linhas-alunos', ['linhas' => $linhas, 'inicio' => $inicio])->render(),
+            'html' => view('admin.avaliacoes._linhas-alunos', ['linhas' => $linhas, 'inicio' => $inicio, 'comEsperadas' => $relatorioService->avaliacaoTemMetaPorPeriodo($avaliacao)])->render(),
             'proximo' => $temMais ? $inicio + $quantidade : null,
         ]);
     }

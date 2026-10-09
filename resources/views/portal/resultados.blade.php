@@ -3,13 +3,25 @@
 @section('title', "Resultados — {$aluno->ra}")
 @section('container-class', 'max-w-6xl')
 
+@section('tour')
+    @include('portal._tour', ['chave' => 'resultados', 'passos' => [
+        ['titulo' => 'Seus resultados', 'texto' => 'Esta é a página principal do portal. Vamos mostrar, em poucos passos, o que cada parte da tela significa.'],
+        ['alvo' => '[data-tour="cabecalho"]', 'titulo' => 'Seu perfil', 'texto' => 'Aqui aparecem o seu nome, o RA, o curso e o período, além da quantidade de avaliações com resultado.'],
+        ['alvo' => '[data-tour="resumo"]', 'titulo' => 'Resumo do seu rendimento', 'texto' => 'Frases curtas apontam o que mudou entre as suas últimas avaliações e que tipo de pergunta foi mais difícil para você. Cartões amarelos indicam pontos de atenção; os verdes, bons resultados.'],
+        ['alvo' => '[data-tour="filtros"]', 'titulo' => 'Filtros', 'texto' => 'Escolha o período letivo ou um intervalo de datas para ver apenas as avaliações que lhe interessam.'],
+        ['alvo' => '#resultados-lista', 'titulo' => 'Suas avaliações', 'texto' => 'As avaliações ficam organizadas em categorias. Clique no nome de uma categoria para abri-la: dentro dela estão a evolução do seu acerto, o gráfico de rendimento x mínimo esperado (barra verde: você atingiu o mínimo; barra amarela: ficou abaixo; linha tracejada: mínimo esperado para o seu período), o mapa de domínio por área e o cartão de cada avaliação. Clique no cartão da avaliação para ver os detalhes.'],
+        ['alvo' => '#portal-conta-botao', 'titulo' => 'Seu menu', 'texto' => 'Ao clicar na sua foto ou inicial, você encontra a opção de sair. Use-a sempre que acessar de um computador compartilhado.'],
+        ['alvo' => '#portal-refazer-tour', 'titulo' => 'Rever este tour', 'texto' => 'Para ver estas explicações de novo, use a opção "Refazer tour da página" no rodapé.'],
+    ]])
+@endsection
+
 @php
     $nomeCompleto = $aluno->nome ? mb_convert_case(mb_strtolower(trim($aluno->nome), 'UTF-8'), MB_CASE_TITLE, 'UTF-8') : $aluno->ra;
 @endphp
 
 @section('content')
 <div class="mb-6 fade-in">
-    <div class="relative overflow-hidden rounded-3xl shadow-lg" style="background: linear-gradient(135deg, #00b48d 0%, #009e7d 55%, #007a61 100%);">
+    <div data-tour="cabecalho" class="relative overflow-hidden rounded-3xl shadow-lg" style="background: linear-gradient(135deg, #00b48d 0%, #009e7d 55%, #007a61 100%);">
         <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(circle at 85% 15%, white 0, transparent 45%), radial-gradient(circle at 10% 90%, white 0, transparent 40%);"></div>
 
         <div class="relative p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center gap-6">
@@ -41,11 +53,7 @@
             <div class="flex gap-3 sm:gap-4 shrink-0">
                 <div class="bg-white/15 backdrop-blur-sm rounded-2xl px-4 py-3 text-center min-w-[84px]">
                     <div class="text-2xl font-black text-white">{{ $totalAvaliacoes }}</div>
-                    <div class="text-[11px] text-white/80 font-medium uppercase tracking-wide">Avaliações</div>
-                </div>
-                <div class="bg-white/15 backdrop-blur-sm rounded-2xl px-4 py-3 text-center min-w-[84px]">
-                    <div class="text-2xl font-black text-white">{{ $mediaGeral !== null ? $mediaGeral.'%' : '—' }}</div>
-                    <div class="text-[11px] text-white/80 font-medium uppercase tracking-wide">Média geral</div>
+                    <div class="text-[11px] text-white/80 font-medium uppercase tracking-wide">{{ $totalAvaliacoes === 1 ? 'Avaliação' : 'Avaliações' }}</div>
                 </div>
             </div>
         </div>
@@ -62,7 +70,7 @@
 </script>
 
 @if (! empty($insights))
-    <div class="grid sm:grid-cols-2 gap-3 mb-6 fade-in">
+    <div data-tour="resumo" class="grid sm:grid-cols-2 gap-3 mb-6 fade-in">
         @foreach ($insights as $insight)
             @php
                 $estiloInsight = match ($insight['tom']) {
@@ -84,29 +92,8 @@
 @include('_viz')
 @endif
 
-@if (! empty($resumoPorCategoria))
-    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 mb-6 fade-in">
-        <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-            <i class="ph-bold ph-chart-bar-horizontal text-primary"></i> Desempenho por categoria
-        </p>
-        <div class="grid sm:grid-cols-2 gap-x-6 gap-y-3">
-            @foreach ($resumoPorCategoria as $c)
-                <div>
-                    <div class="flex items-center justify-between text-xs mb-1">
-                        <span class="font-medium text-slate-600 truncate">{{ $c['nome'] }}</span>
-                        <span class="font-bold text-slate-700 shrink-0 ml-2">{{ $c['media'] }}%</span>
-                    </div>
-                    <div class="h-2 rounded-full bg-slate-100 overflow-hidden">
-                        <div class="h-full rounded-full {{ \App\Support\CorDesempenho::classeBg($c['media']) }}" style="width: {{ max(3, $c['media']) }}%"></div>
-                    </div>
-                </div>
-            @endforeach
-        </div>
-    </div>
-@endif
-
 @if (! empty($periodosDisponiveis) || ! empty($arvore) || ! empty($semCategoria))
-    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-6 flex flex-wrap items-end gap-3">
+    <div data-tour="filtros" class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-6 flex flex-wrap items-end gap-3">
         @if (! empty($periodosDisponiveis))
             <form method="GET" action="{{ route('portal.resultados') }}">
                 <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1" for="periodo-letivo">Período letivo</label>

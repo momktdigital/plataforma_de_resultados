@@ -35,7 +35,8 @@
     </p>
     <p class="mb-2">
         <strong>Opcionais:</strong> Cód. Perfil, Nome, Status/Situação, Matriz, Turma, Dt. Nascimento, Sexo,
-        CPF, Estado Civil, Cor/Raça, Religião, Cidade, UF, Celular, Email.
+        CPF, Estado Civil, Cor/Raça, Religião, Cidade, UF, Celular, Email, Forma de Ingresso (Vestibular, ENEM, PROUNI...;
+        o cabeçalho precisa dizer "forma/tipo/modalidade de ingresso" — uma coluna "Ingresso" sozinha costuma ser uma data e é ignorada).
     </p>
     <p>
         A importação usa RA como identificador único: se o aluno já existir, os dados são atualizados

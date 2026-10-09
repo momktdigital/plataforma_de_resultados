@@ -8,8 +8,9 @@
 @php
     $coordenadores = $aba === 'coordenadores';
     $reitores = $aba === 'reitores';
-    $entraPorCodigo = $coordenadores || $reitores;
-    $papelForm = $coordenadores ? 'coordenador' : ($reitores ? 'reitor' : 'administrador');
+    $colaboradores = $aba === 'colaboradores';
+    $entraPorCodigo = $coordenadores || $reitores || $colaboradores;
+    $papelForm = $coordenadores ? 'coordenador' : ($reitores ? 'reitor' : ($colaboradores ? 'colaborador' : 'administrador'));
 @endphp
 
 <div class="flex gap-1 border-b border-slate-200 mb-6" role="tablist">
@@ -25,6 +26,10 @@
        class="px-4 py-2 text-sm font-medium -mb-px border-b-2 {{ $reitores ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700' }}">
         Reitoria <span class="ml-1 text-xs text-slate-500">{{ $totalReitores }}</span>
     </a>
+    <a href="{{ route('usuarios.index', ['aba' => 'colaboradores']) }}" role="tab" aria-selected="{{ $colaboradores ? 'true' : 'false' }}"
+       class="px-4 py-2 text-sm font-medium -mb-px border-b-2 {{ $colaboradores ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700' }}">
+        Colaboradores <span class="ml-1 text-xs text-slate-500">{{ $totalColaboradores }}</span>
+    </a>
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -39,6 +44,11 @@
                 A reitoria acompanha os indicadores institucionais de <strong>todos os cursos</strong> (participação, proficiência, desempenho,
                 trajetória e evolução entre semestres). O painel é <strong>agregado, sem dados nominais</strong>. Para analisar um curso a fundo, o reitor
                 pode abrir a <strong>visão do coordenador</strong> daquele curso (somente leitura, com os alunos do curso); cada abertura fica registrada na auditoria.
+            </p>
+        @elseif ($colaboradores)
+            <p class="px-4 pt-4 text-sm text-slate-500">
+                Colaboradores montam o <strong>cronograma de atividades</strong> (a checklist de auditoria): cadastram as atividades, indicam a quais cursos se aplicam
+                (o que monta o calendário de cada coordenador) e registram as pendências. Não enxergam resultados nem dados de alunos.
             </p>
         @endif
         <table class="w-full text-sm">
@@ -93,7 +103,7 @@
                 @empty
                     <tr>
                         <td colspan="6" class="px-4 py-8 text-center text-slate-500">
-                            {{ $coordenadores ? 'Nenhum coordenador cadastrado ainda.' : ($reitores ? 'Nenhum usuário da reitoria cadastrado ainda.' : 'Nenhum administrador cadastrado.') }}
+                            {{ $coordenadores ? 'Nenhum coordenador cadastrado ainda.' : ($reitores ? 'Nenhum usuário da reitoria cadastrado ainda.' : ($colaboradores ? 'Nenhum colaborador cadastrado ainda.' : 'Nenhum administrador cadastrado.')) }}
                         </td>
                     </tr>
                 @endforelse
@@ -105,7 +115,7 @@
     </div>
 
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-        <h2 class="font-semibold mb-4">{{ $coordenadores ? 'Novo coordenador' : ($reitores ? 'Novo usuário da reitoria' : 'Novo administrador') }}</h2>
+        <h2 class="font-semibold mb-4">{{ $coordenadores ? 'Novo coordenador' : ($reitores ? 'Novo usuário da reitoria' : ($colaboradores ? 'Novo colaborador' : 'Novo administrador')) }}</h2>
         <form method="POST" action="{{ route('usuarios.store') }}" class="space-y-4">
             @csrf
             <input type="hidden" name="papel" value="{{ $papelForm }}">

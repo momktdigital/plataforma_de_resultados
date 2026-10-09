@@ -174,7 +174,7 @@
                         ['Questão', 'obrigatoria'], ['Gabarito', 'obrigatoria'],
                         ['Área', 'simples'], ['Tema', 'simples'], ['Habilidade', 'simples'],
                         ['Bloom (nível)', 'simples'], ['Bloom (verbo)', 'simples'], ['Miller (nível)', 'simples'],
-                        ['Dificuldade Pedagógica', 'simples'], ['Dificuldade TRI', 'simples'],
+                        ['Dificuldade Pedagógica', 'simples'], ['Dificuldade TRI', 'simples'], ['Período mínimo', 'simples'],
                         ['Matriz (período)', 'multipla'], ['Matriz (disciplina)', 'multipla'], ['Matriz (código)', 'multipla'],
                         ['Matriz Prova A', 'multipla'], ['Matriz Prova B', 'multipla'], ['Matriz Prova C', 'multipla'],
                         ['DCN A', 'multipla'], ['DCN B', 'multipla'],
@@ -194,9 +194,9 @@
             </thead>
             <tbody class="text-slate-700">
                 @foreach ([
-                    [1, 'B', 'Clínica Médica', 'HIV/AIDS', 'E3 — Avaliação e Julgamento Ético-Profissional', 'Aplicação', 'Avaliar', 'Sabe como', 'fácil', '0,35', '1;2', 'Anatomia;Fisiologia', 'AN01;FI02', 'Item 1', 'Item 2', '', 'Art. 5º', '', 'P1', 'P2', '', 'PPC-01', 'PPC-02', '', ''],
-                    [2, 'C', 'Cirurgia Geral', 'Cirurgia Bariátrica', 'E2 — Aplicação e Análise', 'Análise', 'Analisar', 'Sabe fazer', 'médio', '0,58', '3', 'Clínica Médica', 'CM04', 'Item 3', '', '', '', '', '', '', '', 'PPC-03', '', '', ''],
-                    [3, 'A', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+                    [1, 'B', 'Clínica Médica', 'HIV/AIDS', 'E3 — Avaliação e Julgamento Ético-Profissional', 'Aplicação', 'Avaliar', 'Sabe como', 'fácil', '0,35', '3', '1;2', 'Anatomia;Fisiologia', 'AN01;FI02', 'Item 1', 'Item 2', '', 'Art. 5º', '', 'P1', 'P2', '', 'PPC-01', 'PPC-02', '', ''],
+                    [2, 'C', 'Cirurgia Geral', 'Cirurgia Bariátrica', 'E2 — Aplicação e Análise', 'Análise', 'Analisar', 'Sabe fazer', 'médio', '0,58', '', '3', 'Clínica Médica', 'CM04', 'Item 3', '', '', '', '', '', '', '', 'PPC-03', '', '', ''],
+                    [3, 'A', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
                 ] as $linha)
                     <tr class="odd:bg-white even:bg-slate-50/60">
                         @foreach ($linha as $valor)
@@ -214,6 +214,7 @@
         <li><strong>Área</strong>, <strong>Tema</strong> e <strong>Habilidade</strong> descrevem o conteúdo da questão — um valor só por questão, igual Bloom/Miller/Dificuldade.</li>
         <li><strong>Bloom (verbo)</strong> também aceita o cabeçalho <strong>Taxonomia</strong> — se sua planilha já chama essa coluna assim (com os verbos Lembrar/Aplicar/Analisar/Avaliar...), não precisa renomear.</li>
         <li><strong>Dificuldade Pedagógica</strong> aceita Muito fácil, Fácil, Médio (ou "Moderada", sinônimo aceito) e Difícil.</li>
+        <li><strong>Período mínimo</strong> é o período do curso a partir do qual se espera que o aluno acerte a questão (<code class="bg-slate-100 px-1 rounded">3</code>, <code class="bg-slate-100 px-1 rounded">3º</code> ou <code class="bg-slate-100 px-1 rounded">3º período</code> = 3º período em diante); em branco, a questão vale para todos. Também aceita os cabeçalhos "Período esperado" e "A partir do período". Não confundir com <strong>Matriz (período)</strong>, que é o período da disciplina na matriz curricular.</li>
         <li><strong>Matriz (período/disciplina/código)</strong> aceitam vários valores na mesma célula, separados por vírgula, ponto-e-vírgula ou "|" (ver linha 1 do exemplo acima).</li>
         <li><strong>Matriz Prova, DCN, Portaria INEP e PPC</strong> guardam vários valores usando uma coluna por letra (A, B, C...) — deixe em branco as letras que não usar.</li>
         <li>Reimportar o mesmo número de questão desta avaliação <strong>atualiza</strong> os dados em vez de duplicar.</li>

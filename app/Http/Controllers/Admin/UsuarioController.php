@@ -19,18 +19,19 @@ use Illuminate\View\View;
 /**
  * Gestão de usuários do sistema: administradores (acesso total),
  * coordenadores (acesso limitado aos cursos vinculados) e reitores (só
- * leitura, indicadores agregados de todos os cursos). Mesma tabela
+ * leitura, indicadores agregados de todos os cursos) e colaboradores (montam o cronograma de atividades). Mesma tabela
  * (`admins`), diferenciados por `role` — uma aba por perfil na mesma tela.
  */
 class UsuarioController extends Controller
 {
     public function index(Request $request): View
     {
-        $aba = in_array($request->query('aba'), ['coordenadores', 'reitores'], true) ? $request->query('aba') : 'administradores';
+        $aba = in_array($request->query('aba'), ['coordenadores', 'reitores', 'colaboradores'], true) ? $request->query('aba') : 'administradores';
 
         $usuarios = match ($aba) {
             'coordenadores' => Admin::coordenadores(),
             'reitores' => Admin::reitores(),
+            'colaboradores' => Admin::colaboradores(),
             default => Admin::administradores(),
         };
         $usuarios = $usuarios
@@ -50,6 +51,7 @@ class UsuarioController extends Controller
             'totalAdministradores' => Admin::administradores()->count(),
             'totalCoordenadores' => Admin::coordenadores()->count(),
             'totalReitores' => Admin::reitores()->count(),
+            'totalColaboradores' => Admin::colaboradores()->count(),
             'opcoesCurso' => Curso::nomesDisponiveis(),
         ]);
     }
@@ -58,16 +60,18 @@ class UsuarioController extends Controller
     {
         $coordenador = $request->validated('papel') === 'coordenador';
         $reitor = $request->validated('papel') === 'reitor';
+        $colaborador = $request->validated('papel') === 'colaborador';
 
         $usuario = Admin::create([
             'username' => $request->validated('username'),
             'email' => $request->validated('email'),
-            // Coordenador e reitor podem não ter senha: `password_hash` é NOT NULL no schema legado, então vai um
+            // Coordenador, reitor e colaborador podem não ter senha: `password_hash` é NOT NULL no schema legado, então vai um
             // hash de um valor aleatório que ninguém conhece — o login por senha dele simplesmente nunca passa.
             'password_hash' => Hash::make($request->validated('password') ?: Str::random(64)),
             'role' => match (true) {
                 $coordenador => Admin::ROLE_COORDENADOR,
                 $reitor => Admin::ROLE_REITOR,
+                $colaborador => Admin::ROLE_COLABORADOR,
                 default => Admin::ROLE_ADMIN,
             },
         ]);
@@ -76,7 +80,7 @@ class UsuarioController extends Controller
             $usuario->sincronizarCursos($request->validated('cursos'));
         }
 
-        AtividadeLogger::registrar($reitor ? 'reitor.criado' : ($coordenador ? 'coordenador.criado' : 'administrador.criado'), 'Admin', $usuario->id, array_filter([
+        AtividadeLogger::registrar($colaborador ? 'colaborador.criado' : ($reitor ? 'reitor.criado' : ($coordenador ? 'coordenador.criado' : 'administrador.criado')), 'Admin', $usuario->id, array_filter([
             'username' => $usuario->username,
             'cursos' => $coordenador ? $request->validated('cursos') : null,
         ]));
@@ -114,7 +118,7 @@ class UsuarioController extends Controller
             $admin->sincronizarCursos($request->validated('cursos'));
         }
 
-        AtividadeLogger::registrar($admin->ehReitor() ? 'reitor.editado' : ($admin->ehCoordenador() ? 'coordenador.editado' : 'administrador.editado'), 'Admin', $admin->id, array_filter([
+        AtividadeLogger::registrar($admin->ehColaborador() ? 'colaborador.editado' : ($admin->ehReitor() ? 'reitor.editado' : ($admin->ehCoordenador() ? 'coordenador.editado' : 'administrador.editado')), 'Admin', $admin->id, array_filter([
             'username_antes' => $usernameAntes,
             'username_depois' => $admin->username,
             'senha_redefinida' => $senhaRedefinida,
@@ -136,7 +140,7 @@ class UsuarioController extends Controller
         $username = $admin->username;
         $aba = $this->abaDo($admin);
         $rotulo = $this->rotuloDoPerfil($admin);
-        $acao = $admin->ehReitor() ? 'reitor.excluido' : ($admin->ehCoordenador() ? 'coordenador.excluido' : 'administrador.excluido');
+        $acao = $admin->ehColaborador() ? 'colaborador.excluido' : ($admin->ehReitor() ? 'reitor.excluido' : ($admin->ehCoordenador() ? 'coordenador.excluido' : 'administrador.excluido'));
         $admin->delete();
 
         AtividadeLogger::registrar($acao, 'Admin', $admin->id, ['username' => $username]);
@@ -149,6 +153,7 @@ class UsuarioController extends Controller
     private function abaDo(Admin $usuario): string
     {
         return match (true) {
+            $usuario->ehColaborador() => 'colaboradores',
             $usuario->ehReitor() => 'reitores',
             $usuario->ehCoordenador() => 'coordenadores',
             default => 'administradores',
@@ -158,6 +163,7 @@ class UsuarioController extends Controller
     private function rotuloDoPerfil(Admin $usuario): string
     {
         return match (true) {
+            $usuario->ehColaborador() => 'Colaborador',
             $usuario->ehReitor() => 'Reitor',
             $usuario->ehCoordenador() => 'Coordenador',
             default => 'Administrador',

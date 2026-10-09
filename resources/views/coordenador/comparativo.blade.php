@@ -14,6 +14,7 @@
         default => ['bg' => 'bg-slate-50', 'borda' => 'border-slate-100', 'icone' => 'text-slate-600'],
     };
     $manter = array_filter(['curso' => $painel['cursoSelecionado'] ?? ''], fn ($v) => $v !== '');
+    $filtros = ['categoria' => (string) ($filtrosEscolhidos['categoria'] ?? ''), 'periodoCurso' => isset($filtrosEscolhidos['periodo_curso']) && $filtrosEscolhidos['periodo_curso'] !== '' ? (int) $filtrosEscolhidos['periodo_curso'] : null];
 @endphp
 
 @section('content')
@@ -62,6 +63,26 @@
                 @endforeach
             </select>
         </div>
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1" for="filtro-categoria">Categoria</label>
+            <select id="filtro-categoria" name="categoria" onchange="this.form.submit()" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm bg-white min-w-[170px] max-w-full">
+                <option value="" {{ $filtros['categoria'] === '' ? 'selected' : '' }}>Todas as categorias</option>
+                @foreach ($comparacao['categoriasDisponiveis'] as $c)
+                    <option value="{{ $c['id'] }}" {{ $filtros['categoria'] !== '' && (int) $filtros['categoria'] === $c['id'] ? 'selected' : '' }}>{{ $c['nome'] }}</option>
+                @endforeach
+            </select>
+        </div>
+        @if (! empty($comparacao['periodosCursoDisponiveis']))
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1" for="filtro-periodo-curso">Período do curso</label>
+                <select id="filtro-periodo-curso" name="periodo_curso" onchange="this.form.submit()" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm bg-white min-w-[140px]">
+                    <option value="" {{ $filtros['periodoCurso'] === null ? 'selected' : '' }}>Todos</option>
+                    @foreach ($comparacao['periodosCursoDisponiveis'] as $p)
+                        <option value="{{ $p }}" {{ $filtros['periodoCurso'] === $p ? 'selected' : '' }}>{{ \App\Support\PeriodoCurso::rotulo($p) }}</option>
+                    @endforeach
+                </select>
+            </div>
+        @endif
         <noscript><button type="submit" class="bg-slate-800 text-white font-semibold rounded-lg px-4 py-2 text-sm">Comparar</button></noscript>
         <p class="text-sm text-slate-500 ml-auto max-w-md">
             Cada categoria de avaliação é comparada só com ela mesma. A variação é <strong>{{ $atual }}</strong> menos <strong>{{ $referencia }}</strong>.
@@ -120,7 +141,10 @@
                 @php
                     $metricas = [
                         ['rotulo' => 'Média', 'par' => $cat['media'], 'inverter' => false, 'cor' => true],
-                        ['rotulo' => 'Alunos abaixo de '.(int) \App\Services\CoordenadorAlunosService::LIMIAR_ADEQUADO.'%', 'par' => $cat['abaixoPct'], 'inverter' => true, 'cor' => false],
+                        // Com o mínimo esperado por período na categoria, o corte é o esperado de cada aluno; sem ele, os 60% de sempre.
+                        $cat['comMeta']
+                            ? ['rotulo' => 'Alunos abaixo do esperado', 'par' => $cat['abaixoEsperado'], 'inverter' => true, 'cor' => false]
+                            : ['rotulo' => 'Alunos abaixo de '.(int) \App\Services\CoordenadorAlunosService::LIMIAR_ADEQUADO.'%', 'par' => $cat['abaixoPct'], 'inverter' => true, 'cor' => false],
                         ['rotulo' => 'Presença', 'par' => $cat['presenca'], 'inverter' => false, 'cor' => false],
                     ];
                 @endphp
@@ -174,54 +198,82 @@
                     @endforeach
                 </div>
 
-                {{-- Os mesmos alunos nos dois períodos --}}
-                @php $al = $cat['alunos']; @endphp
+                {{-- Alunos dentro do esperado, por período do curso (olha para o período, não para o aluno) --}}
+                @php $ap = $cat['alunosPorPeriodo']; @endphp
                 <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-                    <h3 class="font-semibold mb-1">Os mesmos alunos, nos dois períodos</h3>
-                    @if ($al === null || $al['comparaveis'] === 0)
-                        <p class="text-sm text-slate-500">Nenhum aluno com nota nesta categoria nos dois períodos.</p>
+                    <h3 class="font-semibold mb-1">Alunos dentro do esperado, por período do curso</h3>
+                    @if ($ap === null || empty($ap['periodos']))
+                        <p class="text-sm text-slate-500">Nenhum aluno com nota nesta categoria para comparar por período do curso.</p>
                     @else
                         <p class="text-sm text-slate-500 mb-4">
-                            {{ $al['comparaveis'] }} aluno(s) fizeram provas desta categoria em {{ $referencia }} e em {{ $atual }}.
-                            Variação menor que {{ (int) \App\Services\ComparacaoSemestresService::VARIACAO_ALUNO }} pontos conta como estável.
+                            Em cada período do curso, quantos alunos atingiram o resultado esperado em {{ $referencia }} e em {{ $atual }}
+                            @if ($cat['comMeta'])
+                                (o esperado de cada aluno depende do período em que ele está; sem essa informação na prova, vale 60%).
+                            @else
+                                (a categoria não define o esperado por período: vale 60% de acerto).
+                            @endif
+                            Variação menor que {{ (int) \App\Services\ComparacaoSemestresService::VARIACAO_PERIODO }} pontos conta como estável.
                         </p>
+
                         <div class="grid grid-cols-3 gap-3 mb-4 text-center">
                             <div class="rounded-xl bg-emerald-50 border border-emerald-100 p-3">
-                                <p class="text-2xl font-black text-emerald-700">{{ $al['subiram'] }}</p>
-                                <p class="text-xs font-medium text-slate-600">subiram</p>
+                                <p class="text-2xl font-black text-emerald-700">{{ $ap['subiram'] }}</p>
+                                <p class="text-xs font-medium text-slate-600">{{ $ap['subiram'] === 1 ? 'período subiu' : 'períodos subiram' }}</p>
                             </div>
                             <div class="rounded-xl bg-slate-50 border border-slate-200 p-3">
-                                <p class="text-2xl font-black text-slate-700">{{ $al['estaveis'] }}</p>
-                                <p class="text-xs font-medium text-slate-600">estáveis</p>
+                                <p class="text-2xl font-black text-slate-700">{{ $ap['estaveis'] }}</p>
+                                <p class="text-xs font-medium text-slate-600">{{ $ap['estaveis'] === 1 ? 'período estável' : 'períodos estáveis' }}</p>
                             </div>
                             <div class="rounded-xl bg-amber-50 border border-amber-100 p-3">
-                                <p class="text-2xl font-black text-amber-700">{{ $al['cairam'] }}</p>
-                                <p class="text-xs font-medium text-slate-600">caíram</p>
+                                <p class="text-2xl font-black text-amber-700">{{ $ap['cairam'] }}</p>
+                                <p class="text-xs font-medium text-slate-600">{{ $ap['cairam'] === 1 ? 'período caiu' : 'períodos caíram' }}</p>
                             </div>
                         </div>
 
-                        <div class="grid gap-6 md:grid-cols-2">
-                            @foreach ([['Mais caíram', $al['maisCairam']], ['Mais subiram', $al['maisSubiram']]] as [$titulo, $lista])
-                                <div>
-                                    <h4 class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">{{ $titulo }}</h4>
-                                    @if (empty($lista))
-                                        <p class="text-sm text-slate-500">Nenhum.</p>
-                                    @else
-                                        <ul class="divide-y divide-slate-100">
-                                            @foreach ($lista as $p)
-                                                <li class="py-2 flex items-center gap-3">
-                                                    @include('coordenador._avatar', ['nome' => $p['nome'] ?? $p['ra'], 'foto' => $p['foto'], 'tamanho' => 'w-8 h-8 text-sm'])
-                                                    <div class="min-w-0 flex-1">
-                                                        <a href="{{ route('coordenador.alunos.show', [$p['id'], ...$manter, 'periodo_letivo' => $atual]) }}" class="font-medium text-slate-800 hover:text-emerald-700 hover:underline truncate block">{{ $p['nome'] ?: 'Aluno sem nome' }}</a>
-                                                        <p class="text-xs text-slate-500">{{ $fmt($p['de']) }}% → {{ $fmt($p['para']) }}%</p>
-                                                    </div>
-                                                    @include('coordenador._variacao', ['delta' => $p['delta']])
-                                                </li>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <caption class="sr-only">Alunos dentro do esperado por período do curso: {{ $referencia }} contra {{ $atual }}</caption>
+                                <thead class="text-slate-500 text-left">
+                                    <tr>
+                                        <th scope="col" class="py-2 pr-3 font-semibold">Período do curso</th>
+                                        <th scope="col" class="py-2 px-3 font-semibold">{{ $referencia }}</th>
+                                        <th scope="col" class="py-2 px-3 font-semibold">{{ $atual }}</th>
+                                        <th scope="col" class="py-2 pl-3 font-semibold">Variação</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    @foreach ($ap['periodos'] as $p)
+                                        <tr>
+                                            <th scope="row" class="py-2 pr-3 text-left font-medium whitespace-nowrap">{{ $p['rotulo'] }}</th>
+                                            @foreach ([$p['referencia'], $p['atual']] as $lado)
+                                                <td class="py-2 px-3 min-w-[170px]">
+                                                    @if ($lado === null)
+                                                        <span class="text-slate-500">—</span>
+                                                    @else
+                                                        <div class="flex items-center gap-2">
+                                                            <div class="h-2 w-20 rounded-full bg-slate-100 overflow-hidden" aria-hidden="true">
+                                                                <div class="h-full rounded-full bg-primary" style="width: {{ max(3, min(100, $lado['pct'])) }}%"></div>
+                                                            </div>
+                                                            <span class="font-bold text-slate-700">{{ $fmt($lado['pct'], 0) }}%</span>
+                                                        </div>
+                                                        <span class="block text-xs text-slate-500">{{ $lado['dentro'] }} de {{ $lado['presentes'] }} alunos</span>
+                                                    @endif
+                                                </td>
                                             @endforeach
-                                        </ul>
-                                    @endif
-                                </div>
-                            @endforeach
+                                            <td class="py-2 pl-3 whitespace-nowrap">
+                                                @if ($p['sentido'] === null)
+                                                    <span class="text-xs text-slate-500">só em um dos períodos</span>
+                                                @else
+                                                    @include('coordenador._variacao', ['delta' => $p['deltaPct']])
+                                                    <span class="block text-xs text-slate-500 mt-1">
+                                                        {{ $p['deltaAlunos'] > 0 ? '+' : ($p['deltaAlunos'] < 0 ? '−' : '') }}{{ abs($p['deltaAlunos']) }} {{ abs($p['deltaAlunos']) === 1 ? 'aluno' : 'alunos' }} dentro do esperado
+                                                    </span>
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
                         </div>
                     @endif
                 </div>

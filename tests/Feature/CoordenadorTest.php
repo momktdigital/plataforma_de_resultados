@@ -573,7 +573,7 @@ class CoordenadorTest extends TestCase
             ->assertViewHas('painel', fn ($p) => $p['cursoSelecionado'] === 'MEDICINA' && $p['geral']['inscritos'] === 1);
     }
 
-    public function test_grafico_de_evolucao_do_painel_usa_a_regra_de_cor_do_desempenho(): void
+    public function test_grafico_de_evolucao_do_painel_tem_abas_geral_e_por_periodo(): void
     {
         $categoria = Categoria::create(['nome' => 'Simulados']);
         $this->avaliacao('Primeira', [['DIREITO', 'A'], ['DIREITO', 'B']], '2026-03-10', $categoria->id);
@@ -582,9 +582,11 @@ class CoordenadorTest extends TestCase
 
         $this->actingAs($coordenador, 'admin')->get('/painel/desempenho?periodo_letivo=')
             ->assertOk()
-            ->assertSee('id="grafico-evolucao-0"', false)
-            ->assertSee('window.LinhaDesempenho', false)
-            ->assertSee('LinhaDesempenho.serie(', false);
+            ->assertSee('id="grafico-0-evolucao"', false)
+            ->assertSee('assets/js/painel-desempenho.js', false)
+            ->assertSee('role="tablist"', false)
+            ->assertSee('Geral')
+            ->assertSee('Evolução da média nesta categoria'); // sem a meta por período nas questões, segue a média
     }
 
     /**
@@ -596,22 +598,19 @@ class CoordenadorTest extends TestCase
         $categoria = Categoria::create(['nome' => 'Simulados']);
         $coordenador = $this->coordenador('coord-direito', ['DIREITO']);
 
-        // Poucos alunos: só o cartão de período do curso (área exige 30+ respostas) -> largura total.
+        // Um curso só: apenas o cartão de período do curso -> largura total.
         $this->avaliacao('Pequena', [['DIREITO', 'A'], ['DIREITO', 'B']], '2026-03-10', $categoria->id);
         $html = $this->actingAs($coordenador, 'admin')->get('/painel/desempenho')->assertOk()->getContent();
         $this->assertStringContainsString('Desempenho por período do curso', $html);
-        $this->assertStringNotContainsString('Desempenho por área', $html);
+        $this->assertStringNotContainsString('Comparativo entre os seus cursos', $html);
         $this->assertStringContainsString('sm:grid-cols-2 xl:grid-cols-3', $html, 'cartão sozinho: barras em colunas');
         $this->assertMatchesRegularExpression('#<div class="grid gap-4 ">#', $html, 'um só cartão: a grade não divide a linha em duas colunas');
 
-        // Com área também: dois cartões dividem a linha, cada um em coluna única.
-        $muitos = [];
-        for ($i = 0; $i < 32; $i++) {
-            $muitos[] = ['DIREITO', $i % 2 ? 'A' : 'B'];
-        }
-        $this->avaliacao('Grande', $muitos, '2026-03-11', $categoria->id);
-        $html = $this->actingAs($coordenador, 'admin')->get('/painel/desempenho')->assertOk()->getContent();
-        $this->assertStringContainsString('Desempenho por área', $html);
+        // Com dois cursos: período do curso + comparativo entre cursos dividem a linha, cada um em coluna única.
+        $dois = $this->coordenador('coord-dois', ['DIREITO', 'MEDICINA']);
+        $this->avaliacao('Mista', [['DIREITO', 'A'], ['MEDICINA', 'B']], '2026-03-11', $categoria->id);
+        $html = $this->actingAs($dois, 'admin')->get('/painel/desempenho')->assertOk()->getContent();
+        $this->assertStringContainsString('Comparativo entre os seus cursos', $html);
         $this->assertStringContainsString('gap-4 lg:grid-cols-2 lg:[&>*:last-child:nth-child(odd)]:col-span-2', $html);
         $this->assertStringContainsString('space-y-3 max-h-96', $html, 'dois cartões: cada um em coluna única');
     }

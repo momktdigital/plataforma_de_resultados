@@ -4,6 +4,7 @@
 
 @php
     use App\Services\CoordenadorAlunosService;
+    use App\Support\RegraDeRisco;
     use App\Support\CorDesempenho;
 
     $semDados = ! empty($painel['semCurso']) || ! empty($painel['semResultados']);
@@ -27,6 +28,7 @@
 @endphp
 
 @section('content')
+@php $faltasDaRegra = RegraDeRisco::atual()->faltas ?? PHP_INT_MAX; @endphp
 @include('coordenador._cabecalho', [
     'ctx' => $painel,
     'aba' => 'alunos',
@@ -194,7 +196,7 @@
                                         <span class="text-slate-500">—</span>
                                     @else
                                         <span class="font-semibold">{{ $a['presentes'] }}/{{ $a['inscritos'] }}</span>
-                                        <span class="block text-xs {{ $a['faltas'] >= CoordenadorAlunosService::FALTAS_ALERTA ? 'text-amber-700 font-semibold' : 'text-slate-500' }}">{{ $a['faltas'] }} falta(s)</span>
+                                        <span class="block text-xs {{ ($a['faltasRisco'] ?? $a['faltas']) >= $faltasDaRegra ? 'text-amber-700 font-semibold' : 'text-slate-500' }}">{{ $a['faltas'] }} falta(s)</span>
                                     @endif
                                 </td>
                                 <td class="px-4 py-3">

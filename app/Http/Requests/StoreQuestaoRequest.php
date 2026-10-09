@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Support\Anulacao;
 use App\Support\Dificuldade;
+use App\Support\PeriodoCurso;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -32,6 +33,7 @@ class StoreQuestaoRequest extends FormRequest
             'miller_nivel' => ['nullable', 'string', 'max:255'],
             'dificuldade_pedagogica' => ['nullable', Rule::in(Dificuldade::valores())],
             'dificuldade_tri' => ['nullable', 'numeric'],
+            'periodo_minimo' => ['nullable', 'integer', 'min:1', 'max:'.PeriodoCurso::MAXIMO],
 
             // Campos de múltiplos valores (editor exibe como "chips") — ver
             // App\Services\QuestaoReferenciaService.
@@ -58,6 +60,9 @@ class StoreQuestaoRequest extends FormRequest
             'numero.required' => 'Informe o número da questão.',
             'numero.integer' => 'O número da questão precisa ser inteiro.',
             'gabarito.required' => 'Informe o gabarito da questão.',
+            'periodo_minimo.integer' => 'O período mínimo precisa ser um número (1 = 1º período).',
+            'periodo_minimo.min' => 'O período mínimo precisa ser a partir do 1º.',
+            'periodo_minimo.max' => 'O período mínimo não pode passar do '.PeriodoCurso::MAXIMO.'º.',
         ];
     }
 }

@@ -8,11 +8,8 @@
             <p class="text-sm text-slate-500">Sem dados suficientes.</p>
         @else
             @php $areasOrdenadas = collect($mediaPorArea)->sortDesc(); @endphp
-            <div class="grid lg:grid-cols-2 gap-6 items-center">
-                <div class="max-w-md mx-auto w-full">
-                    <canvas id="grafico-area" height="320"></canvas>
-                </div>
-                <ul class="space-y-2.5">
+            <div>
+                <ul class="grid gap-x-10 gap-y-3 md:grid-cols-2">
                     @foreach ($areasOrdenadas as $area => $percentual)
                         <li>
                             <div class="flex items-center justify-between text-sm mb-1">

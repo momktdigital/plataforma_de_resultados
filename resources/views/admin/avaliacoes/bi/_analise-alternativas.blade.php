@@ -7,6 +7,22 @@
         @if (empty($analiseAlternativas))
             <p class="text-sm text-slate-500">Sem dados suficientes.</p>
         @else
+            @php $areasDasQuestoes = collect($analiseAlternativas)->pluck('area')->filter()->unique()->sort()->values(); @endphp
+            @if ($areasDasQuestoes->isNotEmpty())
+                <div class="flex flex-wrap items-end gap-3 mb-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1" for="filtro-area-alternativas">Filtrar por área</label>
+                        <select id="filtro-area-alternativas" onchange="filtrarAlternativasPorArea(this.value)"
+                                class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm bg-white min-w-[200px] max-w-full">
+                            <option value="">Todas as áreas</option>
+                            @foreach ($areasDasQuestoes as $areaFiltro)
+                                <option value="{{ $areaFiltro }}">{{ $areaFiltro }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <p id="alternativas-contagem" class="text-sm text-slate-500" aria-live="polite">{{ count($analiseAlternativas) }} questão(ões)</p>
+                </div>
+            @endif
             <p class="text-xs text-slate-500 mb-4 flex flex-wrap items-center gap-4">
                 <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-emerald-100 border border-emerald-300 inline-block"></span> gabarito</span>
                 <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-amber-100 border border-amber-300 inline-block"></span> distrator (alternativa errada mais marcada)</span>
@@ -30,7 +46,7 @@
                     </thead>
                     <tbody class="divide-y divide-slate-100">
                         @foreach ($analiseAlternativas as $q)
-                            <tr data-numero="{{ $q['numero'] }}" data-percentual="{{ $q['percentualAcerto'] }}" @if ($q['anulada']) title="Questão anulada — não conta na nota" @endif>
+                            <tr data-numero="{{ $q['numero'] }}" data-percentual="{{ $q['percentualAcerto'] }}" data-area="{{ $q['area'] ?? '' }}" @if ($q['anulada']) title="Questão anulada — não conta na nota" @endif>
                                 <td class="px-3 py-2 font-bold text-slate-600 font-mono whitespace-nowrap">Q{{ $q['numero'] }}{{ $q['anulada'] ? '*' : '' }}</td>
                                 <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $q['area'] ?? '—' }}</td>
                                 <td class="px-3 py-2 text-slate-500">{{ $q['tema'] ?? '—' }}</td>

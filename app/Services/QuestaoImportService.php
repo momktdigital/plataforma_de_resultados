@@ -7,6 +7,7 @@ use App\Models\Questao;
 use App\Support\Dificuldade;
 use App\Support\HeaderResolver;
 use App\Support\ImportResult;
+use App\Support\PeriodoCurso;
 use App\Support\SpreadsheetReader;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -57,6 +58,8 @@ class QuestaoImportService
         'miller_nivel' => ['/miller/'],
         'dificuldade_pedagogica' => ['/(?=.*dificuldade)(?!.*tri)/'],
         'dificuldade_tri' => ['/(?=.*dificuldade)(?=.*tri)/'],
+        // "Período mínimo", "Período esperado", "A partir do período"... — nunca a coluna "Matriz (período)".
+        'periodo_minimo' => ['/(?!.*matriz)(?=.*period)(?=.*(minim|esperad|meta|partir))/'],
     ];
 
     /**
@@ -84,6 +87,7 @@ class QuestaoImportService
         ['chave' => 'miller_nivel', 'rotulo' => 'Miller (nível)', 'obrigatorio' => false, 'patterns' => self::METADADOS_PADROES['miller_nivel']],
         ['chave' => 'dificuldade_pedagogica', 'rotulo' => 'Dificuldade Pedagógica', 'obrigatorio' => false, 'patterns' => self::METADADOS_PADROES['dificuldade_pedagogica']],
         ['chave' => 'dificuldade_tri', 'rotulo' => 'Dificuldade TRI', 'obrigatorio' => false, 'patterns' => self::METADADOS_PADROES['dificuldade_tri']],
+        ['chave' => 'periodo_minimo', 'rotulo' => 'Período mínimo', 'obrigatorio' => false, 'patterns' => self::METADADOS_PADROES['periodo_minimo']],
         ['chave' => 'matriz_periodo', 'rotulo' => 'Matriz (período)', 'obrigatorio' => false, 'patterns' => ['/(?=.*matriz)(?=.*period)/']],
         ['chave' => 'matriz_disciplina', 'rotulo' => 'Matriz (disciplina)', 'obrigatorio' => false, 'patterns' => ['/(?=.*matriz)(?=.*disciplina)/']],
         ['chave' => 'matriz_codigo', 'rotulo' => 'Matriz (código)', 'obrigatorio' => false, 'patterns' => ['/(?=.*matriz)(?=.*codigo)/']],
@@ -367,6 +371,7 @@ class QuestaoImportService
             $campos[$campo] = match ($campo) {
                 'dificuldade_pedagogica' => $this->normalizarDificuldade($valor),
                 'dificuldade_tri' => $valor !== null ? (float) str_replace(',', '.', $valor) : null,
+                'periodo_minimo' => PeriodoCurso::ordinal($valor),
                 default => $valor,
             };
         }

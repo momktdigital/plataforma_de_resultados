@@ -155,6 +155,36 @@
                 </div>
             </div>
         </fieldset>
+        @php $regraPadrao = \App\Support\RegraDeRisco::atual(); @endphp
+        <fieldset class="w-full border-t border-slate-100 pt-3 mt-1">
+            <legend class="text-sm font-medium px-1">Estudante em risco nesta avaliação</legend>
+            <input type="hidden" name="risco_enviado" value="1">
+            <p class="text-xs text-slate-600 mb-3">
+                Padrão da instituição (Sistema &rarr; Configurações): <strong>{{ $regraPadrao->descricao() }}</strong>.
+                Preencha só o que esta avaliação faz diferente.
+            </p>
+            <div class="flex flex-wrap items-start gap-6">
+                <div class="min-w-[220px]">
+                    <label class="block text-sm font-medium mb-1" for="risco_acerto">Acerto abaixo de (%)</label>
+                    <input id="risco_acerto" name="risco_acerto" type="text" inputmode="decimal"
+                           placeholder="{{ $regraPadrao->acerto !== null ? 'padrão: '.\App\Support\RegraDeRisco::numero($regraPadrao->acerto) : 'padrão: desligado' }}"
+                           value="{{ old('risco_acerto', $avaliacao->risco_acerto !== null ? \App\Support\RegraDeRisco::numero($avaliacao->risco_acerto) : '') }}"
+                           class="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    <p class="text-xs text-slate-600 mt-1">Em branco usa o padrão. <strong>0</strong> tira esta prova do critério de acerto.</p>
+                    @error('risco_acerto')
+                        <p class="text-sm text-red-700 mt-1" role="alert">{{ $message }}</p>
+                    @enderror
+                </div>
+                <div class="min-w-[220px]">
+                    <label class="inline-flex items-center gap-2 text-sm font-medium">
+                        <input type="checkbox" name="risco_ignora_falta" value="1" class="rounded border-slate-300"
+                               {{ old('risco_enviado') ? (old('risco_ignora_falta') ? 'checked' : '') : ($avaliacao->risco_ignora_falta ? 'checked' : '') }}>
+                        Não contar falta nesta avaliação
+                    </label>
+                    <p class="text-xs text-slate-600 mt-1">Para prova opcional: faltar a ela não conta no critério de faltas.</p>
+                </div>
+            </div>
+        </fieldset>
         <fieldset class="w-full border-t border-slate-100 pt-3 mt-1">
             <legend class="text-sm font-medium px-1">Meta de acerto por dificuldade pedagógica (%)</legend>
             <p class="text-xs text-slate-500 mb-2">Quanto esperamos que a turma acerte em questões de cada nível. O dashboard compara com o observado e mostra o desvio. Deixe em branco para não definir meta.</p>
@@ -200,8 +230,8 @@
     });
 </script>
 
-{{-- Editor manual de gabarito --}}
-<div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
+{{-- Editor manual de gabarito (âncora #gabarito: o Dashboard linka para cá) --}}
+<div id="gabarito" class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
     <div class="flex items-center justify-between mb-1">
         <h2 id="editor-questao-titulo" class="font-semibold">Adicionar questão</h2>
         <button type="button" id="editor-questao-cancelar" class="hidden text-sm text-slate-500 hover:underline">Cancelar edição</button>
@@ -273,6 +303,15 @@
                 <label class="block text-sm font-medium mb-1" for="dificuldade_tri">Dificuldade TRI</label>
                 <input id="dificuldade_tri" name="dificuldade_tri" type="number" step="0.0001" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
             </div>
+            <div class="lg:col-span-2">
+                <label class="block text-sm font-medium mb-1" for="periodo_minimo">Período mínimo esperado</label>
+                <input id="periodo_minimo" name="periodo_minimo" type="number" min="1" max="{{ \App\Support\PeriodoCurso::MAXIMO }}" step="1" placeholder="Ex.: 3"
+                       aria-describedby="periodo_minimo-ajuda"
+                       class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                <p id="periodo_minimo-ajuda" class="text-xs text-slate-500 mt-1">
+                    A partir de qual período do curso se espera que o aluno acerte (3 = 3º período em diante). Vazio = vale para todos.
+                </p>
+            </div>
         </div>
 
         <div>
@@ -341,6 +380,7 @@
                         <th class="px-3 py-2 whitespace-nowrap">Miller</th>
                         <th class="px-3 py-2 whitespace-nowrap">Dif. Pedagógica</th>
                         <th class="px-3 py-2 whitespace-nowrap">Dif. TRI</th>
+                        <th class="px-3 py-2 whitespace-nowrap">Período mínimo</th>
                         <th class="px-3 py-2 whitespace-nowrap">Matriz Prova</th>
                         <th class="px-3 py-2 whitespace-nowrap">DCN</th>
                         <th class="px-3 py-2 whitespace-nowrap">Portaria INEP</th>
@@ -366,6 +406,7 @@
                                 'miller_nivel' => $questao->miller_nivel,
                                 'dificuldade_pedagogica' => $questao->dificuldade_pedagogica,
                                 'dificuldade_tri' => $questao->dificuldade_tri,
+                                'periodo_minimo' => $questao->periodo_minimo,
                                 'matriz_prova' => $referenciasPorTipo->get('matriz_prova', []),
                                 'dcn' => $referenciasPorTipo->get('dcn', []),
                                 'portaria_inep' => $referenciasPorTipo->get('portaria_inep', []),
@@ -396,6 +437,7 @@
                             <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $questao->miller_nivel ?: '—' }}</td>
                             <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $questao->dificuldade_pedagogica ?: '—' }}</td>
                             <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $questao->dificuldade_tri ?? '—' }}</td>
+                            <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $questao->periodo_minimo ? $questao->periodo_minimo.'º' : '—' }}</td>
                             <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $referenciasPorTipo->get('matriz_prova') ? implode('; ', $referenciasPorTipo->get('matriz_prova')) : '—' }}</td>
                             <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $referenciasPorTipo->get('dcn') ? implode('; ', $referenciasPorTipo->get('dcn')) : '—' }}</td>
                             <td class="px-3 py-2 text-slate-500 whitespace-nowrap">{{ $referenciasPorTipo->get('portaria_inep') ? implode('; ', $referenciasPorTipo->get('portaria_inep')) : '—' }}</td>
@@ -505,7 +547,7 @@ function submeterAcaoQuestaoIndividual(botao, metodo, confirmacao) {
     var camposSimples = [
         'numero', 'gabarito', 'anulada_modo', 'area', 'tema', 'habilidade',
         'bloom_nivel', 'bloom_verbo', 'miller_nivel',
-        'dificuldade_pedagogica', 'dificuldade_tri',
+        'dificuldade_pedagogica', 'dificuldade_tri', 'periodo_minimo',
     ];
     var camposChips = ['matriz_prova', 'dcn', 'portaria_inep', 'ppc', 'matriz_periodo', 'matriz_disciplina', 'matriz_codigo'];
 

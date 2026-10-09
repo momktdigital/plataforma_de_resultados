@@ -48,10 +48,17 @@ class CoordenadorComparativoController extends PainelController
         return view('coordenador.comparativo', [
             'usuario' => $usuario,
             'painel' => $painel,
+            'filtrosEscolhidos' => [
+                'categoria' => trim((string) $request->query('categoria', '')),
+                'periodo_curso' => trim((string) $request->query('periodo_curso', '')),
+            ],
             'periodos' => $periodos,
             'atual' => $atual,
             'referencia' => $referencia,
-            'comparacao' => $servico->comparar($usuario, $curso, $atual, $referencia),
+            'comparacao' => $servico->comparar($usuario, $curso, $atual, $referencia, [
+                'categoria' => trim((string) $request->query('categoria', '')),
+                'periodo_curso' => trim((string) $request->query('periodo_curso', '')),
+            ]),
         ]);
     }
 }

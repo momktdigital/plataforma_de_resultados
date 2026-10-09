@@ -21,7 +21,7 @@ sem alterá-las, e adiciona as tabelas novas descritas abaixo.
 |---|---|---|
 | `categorias` | `nome` | Árvore (`categoria_pai_id` aponta pra outra `categorias`, nulo = raiz) — agrupa o boletim do aluno no portal por categoria/subcategoria. |
 | `avaliacoes` | — (código gerado automaticamente) | `nome`/`tipo`/`link_comentado` são só identificação, totalmente opcionais. `categoria_id` (opcional) e `data_avaliacao` (opcional, distinta de `created_at`) alimentam o agrupamento e a ordenação/filtro por data no portal. |
-| `questoes` | `avaliacao_codigo`, `numero`, `gabarito` | O resto que é **um valor só** por questão (Bloom, Miller, dificuldade) é opcional e vira coluna. O que pode ter **vários valores** (matriz da avaliação, DCN, Portaria INEP, PPC) vira linhas em `questao_referencias` — ver abaixo. Suporta soft-delete. |
+| `questoes` | `avaliacao_codigo`, `numero`, `gabarito` | O resto que é **um valor só** por questão (Bloom, Miller, dificuldade, `periodo_minimo`) é opcional e vira coluna. `periodo_minimo` (1–20, NULL = vale para todos) é a meta por período: a partir de qual período do curso se espera que o aluno acerte a questão — só classificação, não altera acerto, nota nem `resultado_resumos`. O que pode ter **vários valores** (matriz da avaliação, DCN, Portaria INEP, PPC) vira linhas em `questao_referencias` — ver abaixo. Suporta soft-delete. |
 | `questao_matrizes` | `questao_id` | Uma questão pode estar em mais de um período/disciplina/código de matriz — por isso é uma tabela filha (1:N), não colunas fixas. |
 | `questao_referencias` | `questao_id`, `tipo`, `valor` | Referências da questão a matriz de avaliação/DCN/Portaria INEP/PPC — uma linha por valor, `tipo` diz a qual grupo pertence. Existiam como colunas numeradas (`dcn_a`, `dcn_b`...); viraram tabela porque é um grupo repetitivo (0..N valores), não um atributo de valor único, e o número de colunas era só um palpite (ver "Performance e escala" abaixo). |
 | `respostas` | `avaliacao_codigo`, (`ra` OU `cpf`), `questao_numero` | Formato longo: uma linha por resposta de um respondente a uma questão, num período (`periodo`, opcional — default `''`). `aluno_chave` é uma coluna gerada pelo banco (`COALESCE(cpf, ra)`) usada no índice único que evita duplicar a mesma resposta num reimport; `ra`/`cpf` também têm índice próprio (ver "Performance e escala"). Chama-se `respostas`, não `resultados`, porque a aplicação legada já tem uma tabela `resultados` no mesmo banco. |
@@ -244,7 +244,7 @@ herdada do schema da aplicação legada, então uma conta já cadastrada
 antes de o app legado ser removido continua funcionando aqui normalmente.
 (`/administradores` antigo redireciona para `/usuarios`.)
 
-A tela tem três abas, distinguidas pela coluna legada `admins.role`:
+A tela tem quatro abas, distinguidas pela coluna legada `admins.role`:
 
 - **Administradores** (`superadmin`, ou sem role): acesso total.
 - **Coordenadores** (`coordinator`): acesso limitado aos cursos a que estão
@@ -264,9 +264,12 @@ A tela tem três abas, distinguidas pela coluna legada `admins.role`:
   análise aprofundada.
   Cadastro: e-mail obrigatório (é para ele que vai o código de acesso), senha
   opcional, nenhum curso.
+- **Colaboradores** (`collaborator`): montam o **cronograma de atividades** e registram as
+  pendências (ver "Cronograma de atividades"). Não veem avaliações, resultados nem alunos. Cadastro como o da
+  reitoria: e-mail obrigatório, senha opcional, nenhum curso.
 
 **Login.** A tela de login tem duas abas. **Administrador**: usuário e senha
-(a senha é obrigatória só para ele). **Coordenação / Reitoria** (coordenador e reitor): informa usuário ou e-mail
+(a senha é obrigatória só para ele). **Coordenação / Reitoria** (coordenador, reitor e colaborador): informa usuário ou e-mail
 e recebe um **código de 6 dígitos** no e-mail cadastrado (`/login/codigo`,
 `LoginPorCodigoService`) — sem senha. O código vale 10 minutos e uma única vez,
 3 erros o invalidam, o reenvio tem espera crescente (1, 2, 5, 10 min) e só o
@@ -377,10 +380,11 @@ avaliação, igual ao portal; padrão = o mais recente; avaliação **sem data**
 o início do nome — `2026/2 - Diagnóstico...` — ou o período letivo em que a
 maioria dos alunos dela estava matriculada):
 
-- **Visão geral** (`/painel`): alunos, quantos precisam de atenção, presença e
-  nº de avaliações; os alunos que mais precisam de atenção (com o motivo); a
-  divisão dos alunos por situação; destaques em texto; avaliações mais recentes;
-  alunos por período do curso; atalhos.
+- **Visão geral** (`/painel`): alunos, quantos precisam de atenção (com a regra em vigor), presença e
+  nº de avaliações; destaques em texto; avaliações mais recentes, com a coluna **Dentro do esperado** (alunos presentes que
+  alcançaram o mínimo esperado para o período deles — a fatia da prova que cabe no período, meta `periodo_minimo` —, ex.:
+  `5 (20%)`; numa prova sem a meta, só a média no lugar); alunos por período do curso, com presença e **% de acerto**; atalhos.
+  A lista nominal de quem precisa de atenção fica na aba Alunos.
 - **Alunos do curso** (`/painel/alunos`): todos os alunos do semestre (quem
   fez ao menos uma avaliação **mais** os matriculados nele, mesmo sem
   resultado), com presença, média, última nota, tendência e **situação**. Busca
@@ -393,19 +397,28 @@ maioria dos alunos dela estava matriculada):
   matrículas dele no curso. Aluno de outro curso responde 404; resultados de
   provas feitas em OUTRO curso (aluno transferido) não aparecem.
 - **Desempenho** (`/painel/desempenho`): a análise detalhada, **por categoria
-  de avaliação** (provas de categorias diferentes não são comparáveis): média,
-  abaixo de 60%, presença, evolução, desempenho por período do curso e por
-  área. A "avaliação anterior" é a anterior **da mesma categoria**, mesmo de
-  outro período letivo.
+  de avaliação** (provas de categorias diferentes não são comparáveis). Filtros:
+  curso, período letivo, **categoria** e **período do curso**. Cada categoria é um
+  **dropdown** (fechado por padrão; abre sozinho com uma só categoria ou ao filtrar por ela) com: média, **alunos abaixo do
+  desempenho esperado** (o aluno que não alcançou o mínimo do próprio período — a fatia da prova que cabe nele, meta
+  `periodo_minimo`; sem a meta nas questões, o cartão volta a ser "Abaixo de 60%"), presença e avaliações; gráficos de
+  **evolução** (alunos que atingiram o esperado a cada avaliação; sem a meta, a média), **área**, **nível de Bloom** e **tema**,
+  cada um com as abas **Geral** e **Por período** (do curso); e, no fim, a tabela das avaliações da categoria. A "avaliação
+  anterior" é a anterior **da mesma categoria**, mesmo de outro período letivo. Os gráficos só são criados quando a categoria
+  é aberta (`public/assets/js/painel-desempenho.js`).
 
 - **Comparar semestres** (`/painel/comparativo`): o período escolhido contra
   outro (padrão: o anterior). Alunos, quem precisa de atenção, presença e nº de
-  avaliações dos dois períodos; e, **dentro de cada categoria** (que só se
-  compara com ela mesma), média, % abaixo de 60%, presença, desempenho por
-  área e por período do curso, com a variação. Os **mesmos alunos** nos dois
-  períodos são pareados pela pessoa: quantos subiram, ficaram estáveis ou
-  caíram (menos de 5 pontos é estável) e os que mais variaram, com link para a
-  ficha. Categoria que só existiu em um dos períodos é avisada, não comparada.
+  avaliações dos dois períodos (filtros de curso, categoria e **período do curso**, estes
+  valendo para os dois semestres); e, **dentro de cada categoria** (que só se
+  compara com ela mesma), média, **alunos abaixo do esperado** (abaixo de 60% quando
+  a categoria não traz o mínimo por período), presença, desempenho por área e por
+  período do curso, com a variação. Em vez de parear a pessoa, o quadro **"Alunos
+  dentro do esperado, por período do curso"** olha para o período: em cada período do
+  curso (1º, 2º...), quantos alunos atingiram o esperado (ou 60%) em cada semestre e se o
+  período subiu, ficou estável ou caiu (menos de 5 pontos é estável). Categoria que só
+  existiu em um dos períodos é avisada, não comparada. O menu do coordenador segue a
+  ordem Visão geral · Desempenho · Avaliações · Comparar semestres · Alunos do curso.
 
 **Notificações** (`/notificacoes`, só coordenador). Quando resultados de uma
 avaliação do curso são importados (`ImportarResultadosJob`),
@@ -428,8 +441,9 @@ VAPID, um service worker, uma tabela de inscrições, a biblioteca
 `minishlink/web-push` e HTTPS no servidor; não está implementado.
 
 **Situação do aluno** (`CoordenadorAlunosService::classificar`, sempre com os
-motivos à vista): *Em atenção* = média abaixo de 60%, 2 faltas ou mais, ou queda
-de 20 pontos ou mais entre as duas últimas avaliações da mesma categoria;
+motivos à vista): *Em atenção* = a **regra de risco da instituição** (padrão: média abaixo de
+60% ou 2 faltas ou mais; ver *Estudante em risco*) ou queda de 20 pontos ou mais entre as duas últimas avaliações da mesma
+categoria (a queda é um sinal à parte);
 *Ausente em tudo* = faltou em todas; *Destaque* = média ≥ 80% e nenhuma falta;
 *Regular* = o resto; *Sem resultado* = matriculado sem avaliação registrada.
 **Ausentes** (prova inteira em branco) ficam fora das médias e entram só em
@@ -451,6 +465,46 @@ não registra: essa visão é só leitura de verdade (o middleware recusa qualqu
 e, para presença e áreas, sobre `respostas` restrito aos alunos do curso e ao
 período. `CoordenadorAlunosService` lê só `resultado_resumos` (uma linha por
 aluno×avaliação×período) e toca `respostas` apenas na ficha de UM aluno.
+
+## Cronograma de atividades (`/colaboracao`, `/cronograma`)
+
+A checklist de auditoria ROC/ROD (planilha "Tabela-base da Auditoria") vira um **calendário por coordenador**. Quem monta é o
+**colaborador** (`admins.role = 'collaborator'`, quarta aba de `/usuarios`; entra por código no e-mail como o coordenador; só alcança
+o cronograma e o próprio perfil — o resto responde 403 e um GET fora do lugar volta para `/colaboracao`). O administrador também
+gerencia (sem ele ninguém corrigiria nada se o colaborador saísse).
+
+- **Atividade** (`cronograma_itens`): data, rotina (**ROD** = docentes, **ROC** = coordenação, **Auditoria** = conferência final),
+  projeto/atividade e "o que vou conferir". Os **cursos a que se aplica** ficam em `cronograma_item_cursos`, cada um com a sua
+  situação (Aguardando, Em acompanhamento, Pendente, Resolvido). Curso fora da tabela = "Não se aplica" da planilha. A atividade
+  aparece no calendário do coordenador de cada curso marcado, e só nele.
+- **Pendências** (`cronograma_pendencias`, a aba "Registro de Pendências"): curso, data do registro, pendência, encaminhamento,
+  prazo, situação e responsável, **vinculadas à atividade**. O colaborador registra e atualiza a situação; o coordenador **só
+  visualiza** (calendário, lista "Pendências registradas" e a tela da atividade, só com os cursos dele). Serve de histórico: curso e
+  data do registro não mudam (`resolvida_em` marca quando foi resolvida). O colaborador (e o administrador) pode **excluir** uma
+  pendência — o conteúdo todo fica na auditoria (`cronograma.pendencia_excluida`). Uma atividade com pendência não pode ser
+  excluída nem perder o curso da pendência enquanto ela existir. Cada gravação vai para a auditoria (`cronograma.*`).
+- **Coordenador** (`/cronograma`): duas visões, alternadas por `?visao=` e com os mesmos filtros (busca em projeto/descrição, rotina,
+  situação, curso se tiver mais de um; na lista, também intervalo `de`/`ate`): **calendário** mensal (domingo a sábado; no celular
+  vira agenda por dia) e **lista** paginada por data, com a situação de cada curso e as pendências abertas. A situação filtrada vale
+  para os cursos DELE (a pendência de outro curso não faz a atividade aparecer). Números de pendências em aberto/vencidas. Atividade de outro curso é **404**, não 403. O reitor na visão do curso enxerga o
+  cronograma daquele curso (só leitura, pelo mesmo middleware).
+- **Colaborador** (`/colaboracao`): o mesmo calendário e a mesma lista, com todas as atividades e um "+" em cada dia, o formulário da atividade,
+  a tela da atividade (situação por curso + pendências) e `/colaboracao/pendencias` (todas, com filtros).
+
+**Carga inicial pela planilha.** `php artisan cronograma:importar "Tabela-base da Auditoria ROC ROD.xlsx"` lê as abas "Checklist de
+Auditoria" e "Registro de Pendências" (`CronogramaImportService`). Sem `--gravar` é só uma **simulação** que mostra como cada coluna de
+curso da planilha foi mapeada; o que não casa pelo nome (sem acento/caixa, ou com erro de digitação óbvio de até 2 letras) exige
+`--mapa="Coluna=CURSO"` (vários cursos com `|`) ou `--ignorar="Coluna"`, e `--criar-cursos` cadastra os nomes do mapa que ainda não
+existem. "Não se aplica" tira o curso da atividade, célula em branco = Aguardando, e a pendência se liga à atividade pela
+rotina + processo + curso. Pode ser repetido: o que já existe não é duplicado nem sobrescrito. Ex. da carga feita:
+
+```bash
+php artisan cronograma:importar planilha.xlsx --mapa="Medicina Veterinária Integral=MEDICINA VETERINARIA" --mapa="Odontologia Integral=ODONTOLOGIA" --mapa="Odontologia Integral2=ODONTOLOGIA" --mapa="Cursos EAD=Cursos EAD" --mapa="Cursos Semipresenciais=Cursos Semipresenciais" --criar-cursos --gravar
+```
+
+Leituras em `CronogramaService`; o recorte por curso compara pelo nome sem acento/caixa (`NomeCurso`). Os cursos selecionáveis são os
+de `Curso::nomesDisponiveis()` (vindos da matrícula): um nome que a planilha usa e não existe lá (por exemplo, "Cursos EAD")
+precisa existir como curso para poder ser marcado.
 
 ## Painel da reitoria (`/reitoria`)
 
@@ -508,7 +562,7 @@ Sete telas sobre o mesmo recorte (mais a lista **Análise do curso**, abaixo):
 | **Competências** | níveis de **Bloom** (proficientes × não proficientes, mapa por curso, radar curso × conjunto) e **áreas** de conhecimento (ranking e mapa curso × área) |
 | **Evolução entre semestres** | série institucional (proficiência, média, participação), **variação de cada curso** frente a um semestre à escolha, curso × semestre |
 | **Análise dos itens** | análise **institucional** das questões (`ReitorItensService`): mapa acerto × discriminação, itens a revisar — **gabarito suspeito** (discriminação negativa e uma alternativa errada mais marcada que o gabarito), **problema da questão** (acerto muito baixo e não discrimina) × **lacuna de formação** (acerto muito baixo, mas discrimina bem), item fraco, baixo em todos os cursos —, por área e por avaliação (KR-20). O item é sempre (avaliação × número): cada avaliação cadastra as suas questões. Usa `PsicometriaService` e `RelatorioAdminService::analiseAlternativas()` (com cache próprio) e, quando a avaliação tem estudantes de vários cursos, calcula o item por curso |
-| **Estudantes em risco** | **só agregado** (`ReitorRiscoService`): quem faltou a 2+ aplicações ("ausência recorrente") ou ficou abaixo do critério em TODAS as aplicações a que compareceu ("baixo desempenho persistente"), por curso e por período do curso, com tendência frente ao semestre anterior. Pede várias aplicações no recorte (os simulados, ou "Todos os períodos"); grupos com menos de 5 elegíveis não mostram percentual. A lista nominal é do coordenador (o nome do curso abre a lista de alunos em atenção) |
+| **Estudantes em risco** | **só agregado** (`ReitorRiscoService`): quantos estudantes se enquadram na **regra de risco da instituição** (ver *Estudante em risco*, abaixo) — por faltas, por acerto e no total —, por curso e por período do curso, com tendência frente ao semestre anterior. Funciona com uma aplicação só (a regra de faltas avisa quando o recorte tem menos aplicações que o limite); grupos com menos de 5 estudantes não mostram percentual. A lista nominal é do coordenador (o nome do curso abre a lista de alunos em atenção) e usa a MESMA regra |
 
 **Drill-down.** Para o reitor, clicar numa barra/ponto/célula, ou no nome de um curso em qualquer tabela,
 abre a análise **daquele curso, naquele recorte** (período letivo, período do curso, avaliação) na visão do
@@ -547,6 +601,22 @@ em `/reitoria/exportar.xlsx` e a exportação é registrada na auditoria.
   escolhida no semestre dela e a de mais participantes da mesma categoria nos outros.
   É uma foto de cada semestre, não o acompanhamento dos mesmos estudantes — idem
   para a trajetória por período do curso (cada período é uma turma diferente).
+
+**Estudante em risco** (`App\Support\RegraDeRisco`). Quem é "estudante em risco" é definido pela administração em
+**Configurações do sistema → Estudante em risco** — uma regra só, usada pela lista de alunos em atenção do coordenador, pelas
+notificações dele e pelo painel da reitoria (que conta, em agregado, as mesmas pessoas):
+
+- **Acerto**: a *média de acerto* do estudante nas provas em que esteve presente fica abaixo de X% (padrão 60).
+- **Faltas**: faltou a N ou mais aplicações — prova inteira em branco (padrão 2).
+- Cada critério pode ser ligado ou desligado (um dos dois é obrigatório) e o operador diz se **basta um** ("ou") ou se é
+  preciso **os dois ao mesmo tempo** ("e").
+- **Por avaliação** (Avaliação → *Estudante em risco nesta avaliação*): limite de acerto próprio (em branco = padrão da
+  instituição; **0** = a prova não entra no critério de acerto; pode também ligar o acerto só nela) e *Não contar falta
+  nesta avaliação* (prova opcional). Com limites diferentes, compara-se a média do estudante com a **média dos limites** das
+  provas que ele fez (com um limite só, é "média < limite").
+- Gravado em `configuracoes_sistema` (`risco_acerto`, `risco_faltas`, `risco_operador`; vazio = critério desligado) e em
+  `avaliacoes.risco_acerto` / `avaliacoes.risco_ignora_falta`. Mudar a regra é auditado (`configuracao.risco_alterado`) e os
+  agregados em cache levam a regra (e a de cada avaliação) na chave: trocar o valor nunca serve número velho.
 
 **Parâmetros** (Configurações do sistema → *Painel da reitoria*, só administrador;
 `configuracoes_sistema`): `reitor_corte_proficiencia` (inteiro 30–90, padrão 60) e
@@ -749,6 +819,53 @@ segundo fator confirmado (ou direto, sem 2FA) entra a sessão do boletim
    aparece como um **card resumido** (nome, data, % de acerto). Um filtro
    por período (De/Até) esconde os cards fora do intervalo e as categorias
    que ficam vazias — tudo client-side, sem nova consulta ao servidor.
+
+   **Tour guiado e rodapé.** Cada tela do portal com tour (boletim e detalhe da avaliação; a tela de login não tem) abre sozinha, na
+   primeira visita, um popup que destaca os elementos da tela e explica cada um (`public/assets/js/portal-tour.js`, JS
+   puro, sem biblioteca; estilos em `portal-tour.css`). Os passos ficam na própria view, em `@section('tour')` com
+   `@include('portal._tour', ['chave' => ..., 'passos' => [...]])`; passo cujo alvo não existe na tela é pulado. Quem já
+   viu fica registrado no `localStorage` do navegador (uma chave por tela, `portal_tour_v1_<chave>`). O rodapé tem
+   **"Refazer tour da página"** nas telas com tour. O link da **área administrativa** aparece só na tela de login do aluno
+   (`@section('acesso-administrativo')` na `consulta`), nunca no boletim, no detalhe ou na verificação do código.
+
+   **O que o boletim mostra (e o que não mostra).** O card verde do topo traz só o
+   número de avaliações — sem "média geral". Os cards de resumo falam em **percentual de
+   acerto** ("subiu de 55% para 68%"), nunca em "pontos", e **não comparam o aluno com a
+   turma** (nada de "acima/abaixo da média da turma" nem "entre os X% melhores"). Um dos
+   cards traduz o **nível de Bloom** de menor acerto em linguagem de estudante
+   (`App\Support\BloomExplicado`: "As questões que pedem para relacionar dados de um caso
+   foram as mais difíceis pra você… Treine com casos, não só com teoria."), só com ≥ 2
+   níveis, ≥ 3 questões no pior e diferença que não seja ruído. Dentro de cada categoria
+   o gráfico **rendimento x mínimo esperado** (título na tela) substituiu "Você x turma", "Dificuldade pedagógica",
+   "Nível de Bloom" e "Áreas onde você mais diverge da turma": **uma barra por avaliação** com o % de
+   acerto TOTAL do aluno (verde = no mínimo ou acima, amarela = abaixo) e uma **linha tracejada em pé**
+   no **mínimo esperado**, mais a **Leitura rápida** em texto
+   (`AnaliseConsolidadaService::metaPorPeriodo()` + `App\Support\LeituraMetaPeriodo`).
+   O mínimo vem da meta `questoes.periodo_minimo`: é a fatia da prova que já cabe no
+   período do aluno (questão sem meta conta para todos; questão de período à frente não
+   é cobrada). O período do aluno é o de `respostas.periodo` daquela prova, não o do
+   cadastro. **Prova sem meta (nenhuma questão com período mínimo, ou período do aluno
+   irreconhecível): mínimo padrão de 60%** (`AnaliseConsolidadaService::MINIMO_PADRAO`).
+   O **mapa de domínio por área** segue a mesma regra por célula (área × avaliação): mostra o acerto e o
+   "mín." esperado — a fatia das questões daquela área que o aluno já deveria acertar pelo período dele —,
+   verde no mínimo ou acima, **amarelo abaixo**, e 60% quando as questões da célula não trazem a meta.
+   Os cards de resumo usam "rendimento" (não "desempenho") e o rótulo do card verde vai
+   para o singular quando há uma única avaliação.
+
+   **Detalhe da avaliação sem comparação com a turma.** A tela da avaliação não mostra mais "Comparativo com a
+   turma", "Posição relativa" nem "Sua resposta x turma, por questão" (os três visuais continuam existindo no
+   catálogo de visualizações, mas o portal não os renderiza). "Desempenho por área" virou barras com uma linha
+   tracejada em pé na **meta de cada área** (`RelatorioAlunoService::desempenhoPorAreaComMeta()`, desenhado por
+   `Viz.barrasComMinimo()` em `_viz.blade.php`, o mesmo gráfico do acerto x mínimo da categoria): a meta é a fatia das
+   questões da área que já cabem no período do aluno (`respostas.periodo` da prova), ou 60% sem essa informação; verde
+   atinge, amarelo não. **Trilha de estudo** e **Lacunas / Conhecimentos consolidados** só consideram as questões que o
+   aluno precisava acertar pelo período dele (as de `periodo_minimo` à frente ficam de fora, e a tela diz quantas); o
+   ganho da trilha continua sendo sobre a prova inteira. O gráfico "Desempenho por nível de Bloom" saiu da tela da
+   avaliação; no lugar entrou **"Como você foi nesta prova"** (`App\Support\LeituraDaProva`): uma abertura (muito bem /
+   bem / perto do esperado / abaixo, contra o esperado do período — ou a referência de 60%), o ponto forte e as áreas a
+   reforçar, o tipo de pergunta que mais deu trabalho (o Bloom traduzido por `BloomExplicado`, sem citar "Bloom") e as
+   questões de períodos à frente. Linguagem de estudante, sem jargão nem comparação com a turma; cada trecho respeita a
+   configuração de visuais (nota geral, desempenho por área, nível de Bloom).
 
    **O detalhe de cada avaliação abre em nova aba** (`GET
    /portal/resultados/avaliacoes/{avaliacao}?periodo=`,
@@ -964,7 +1081,7 @@ Uma linha por questão. Colunas reconhecidas (cabeçalho flexível, com ou sem
 acento):
 
 - **Obrigatórias:** `Questão` (aceita `Questao`, `Número`, `Item`, `#`), `Gabarito` (aceita `Resposta`, `Alternativa`, `Letra`, `Correta`).
-- **Opcionais:** `Matriz Prova (campo A/B/C)`, `Bloom (nível)`, `Bloom (verbo)`, `Miller (nível)`, `Dificuldade Pedagógica` (fácil/médio/difícil), `Dificuldade TRI`, `DCN (campo A/B)`, `Portaria INEP (campo A/B/C)`, `PPC (campo A/B/C/D)`, `Matriz (período)`, `Matriz (disciplina)`, `Matriz (código)`.
+- **Opcionais:** `Matriz Prova (campo A/B/C)`, `Bloom (nível)`, `Bloom (verbo)`, `Miller (nível)`, `Dificuldade Pedagógica` (fácil/médio/difícil), `Dificuldade TRI`, `Período mínimo` (também "Período esperado" ou "A partir do período"; aceita `3`, `3º`, `3º período` ou `P3`; vazio = vale para todos — não confundir com `Matriz (período)`), `DCN (campo A/B)`, `Portaria INEP (campo A/B/C)`, `PPC (campo A/B/C/D)`, `Matriz (período)`, `Matriz (disciplina)`, `Matriz (código)`.
 - As três colunas de Matriz (período/disciplina/código) aceitam **múltiplos valores por célula**, separados por `,`, `;` ou `|` — cada posição vira uma linha em `questao_matrizes`. `Matriz Prova`, `DCN`, `Portaria INEP` e `PPC` são um valor por coluna de campo (A/B/C/D) — cada um vira uma linha em `questao_referencias` (ver "Performance e escala").
 - Reimportar o mesmo número de questão desta avaliação **atualiza** em vez de duplicar.
 - **Planilha parcial não apaga o que ela não traz:** só as colunas de metadado (Área, Tema, Habilidade, Bloom, Miller, Dificuldade, TRI) que existem no cabeçalho são regravadas. Reimportar só `Questão` + `Gabarito` (para corrigir um gabarito) mantém todo o resto. Já uma célula em branco de uma coluna que a planilha tem limpa o valor.
@@ -1189,3 +1306,14 @@ Precisa também de um worker de fila rodando continuamente
 (`php artisan queue:work`, `QUEUE_CONNECTION=database` por padrão — sem
 worker, o backup sob demanda pela interface (ver "Backups" acima) nunca
 sai do estado "processando").
+
+## Dashboard da avaliação: ajustes recentes
+
+- **Gabarito:** o cabeçalho tem "Gabarito comentado" (o link da avaliação, quando cadastrado) e, para o administrador, "Gabarito da avaliação" (leva à lista de questões).
+- **Alunos da avaliação:** coluna **Acertos dentro do esperado** (ex.: `5 de 8`): acertos nas questões que o aluno precisava acertar pelo período em que
+  estava (as de `periodo_minimo` à frente não contam). Só aparece quando a avaliação traz o período mínimo em alguma questão.
+- **Desempenho por área** sem o gráfico de teia (ficam as barras); **Análise de alternativas** com filtro por área; a **Análise demográfica** vai para o
+  fim do Dashboard; "Evolução da média na categoria" saiu (a evolução está na tela de desempenho do coordenador).
+- **Forma de ingresso** (`alunos.forma_ingresso`, da planilha de alunos — cabeçalho "Forma de ingresso"/"Tipo de ingresso"/"Modalidade de ingresso"):
+  aparece no perfil demográfico e entra na **equidade** como um recorte (grupos com menos de 10 respondentes são omitidos), para comparar se
+  PROUNI, Vestibular etc. influenciam o desempenho na avaliação.

@@ -27,11 +27,14 @@
                             <th class="px-4 py-3">Curso</th>
                             <th class="px-4 py-3">Período</th>
                             <th class="px-4 py-3">Turma</th>
+                            @if ($listaComEsperadas)
+                                <th class="px-4 py-3 whitespace-nowrap" title="Questões acertadas entre as que o aluno precisava acertar pelo período em que está (as de períodos à frente não contam)">Acertos dentro do esperado</th>
+                            @endif
                             <th class="px-4 py-3">Total</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
-                        @include('admin.avaliacoes._linhas-alunos', ['linhas' => $rankingCompleto, 'inicio' => 0])
+                        @include('admin.avaliacoes._linhas-alunos', ['linhas' => $rankingCompleto, 'inicio' => 0, 'comEsperadas' => $listaComEsperadas])
                     </tbody>
                 </table>
                 {{-- A lista tem milhares de linhas com foto: só a primeira página vai no HTML; o resto chega por aqui. --}}

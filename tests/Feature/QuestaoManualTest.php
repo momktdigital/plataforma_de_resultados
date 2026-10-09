@@ -30,6 +30,34 @@ class QuestaoManualTest extends TestCase
         $this->assertDatabaseHas('questoes', ['avaliacao_codigo' => $avaliacao->codigo, 'numero' => 5, 'gabarito' => 'C']);
     }
 
+    public function test_grava_e_limpa_o_periodo_minimo_da_questao(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        $admin = $this->admin();
+
+        $this->actingAs($admin, 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/questoes", ['numero' => 1, 'gabarito' => 'A', 'periodo_minimo' => '3']);
+        $this->assertDatabaseHas('questoes', ['numero' => 1, 'periodo_minimo' => 3]);
+
+        $this->actingAs($admin, 'admin')
+            ->post("/avaliacoes/{$avaliacao->codigo}/questoes", ['numero' => 1, 'gabarito' => 'A', 'periodo_minimo' => '']);
+        $this->assertDatabaseHas('questoes', ['numero' => 1, 'periodo_minimo' => null]);
+    }
+
+    public function test_periodo_minimo_invalido_e_rejeitado(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        $admin = $this->admin();
+
+        foreach (['0', '21', 'abc', '2.5'] as $valor) {
+            $this->actingAs($admin, 'admin')
+                ->post("/avaliacoes/{$avaliacao->codigo}/questoes", ['numero' => 1, 'gabarito' => 'A', 'periodo_minimo' => $valor])
+                ->assertSessionHasErrors('periodo_minimo');
+        }
+
+        $this->assertDatabaseCount('questoes', 0);
+    }
+
     public function test_gabarito_em_branco_e_rejeitado(): void
     {
         $avaliacao = Avaliacao::create([]);

@@ -10,12 +10,14 @@
     $analise = $no['analise'];
     $idSufixo = $no['categoria']->id;
     $temEvolucao = count($analise['evolucaoHistorica']) >= 2;
-    $temAlgumPainel = ! empty($analise['comparativoTurma']) || ! empty($analise['curvaDificuldade'])
-        || ! empty($analise['dispersaoTri']) || ! empty($analise['coberturaHabilidade'])
-        || ! empty($analise['bloom']) || ! empty($analise['miller']);
+    $temAlgumPainel = ! empty($analise['dispersaoTri']) || ! empty($analise['coberturaHabilidade']) || ! empty($analise['miller']);
+
+    // Uma barra por avaliação da categoria: acerto total x mínimo esperado (ver AnaliseConsolidadaService::metaPorPeriodo()).
+    $meta = $analise['metaPeriodo'] ?? null;
+    $avaliacoesMeta = $meta['avaliacoes'] ?? [];
 @endphp
 
-@if ($temEvolucao || $temAlgumPainel || ! empty($analise['divergentes']))
+@if ($temEvolucao || $avaliacoesMeta !== [] || $temAlgumPainel)
     <div class="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-4">
         @if ($temEvolucao)
             <div>
@@ -29,42 +31,36 @@
             </div>
         @endif
 
+        @if ($avaliacoesMeta !== [])
+            <div class="bg-white border border-slate-200 rounded-lg p-3">
+                <div class="flex items-center justify-between gap-2 mb-2">
+                    <p class="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                        <i class="ph-bold ph-target text-primary" aria-hidden="true"></i> Seu rendimento x mínimo esperado
+                    </p>
+                    @include('portal._explicacao_visual', ['no' => $no, 'chave' => 'metaPeriodo'])
+                </div>
+                <div class="relative" style="height: {{ max(96, count($avaliacoesMeta) * 48 + 36) }}px">
+                    <canvas id="grafico-meta-{{ $idSufixo }}"
+                            data-titulo="Seu acerto total em cada avaliação e o mínimo esperado, em percentual"></canvas>
+                </div>
+                @include('portal._legenda_barras_minimo')
+
+                @if (! empty($analise['leituraRapida']))
+                    <div class="mt-3 pt-3 border-t border-slate-100">
+                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5 mb-1.5">
+                            <i class="ph-bold ph-lightbulb text-primary" aria-hidden="true"></i> Leitura rápida
+                        </p>
+                        <ul class="space-y-1 text-sm text-slate-700">
+                            @foreach ($analise['leituraRapida'] as $frase)
+                                <li>{{ $frase }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+            </div>
+        @endif
         @if ($temAlgumPainel)
             <div class="grid sm:grid-cols-2 gap-3">
-                @if (! empty($analise['comparativoTurma']))
-                    <div class="bg-white border border-slate-200 rounded-lg p-3">
-                        <div class="flex items-center justify-between gap-2 mb-2">
-                            <p class="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
-                                <i class="ph-bold ph-users-three text-primary"></i> Você x turma {{ $analise['comparativoTurma']['turma'] }}
-                            </p>
-                            @include('portal._explicacao_visual', ['no' => $no, 'chave' => 'comparativoTurma'])
-                        </div>
-                        <canvas id="grafico-turma-{{ $idSufixo }}" height="90"></canvas>
-                        <p class="text-[11px] text-slate-500 mt-2">Média de {{ $analise['comparativoTurma']['avaliacoesComparadas'] }} avaliação(ões) comparável(eis)</p>
-                    </div>
-                @endif
-
-                @if (! empty($analise['curvaDificuldade']))
-                    @php
-                        $facilPct = $analise['curvaDificuldade']['facil']['percentual'] ?? null;
-                        $dificilPct = $analise['curvaDificuldade']['dificil']['percentual'] ?? null;
-                    @endphp
-                    <div class="bg-white border border-slate-200 rounded-lg p-3">
-                        <div class="flex items-center justify-between gap-2 mb-2">
-                            <p class="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
-                                <i class="ph-bold ph-gauge text-primary"></i> Dificuldade pedagógica
-                            </p>
-                            @include('portal._explicacao_visual', ['no' => $no, 'chave' => 'curvaDificuldade'])
-                        </div>
-                        <canvas id="grafico-dificuldade-{{ $idSufixo }}" height="90"></canvas>
-                        @if ($facilPct !== null && $dificilPct !== null && $facilPct < $dificilPct)
-                            <p class="text-[11px] text-amber-700 mt-2 flex items-center gap-1">
-                                <i class="ph-bold ph-warning-circle"></i> Acerto em fáceis menor que em difíceis.
-                            </p>
-                        @endif
-                    </div>
-                @endif
-
                 @if (! empty($analise['dispersaoTri']))
                     <div class="bg-white border border-slate-200 rounded-lg p-3">
                         <div class="flex items-center justify-between gap-2 mb-2">
@@ -89,18 +85,6 @@
                     </div>
                 @endif
 
-                @if (! empty($analise['bloom']))
-                    <div class="bg-white border border-slate-200 rounded-lg p-3">
-                        <div class="flex items-center justify-between gap-2 mb-2">
-                            <p class="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
-                                <i class="ph-bold ph-brain text-primary"></i> Nível de Bloom
-                            </p>
-                            @include('portal._explicacao_visual', ['no' => $no, 'chave' => 'bloom'])
-                        </div>
-                        <canvas id="grafico-bloom-{{ $idSufixo }}" height="110"></canvas>
-                    </div>
-                @endif
-
                 @if (! empty($analise['miller']))
                     <div class="bg-white border border-slate-200 rounded-lg p-3">
                         <div class="flex items-center justify-between gap-2 mb-2">
@@ -118,14 +102,9 @@
         @if (! empty($analise['mapaDominio']))
             @php
                 $mapa = $analise['mapaDominio'];
-                $rampa = ['#e2f4ee', '#b9e5d7', '#7ed2b9', '#3fb99b', '#12a37f', '#0a7159'];
-                $corDominio = function (?float $v) use ($rampa) {
-                    if ($v === null) {
-                        return '#f1f5f9';
-                    }
-
-                    return $rampa[max(0, min(count($rampa) - 1, (int) floor($v / 100 * count($rampa))))];
-                };
+                // Verde = no mínimo esperado ou acima; amarelo = abaixo (o mínimo vem de AnaliseConsolidadaService::mapaDominio()).
+                $verdeDominio = '#3fb99b';
+                $amareloDominio = '#fbbf24';
             @endphp
             <div class="bg-white border border-slate-200 rounded-lg p-3">
                 <div class="flex items-center justify-between gap-2 mb-2">
@@ -151,11 +130,20 @@
                                 <tr>
                                     <th scope="row" class="text-left text-xs font-medium text-slate-700 pr-2 whitespace-nowrap">{{ $linha['area'] }}</th>
                                     @foreach ($mapa['avaliacoes'] as $av)
-                                        @php $valor = $linha['valores'][$av['codigo']] ?? null; @endphp
-                                        <td class="text-center rounded-md py-2 text-xs font-bold tabular-nums"
-                                            style="background-color: {{ $corDominio($valor) }}; color: {{ $valor !== null && $valor >= 66 ? '#ffffff' : ($valor === null ? '#94a3b8' : '#0f1720') }}"
-                                            title="{{ $linha['area'] }} — {{ $av['nome'] ?: 'Avaliação '.$av['codigo'] }}: {{ $valor === null ? 'sem questão desta área' : $valor.'% de acerto' }}">
-                                            {{ $valor === null ? '—' : round($valor).'%' }}
+                                        @php
+                                            $valor = $linha['valores'][$av['codigo']] ?? null;
+                                            $minimo = $linha['esperados'][$av['codigo']] ?? null;
+                                            $abaixo = $valor !== null && $minimo !== null && $valor < $minimo;
+                                        @endphp
+                                        <td class="text-center rounded-md py-1.5 tabular-nums"
+                                            style="background-color: {{ $valor === null ? '#f1f5f9' : ($abaixo ? $amareloDominio : $verdeDominio) }}; color: {{ $valor === null ? '#64748b' : '#0f1720' }}"
+                                            title="{{ $linha['area'] }} — {{ $av['nome'] ?: 'Avaliação '.$av['codigo'] }}: {{ $valor === null ? 'sem questão desta área' : $valor.'% de acerto — '.($abaixo ? 'abaixo' : 'no mínimo ou acima').' do mínimo esperado ('.$minimo.'%)' }}">
+                                            @if ($valor === null)
+                                                <span class="text-xs font-bold">—</span>
+                                            @else
+                                                <span class="block text-xs font-bold leading-tight">{{ round($valor) }}%</span>
+                                                <span class="block text-[10px] leading-tight">mín. {{ round($minimo) }}%</span>
+                                            @endif
                                         </td>
                                     @endforeach
                                 </tr>
@@ -163,43 +151,15 @@
                         </tbody>
                     </table>
                 </div>
-                <div class="flex items-center gap-1.5 mt-2 text-[11px] text-slate-500">
-                    <span>menor acerto</span>
-                    @foreach ($rampa as $tom)
-                        <span class="inline-block w-5 h-2 rounded-sm" style="background-color: {{ $tom }}"></span>
-                    @endforeach
-                    <span>maior</span>
-                    <span class="ml-2">— vazio: a avaliação não tinha questão dessa área</span>
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[11px] text-slate-500">
+                    <span class="inline-flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded-sm" style="background-color: {{ $verdeDominio }}"></span> no mínimo esperado ou acima</span>
+                    <span class="inline-flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded-sm" style="background-color: {{ $amareloDominio }}"></span> abaixo do mínimo</span>
+                    <span>mín. = mínimo esperado para o seu período (60% quando a prova não traz a meta)</span>
+                    <span>— vazio: a avaliação não tinha questão dessa área</span>
                 </div>
             </div>
         @endif
 
-        @if (! empty($analise['divergentes']))
-            <div class="bg-white border border-slate-200 rounded-lg p-3">
-                <div class="flex items-center justify-between gap-2 mb-2">
-                    <p class="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
-                        <i class="ph-bold ph-warning-circle text-primary"></i> Áreas onde você mais diverge da turma
-                    </p>
-                    @include('portal._explicacao_visual', ['no' => $no, 'chave' => 'divergentes'])
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                        <thead class="bg-slate-50 text-slate-500 text-left">
-                            <tr><th class="px-3 py-2">Área</th><th class="px-3 py-2">% de acerto (Você)</th><th class="px-3 py-2">Percentual médio de acerto (Turma)</th></tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100">
-                            @foreach ($analise['divergentes'] as $d)
-                                <tr>
-                                    <td class="px-3 py-2">{{ $d['area'] }}</td>
-                                    <td class="px-3 py-2 font-bold {{ \App\Support\CorDesempenho::classeTexto((float) $d['percentualAluno']) }}">{{ $d['percentualAluno'] }}%</td>
-                                    <td class="px-3 py-2">{{ $d['percentualTurma'] }}%</td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        @endif
     </div>
 
     <script>
@@ -230,37 +190,13 @@
         });
         @endif
 
-        @if (! empty($analise['comparativoTurma']))
-        new Chart(document.getElementById('grafico-turma-{{ $idSufixo }}'), {
-            type: 'bar',
-            data: {
-                labels: ['Você', 'Média da turma'],
-                datasets: [{
-                    data: [{{ $analise['comparativoTurma']['suaMedia'] }}, {{ $analise['comparativoTurma']['mediaTurma'] }}],
-                    backgroundColor: ['#00b48d', '#94a3b8'],
-                    borderRadius: 4,
-                    maxBarThickness: 24,
-                }],
-            },
-            options: {
-                indexAxis: 'y',
-                scales: { x: { beginAtZero: true, max: 100, grid: { color: '#f1f5f9' } }, y: { grid: { display: false } } },
-                plugins: { legend: { display: false } },
-            },
+        @if ($avaliacoesMeta !== [])
+        Viz.barrasComMinimo(document.getElementById('grafico-meta-{{ $idSufixo }}'), {
+            rotulos: {{ Js::from(array_column($avaliacoesMeta, 'nome')) }},
+            acertos: {{ Js::from(array_column($avaliacoesMeta, 'percentual')) }},
+            minimos: {{ Js::from(array_column($avaliacoesMeta, 'minimo')) }},
         });
         @endif
-
-        @if (! empty($analise['curvaDificuldade']))
-        new Chart(document.getElementById('grafico-dificuldade-{{ $idSufixo }}'), {
-            type: 'bar',
-            data: {
-                labels: {{ Js::from(array_column($analise['curvaDificuldade'], 'label')) }},
-                datasets: [{ label: '% de acerto', data: {{ Js::from(array_column($analise['curvaDificuldade'], 'percentual')) }}, backgroundColor: '#00b48d', borderRadius: 4, maxBarThickness: 24 }],
-            },
-            options: { scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
-        });
-        @endif
-
         @if (! empty($analise['dispersaoTri']))
         new Chart(document.getElementById('grafico-tri-{{ $idSufixo }}'), {
             type: 'scatter',
@@ -312,17 +248,6 @@
                 },
                 plugins: { legend: { display: false } },
             },
-        });
-        @endif
-
-        @if (! empty($analise['bloom']))
-        new Chart(document.getElementById('grafico-bloom-{{ $idSufixo }}'), {
-            type: 'bar',
-            data: {
-                labels: {{ Js::from(array_keys($analise['bloom'])) }},
-                datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($analise['bloom'])) }}, backgroundColor: '#00b48d', borderRadius: 4, maxBarThickness: 20 }],
-            },
-            options: { indexAxis: 'y', scales: { x: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
         });
         @endif
 

@@ -27,13 +27,10 @@ class ExplicacaoVisualService
     {
         return [
             'evolucaoHistorica' => $this->evolucaoHistorica($analise['evolucaoHistorica']),
-            'comparativoTurma' => $this->comparativoTurma($analise['comparativoTurma']),
-            'curvaDificuldade' => $this->curvaDificuldade($analise['curvaDificuldade']),
+            'metaPeriodo' => $this->metaPeriodo(),
             'dispersaoTri' => $this->dispersaoTri($analise['dispersaoTri']),
             'coberturaHabilidade' => $this->coberturaHabilidade($analise['coberturaHabilidade']),
-            'bloom' => $this->nivelCognitivo($analise['bloom'], 'bloom'),
-            'miller' => $this->nivelCognitivo($analise['miller'], 'miller'),
-            'divergentes' => $this->divergentes($analise['divergentes']),
+            'miller' => $this->nivelCognitivo($analise['miller']),
             'mapaDominio' => $this->mapaDominio($analise['mapaDominio'] ?? null),
         ];
     }
@@ -45,8 +42,9 @@ class ExplicacaoVisualService
     private function mapaDominio(?array $mapa): array
     {
         $generico = 'Cada linha é uma área e cada coluna é uma avaliação desta categoria, na ordem em que aconteceram. '
-            .'A cor mostra quanto você acertou: quanto mais escura, melhor. Ler a linha da esquerda para a direita mostra '
-            .'se você está consolidando aquele conteúdo ou esquecendo ele. Célula vazia é avaliação que não tinha questão daquela área.';
+            .'Cada célula mostra quanto você acertou e o mínimo esperado para o seu período naquela área (60% quando a prova não traz essa '
+            .'informação). Verde: você chegou ao mínimo ou passou dele. Amarelo: ficou abaixo — convém revisar. Ler a linha da esquerda para a '
+            .'direita mostra se você está consolidando aquele conteúdo ou esquecendo ele. Célula vazia é avaliação que não tinha questão daquela área.';
 
         if ($mapa === null || count($mapa['avaliacoes']) < 2) {
             return ['generico' => $generico, 'pessoal' => null];
@@ -104,7 +102,7 @@ class ExplicacaoVisualService
      * @return array{generico: string, pessoal: ?string} */
     private function evolucaoHistorica(array $pontos): array
     {
-        $generico = 'Mostra seu percentual de acerto em cada avaliação desta categoria, na ordem em que aconteceram — dá pra ver se você está melhorando, piorando ou estável ao longo do tempo.';
+        $generico = 'Mostra seu percentual de acerto em cada avaliação desta categoria, na ordem em que aconteceram — é possível ver se você está melhorando, piorando ou estável ao longo do tempo.';
 
         if (count($pontos) < 2) {
             return ['generico' => $generico, 'pessoal' => null];
@@ -123,42 +121,21 @@ class ExplicacaoVisualService
         return ['generico' => $generico, 'pessoal' => $pessoal];
     }
 
-    /** @param  array{turma: string, suaMedia: float, mediaTurma: float, avaliacoesComparadas: int}|null  $comparativo
-     * @return array{generico: string, pessoal: ?string} */
-    private function comparativoTurma(?array $comparativo): array
+    /**
+     * Só texto genérico: a leitura pessoal já aparece escrita logo abaixo do gráfico ("Leitura rápida"), e repeti-la
+     * aqui seria o mesmo parágrafo duas vezes.
+     *
+     * @return array{generico: string, pessoal: ?string}
+     */
+    private function metaPeriodo(): array
     {
-        $generico = 'Compara sua média nesta categoria com a média de todos os colegas da sua turma que fizeram as mesmas avaliações.';
-
-        if ($comparativo === null) {
-            return ['generico' => $generico, 'pessoal' => null];
-        }
-
-        $diferenca = round($comparativo['suaMedia'] - $comparativo['mediaTurma'], 1);
-        $pessoal = $diferenca >= 0
-            ? "Sua média ({$comparativo['suaMedia']}%) está {$diferenca} pontos acima da média da turma {$comparativo['turma']} ({$comparativo['mediaTurma']}%)."
-            : "Sua média ({$comparativo['suaMedia']}%) está ".abs($diferenca)." pontos abaixo da média da turma {$comparativo['turma']} ({$comparativo['mediaTurma']}%).";
-
-        return ['generico' => $generico, 'pessoal' => $pessoal];
-    }
-
-    /** @param  array<string, array{label: string, percentual: float, respostas: int}>  $curva
-     * @return array{generico: string, pessoal: ?string} */
-    private function curvaDificuldade(array $curva): array
-    {
-        $generico = 'Cada questão é classificada pelo professor por dificuldade esperada (fácil, média, difícil). O gráfico mostra seu percentual de acerto real em cada nível — o esperado é acertar mais questões fáceis do que difíceis.';
-
-        $facil = $curva['facil']['percentual'] ?? null;
-        $dificil = $curva['dificil']['percentual'] ?? null;
-
-        if ($facil === null || $dificil === null) {
-            return ['generico' => $generico, 'pessoal' => null];
-        }
-
-        $pessoal = $facil >= $dificil
-            ? "Você acertou {$facil}% das questões fáceis e {$dificil}% das difíceis — dentro do esperado."
-            : "Você acertou {$facil}% das questões fáceis e {$dificil}% das difíceis — isso foge do padrão comum (normalmente se acerta mais fáceis que difíceis) e pode indicar desatenção nas fáceis, mesmo com domínio do conteúdo mais avançado.";
-
-        return ['generico' => $generico, 'pessoal' => $pessoal];
+        return [
+            'generico' => 'Cada barra é o seu percentual de acerto total numa avaliação. A linha tracejada em pé marca o mínimo esperado: '
+                .'cada questão é marcada com o período a partir do qual se espera que o aluno acerte, então o mínimo é a parte da prova que já '
+                .'cabe no seu período (questões de períodos à frente você pode acertar, mas não são cobradas). Quando a prova não traz essa '
+                .'informação, o mínimo é 60%. Barra verde: você chegou ao mínimo ou passou dele. Barra amarela: ficou abaixo — convém revisar.',
+            'pessoal' => null,
+        ];
     }
 
     /** @param  array<int, array{dificuldade_tri: float, acertou: bool}>  $pontos
@@ -250,11 +227,9 @@ class ExplicacaoVisualService
 
     /** @param  array<string, float>  $niveis
      * @return array{generico: string, pessoal: ?string} */
-    private function nivelCognitivo(array $niveis, string $tipo): array
+    private function nivelCognitivo(array $niveis): array
     {
-        $generico = $tipo === 'bloom'
-            ? 'A Taxonomia de Bloom classifica as questões pelo tipo de raciocínio exigido, do mais simples (lembrar um fato) ao mais complexo (criar algo novo a partir do conhecimento). O gráfico mostra seu percentual de acerto em cada nível.'
-            : 'A Pirâmide de Miller classifica o nível de competência clínica avaliado, do conhecimento teórico ("sabe") até a aplicação prática ("faz"). O gráfico mostra seu percentual de acerto em cada nível.';
+        $generico = 'A Pirâmide de Miller classifica o nível de competência clínica avaliado, do conhecimento teórico ("sabe") até a aplicação prática ("faz"). O gráfico mostra seu percentual de acerto em cada nível.';
 
         if (empty($niveis)) {
             return ['generico' => $generico, 'pessoal' => null];
@@ -268,22 +243,6 @@ class ExplicacaoVisualService
         $pessoal = $pior === $melhor
             ? "Seu desempenho foi de {$piorValor}% no único nível avaliado (\"{$pior}\")."
             : "Seu desempenho é menor no nível \"{$pior}\" ({$piorValor}%) e maior no nível \"{$melhor}\" ({$melhorValor}%).";
-
-        return ['generico' => $generico, 'pessoal' => $pessoal];
-    }
-
-    /** @param  array<int, array{area: string, percentualAluno: float, percentualTurma: float, diferenca: float}>  $lista
-     * @return array{generico: string, pessoal: ?string} */
-    private function divergentes(array $lista): array
-    {
-        $generico = 'Compara seu percentual de acerto em cada área com o percentual médio de acerto da turma na mesma área — só entram áreas onde você fica pelo menos 10 pontos abaixo da turma (uma diferença menor que essa é ruído, não divergência real), ordenadas pela maior diferença primeiro.';
-
-        if (empty($lista)) {
-            return ['generico' => $generico, 'pessoal' => null];
-        }
-
-        $top = $lista[0];
-        $pessoal = "A área onde você mais fica atrás da turma é \"{$top['area']}\": você acertou {$top['percentualAluno']}%, contra {$top['percentualTurma']}% de média da turma — {$top['diferenca']} pontos de diferença.";
 
         return ['generico' => $generico, 'pessoal' => $pessoal];
     }

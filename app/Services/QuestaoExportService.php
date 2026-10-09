@@ -18,7 +18,7 @@ class QuestaoExportService
     private const CABECALHO = [
         'Questão', 'Gabarito', 'Área', 'Tema', 'Habilidade',
         'Bloom (nível)', 'Bloom (verbo)', 'Miller (nível)',
-        'Dificuldade Pedagógica', 'Dificuldade TRI',
+        'Dificuldade Pedagógica', 'Dificuldade TRI', 'Período mínimo',
         'Matriz (período)', 'Matriz (disciplina)', 'Matriz (código)',
         'Matriz Prova A', 'Matriz Prova B', 'Matriz Prova C',
         'DCN A', 'DCN B',
@@ -41,7 +41,7 @@ class QuestaoExportService
             $linha++;
         }
 
-        foreach (range('A', 'Y') as $coluna) {
+        foreach (range('A', 'Z') as $coluna) {
             $sheet->getColumnDimension($coluna)->setAutoSize(true);
         }
         $sheet->freezePane('A2');
@@ -72,6 +72,7 @@ class QuestaoExportService
                 $questao->miller_nivel,
                 $questao->dificuldade_pedagogica,
                 $questao->dificuldade_tri,
+                $questao->periodo_minimo,
                 $questao->matrizes->pluck('periodo')->filter()->implode(';'),
                 $questao->matrizes->pluck('disciplina')->filter()->implode(';'),
                 $questao->matrizes->pluck('codigo')->filter()->implode(';'),

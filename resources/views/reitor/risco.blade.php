@@ -7,7 +7,10 @@
     $cursos = array_values($risco['cursos']);
     $total = $risco['total'];
     $minimo = $risco['minimo'];
-    $corteTxt = $fmt($ctx['corte'], 0);
+    $regra = $risco['regra'];
+    $acertoTxt = $regra['acerto'] !== null ? \App\Support\RegraDeRisco::numero($regra['acerto']) : null;
+    $rotuloFalta = $regra['faltas'] !== null ? 'Faltou a '.$regra['faltas'].($regra['faltas'] > 1 ? ' ou mais aplicações' : ' aplicação ou mais') : 'Faltas';
+    $rotuloAcerto = $acertoTxt !== null ? 'Média abaixo de '.$acertoTxt.'%' : 'Acerto';
     $estCursos = $est['cursos'];
 
     $classeDelta = fn (?float $d) => $d === null ? 'text-slate-500' : (abs($d) < 1 ? 'text-slate-600' : ($d > 0 ? 'text-red-700' : 'text-emerald-700'));
@@ -31,11 +34,15 @@
         'cursos' => array_map(fn ($c) => [
             'chave' => $c['chave'],
             'nome' => $c['nome'],
-            'recorrente' => $c['pctRecorrente'],
-            'persistente' => $c['pctPersistente'],
-            'elegiveis' => $c['elegiveis'],
+            'falta' => $c['pctPorFalta'],
+            'acerto' => $c['pctPorAcerto'],
+            'pessoas' => $c['pessoas'],
         ], $cursos),
-        'total' => ['recorrente' => $total['pctRecorrente'], 'persistente' => $total['pctPersistente']],
+        'total' => ['falta' => $total['pctPorFalta'], 'acerto' => $total['pctPorAcerto']],
+        'rotuloFalta' => $rotuloFalta,
+        'rotuloAcerto' => $rotuloAcerto,
+        'faltaLigada' => $regra['faltas'] !== null,
+        'acertoLigado' => $regra['acertoAtivo'],
     ];
 @endphp
 
@@ -44,8 +51,8 @@
     'ctx' => $ctx,
     'aba' => 'risco',
     'chips' => [
-        ['valor' => $risco['temRecorrencia'] ? $fmt($total['pctRisco']).'%' : '—', 'rotulo' => 'Em risco'],
-        ['valor' => $fmt($total['elegiveis'], 0), 'rotulo' => 'Elegíveis'],
+        ['valor' => $risco['temDados'] ? $fmt($total['pctRisco']).'%' : '—', 'rotulo' => 'Em risco'],
+        ['valor' => $fmt($total['pessoas'], 0), 'rotulo' => 'Estudantes'],
     ],
 ])
 
@@ -54,15 +61,20 @@
 <div class="mb-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
     <i class="ph-bold ph-info mr-1" aria-hidden="true"></i>
     Só <strong>números agregados</strong>: a lista nominal dos estudantes é do coordenador de cada curso (o nome do curso abre a análise dele).
-    O risco compara <strong>várias aplicações</strong> do recorte: estudantes com resultado em duas ou mais (<strong>elegíveis</strong>).
-    Grupos com menos de {{ $minimo }} elegíveis não mostram percentual.
+    <strong>Em risco</strong> é quem se enquadra na regra da instituição: <strong>{{ $regra['descricao'] }}</strong>
+    (definida por quem administra o sistema em Configurações; cada avaliação pode ter uma regra própria). Grupos com menos de {{ $minimo }} estudantes não mostram percentual.
 </div>
 
-@if (! $risco['temRecorrencia'])
+@if (! $risco['temDados'])
     <div class="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
-        <p class="font-semibold mb-1">Este recorte tem poucos estudantes com duas ou mais aplicações ({{ $fmt($total['elegiveis'], 0) }} elegíveis).</p>
-        Para medir ausência recorrente e baixo desempenho persistente, escolha uma categoria com várias avaliações (como os simulados) ou o período <strong>Todos os períodos</strong>.
-        Enquanto isso, o quadro abaixo mostra o que já dá para ver com uma aplicação só.
+        <p class="font-semibold mb-1">Este recorte tem poucos estudantes ({{ $fmt($total['pessoas'], 0) }}) para mostrar percentuais.</p>
+        Escolha uma categoria com mais avaliações, mais cursos ou o período <strong>Todos os períodos</strong>.
+    </div>
+@endif
+@if ($regra['faltasInalcancavel'])
+    <div class="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <i class="ph-bold ph-warning mr-1" aria-hidden="true"></i>
+        A regra de faltas ({{ $regra['faltas'] }} ou mais) não pode ser atingida neste recorte: ele tem menos aplicações que isso. Para medir faltas, escolha uma categoria com várias avaliações (como os simulados) ou <strong>Todos os períodos</strong>.
     </div>
 @endif
 
@@ -70,18 +82,28 @@
     <div class="rounded-2xl border border-red-200 border-t-4 border-t-red-700 bg-red-50 p-5 shadow-sm">
         <p class="text-xs font-bold uppercase tracking-wide text-red-900">Estudantes em risco</p>
         <p class="mt-2 font-mono text-4xl font-black text-red-800">{{ $fmt($total['pctRisco']) }}<span class="text-2xl">%</span></p>
-        <p class="mt-1 text-xs text-slate-700">{{ $fmt($total['risco'], 0) }} de {{ $fmt($total['elegiveis'], 0) }} elegíveis</p>
+        <p class="mt-1 text-xs text-slate-700">{{ $fmt($total['risco'], 0) }} de {{ $fmt($total['pessoas'], 0) }} estudantes</p>
         @if ($total['deltaRisco'] !== null)<p class="mt-1 text-xs font-semibold {{ $classeDelta($total['deltaRisco']) }}">{{ $setaTxt($total['deltaRisco']) }} vs {{ $risco['semestreAnterior'] }}</p>@endif
     </div>
     <div class="rounded-2xl border border-slate-200 border-t-4 border-t-amber-500 bg-white p-5 shadow-sm">
-        <p class="text-xs font-bold uppercase tracking-wide text-slate-600">Ausência recorrente</p>
-        <p class="mt-2 font-mono text-4xl font-black text-[#1e3a5f]">{{ $fmt($total['pctRecorrente']) }}<span class="text-2xl">%</span></p>
-        <p class="mt-1 text-xs text-slate-600">{{ $fmt($total['recorrente'], 0) }} estudantes faltaram a 2 ou mais aplicações</p>
+        <p class="text-xs font-bold uppercase tracking-wide text-slate-600">Por faltas</p>
+        @if ($regra['faltas'] !== null)
+            <p class="mt-2 font-mono text-4xl font-black text-[#1e3a5f]">{{ $fmt($total['pctPorFalta']) }}<span class="text-2xl">%</span></p>
+            <p class="mt-1 text-xs text-slate-600">{{ $fmt($total['porFalta'], 0) }} estudantes: {{ strtolower($rotuloFalta) }}</p>
+        @else
+            <p class="mt-2 font-mono text-4xl font-black text-slate-500" aria-label="critério desligado">—</p>
+            <p class="mt-1 text-xs text-slate-600">Critério de faltas desligado</p>
+        @endif
     </div>
     <div class="rounded-2xl border border-slate-200 border-t-4 border-t-violet-500 bg-white p-5 shadow-sm">
-        <p class="text-xs font-bold uppercase tracking-wide text-slate-600">Baixo desempenho persistente</p>
-        <p class="mt-2 font-mono text-4xl font-black text-[#1e3a5f]">{{ $fmt($total['pctPersistente']) }}<span class="text-2xl">%</span></p>
-        <p class="mt-1 text-xs text-slate-600">{{ $fmt($total['persistente'], 0) }} abaixo de {{ $corteTxt }}% em todas as aplicações</p>
+        <p class="text-xs font-bold uppercase tracking-wide text-slate-600">Por acerto</p>
+        @if ($regra['acertoAtivo'])
+            <p class="mt-2 font-mono text-4xl font-black text-[#1e3a5f]">{{ $fmt($total['pctPorAcerto']) }}<span class="text-2xl">%</span></p>
+            <p class="mt-1 text-xs text-slate-600">{{ $fmt($total['porAcerto'], 0) }} estudantes: {{ strtolower($rotuloAcerto) }}</p>
+        @else
+            <p class="mt-2 font-mono text-4xl font-black text-slate-500" aria-label="critério desligado">—</p>
+            <p class="mt-1 text-xs text-slate-600">Critério de acerto desligado</p>
+        @endif
     </div>
     <div class="rounded-2xl border border-slate-200 border-t-4 border-t-[#1e3a5f] bg-white p-5 shadow-sm">
         <p class="text-xs font-bold uppercase tracking-wide text-slate-600">Na faixa mais baixa (agora)</p>
@@ -95,10 +117,10 @@
 <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5" aria-labelledby="secao-risco-cursos">
     <div class="overflow-x-auto">
         <table data-ordenavel class="w-full text-sm">
-            <caption class="sr-only">Para cada curso: estudantes elegíveis, ausência recorrente, baixo desempenho persistente, em risco, variação frente ao semestre anterior e percentual na faixa mais baixa.</caption>
+            <caption class="sr-only">Para cada curso: estudantes, por faltas, por acerto, em risco, variação frente ao semestre anterior e percentual na faixa mais baixa.</caption>
             <thead class="text-left text-[11px] font-bold uppercase tracking-wide text-slate-600">
                 <tr class="border-b border-slate-200">
-                    @foreach ([['Curso', 'texto'], ['Elegíveis', 'numero'], ['Ausência recorrente', 'numero'], ['Baixo desempenho persistente', 'numero'], ['Em risco', 'numero'], ['Variação', 'numero'], ['Faixa mais baixa', 'numero'], ['Ausentes', 'numero']] as [$rotulo, $tipo])
+                    @foreach ([['Curso', 'texto'], ['Estudantes', 'numero'], ['Por faltas', 'numero'], ['Por acerto', 'numero'], ['Em risco', 'numero'], ['Variação', 'numero'], ['Faixa mais baixa', 'numero'], ['Ausentes', 'numero']] as [$rotulo, $tipo])
                         <th scope="col" data-ordem="{{ $tipo }}" class="px-3 py-2 {{ $tipo === 'numero' ? 'text-right' : '' }}">
                             <button type="button" class="inline-flex items-center gap-1 font-bold uppercase tracking-wide hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded">{{ $rotulo }} <i class="ph ph-arrows-down-up text-xs" aria-hidden="true"></i></button>
                         </th>
@@ -113,9 +135,9 @@
                     @endphp
                     <tr class="border-b border-slate-100 {{ $alto ? 'bg-red-50' : '' }}">
                         <td data-valor="{{ $c['nome'] }}" class="px-3 py-2.5 font-medium text-slate-800 border-l-4 {{ $alto ? 'border-red-700' : 'border-transparent' }}">@include('reitor._nome-curso', ['chave' => $c['chave'], 'nome' => $c['nome'], 'destino' => 'alunos', 'extra' => ['situacao' => 'atencao']])</td>
-                        <td data-valor="{{ $c['elegiveis'] }}" class="px-3 py-2.5 text-right font-mono">{{ $fmt($c['elegiveis'], 0) }}</td>
-                        <td data-valor="{{ $c['pctRecorrente'] }}" class="px-3 py-2.5 text-right font-mono">{{ $c['pctRecorrente'] === null ? '—' : $fmt($c['pctRecorrente']).'%' }} <span class="text-xs text-slate-500">({{ $c['recorrente'] }})</span></td>
-                        <td data-valor="{{ $c['pctPersistente'] }}" class="px-3 py-2.5 text-right font-mono">{{ $c['pctPersistente'] === null ? '—' : $fmt($c['pctPersistente']).'%' }} <span class="text-xs text-slate-500">({{ $c['persistente'] }})</span></td>
+                        <td data-valor="{{ $c['pessoas'] }}" class="px-3 py-2.5 text-right font-mono">{{ $fmt($c['pessoas'], 0) }}</td>
+                        <td data-valor="{{ $c['pctPorFalta'] }}" class="px-3 py-2.5 text-right font-mono">{{ $c['pctPorFalta'] === null ? '—' : $fmt($c['pctPorFalta']).'%' }} <span class="text-xs text-slate-500">({{ $c['porFalta'] }})</span></td>
+                        <td data-valor="{{ $c['pctPorAcerto'] }}" class="px-3 py-2.5 text-right font-mono">{{ $c['pctPorAcerto'] === null ? '—' : $fmt($c['pctPorAcerto']).'%' }} <span class="text-xs text-slate-500">({{ $c['porAcerto'] }})</span></td>
                         <td data-valor="{{ $c['pctRisco'] }}" class="px-3 py-2.5 text-right font-mono font-bold">{{ $c['pctRisco'] === null ? '—' : $fmt($c['pctRisco']).'%' }} <span class="text-xs font-normal text-slate-500">({{ $c['risco'] }})</span></td>
                         <td data-valor="{{ $c['deltaRisco'] }}" class="px-3 py-2.5 text-right font-mono text-xs font-semibold {{ $classeDelta($c['deltaRisco']) }}">{{ $setaTxt($c['deltaRisco']) }}</td>
                         <td data-valor="{{ $e['faixas'][0]['pct'] ?? '' }}" class="px-3 py-2.5 text-right font-mono">{{ $fmt($e['faixas'][0]['pct'] ?? null) }}%</td>
@@ -126,9 +148,9 @@
             <tfoot>
                 <tr class="bg-slate-50 font-bold text-slate-800">
                     <td class="px-3 py-2.5">Total da visão</td>
-                    <td class="px-3 py-2.5 text-right font-mono">{{ $fmt($total['elegiveis'], 0) }}</td>
-                    <td class="px-3 py-2.5 text-right font-mono">{{ $total['pctRecorrente'] === null ? '—' : $fmt($total['pctRecorrente']).'%' }}</td>
-                    <td class="px-3 py-2.5 text-right font-mono">{{ $total['pctPersistente'] === null ? '—' : $fmt($total['pctPersistente']).'%' }}</td>
+                    <td class="px-3 py-2.5 text-right font-mono">{{ $fmt($total['pessoas'], 0) }}</td>
+                    <td class="px-3 py-2.5 text-right font-mono">{{ $total['pctPorFalta'] === null ? '—' : $fmt($total['pctPorFalta']).'%' }}</td>
+                    <td class="px-3 py-2.5 text-right font-mono">{{ $total['pctPorAcerto'] === null ? '—' : $fmt($total['pctPorAcerto']).'%' }}</td>
                     <td class="px-3 py-2.5 text-right font-mono">{{ $total['pctRisco'] === null ? '—' : $fmt($total['pctRisco']).'%' }}</td>
                     <td class="px-3 py-2.5 text-right font-mono text-xs {{ $classeDelta($total['deltaRisco']) }}">{{ $setaTxt($total['deltaRisco']) }}</td>
                     <td class="px-3 py-2.5 text-right font-mono">{{ $fmt($est['total']['faixas'][0]['pct'] ?? null) }}%</td>
@@ -142,12 +164,12 @@
 </section>
 
 {{-- 2 · Comparação das duas situações --}}
-@include('reitor._secao', ['numero' => 2, 'titulo' => 'Ausência recorrente × baixo desempenho persistente', 'id' => 'secao-risco-grafico'])
+@include('reitor._secao', ['numero' => 2, 'titulo' => 'Faltas × acerto: o que leva cada curso ao risco', 'id' => 'secao-risco-grafico'])
 <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5" aria-labelledby="secao-risco-grafico">
-    @if ($risco['temRecorrencia'])
-        <div class="relative h-96"><canvas id="grafico-risco" data-titulo="Ausência recorrente e baixo desempenho persistente por curso"></canvas></div>
+    @if ($risco['temDados'])
+        <div class="relative h-96"><canvas id="grafico-risco" data-titulo="Estudantes em risco por faltas e por acerto, por curso"></canvas></div>
     @else
-        <p class="text-sm text-slate-600">Sem estudantes elegíveis suficientes neste recorte.</p>
+        <p class="text-sm text-slate-600">Sem estudantes suficientes neste recorte.</p>
     @endif
     @include('reitor._rodape-quadro', ['id' => 'risco-grafico', 'sobre' => $sobre['risco_grafico'], 'leitura' => $leituras['risco_grafico'] ?? null])
 </section>
@@ -182,7 +204,7 @@
                                 $cor = $corRisco($p['pctRisco'] ?? null);
                             @endphp
                             <td class="px-3 py-2 text-center font-mono font-semibold" style="background: {{ $cor['bg'] }}; color: {{ $cor['fg'] }}"
-                                @if ($p) title="{{ $p['risco'] }} de {{ $p['elegiveis'] }} elegíveis em risco" @endif>
+                                @if ($p) title="{{ $p['risco'] }} de {{ $p['pessoas'] }} estudantes em risco" @endif>
                                 @if ($p && $p['pctRisco'] !== null)
                                     @include('reitor._nome-curso', ['chave' => $c['chave'], 'nome' => $fmt($p['pctRisco'], 0).'%', 'destino' => 'alunos', 'extra' => ['periodo_curso' => $o, 'situacao' => 'atencao']])
                                 @else
@@ -195,35 +217,35 @@
             </tbody>
         </table>
     </div>
-    <p class="mt-2 text-xs text-slate-600">Células vazias: menos de {{ $minimo }} estudantes elegíveis nesse período do curso.</p>
+    <p class="mt-2 text-xs text-slate-600">Células vazias: menos de {{ $minimo }} estudantes nesse período do curso.</p>
     @include('reitor._rodape-quadro', ['id' => 'risco-mapa', 'sobre' => $sobre['risco_mapa'], 'leitura' => $leituras['risco_mapa'] ?? null])
 </section>
 
 @include('reitor._base')
-@if ($risco['temRecorrencia'])
+@if ($risco['temDados'])
 <script>
 (function () {
     var dados = @json($dados);
     var V = window.ReitorViz;
-    var cursos = dados.cursos.filter(function (c) { return c.recorrente !== null || c.persistente !== null; });
+    var cursos = dados.cursos.filter(function (c) { return c.falta !== null || c.acerto !== null; });
+    var series = [];
+    if (dados.faltaLigada) series.push({ label: dados.rotuloFalta + ' (%)', data: cursos.map(function (c) { return c.falta; }), backgroundColor: V.cores.ambar, maxBarThickness: 36 });
+    if (dados.acertoLigado) series.push({ label: dados.rotuloAcerto + ' (%)', data: cursos.map(function (c) { return c.acerto; }), backgroundColor: V.cores.marinho, maxBarThickness: 36 });
 
     V.criar('grafico-risco', {
         type: 'bar',
         data: {
             labels: cursos.map(function (c) { return c.nome; }),
-            datasets: [
-                { label: 'Ausência recorrente (%)', data: cursos.map(function (c) { return c.recorrente; }), backgroundColor: V.cores.ambar, maxBarThickness: 36 },
-                { label: 'Baixo desempenho persistente (%)', data: cursos.map(function (c) { return c.persistente; }), backgroundColor: V.cores.marinho, maxBarThickness: 36 },
-            ],
+            datasets: series,
         },
         options: {
             maintainAspectRatio: false,
-            scales: { y: { beginAtZero: true, ticks: { callback: function (v) { return v + '%'; } }, title: { display: true, text: '% dos estudantes elegíveis' } }, x: { grid: { display: false } } },
+            scales: { y: { beginAtZero: true, ticks: { callback: function (v) { return v + '%'; } }, title: { display: true, text: '% dos estudantes' } }, x: { grid: { display: false } } },
             plugins: {
                 legend: V.legenda('top'),
                 tooltip: { callbacks: {
                     label: function (item) { return item.dataset.label + ': ' + V.pct(item.raw); },
-                    afterBody: function (itens) { return 'Elegíveis: ' + cursos[itens[0].dataIndex].elegiveis; },
+                    afterBody: function (itens) { return 'Estudantes: ' + cursos[itens[0].dataIndex].pessoas; },
                 } },
             },
         },

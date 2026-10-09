@@ -19,3 +19,14 @@ new Chart(document.getElementById('grafico-cor-raca'), {
     options: { indexAxis: 'y', scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }, plugins: { legend: { display: false } } },
 });
 @endif
+
+@if (! empty($perfilDemografico['forma_ingresso']))
+new Chart(document.getElementById('grafico-forma-ingresso'), {
+    type: 'bar',
+    data: {
+        labels: {{ Js::from(array_keys($perfilDemografico['forma_ingresso'])) }},
+        datasets: [{ data: {{ Js::from(array_values($perfilDemografico['forma_ingresso'])) }}, backgroundColor: Viz.cores.serie2, borderRadius: 4, maxBarThickness: 22 }],
+    },
+    options: { indexAxis: 'y', scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }, plugins: { legend: { display: false } } },
+});
+@endif

@@ -48,6 +48,7 @@
                 <th>Miller</th>
                 <th>Dif. Pedagógica</th>
                 <th>Dif. TRI</th>
+                <th>Período mínimo</th>
                 <th>Matriz Prova</th>
                 <th>DCN</th>
                 <th>Portaria INEP</th>
@@ -72,6 +73,7 @@
                     <td>{{ $questao->miller_nivel ?: '—' }}</td>
                     <td>{{ $questao->dificuldade_pedagogica ?: '—' }}</td>
                     <td>{{ $questao->dificuldade_tri ?? '—' }}</td>
+                    <td>{{ $questao->periodo_minimo ? $questao->periodo_minimo.'º' : '—' }}</td>
                     <td>{{ $porTipo->get('matriz_prova') ?: '—' }}</td>
                     <td>{{ $porTipo->get('dcn') ?: '—' }}</td>
                     <td>{{ $porTipo->get('portaria_inep') ?: '—' }}</td>

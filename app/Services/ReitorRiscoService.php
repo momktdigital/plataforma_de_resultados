@@ -2,32 +2,34 @@
 
 namespace App\Services;
 
+use App\Models\Avaliacao;
 use App\Support\CacheDeAnalise;
 use App\Support\NomeCurso;
 use App\Support\PeriodoCurso;
+use App\Support\RegraDeRisco;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Estudantes em risco, EM AGREGADO (nunca nomes — a lista nominal é do coordenador): quantos estudantes de cada curso
- * faltaram a duas ou mais aplicações ou ficaram abaixo do critério em todas as aplicações em que estiveram presentes.
+ * se enquadram na regra de risco da instituição (`RegraDeRisco`: média de acerto abaixo de X% e/ou faltas, combinadas por
+ * "ou"/"e"; cada avaliação pode sobrepor o limite de acerto e dispensar a falta). É a MESMA regra da lista de alunos em
+ * atenção do coordenador, então o número daqui e a lista do curso contam as mesmas pessoas.
  *
  * A pessoa é o estudante: `aluno_id` quando o resultado está ligado ao cadastro, senão a chave (CPF/RA) — um estudante
- * com chaves diferentes em avaliações diferentes e sem vínculo conta como pessoas diferentes (subestima a recorrência;
- * ver CLAUDE.md sobre `aluno_chave`). As contas são só em SQL sobre `resultado_resumos`.
+ * com chaves diferentes em avaliações diferentes e sem vínculo conta como pessoas diferentes (ver CLAUDE.md sobre
+ * `aluno_chave`). As contas são só em SQL sobre `resultado_resumos`.
  *
- *  - ELEGÍVEL: tem resultado em DUAS ou mais aplicações do recorte (sem isso não existe "recorrente"). Os percentuais
- *    são sobre os elegíveis; por isso a tela faz sentido com uma categoria de várias avaliações (os simulados) ou com
- *    "Todos os períodos" — num Diagnóstico de uma aplicação por semestre ela fica vazia, e a tela avisa.
- *  - AUSÊNCIA RECORRENTE: prova inteira em branco em duas ou mais aplicações.
- *  - BAIXO DESEMPENHO PERSISTENTE: presente em duas ou mais e abaixo do critério em TODAS em que esteve presente.
- *  - EM RISCO: um ou outro.
+ *  - POR FALTA: faltou a N ou mais aplicações do recorte (prova inteira em branco; avaliações que dispensam a falta não contam).
+ *  - POR ACERTO: média de acerto nas provas em que esteve presente abaixo do limite (média dos limites das provas, se
+ *    cada uma tiver o seu).
+ *  - EM RISCO: a regra combinada (os dois indicadores acima podem coexistir na mesma pessoa; o "em risco" conta uma vez).
  *
- * Percentual de um grupo com menos de MINIMO_ELEGIVEIS pessoas não é mostrado (null): numa turma pequena o percentual
+ * Percentual de um grupo com menos de MINIMO_PESSOAS pessoas não é mostrado (null): numa turma pequena o percentual
  * identifica gente.
  */
 class ReitorRiscoService
 {
-    public const MINIMO_ELEGIVEIS = 5;
+    public const MINIMO_PESSOAS = 5;
 
     public function __construct(private readonly ReitorEvolucaoService $evolucao) {}
 
@@ -39,8 +41,9 @@ class ReitorRiscoService
     {
         $nomes = $ctx['cursosDisponiveis'];
         $selecionados = $ctx['cursosSelecionados'];
+        $regra = RegraDeRisco::atual();
 
-        $agora = $this->consolidar($this->linhas($ctx['avaliacao']['codigos'], $ctx['corte']), $selecionados);
+        $agora = $this->consolidar($this->linhas($ctx['avaliacao']['codigos'], $regra), $selecionados);
 
         // Tendência: o mesmo cálculo no semestre anterior da série (só quando o recorte é de UM semestre).
         $anterior = null;
@@ -50,7 +53,7 @@ class ReitorRiscoService
             $indice = collect($serie)->search(fn ($s) => $s['selecionada']);
             if ($indice !== false && $indice > 0) {
                 $previo = $serie[$indice - 1];
-                $anterior = $this->consolidar($this->linhas($previo['codigos'], $ctx['corte']), $selecionados);
+                $anterior = $this->consolidar($this->linhas($previo['codigos'], $regra), $selecionados);
                 $rotuloAnterior = $previo['periodoLetivo'];
             }
         }
@@ -77,10 +80,17 @@ class ReitorRiscoService
         return [
             'cursos' => $cursos,
             'total' => $total,
-            'temRecorrencia' => $agora['total']['elegiveis'] >= self::MINIMO_ELEGIVEIS,
+            'temDados' => $agora['total']['pessoas'] >= self::MINIMO_PESSOAS,
             'semestreAnterior' => $rotuloAnterior,
             'periodos' => collect($cursos)->flatMap(fn ($c) => array_keys($c['periodos']))->unique()->sort()->values()->all(),
-            'minimo' => self::MINIMO_ELEGIVEIS,
+            'minimo' => self::MINIMO_PESSOAS,
+            'regra' => [
+                ...$regra->assinatura(),
+                'descricao' => $regra->descricao(),
+                'acertoAtivo' => $this->acertoAtivo($regra, $ctx['avaliacao']['codigos']),
+                // Regra de faltas que ninguém pode atingir no recorte (ex.: 2 faltas com uma aplicação só): a tela avisa.
+                'faltasInalcancavel' => $regra->faltas !== null && $agora['total']['maiorAplicacao'] < $regra->faltas,
+            ],
         ];
     }
 
@@ -90,22 +100,21 @@ class ReitorRiscoService
     }
 
     /**
-     * @param  array{pessoas: int, elegiveis: int, recorrente: int, persistente: int, risco: int}  $g
+     * @param  array{pessoas: int, porFalta: int, porAcerto: int, risco: int}  $g
      * @return array<string, mixed>
      */
     private function indicadores(array $g): array
     {
-        $ok = $g['elegiveis'] >= self::MINIMO_ELEGIVEIS;
-        $pct = fn (int $n) => $ok ? round($n / $g['elegiveis'] * 100, 1) : null;
+        $ok = $g['pessoas'] >= self::MINIMO_PESSOAS;
+        $pct = fn (int $n) => $ok ? round($n / $g['pessoas'] * 100, 1) : null;
 
         return [
             'pessoas' => $g['pessoas'],
-            'elegiveis' => $g['elegiveis'],
-            'recorrente' => $g['recorrente'],
-            'persistente' => $g['persistente'],
+            'porFalta' => $g['porFalta'],
+            'porAcerto' => $g['porAcerto'],
             'risco' => $g['risco'],
-            'pctRecorrente' => $pct($g['recorrente']),
-            'pctPersistente' => $pct($g['persistente']),
+            'pctPorFalta' => $pct($g['porFalta']),
+            'pctPorAcerto' => $pct($g['porAcerto']),
             'pctRisco' => $pct($g['risco']),
         ];
     }
@@ -119,21 +128,22 @@ class ReitorRiscoService
      */
     private function consolidar(array $linhas, array $selecionados): array
     {
-        $vazio = ['pessoas' => 0, 'elegiveis' => 0, 'recorrente' => 0, 'persistente' => 0, 'risco' => 0];
+        $vazio = ['pessoas' => 0, 'porFalta' => 0, 'porAcerto' => 0, 'risco' => 0];
         $cursos = [];
-        $total = $vazio;
+        $total = [...$vazio, 'maiorAplicacao' => 0];
 
-        foreach ($linhas as [$curso, $periodo, $pessoas, $elegiveis, $recorrente, $persistente, $risco]) {
+        foreach ($linhas as [$curso, $periodo, $pessoas, $porFalta, $porAcerto, $risco, $aplicacoes]) {
             $chave = NomeCurso::chave($curso);
             if (! in_array($chave, $selecionados, true)) {
                 continue;
             }
-            $dados = ['pessoas' => $pessoas, 'elegiveis' => $elegiveis, 'recorrente' => $recorrente, 'persistente' => $persistente, 'risco' => $risco];
+            $dados = ['pessoas' => $pessoas, 'porFalta' => $porFalta, 'porAcerto' => $porAcerto, 'risco' => $risco];
             $cursos[$chave] ??= [...$vazio, 'periodos' => []];
             foreach ($dados as $campo => $valor) {
                 $cursos[$chave][$campo] += $valor;
                 $total[$campo] += $valor;
             }
+            $total['maiorAplicacao'] = max($total['maiorAplicacao'], $aplicacoes);
             if (($ordinal = PeriodoCurso::ordinal($periodo)) !== null) {
                 $cursos[$chave]['periodos'][$ordinal] ??= [...$vazio, 'ordinal' => $ordinal];
                 foreach ($dados as $campo => $valor) {
@@ -150,39 +160,66 @@ class ReitorRiscoService
     }
 
     /**
-     * Uma consulta agregada (cacheada): por (curso, período do curso), quantas pessoas, quantas elegíveis e quantas
-     * em cada situação. A pessoa é agrupada antes (uma linha por pessoa × curso) e só então contada.
+     * O critério de acerto vale quando há limite padrão OU alguma avaliação do recorte traz o limite dela (> 0).
+     *
+     * @param  array<int, int>  $codigos
+     */
+    private function acertoAtivo(RegraDeRisco $regra, array $codigos): bool
+    {
+        return $regra->acerto !== null
+            || Avaliacao::whereIn('codigo', $codigos)->where('risco_acerto', '>', 0)->exists();
+    }
+
+    /**
+     * Uma consulta agregada (cacheada): por (curso, período do curso), quantas pessoas e quantas em cada situação.
+     * A pessoa é agrupada antes (uma linha por pessoa × curso) e só então contada.
      *
      * @param  array<int, int>  $codigos
      * @return array<int, array{0: string, 1: string, 2: int, 3: int, 4: int, 5: int, 6: int}>
      */
-    private function linhas(array $codigos, float $corte): array
+    private function linhas(array $codigos, RegraDeRisco $regra): array
     {
-        return CacheDeAnalise::lembrarVarias('reitor-risco', $codigos, ['corte' => $corte], function () use ($codigos, $corte) {
+        // A regra de cada avaliação (limite próprio, dispensa de falta) entra na chave: mudar uma delas não serve número velho.
+        $proprias = Avaliacao::whereIn('codigo', $codigos)->orderBy('codigo')->get(['codigo', 'risco_acerto', 'risco_ignora_falta'])
+            ->map(fn ($a) => $a->codigo.':'.($a->risco_acerto ?? '-').':'.(int) $a->risco_ignora_falta)->implode('|');
+        $acertoAtivo = $this->acertoAtivo($regra, $codigos);
+
+        return CacheDeAnalise::lembrarVarias('reitor-risco', $codigos, ['regra' => $regra->assinatura(), 'avaliacoes' => md5($proprias)], function () use ($codigos, $regra, $acertoAtivo) {
             $pessoa = DB::getDriverName() === 'sqlite'
                 ? "CASE WHEN rr.aluno_id IS NOT NULL THEN 'a' || rr.aluno_id ELSE 'k' || rr.aluno_chave END"
                 : "CASE WHEN rr.aluno_id IS NOT NULL THEN CONCAT('a', rr.aluno_id) ELSE CONCAT('k', rr.aluno_chave) END";
 
+            // Limite de acerto de cada resultado: o da avaliação (0 = fora do critério), senão o padrão da instituição.
+            $padrao = $regra->acerto === null ? 'NULL' : number_format($regra->acerto, 2, '.', '');
+            $limite = "(CASE WHEN av.risco_acerto IS NOT NULL THEN (CASE WHEN av.risco_acerto > 0 THEN av.risco_acerto ELSE NULL END) ELSE {$padrao} END)";
+            $conta = "(rr.ausente = 0 AND rr.percentual IS NOT NULL AND {$limite} IS NOT NULL)";
+
             $porPessoa = DB::table('resultado_resumos as rr')
+                ->join('avaliacoes as av', 'av.codigo', '=', 'rr.avaliacao_codigo')
                 ->whereIn('rr.avaliacao_codigo', $codigos)
                 ->whereNotNull('rr.curso')->where('rr.curso', '!=', '')
                 ->groupByRaw('1, 2')
                 ->selectRaw("{$pessoa} as pessoa, rr.curso as curso, MAX(rr.periodo) as periodo")
-                ->selectRaw('SUM(CASE WHEN rr.ausente <> 0 THEN 1 ELSE 0 END) as faltas')
-                ->selectRaw('SUM(CASE WHEN rr.ausente = 0 THEN 1 ELSE 0 END) as presentes')
-                ->selectRaw('SUM(CASE WHEN rr.ausente = 0 AND rr.percentual IS NOT NULL AND rr.percentual < ? THEN 1 ELSE 0 END) as abaixo', [$corte]);
+                ->selectRaw('COUNT(*) as aplicacoes')
+                ->selectRaw('SUM(CASE WHEN rr.ausente <> 0 AND COALESCE(av.risco_ignora_falta, 0) = 0 THEN 1 ELSE 0 END) as faltas')
+                ->selectRaw("SUM(CASE WHEN {$conta} THEN 1 ELSE 0 END) as n_acerto")
+                ->selectRaw("SUM(CASE WHEN {$conta} THEN rr.percentual ELSE 0 END) as soma_pc")
+                ->selectRaw("SUM(CASE WHEN {$conta} THEN {$limite} ELSE 0 END) as soma_limite");
 
-            $persistente = '(p.presentes >= 2 AND p.abaixo = p.presentes)';
+            $porFalta = $regra->faltas !== null ? '(p.faltas >= '.(int) $regra->faltas.')' : null;
+            $porAcerto = $acertoAtivo ? '(p.n_acerto > 0 AND p.soma_pc < p.soma_limite)' : null;
+            $criterios = array_values(array_filter([$porFalta, $porAcerto]));
+            $risco = $criterios === [] ? '0 = 1' : implode($regra->operador === 'e' ? ' AND ' : ' OR ', $criterios);
 
             return DB::query()->fromSub($porPessoa, 'p')
                 ->groupBy('p.curso', 'p.periodo')
                 ->selectRaw('p.curso as curso, p.periodo as periodo, COUNT(*) as pessoas')
-                ->selectRaw('SUM(CASE WHEN p.faltas + p.presentes >= 2 THEN 1 ELSE 0 END) as elegiveis')
-                ->selectRaw('SUM(CASE WHEN p.faltas >= 2 THEN 1 ELSE 0 END) as recorrente')
-                ->selectRaw("SUM(CASE WHEN {$persistente} THEN 1 ELSE 0 END) as persistente")
-                ->selectRaw("SUM(CASE WHEN p.faltas >= 2 OR {$persistente} THEN 1 ELSE 0 END) as risco")
+                ->selectRaw('SUM(CASE WHEN '.($porFalta ?? '0 = 1').' THEN 1 ELSE 0 END) as por_falta')
+                ->selectRaw('SUM(CASE WHEN '.($porAcerto ?? '0 = 1').' THEN 1 ELSE 0 END) as por_acerto')
+                ->selectRaw("SUM(CASE WHEN {$risco} THEN 1 ELSE 0 END) as risco")
+                ->selectRaw('MAX(p.aplicacoes) as aplicacoes')
                 ->get()
-                ->map(fn ($l) => [(string) $l->curso, (string) $l->periodo, (int) $l->pessoas, (int) $l->elegiveis, (int) $l->recorrente, (int) $l->persistente, (int) $l->risco])
+                ->map(fn ($l) => [(string) $l->curso, (string) $l->periodo, (int) $l->pessoas, (int) $l->por_falta, (int) $l->por_acerto, (int) $l->risco, (int) $l->aplicacoes])
                 ->all();
         });
     }

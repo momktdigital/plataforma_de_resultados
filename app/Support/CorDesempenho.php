@@ -4,7 +4,7 @@ namespace App\Support;
 
 /**
  * Faixas de cor únicas pro percentual de acerto em toda a UI do aluno (anel
- * de progresso de cada avaliação, barra de "Desempenho por categoria") —
+ * de progresso de cada avaliação) —
  * um só lugar pra não ter dois componentes decidindo o limiar de forma
  * diferente. Faixas pedidas: verde ≥60%, amarelo <60% (sem vermelho — o
  * aluno nunca vê um resultado em vermelho).

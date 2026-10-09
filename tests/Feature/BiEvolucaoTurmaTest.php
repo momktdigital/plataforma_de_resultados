@@ -141,28 +141,17 @@ class BiEvolucaoTurmaTest extends TestCase
         $this->assertSame([100.0, 100.0], array_column($doCoordenador->evolucaoCategoria($primeira), 'media'));
     }
 
-    public function test_bi_mostra_as_abas_periodo_e_avaliacao_inteira_e_a_caixa_de_ausentes(): void
+    public function test_bi_nao_tem_mais_o_visual_de_evolucao_da_media_na_categoria(): void
     {
         [, $segunda] = $this->categoriaComDuasProvas();
 
-        $response = $this->actingAs($this->admin(), 'admin')->get("/avaliacoes/{$segunda->codigo}/bi?turma=Turma C");
-
-        $response->assertOk()
-            ->assertSee('Evolução da média na categoria')
-            ->assertSee('id="aba-evolucao-periodo"', false)
-            ->assertSee('id="aba-evolucao-geral"', false)
-            ->assertSee('Avaliação inteira')
-            ->assertSee('id="seletor-periodo-evolucao"', false)
-            ->assertSee('<option value="3" selected>3º período</option>', false)   // período da turma do filtro
-            ->assertSee('<option value="2" >2º período</option>', false)
-            ->assertSee('id="evolucao-sem-ausentes" checked', false)               // marcada por padrão
-            ->assertSee('Desconsiderar ausentes')
-            ->assertSee('id="grafico-evolucao-periodo"', false)
-            // Linha na regra de cor do desempenho (verde ≥ 60%, amarelo abaixo, degradê no cruzamento).
-            ->assertSee('window.LinhaDesempenho', false)
-            ->assertSee('LinhaDesempenho.serie(', false)
-            ->assertSee('id="grafico-evolucao"', false)
-            ->assertViewHas('evolucaoPorPeriodo', fn ($e) => array_keys($e) === [2, 3]);
+        // O visual saiu do Dashboard (a evolução fica na tela de desempenho do coordenador); os cálculos do serviço seguem testados acima.
+        $this->actingAs($this->admin(), 'admin')->get("/avaliacoes/{$segunda->codigo}/bi")
+            ->assertOk()
+            ->assertDontSee('Evolução da média na categoria')
+            ->assertDontSee('id="grafico-evolucao"', false)
+            ->assertDontSee('id="aba-evolucao-geral"', false)
+            ->assertViewMissing('evolucaoPorPeriodo');
     }
 
     /**
@@ -212,31 +201,6 @@ class BiEvolucaoTurmaTest extends TestCase
         $this->assertSame([], $graficosRepetidos, 'gráficos montados mais de uma vez: '.implode(', ', $graficosRepetidos));
 
         $this->assertSame(1, substr_count($fonte, 'function ordenarTabelaAlternativas'));
-    }
-
-    public function test_script_da_evolucao_recebe_os_periodos_do_curso(): void
-    {
-        // Regressão da divisão do bi.blade.php em parciais: uma variável calculada no bloco HTML da evolução não chega
-        // ao script (@include tem escopo próprio) e o gráfico por período ficava com a lista vazia.
-        [, $segunda] = $this->categoriaComDuasProvas();
-
-        $html = $this->actingAs($this->admin(), 'admin')->get("/avaliacoes/{$segunda->codigo}/bi")->getContent();
-
-        // Js::from() grava o objeto como JSON.parse('...') com as aspas escapadas (").
-        $this->assertMatchesRegularExpression('/var porPeriodo = JSON\.parse\(.*u0022rotulo/', $html);
-        $this->assertStringNotContainsString('var porPeriodo = [];', $html);
-    }
-
-    public function test_sem_periodo_valido_so_ha_a_aba_da_avaliacao_inteira(): void
-    {
-        $categoria = Categoria::create(['nome' => 'Simulados']);
-        $this->avaliacao('Primeira', '2026-03-10', $categoria->id, ['1' => ['', 'Turma A', 5]]);
-        $segunda = $this->avaliacao('Segunda', '2026-04-10', $categoria->id, ['1' => ['', 'Turma A', 4]]);
-
-        $this->actingAs($this->admin(), 'admin')->get("/avaliacoes/{$segunda->codigo}/bi")
-            ->assertOk()
-            ->assertSee('id="aba-evolucao-geral"', false)
-            ->assertDontSee('id="aba-evolucao-periodo"', false);
     }
 
     public function test_percentual_abaixo_de_60_e_amarelo_na_lista_de_alunos(): void

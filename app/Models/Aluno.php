@@ -28,6 +28,7 @@ class Aluno extends Model
         'periodo',
         'turma',
         'cor_raca',
+        'forma_ingresso',
         'religiao',
         'sexo',
         'estado_civil',

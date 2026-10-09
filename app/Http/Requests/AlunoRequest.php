@@ -33,6 +33,7 @@ class AlunoRequest extends FormRequest
             'sexo' => ['nullable', 'string', 'max:20'],
             'estado_civil' => ['nullable', 'string', 'max:60'],
             'cor_raca' => ['nullable', 'string', 'max:100'],
+            'forma_ingresso' => ['nullable', 'string', 'max:100'],
             'religiao' => ['nullable', 'string', 'max:100'],
             'celular' => ['nullable', 'string', 'max:30'],
             'email' => ['nullable', 'email', 'max:255'],

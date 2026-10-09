@@ -7,6 +7,7 @@ use App\Models\AlunoMatricula;
 use App\Support\Anulacao;
 use App\Support\CacheDeAnalise;
 use App\Support\PeriodoCurso;
+use App\Support\RegraDeRisco;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -127,11 +128,14 @@ class CoordenadorAlunosService
         // Acompanhamento do coordenador (último registro de cada aluno, só dos cursos dele).
         $acompanhamentos = app(AcompanhamentoService::class)->ultimos(array_keys($cadastro), $variantes);
 
+        $regra = RegraDeRisco::atual();
+        $acertoAtivo = self::acertoAtivo($regra, $porCodigo);
+
         $resultado = [];
         foreach ($pessoas as $p) {
             $aluno = $p['id'] !== null ? ($cadastro[$p['id']] ?? null) : null;
-            $metricas = $this->metricas($p['avals'], $porCodigo);
-            [$situacao, $motivos] = self::classificar($metricas);
+            $metricas = $this->metricas($p['avals'], $porCodigo, $regra, $acertoAtivo);
+            [$situacao, $motivos] = self::classificar($metricas, $regra);
 
             // Período do curso / turma na época: da matrícula da prova mais recente; senão a do semestre; senão o cadastro.
             $matricula = $this->matriculaDaUltimaProva($p['avals'], $porCodigo, $matriculasDosResultados)
@@ -160,7 +164,7 @@ class CoordenadorAlunosService
      * Contagens para os cartões e atalhos de filtro.
      *
      * @param  array<int, array<string, mixed>>  $alunos
-     * @return array{total: int, porSituacao: array<string, int>, precisamAtencao: int, inscritos: int, presentes: int, presenca: ?float, porPeriodoCurso: array<int, array{ordinal: int, rotulo: string, alunos: int, atencao: int, inscritos: int, presentes: int, presenca: ?float}>}
+     * @return array{total: int, porSituacao: array<string, int>, precisamAtencao: int, inscritos: int, presentes: int, presenca: ?float, porPeriodoCurso: array<int, array{ordinal: int, rotulo: string, alunos: int, atencao: int, inscritos: int, presentes: int, presenca: ?float, media: ?float}>}
      */
     public function resumo(array $alunos): array
     {
@@ -175,11 +179,15 @@ class CoordenadorAlunosService
 
             if ($a['periodoCurso'] !== null) {
                 $grupo = &$porPeriodo[$a['periodoCurso']];
-                $grupo ??= ['ordinal' => $a['periodoCurso'], 'rotulo' => PeriodoCurso::rotulo($a['periodoCurso']), 'alunos' => 0, 'atencao' => 0, 'inscritos' => 0, 'presentes' => 0];
+                $grupo ??= ['ordinal' => $a['periodoCurso'], 'rotulo' => PeriodoCurso::rotulo($a['periodoCurso']), 'alunos' => 0, 'atencao' => 0, 'inscritos' => 0, 'presentes' => 0, 'soma_media' => 0.0, 'n_media' => 0];
                 $grupo['alunos']++;
                 $grupo['atencao'] += in_array($a['situacao'], ['atencao', 'ausente'], true) ? 1 : 0;
                 $grupo['inscritos'] += $a['inscritos'];
                 $grupo['presentes'] += $a['presentes'];
+                if ($a['media'] !== null) {
+                    $grupo['soma_media'] += $a['media'];
+                    $grupo['n_media']++;
+                }
                 unset($grupo);
             }
         }
@@ -193,7 +201,12 @@ class CoordenadorAlunosService
             'presentes' => $presentes,
             'presenca' => $inscritos > 0 ? round($presentes / $inscritos * 100, 1) : null,
             'porPeriodoCurso' => array_values(array_map(
-                fn ($g) => [...$g, 'presenca' => $g['inscritos'] > 0 ? round($g['presentes'] / $g['inscritos'] * 100, 1) : null],
+                fn ($g) => [
+                    ...array_diff_key($g, ['soma_media' => 1, 'n_media' => 1]),
+                    'presenca' => $g['inscritos'] > 0 ? round($g['presentes'] / $g['inscritos'] * 100, 1) : null,
+                    // % de acerto do período: média das médias dos alunos dele (quem tem nota; ausente em tudo fica de fora).
+                    'media' => $g['n_media'] > 0 ? round($g['soma_media'] / $g['n_media'], 1) : null,
+                ],
                 $porPeriodo,
             )),
         ];
@@ -347,8 +360,9 @@ class CoordenadorAlunosService
             }
         }
 
-        $metricas = $this->metricas($avals, $porCodigo);
-        [$situacao, $motivos] = self::classificar($metricas);
+        $regra = RegraDeRisco::atual();
+        $metricas = $this->metricas($avals, $porCodigo, $regra, self::acertoAtivo($regra, $porCodigo));
+        [$situacao, $motivos] = self::classificar($metricas, $regra);
 
         $estatisticas = $this->estatisticasDoCurso($avals, $variantes);
         $nomesCategoria = $this->dashboard->nomesDeCategoria();
@@ -429,14 +443,27 @@ class CoordenadorAlunosService
     // Regras
     // ------------------------------------------------------------------------------------------------------------
 
+    /** O critério de acerto vale com limite padrão OU quando alguma avaliação do recorte traz o limite dela (> 0). */
+    private static function acertoAtivo(RegraDeRisco $regra, Collection $porCodigo): bool
+    {
+        return $regra->acerto !== null || $porCodigo->contains(fn ($a) => ($a['riscoAcerto'] ?? 0) > 0);
+    }
+
     /**
      * Situação do aluno a partir das métricas dele e os motivos (mostrados ao coordenador — nada de "caixa-preta").
      *
-     * @param  array<string, mixed>  $m  inscritos, presentes, faltas, media, tendencia
+     * "Em atenção" segue a regra de risco da instituição (`RegraDeRisco`: média de acerto e/ou faltas, combinadas por "ou"/"e",
+     * com o que cada avaliação sobrepõe), MAIS a queda de nota entre duas provas, que é um sinal à parte (sozinha basta).
+     * Sem `$regra` vale o padrão (média abaixo de 60% ou 2 faltas).
+     *
+     * @param  array<string, mixed>  $m  inscritos, presentes, faltas, media, tendencia (e, se calculados com a regra:
+     *                                   faltasRisco, acertoAtivo, acertoAbaixo, mediaRisco, limiteMedio)
      * @return array{0: string, 1: array<int, string>}
      */
-    public static function classificar(array $m): array
+    public static function classificar(array $m, ?RegraDeRisco $regra = null): array
     {
+        $regra ??= RegraDeRisco::padrao();
+
         if ($m['inscritos'] === 0) {
             return ['sem_resultado', ['Nenhuma avaliação registrada neste semestre.']];
         }
@@ -444,13 +471,27 @@ class CoordenadorAlunosService
             return ['ausente', ["Faltou em todas as {$m['inscritos']} avaliação(ões) do semestre."]];
         }
 
-        $motivos = [];
-        if ($m['media'] !== null && $m['media'] < self::LIMIAR_ADEQUADO) {
-            $motivos[] = 'Média de '.self::pct($m['media']).'% (abaixo de '.(int) self::LIMIAR_ADEQUADO.'%).';
+        $criterios = [];
+        $motivosDaRegra = [];
+
+        if ($regra->faltas !== null) {
+            $atingiu = ($m['faltasRisco'] ?? $m['faltas']) >= $regra->faltas;
+            $criterios[] = $atingiu;
+            if ($atingiu) {
+                $motivosDaRegra[] = "{$m['faltas']} ".($m['faltas'] === 1 ? 'falta' : 'faltas')." em {$m['inscritos']} avaliações.";
+            }
         }
-        if ($m['faltas'] >= self::FALTAS_ALERTA) {
-            $motivos[] = "{$m['faltas']} faltas em {$m['inscritos']} avaliações.";
+        if ($m['acertoAtivo'] ?? $regra->acerto !== null) {
+            $limite = $m['limiteMedio'] ?? $regra->acerto;
+            $abaixo = $m['acertoAbaixo'] ?? ($m['media'] !== null && $regra->acerto !== null && $m['media'] < $regra->acerto);
+            $criterios[] = $abaixo;
+            if ($abaixo) {
+                $motivosDaRegra[] = 'Média de '.self::pct($m['mediaRisco'] ?? $m['media']).'% (abaixo de '.RegraDeRisco::numero((float) $limite).'%).';
+            }
         }
+
+        // Com "e", só entra em atenção quem atinge todos os critérios ligados; com "ou", qualquer um já basta.
+        $motivos = $regra->combinar($criterios) ? $motivosDaRegra : [];
         $tendencia = $m['tendencia']['delta'] ?? null;
         if ($tendencia !== null && $tendencia <= -self::QUEDA_ALERTA) {
             $motivos[] = 'Queda de '.self::pct(abs($tendencia)).' pontos na última avaliação.';
@@ -465,23 +506,36 @@ class CoordenadorAlunosService
 
     /**
      * @param  array<int, array{pc: ?float, ausente: bool}>  $avals  codigo => resultado do aluno
-     * @param  Collection<int, array<string, mixed>>  $porCodigo  avaliações (nome, data, categoriaId) por código
-     * @return array{inscritos: int, presentes: int, faltas: int, presenca: ?float, media: ?float, abaixo: int, ultima: ?array{nome: string, data: ?string, pc: float}, tendencia: ?array{delta: float, de: float, para: float}}
+     * @param  Collection<int, array<string, mixed>>  $porCodigo  avaliações (nome, data, categoriaId, regra de risco) por código
+     * @return array<string, mixed> inscritos, presentes, faltas, presenca, media, abaixo, ultima, tendencia e os números da regra
+     *                              de risco (faltasRisco, acertoAtivo, acertoAbaixo, mediaRisco, limiteMedio)
      */
-    private function metricas(array $avals, Collection $porCodigo): array
+    private function metricas(array $avals, Collection $porCodigo, RegraDeRisco $regra, bool $acertoAtivo): array
     {
         $presentes = $comNota = $abaixo = 0;
         $soma = 0.0;
+        $faltasRisco = $nAcerto = 0;
+        $somaRisco = $somaLimite = 0.0;
         $ultima = null;
         $porCategoria = [];
 
         foreach ($avals as $codigo => $a) {
             if ($a['ausente']) {
+                $faltasRisco += ($porCodigo[$codigo]['riscoIgnoraFalta'] ?? false) ? 0 : 1;
+
                 continue;
             }
             $presentes++;
             if ($a['pc'] === null) {
                 continue;
+            }
+
+            // Critério de acerto da regra: cada avaliação traz o limite dela (ou nenhum, se estiver fora do critério).
+            $limite = $regra->limiteDaAvaliacao($porCodigo[$codigo]['riscoAcerto'] ?? null);
+            if ($limite !== null) {
+                $nAcerto++;
+                $somaRisco += $a['pc'];
+                $somaLimite += $limite;
             }
 
             $comNota++;
@@ -523,6 +577,11 @@ class CoordenadorAlunosService
             'presenca' => $inscritos > 0 ? round($presentes / $inscritos * 100, 1) : null,
             'media' => $comNota > 0 ? round($soma / $comNota, 1) : null,
             'abaixo' => $abaixo,
+            'faltasRisco' => $faltasRisco,
+            'acertoAtivo' => $acertoAtivo,
+            'acertoAbaixo' => $nAcerto > 0 && $somaRisco < $somaLimite,
+            'mediaRisco' => $nAcerto > 0 ? round($somaRisco / $nAcerto, 1) : null,
+            'limiteMedio' => $nAcerto > 0 ? round($somaLimite / $nAcerto, 1) : null,
             'ultima' => $ultima !== null ? ['nome' => $ultima['nome'], 'data' => $ultima['data'], 'pc' => $ultima['pc']] : null,
             'tendencia' => $tendencia,
         ];
@@ -541,7 +600,7 @@ class CoordenadorAlunosService
 
         if ($m['inscritos'] > 0 && $m['faltas'] > 0) {
             $cartoes[] = [
-                'tom' => $m['faltas'] >= self::FALTAS_ALERTA ? 'atencao' : 'neutro',
+                'tom' => ($m['faltasRisco'] ?? $m['faltas']) >= (RegraDeRisco::atual()->faltas ?? PHP_INT_MAX) ? 'atencao' : 'neutro',
                 'icone' => 'ph-user-minus',
                 'texto' => "Faltou em {$m['faltas']} de {$m['inscritos']} avaliação(ões) do semestre (presença de ".self::pct($m['presenca']).'%).',
             ];

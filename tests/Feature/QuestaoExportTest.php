@@ -22,8 +22,8 @@ class QuestaoExportTest extends TestCase
 
     private function questaoCompleta(Avaliacao $avaliacao): Questao
     {
-        $csv = "Questão,Gabarito,Área,Tema,Habilidade,Matriz Prova A,Matriz Prova B,DCN A,PPC A,PPC B,Matriz (período),Matriz (disciplina),Matriz (código)\n"
-            .'1,B,"Clínica Médica","HIV/AIDS","E3 — Avaliação","Item 1","Item 2","Art. 5º","P1","P2","1;2","Anatomia;Fisiologia","AN01;FI02"'."\n";
+        $csv = "Questão,Gabarito,Área,Tema,Habilidade,Matriz Prova A,Matriz Prova B,DCN A,PPC A,PPC B,Período mínimo,Matriz (período),Matriz (disciplina),Matriz (código)\n"
+            .'1,B,"Clínica Médica","HIV/AIDS","E3 — Avaliação","Item 1","Item 2","Art. 5º","P1","P2","3º período","1;2","Anatomia;Fisiologia","AN01;FI02"'."\n";
         $arquivo = UploadedFile::fake()->createWithContent('gabarito.csv', $csv);
         app(QuestaoImportService::class)->importar($avaliacao, $arquivo);
 
@@ -48,11 +48,13 @@ class QuestaoExportTest extends TestCase
         @unlink($temporario);
 
         $this->assertSame('Questão', $sheet->getCell('A1')->getValue());
-        $this->assertSame('Matriz Prova A', $sheet->getCell('N1')->getValue());
+        $this->assertSame('Matriz Prova A', $sheet->getCell('O1')->getValue());
         $this->assertSame(1, $sheet->getCell('A2')->getValue());
         $this->assertSame('Clínica Médica', $sheet->getCell('C2')->getValue());
-        $this->assertSame('Item 1', $sheet->getCell('N2')->getValue());
-        $this->assertSame('Item 2', $sheet->getCell('O2')->getValue());
+        $this->assertSame('Item 1', $sheet->getCell('O2')->getValue());
+        $this->assertSame('Item 2', $sheet->getCell('P2')->getValue());
+        $this->assertSame('Período mínimo', $sheet->getCell('K1')->getValue());
+        $this->assertSame(3, $sheet->getCell('K2')->getValue());
     }
 
     public function test_planilha_exportada_e_reimportavel_sem_perder_dados(): void
@@ -72,6 +74,7 @@ class QuestaoExportTest extends TestCase
         $this->assertSame('B', $reimportada->gabarito);
         $this->assertSame('Clínica Médica', $reimportada->area);
         $this->assertSame('HIV/AIDS', $reimportada->tema);
+        $this->assertSame(3, $reimportada->periodo_minimo);
         $this->assertSame(
             ['Item 1', 'Item 2'],
             $reimportada->referencias()->where('tipo', 'matriz_prova')->pluck('valor')->all(),

@@ -1,0 +1,145 @@
+/* Tour guiado do portal do aluno (ver public/assets/js/portal-tour.js). Estilos próprios: não dependem do Tailwind. */
+
+.portal-tour-fundo {
+    position: fixed;
+    inset: 0;
+    z-index: 9990;
+    background: transparent; /* clique fora do diálogo não faz nada: o foco fica no tour */
+}
+
+.portal-tour-fundo--cheio {
+    background: rgba(15, 23, 32, 0.6);
+}
+
+/* O "recorte" sobre o elemento: a sombra gigante escurece o resto da tela e deixa o alvo iluminado. */
+.portal-tour-destaque {
+    position: fixed;
+    display: none;
+    z-index: 9991;
+    border-radius: 12px;
+    box-shadow: 0 0 0 9999px rgba(15, 23, 32, 0.6), 0 0 0 3px #00b48d;
+    pointer-events: none;
+    transition: top .25s ease, left .25s ease, width .25s ease, height .25s ease;
+}
+
+.portal-tour-dialogo {
+    position: fixed;
+    z-index: 9992;
+    box-sizing: border-box;
+    width: min(380px, calc(100vw - 24px));
+    background: #ffffff;
+    color: #1e293b;
+    border-radius: 16px;
+    box-shadow: 0 20px 45px rgba(15, 23, 32, 0.35);
+    padding: 20px 20px 16px;
+    font-family: 'Inter', system-ui, sans-serif;
+}
+
+.portal-tour-dialogo:focus {
+    outline: none;
+}
+
+.portal-tour-dialogo--rodape {
+    width: 100%;
+    max-width: none;
+    bottom: 0;
+    border-radius: 16px 16px 0 0;
+}
+
+.portal-tour-contador {
+    margin: 0 0 6px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: #047857;
+}
+
+.portal-tour-titulo {
+    margin: 0 0 8px;
+    font-size: 18px;
+    line-height: 1.3;
+    font-weight: 700;
+    color: #0f1720;
+}
+
+.portal-tour-texto {
+    margin: 0 0 16px;
+    font-size: 14px;
+    line-height: 1.55;
+    color: #334155;
+}
+
+.portal-tour-botoes {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.portal-tour-grupo {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.portal-tour-dialogo button {
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 10px;
+    padding: 9px 16px;
+    border: 1px solid transparent;
+}
+
+.portal-tour-dialogo button[hidden] {
+    display: none;
+}
+
+.portal-tour-primario {
+    background: #047857;
+    color: #ffffff;
+}
+
+.portal-tour-primario:hover {
+    background: #065f46;
+}
+
+.portal-tour-secundario {
+    background: #ffffff;
+    color: #334155;
+    border-color: #cbd5e1 !important;
+}
+
+.portal-tour-secundario:hover {
+    background: #f1f5f9;
+}
+
+.portal-tour-pular {
+    background: transparent;
+    color: #475569;
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+    text-decoration: underline;
+}
+
+.portal-tour-dialogo button:focus-visible {
+    outline: 3px solid #0f1720;
+    outline-offset: 2px;
+}
+
+.portal-tour-sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .portal-tour-destaque {
+        transition: none;
+    }
+}

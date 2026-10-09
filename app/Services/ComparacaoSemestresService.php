@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Admin;
+use App\Support\PeriodoCurso;
 use Illuminate\Support\Collection;
 
 /**
@@ -12,17 +13,17 @@ use Illuminate\Support\Collection;
  * categorias diferentes não são comparáveis), ausentes ficam fora das médias, e o curso de cada resultado é o da
  * época da prova. Só os números que não dependem da prova (alunos, presença, quem está em atenção) são globais.
  *
- * Quem fez prova nos dois semestres é pareado pela pessoa (aluno do cadastro): o que se compara é a MÉDIA DELE na
- * categoria em cada semestre. Variação menor que VARIACAO_ALUNO pontos conta como "estável" — numa prova de 20
- * questões a nota de um aluno oscila sozinha.
+ * A comparação de alunos olha para o PERÍODO DO CURSO (1º, 2º...), não para a pessoa: em cada período, quantos alunos
+ * ficaram dentro do esperado (a fatia da prova que cabe no período dele, ou 60% sem a meta) em cada semestre. Variação
+ * menor que VARIACAO_PERIODO pontos percentuais conta como "estável".
  */
 class ComparacaoSemestresService
 {
-    /** Pontos percentuais a partir dos quais a média de um aluno subiu/caiu de verdade. */
-    public const VARIACAO_ALUNO = 5.0;
-
-    /** Quantos alunos aparecem em cada lista de "mais subiram"/"mais caíram". */
-    private const TOPO = 5;
+    /**
+     * Pontos percentuais, no % de alunos dentro do esperado de um período do curso, a partir dos quais ele subiu/caiu de
+     * verdade entre os dois semestres (turmas diferentes oscilam sozinhas).
+     */
+    public const VARIACAO_PERIODO = 5.0;
 
     public function __construct(
         private readonly CoordenadorDashboardService $dashboard,
@@ -43,16 +44,26 @@ class ComparacaoSemestresService
     /**
      * @return array<string, mixed>
      */
-    public function comparar(Admin $coordenador, string $curso, string $atual, string $referencia): array
+    /**
+     * @param  array{categoria?: string, periodo_curso?: int|string|null}  $filtros  categoria ('' = todas, '0' = sem categoria, ou o id)
+     *                                                                              e período do curso (ordinal) — valem para os dois semestres
+     * @return array<string, mixed>
+     */
+    public function comparar(Admin $coordenador, string $curso, string $atual, string $referencia, array $filtros = []): array
     {
+        $filtroCategoria = (string) ($filtros['categoria'] ?? '');
+        $filtroPeriodoCurso = isset($filtros['periodo_curso']) && $filtros['periodo_curso'] !== '' ? (int) $filtros['periodo_curso'] : null;
+
         $escopoAtual = $this->dashboard->escopo($coordenador, $curso, $atual);
         $escopoReferencia = $this->dashboard->escopo($coordenador, $curso, $referencia);
 
-        $painelAtual = $this->dashboard->gerar($coordenador, $curso, $atual, $escopoAtual);
-        $painelReferencia = $this->dashboard->gerar($coordenador, $curso, $referencia, $escopoReferencia);
+        // Estrito: uma categoria/período do curso que só existe num dos semestres aparece vazio no outro, em vez de tudo.
+        $opcoes = ['detalhado' => true, 'campos' => false, 'estrito' => true, 'periodo_curso' => $filtroPeriodoCurso];
+        $painelAtual = $this->dashboard->gerar($coordenador, $curso, $atual, $escopoAtual, $opcoes);
+        $painelReferencia = $this->dashboard->gerar($coordenador, $curso, $referencia, $escopoReferencia, $opcoes);
 
-        $listaAtual = $this->alunos->alunos($escopoAtual);
-        $listaReferencia = $this->alunos->alunos($escopoReferencia);
+        $listaAtual = $this->soDoPeriodoDoCurso($this->alunos->alunos($escopoAtual), $filtroPeriodoCurso);
+        $listaReferencia = $this->soDoPeriodoDoCurso($this->alunos->alunos($escopoReferencia), $filtroPeriodoCurso);
         $resumoAtual = $this->alunos->resumo($listaAtual);
         $resumoReferencia = $this->alunos->resumo($listaReferencia);
 
@@ -66,10 +77,23 @@ class ComparacaoSemestresService
         $atuais = collect($painelAtual['categorias'])->keyBy(fn ($c) => $c['id'] ?? 0);
         $referencias = collect($painelReferencia['categorias'])->keyBy(fn ($c) => $c['id'] ?? 0);
 
+        // As categorias e períodos do curso que existem em QUALQUER um dos dois semestres, para os seletores da tela.
+        $categoriasDisponiveis = collect([...$painelAtual['categoriasDisponiveis'], ...$painelReferencia['categoriasDisponiveis']])
+            ->unique('id')
+            ->sortBy(fn ($c) => $c['id'] === 0 ? 'zzz' : mb_strtolower($c['nome']))
+            ->values()
+            ->all();
+        $periodosCursoDisponiveis = collect([...$painelAtual['periodosCursoDisponiveis'], ...$painelReferencia['periodosCursoDisponiveis']])->unique()->sort()->values()->all();
+
         $categorias = [];
         foreach ($atuais->keys()->merge($referencias->keys())->unique() as $id) {
+            if ($filtroCategoria !== '' && (int) $id !== (int) $filtroCategoria) {
+                continue;
+            }
+
             $a = $atuais->get($id);
             $r = $referencias->get($id);
+            $comMeta = ($a['detalhe']['comMeta'] ?? false) || ($r['detalhe']['comMeta'] ?? false);
 
             $categorias[] = [
                 'id' => $id ?: null,
@@ -77,16 +101,16 @@ class ComparacaoSemestresService
                 'emAmbos' => $a !== null && $r !== null,
                 'so' => $a === null ? $referencia : ($r === null ? $atual : null),
                 'media' => $this->par($a['totais']['media'] ?? null, $r['totais']['media'] ?? null),
+                // "Alunos abaixo do esperado" quando a categoria traz o mínimo por período; senão, abaixo de 60%.
+                'comMeta' => $comMeta,
                 'abaixoPct' => $this->par($a['totais']['abaixoPct'] ?? null, $r['totais']['abaixoPct'] ?? null),
+                'abaixoEsperado' => $this->par($a['detalhe']['abaixoEsperado']['pct'] ?? null, $r['detalhe']['abaixoEsperado']['pct'] ?? null),
                 'presenca' => $this->par($a['totais']['presenca'] ?? null, $r['totais']['presenca'] ?? null),
                 'avaliacoes' => $this->par($a['totais']['avaliacoes'] ?? null, $r['totais']['avaliacoes'] ?? null),
                 'areas' => $this->parearListas($a['porArea'] ?? [], $r['porArea'] ?? [], 'area', 'percentual'),
                 'periodosDoCurso' => $this->parearPeriodos($a['porPeriodoDoCurso'] ?? [], $r['porPeriodoDoCurso'] ?? []),
-                'alunos' => $a !== null && $r !== null
-                    ? $this->alunosEmAmbos(
-                        $this->alunos->alunos($escopoAtual, (string) $id),
-                        $this->alunos->alunos($escopoReferencia, (string) $id),
-                    )
+                'alunosPorPeriodo' => $a !== null && $r !== null
+                    ? $this->alunosPorPeriodo($a['detalhe']['porPeriodoCurso'] ?? [], $r['detalhe']['porPeriodoCurso'] ?? [])
                     : null,
             ];
         }
@@ -97,47 +121,69 @@ class ComparacaoSemestresService
             'referencia' => $referencia,
             'geral' => $geral,
             'categorias' => $categorias,
+            'categoriasDisponiveis' => $categoriasDisponiveis,
+            'periodosCursoDisponiveis' => $periodosCursoDisponiveis,
             'destaques' => $this->destaques($geral, $categorias, $atual, $referencia),
             'painelAtual' => $escopoAtual,
         ];
     }
 
     /**
-     * Alunos com média na categoria nos DOIS semestres: quantos subiram, ficaram estáveis ou caíram, e os que mais
-     * variaram.
+     * Por PERÍODO DO CURSO: quantos alunos ficaram dentro do esperado em cada semestre (a regra do esperado é a de
+     * CoordenadorDashboardService: a fatia da prova que cabe no período do aluno, ou 60% sem a meta). Compara os totais
+     * do período — não o mesmo aluno nos dois semestres: turmas mudam, o que interessa é como o período está indo.
      *
-     * @param  array<int, array<string, mixed>>  $atual
-     * @param  array<int, array<string, mixed>>  $referencia
-     * @return array{comparaveis: int, subiram: int, estaveis: int, cairam: int, maisSubiram: array<int, array<string, mixed>>, maisCairam: array<int, array<string, mixed>>}
+     * `sentido`: 'subiu' / 'caiu' / 'estavel' pela variação do % de alunos dentro do esperado (VARIACAO_PERIODO); null
+     * quando o período só existe num dos semestres.
+     *
+     * @param  array<int, array{presentes: int, dentro: int}>  $atual  ordinal => totais
+     * @param  array<int, array{presentes: int, dentro: int}>  $referencia
+     * @return array{periodos: array<int, array<string, mixed>>, subiram: int, estaveis: int, cairam: int}
      */
-    private function alunosEmAmbos(array $atual, array $referencia): array
+    private function alunosPorPeriodo(array $atual, array $referencia): array
     {
-        $antes = collect($referencia)->filter(fn ($a) => $a['id'] !== null && $a['media'] !== null)->keyBy('id');
-
-        $pares = collect($atual)
-            ->filter(fn ($a) => $a['id'] !== null && $a['media'] !== null && $antes->has($a['id']))
-            ->map(fn ($a) => [
-                'id' => $a['id'],
-                'nome' => $a['nome'],
-                'ra' => $a['ra'],
-                'foto' => $a['foto'],
-                'de' => $antes[$a['id']]['media'],
-                'para' => $a['media'],
-                'delta' => round($a['media'] - $antes[$a['id']]['media'], 1),
-            ]);
-
-        $limiar = self::VARIACAO_ALUNO;
-
-        return [
-            'comparaveis' => $pares->count(),
-            'subiram' => $pares->filter(fn ($p) => $p['delta'] >= $limiar)->count(),
-            'estaveis' => $pares->filter(fn ($p) => abs($p['delta']) < $limiar)->count(),
-            'cairam' => $pares->filter(fn ($p) => $p['delta'] <= -$limiar)->count(),
-            'maisSubiram' => $pares->filter(fn ($p) => $p['delta'] >= $limiar)->sortByDesc('delta')->take(self::TOPO)->values()->all(),
-            'maisCairam' => $pares->filter(fn ($p) => $p['delta'] <= -$limiar)->sortBy('delta')->take(self::TOPO)->values()->all(),
+        $resumo = fn (?array $p) => $p === null || $p['presentes'] === 0 ? null : [
+            'presentes' => $p['presentes'],
+            'dentro' => $p['dentro'],
+            'pct' => round($p['dentro'] / $p['presentes'] * 100, 1),
         ];
+
+        $periodos = [];
+        $contagem = ['subiram' => 0, 'estaveis' => 0, 'cairam' => 0];
+
+        foreach (collect(array_keys($atual))->merge(array_keys($referencia))->unique()->sort() as $ordinal) {
+            $a = $resumo($atual[$ordinal] ?? null);
+            $r = $resumo($referencia[$ordinal] ?? null);
+            $deltaPct = $a !== null && $r !== null ? round($a['pct'] - $r['pct'], 1) : null;
+
+            $sentido = null;
+            if ($deltaPct !== null) {
+                $sentido = $deltaPct >= self::VARIACAO_PERIODO ? 'subiu' : ($deltaPct <= -self::VARIACAO_PERIODO ? 'caiu' : 'estavel');
+                $contagem[['subiu' => 'subiram', 'caiu' => 'cairam', 'estavel' => 'estaveis'][$sentido]]++;
+            }
+
+            $periodos[] = [
+                'ordem' => (int) $ordinal,
+                'rotulo' => PeriodoCurso::rotulo((int) $ordinal),
+                'atual' => $a,
+                'referencia' => $r,
+                'deltaPct' => $deltaPct,
+                'deltaAlunos' => $a !== null && $r !== null ? $a['dentro'] - $r['dentro'] : null,
+                'sentido' => $sentido,
+            ];
+        }
+
+        return ['periodos' => $periodos, ...$contagem];
     }
 
+    /**
+     * @param  array<int, array<string, mixed>>  $alunos  lista de CoordenadorAlunosService::alunos()
+     * @return array<int, array<string, mixed>>
+     */
+    private function soDoPeriodoDoCurso(array $alunos, ?int $ordinal): array
+    {
+        return $ordinal === null ? $alunos : array_values(array_filter($alunos, fn ($a) => $a['periodoCurso'] === $ordinal));
+    }
     /**
      * @return array{atual: int|float|null, referencia: int|float|null, delta: float|null}
      */
@@ -237,11 +283,15 @@ class ComparacaoSemestresService
                 ];
             }
 
-            if ($c['alunos'] !== null && $c['alunos']['comparaveis'] >= 5 && $c['alunos']['cairam'] > $c['alunos']['subiram']) {
+            // O período do curso em que menos alunos atingiram o esperado (a maior queda).
+            $caiu = $c['alunosPorPeriodo'] === null ? [] : array_values(array_filter($c['alunosPorPeriodo']['periodos'], fn ($p) => $p['sentido'] === 'caiu'));
+            if ($caiu !== []) {
+                usort($caiu, fn ($x, $y) => $x['deltaPct'] <=> $y['deltaPct']);
+                $p = $caiu[0];
                 $cartoes[] = [
                     'tom' => 'atencao',
                     'icone' => 'ph-users-three',
-                    'texto' => "Em {$c['nome']}, mais alunos caíram ({$c['alunos']['cairam']}) do que subiram ({$c['alunos']['subiram']}) entre os {$c['alunos']['comparaveis']} que fizeram provas nos dois períodos.",
+                    'texto' => "Em {$c['nome']}, no {$p['rotulo']}, menos alunos atingiram o esperado: {$pct($p['referencia']['pct'])}% em {$referencia} → {$pct($p['atual']['pct'])}% em {$atual}.",
                 ];
             }
         }

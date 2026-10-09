@@ -27,7 +27,6 @@
     'aba' => 'visao',
     'chips' => $r === null ? [] : [
         ['valor' => $r['total'], 'rotulo' => 'Alunos'],
-        ['valor' => $r['precisamAtencao'], 'rotulo' => 'Em atenção'],
         ['valor' => $fmt($g['presenca']).'%', 'rotulo' => 'Presença'],
     ],
 ])
@@ -86,6 +85,7 @@
                 <p class="text-xs text-slate-500 mt-1">
                     {{ $r['total'] > 0 ? $fmt($r['precisamAtencao'] / $r['total'] * 100) : '0' }}% dos alunos &middot; ver lista
                 </p>
+                <p class="text-xs text-slate-500 mt-1">{{ ucfirst(\App\Support\RegraDeRisco::atual()->descricao()) }}.</p>
             </a>
             <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
                 <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 flex items-center gap-1.5"><i class="ph-bold ph-user-check" aria-hidden="true"></i> Presença</p>
@@ -97,86 +97,6 @@
                 <p class="text-3xl font-bold mt-2 tracking-tight">{{ $g['avaliacoes'] }}</p>
                 <p class="text-xs text-slate-500 mt-1">em {{ count($painel['categorias']) }} categoria(s) &middot; ver desempenho</p>
             </a>
-        </div>
-
-        <div class="grid gap-6 lg:grid-cols-3 mb-6">
-            {{-- Quem precisa de atenção --}}
-            <section class="lg:col-span-2 bg-white border border-slate-200 rounded-xl shadow-sm" aria-labelledby="titulo-atencao">
-                <div class="px-5 pt-5 flex items-start justify-between gap-3">
-                    <div>
-                        <h2 id="titulo-atencao" class="font-bold flex items-center gap-2"><i class="ph-bold ph-warning-circle text-amber-600" aria-hidden="true"></i> Alunos que precisam de atenção</h2>
-                        <p class="text-sm text-slate-500 mt-0.5">Média abaixo de {{ (int) \App\Services\CoordenadorAlunosService::LIMIAR_ADEQUADO }}%, {{ \App\Services\CoordenadorAlunosService::FALTAS_ALERTA }} faltas ou mais, queda de {{ (int) \App\Services\CoordenadorAlunosService::QUEDA_ALERTA }} pontos ou mais, ou ausente em tudo.</p>
-                    </div>
-                    @if ($r['precisamAtencao'] > 0)
-                        <a href="{{ route('coordenador.alunos', [...$manter, 'situacao' => 'atencao', 'ordem' => 'prioridade']) }}" class="shrink-0 text-sm font-semibold text-emerald-700 hover:underline">Ver todos ({{ $r['precisamAtencao'] }})</a>
-                    @endif
-                </div>
-
-                @if (empty($emAtencao))
-                    <div class="m-5 rounded-xl bg-emerald-50 border border-emerald-100 p-4 text-sm text-emerald-800 flex items-center gap-3">
-                        <i class="ph-bold ph-check-circle text-xl" aria-hidden="true"></i>
-                        Nenhum aluno em atenção neste período. Bom sinal!
-                    </div>
-                @else
-                    <ul class="divide-y divide-slate-100 mt-3">
-                        @foreach ($emAtencao as $a)
-                            <li class="px-5 py-3 flex items-center gap-3">
-                                @include('coordenador._avatar', ['nome' => $a['nome'] ?? $a['ra'], 'foto' => $a['foto'], 'tamanho' => 'w-10 h-10'])
-                                <div class="min-w-0 flex-1">
-                                    @if ($a['id'])
-                                        <a href="{{ route('coordenador.alunos.show', [$a['id'], ...$manter]) }}" class="font-semibold text-slate-800 hover:text-emerald-700 hover:underline truncate block">{{ $a['nome'] ?: 'Aluno sem cadastro' }}</a>
-                                    @else
-                                        <span class="font-semibold text-slate-800 truncate block">{{ $a['nome'] ?: 'Aluno sem cadastro' }}</span>
-                                    @endif
-                                    <p class="text-xs text-slate-500 truncate">
-                                        RA {{ $a['ra'] ?: '—' }}@if ($a['periodoCursoRotulo']) &middot; {{ $a['periodoCursoRotulo'] }}@endif
-                                    </p>
-                                    <p class="text-xs text-slate-600 mt-0.5">{{ $a['motivos'][0] ?? '' }}@if (count($a['motivos']) > 1) <span class="text-slate-500">(+{{ count($a['motivos']) - 1 }})</span>@endif</p>
-                                    @if (! empty($a['acompanhamento']))<p class="mt-1">@include('coordenador._acompanhamento', ['acompanhamento' => $a['acompanhamento']])</p>@endif
-                                </div>
-                                <div class="text-right shrink-0">
-                                    <p class="font-bold {{ CorDesempenho::classeTextoLegivel($a['media']) }}">{{ $a['media'] !== null ? $fmt($a['media']).'%' : '—' }}</p>
-                                    <p class="text-xs text-slate-500">{{ $a['faltas'] }} falta(s)</p>
-                                </div>
-                            </li>
-                        @endforeach
-                    </ul>
-                @endif
-            </section>
-
-            {{-- Como estão os alunos --}}
-            <section class="bg-white border border-slate-200 rounded-xl shadow-sm p-5" aria-labelledby="titulo-situacao">
-                <h2 id="titulo-situacao" class="font-bold flex items-center gap-2"><i class="ph-bold ph-chart-donut text-primary" aria-hidden="true"></i> Situação dos alunos</h2>
-                <p class="text-sm text-slate-500 mt-0.5 mb-4">Como o curso se divide neste período.</p>
-
-                @php
-                    $faixas = [
-                        'destaque' => ['Destaque', 'bg-emerald-500'],
-                        'regular' => ['Regular', 'bg-slate-300'],
-                        'atencao' => ['Em atenção', 'bg-amber-500'],
-                        'ausente' => ['Ausente em tudo', 'bg-red-500'],
-                        'sem_resultado' => ['Sem resultado', 'bg-slate-200'],
-                    ];
-                    $descricaoFaixas = collect($faixas)->map(fn ($f, $k) => $f[0].': '.$r['porSituacao'][$k])->implode('; ');
-                @endphp
-                <div class="flex h-3 w-full overflow-hidden rounded-full bg-slate-100" role="img" aria-label="Situação dos alunos. {{ $descricaoFaixas }}.">
-                    @foreach ($faixas as $chave => [$rotulo, $cor])
-                        @if ($r['porSituacao'][$chave] > 0)
-                            <div class="{{ $cor }}" style="width: {{ $r['porSituacao'][$chave] / max(1, $r['total']) * 100 }}%"></div>
-                        @endif
-                    @endforeach
-                </div>
-                <ul class="mt-4 space-y-2 text-sm">
-                    @foreach ($faixas as $chave => [$rotulo, $cor])
-                        <li>
-                            <a href="{{ route('coordenador.alunos', [...$manter, 'situacao' => $chave]) }}" class="flex items-center justify-between gap-2 rounded-lg px-2 py-1 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-                                <span class="flex items-center gap-2"><span class="inline-block h-2.5 w-2.5 rounded-full {{ $cor }}" aria-hidden="true"></span> {{ $rotulo }}</span>
-                                <span class="font-semibold">{{ $r['porSituacao'][$chave] }}</span>
-                            </a>
-                        </li>
-                    @endforeach
-                </ul>
-            </section>
         </div>
 
         {{-- Destaques do semestre, por categoria --}}
@@ -214,13 +134,14 @@
             </div>
             <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-x-auto">
                 <table class="w-full text-sm">
-                    <caption class="sr-only">Avaliações mais recentes do período, com presença e média</caption>
+                    <caption class="sr-only">Avaliações mais recentes do período, com presença, média e alunos dentro do esperado</caption>
                     <thead class="bg-slate-50 text-slate-500 text-left">
                         <tr>
                             <th scope="col" class="px-4 py-3">Avaliação</th>
                             <th scope="col" class="px-4 py-3">Data</th>
                             <th scope="col" class="px-4 py-3">Presença</th>
                             <th scope="col" class="px-4 py-3">Média</th>
+                            <th scope="col" class="px-4 py-3">Dentro do esperado</th>
                             <th scope="col" class="px-4 py-3">vs. anterior</th>
                             <th scope="col" class="px-4 py-3"><span class="sr-only">Ações</span></th>
                         </tr>
@@ -247,6 +168,18 @@
                                     @endif
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap">
+                                    @php $de = $a['dentroDoEsperado']; @endphp
+                                    @if ($de['comMeta'] && $de['presentes'] > 0)
+                                        <span class="font-semibold text-slate-700" title="{{ $de['dentro'] }} de {{ $de['presentes'] }} alunos presentes alcançaram o mínimo esperado para o período em que estão">{{ $de['dentro'] }}</span>
+                                        <span class="text-xs text-slate-500">({{ $fmt($de['pct'], 0) }}%)</span>
+                                    @elseif ($a['media'] !== null)
+                                        {{-- A prova não especifica o esperado por período: só a média, no lugar. --}}
+                                        <span class="text-slate-600" title="Esta avaliação não define o mínimo esperado por período; mostramos a média">{{ $fmt($a['media']) }}% <span class="text-xs text-slate-500">(média)</span></span>
+                                    @else
+                                        <span class="text-slate-500">—</span>
+                                    @endif
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap">
                                     @if ($a['delta'] === null)
                                         <span class="text-slate-500" title="Nenhuma avaliação anterior desta categoria com resultado">—</span>
                                     @else
@@ -269,16 +202,17 @@
         @if (! empty($r['porPeriodoCurso']))
             <section class="mb-6" aria-labelledby="titulo-periodos">
                 <h2 id="titulo-periodos" class="font-bold mb-1 flex items-center gap-2"><i class="ph-bold ph-graduation-cap text-primary" aria-hidden="true"></i> Alunos por período do curso</h2>
-                <p class="text-sm text-slate-500 mb-3">Onde estão concentrados os alunos que precisam de atenção.</p>
+                <p class="text-sm text-slate-500 mb-3">Onde estão concentrados os alunos que precisam de atenção e como cada período está acertando.</p>
                 <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-x-auto">
                     <table class="w-full text-sm">
-                        <caption class="sr-only">Alunos, alunos em atenção e presença por período do curso</caption>
+                        <caption class="sr-only">Alunos, alunos em atenção, presença e percentual de acerto por período do curso</caption>
                         <thead class="bg-slate-50 text-slate-500 text-left">
                             <tr>
                                 <th scope="col" class="px-4 py-3">Período do curso</th>
                                 <th scope="col" class="px-4 py-3">Alunos</th>
                                 <th scope="col" class="px-4 py-3">Em atenção</th>
                                 <th scope="col" class="px-4 py-3">Presença</th>
+                                <th scope="col" class="px-4 py-3">% de acerto</th>
                                 <th scope="col" class="px-4 py-3"><span class="sr-only">Ações</span></th>
                             </tr>
                         </thead>
@@ -292,6 +226,13 @@
                                         <span class="text-xs text-slate-500">({{ $p['alunos'] > 0 ? $fmt($p['atencao'] / $p['alunos'] * 100, 0) : 0 }}%)</span>
                                     </td>
                                     <td class="px-4 py-3 text-slate-600">{{ $fmt($p['presenca']) }}%</td>
+                                    <td class="px-4 py-3">
+                                        @if ($p['media'] === null)
+                                            <span class="text-slate-500">—</span>
+                                        @else
+                                            <span class="font-bold {{ CorDesempenho::classeTextoLegivel($p['media']) }}">{{ $fmt($p['media']) }}%</span>
+                                        @endif
+                                    </td>
                                     <td class="px-4 py-3 text-right whitespace-nowrap">
                                         <a href="{{ route('coordenador.alunos', [...$manter, 'periodo_curso' => $p['ordinal']]) }}" class="text-emerald-700 font-semibold hover:underline">Ver alunos</a>
                                     </td>

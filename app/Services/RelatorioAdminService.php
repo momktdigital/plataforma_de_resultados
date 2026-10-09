@@ -82,9 +82,14 @@ class RelatorioAdminService
      * foto não cabe numa página); sem $limite devolve todos (planilha). A ordem é total e estável: presentes antes
      * dos ausentes, maior percentual primeiro e, no empate, pela chave do aluno.
      *
-     * @return array<int, array{ra: ?string, cpf: ?string, periodo: string, periodo_curso: ?string, acertos: int, total: int, percentual: ?float, aluno_nome: ?string, turma: ?string, curso: ?string, foto: ?string, ausente: bool}>
+     * Com `$comEsperadas`, cada linha traz também `esperadas`: quantas questões o aluno acertou DENTRO DO ESPERADO — entre
+     * as questões que ele precisava acertar pelo período em que estava (as marcadas para um período à frente, meta
+     * `questoes.periodo_minimo`, ficam de fora) — e quantas eram. null quando a avaliação não define a meta por período
+     * (aí todas as questões valem para todos e o número seria igual ao total) ou o aluno não tem nota.
+     *
+     * @return array<int, array{ra: ?string, cpf: ?string, periodo: string, periodo_curso: ?string, acertos: int, total: int, percentual: ?float, aluno_nome: ?string, turma: ?string, curso: ?string, foto: ?string, ausente: bool, esperadas: ?array{acertos: int, total: int}}>
      */
-    public function rankingCompleto(Avaliacao $avaliacao, string $periodo = '', ?int $limite = null, int $inicio = 0): array
+    public function rankingCompleto(Avaliacao $avaliacao, string $periodo = '', ?int $limite = null, int $inicio = 0, bool $comEsperadas = false): array
     {
         $resumos = $this->escoparResumos(DB::table('resultado_resumos'))
             ->where('avaliacao_codigo', $avaliacao->codigo)
@@ -103,8 +108,9 @@ class RelatorioAdminService
             ->pluck('periodo', 'id');
 
         $alunos = $this->dentroDoEscopo($this->alunoResolver->resolver($avaliacao->codigo, $periodo), $avaliacao->codigo);
+        $esperadas = $comEsperadas ? $this->acertosDentroDoEsperado($avaliacao, $resumos) : [];
 
-        return $resumos->map(function ($r) use ($alunos, $periodosDaMatricula) {
+        return $resumos->map(function ($r) use ($alunos, $periodosDaMatricula, $esperadas) {
             $aluno = $alunos->get($r->aluno_chave);
 
             return [
@@ -121,10 +127,70 @@ class RelatorioAdminService
                 'foto' => $aluno?->fotoUrl(96),
                 // Ausente = nenhuma resposta de verdade na prova inteira (gravado em resultado_resumos.ausente).
                 'ausente' => (bool) $r->ausente,
+                'esperadas' => $esperadas[$r->aluno_chave.'|'.$r->periodo] ?? null,
             ];
         })
             ->values()
             ->all();
+    }
+
+    /** A avaliação define o período mínimo em alguma questão válida? (sem isso não há "dentro do esperado" por aluno) */
+    public function avaliacaoTemMetaPorPeriodo(Avaliacao $avaliacao): bool
+    {
+        return DB::table('questoes')
+            ->where('avaliacao_codigo', $avaliacao->codigo)
+            ->whereNull('deleted_at')
+            ->whereNotNull('periodo_minimo')
+            ->exists();
+    }
+
+    /**
+     * Acertos de cada aluno nas questões que ele precisava acertar pelo período dele. Agrega em SQL por
+     * (aluno, período, meta da questão) — poucas linhas por aluno — e aplica o período do aluno em PHP.
+     *
+     * @param  \Illuminate\Support\Collection<int, object>  $resumos  linhas de resultado_resumos (aluno_chave, periodo, percentual...)
+     * @return array<string, array{acertos: int, total: int}>  "aluno_chave|periodo" => acertos dentro do esperado
+     */
+    private function acertosDentroDoEsperado(Avaliacao $avaliacao, $resumos): array
+    {
+        if ($resumos->isEmpty() || ! $this->avaliacaoTemMetaPorPeriodo($avaliacao)) {
+            return [];
+        }
+
+        $resultado = [];
+
+        foreach ($resumos->pluck('aluno_chave')->unique()->chunk(1000) as $lote) {
+            $linhas = DB::table('respostas as r')
+                ->join('questoes as q', function ($join) {
+                    Anulacao::excluirDistribuidas(
+                        $join->on('q.numero', '=', 'r.questao_numero')
+                            ->on('q.avaliacao_codigo', '=', 'r.avaliacao_codigo')
+                            ->whereNull('q.deleted_at')
+                            ->whereNotNull('q.gabarito')->where('q.gabarito', '!=', ''),
+                        'q.anulada_modo',
+                    );
+                })
+                ->where('r.avaliacao_codigo', $avaliacao->codigo)
+                ->whereNull('r.deleted_at')
+                ->whereIn('r.aluno_chave', $lote->all())
+                ->groupBy('r.aluno_chave', 'r.periodo', 'q.periodo_minimo')
+                ->selectRaw('r.aluno_chave as chave, r.periodo as periodo, q.periodo_minimo as minimo, COUNT(*) as total')
+                ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
+                ->get();
+
+            foreach ($linhas as $l) {
+                $ordinal = PeriodoCurso::ordinal((string) $l->periodo);
+                if (PeriodoCurso::aFrente($ordinal, $l->minimo !== null ? (int) $l->minimo : null)) {
+                    continue;
+                }
+
+                $chave = $l->chave.'|'.$l->periodo;
+                $resultado[$chave]['acertos'] = ($resultado[$chave]['acertos'] ?? 0) + (int) $l->acertos;
+                $resultado[$chave]['total'] = ($resultado[$chave]['total'] ?? 0) + (int) $l->total;
+            }
+        }
+
+        return $resultado;
     }
 
     /**
@@ -363,7 +429,7 @@ class RelatorioAdminService
         return $matriz;
     }
 
-    /** @return array{sexo: array<string, int>, cor_raca: array<string, int>, uf: array<string, int>} */
+    /** @return array{sexo: array<string, int>, cor_raca: array<string, int>, forma_ingresso: array<string, int>, uf: array<string, int>} */
     public function perfilDemografico(Avaliacao $avaliacao): array
     {
         $alunos = $this->dentroDoEscopo($this->alunoResolver->resolver($avaliacao->codigo), $avaliacao->codigo);
@@ -379,6 +445,7 @@ class RelatorioAdminService
             'sexo' => $contarPor('sexo'),
             'cor_raca' => $contarPor('cor_raca'),
             'uf' => $contarPor('uf'),
+            'forma_ingresso' => $contarPor('forma_ingresso'),
         ];
     }
 
@@ -805,6 +872,8 @@ class RelatorioAdminService
         $recortes = [
             'sexo' => ['rotulo' => 'Sexo', 'valor' => fn ($aluno) => $aluno->sexo],
             'cor_raca' => ['rotulo' => 'Cor/raça', 'valor' => fn ($aluno) => $aluno->cor_raca],
+            // A forma de ingresso (Vestibular, ENEM, PROUNI...) influencia o desempenho? Comparada como qualquer recorte.
+            'forma_ingresso' => ['rotulo' => 'Forma de ingresso', 'valor' => fn ($aluno) => $aluno->forma_ingresso],
             'faixa_etaria' => [
                 'rotulo' => 'Faixa etária',
                 'valor' => fn ($aluno) => FiltroDemografico::faixaEtariaDoAluno($aluno, $dataReferencia),

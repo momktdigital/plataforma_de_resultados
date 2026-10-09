@@ -62,7 +62,7 @@ class AcompanhamentoTest extends TestCase
         return $avaliacao;
     }
 
-    public function test_coordenador_registra_acompanhamento_e_ele_aparece_na_ficha_na_lista_e_no_painel(): void
+    public function test_coordenador_registra_acompanhamento_e_ele_aparece_na_ficha_e_na_lista(): void
     {
         $coordenador = $this->coordenador('coord', 'DIREITO');
         $aluno = $this->aluno('DIREITO');
@@ -81,7 +81,6 @@ class AcompanhamentoTest extends TestCase
         $this->actingAs($coordenador, 'admin')->get(route('coordenador.alunos.show', $aluno))
             ->assertOk()->assertSee('Liguei para a família.')->assertSee('Contatado')->assertSee($coordenador->username);
         $this->actingAs($coordenador, 'admin')->get(route('coordenador.alunos'))->assertOk()->assertSee('Contatado');
-        $this->actingAs($coordenador, 'admin')->get(route('coordenador.painel'))->assertOk()->assertSee('Contatado');
     }
 
     public function test_historico_so_se_acrescenta_e_o_estado_atual_e_o_ultimo_registro(): void

@@ -18,6 +18,7 @@ use App\Services\ReitorEvolucaoService;
 use App\Services\ReitorItensService;
 use App\Services\ReitorRiscoService;
 use App\Services\ResumoResultadoService;
+use App\Support\RegraDeRisco;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -1011,7 +1012,7 @@ class ReitorTest extends TestCase
     }
 
     // ------------------------------------------------------------------------------------------------------------
-    // Estudantes em risco (agregado): ausência recorrente e baixo desempenho persistente
+    // Estudantes em risco (agregado): a regra da instituição (média de acerto e/ou faltas), com o que cada avaliação sobrepõe
     // ------------------------------------------------------------------------------------------------------------
 
     /**
@@ -1056,8 +1057,9 @@ class ReitorTest extends TestCase
     }
 
     /**
-     * a0 faltou a 2 de 3 (recorrente) · a1 abaixo do critério nas 3 (persistente) · a2 sempre bem · a3 faltou a 1 ·
-     * a4 abaixo em 2 mas acima em 1 (não é persistente) · a5 só fez 1 aplicação (não é elegível).
+     * Com a regra padrão (média abaixo de 60% ou 2 faltas):
+     * a0 faltou a 2 de 3, média 80 (por falta) · a1 30, 40 e 20: média 30 (por acerto) · a2 sempre bem · a3 faltou a 1, média 80 ·
+     * a4 50, 70 e 40: média 53,3 (por acerto) · a5 só fez 1 aplicação, 50% (por acerto).
      *
      * @return array<int, array<int, ?int>>
      */
@@ -1070,7 +1072,7 @@ class ReitorTest extends TestCase
         ];
     }
 
-    public function test_risco_conta_ausencia_recorrente_e_baixo_desempenho_persistente_por_curso(): void
+    public function test_risco_segue_a_regra_padrao_faltas_e_media_de_acerto_por_curso(): void
     {
         $categoria = Categoria::create(['nome' => 'Simulado']);
         $alunos = $this->seisAlunos('2026/1');
@@ -1081,37 +1083,120 @@ class ReitorTest extends TestCase
         $risco = app(ReitorRiscoService::class)->gerar($ctx);
         $direito = $risco['cursos']['DIREITO'];
 
-        $this->assertTrue($risco['temRecorrencia']);
+        $this->assertTrue($risco['temDados']);
         $this->assertSame(6, $direito['pessoas']);
-        $this->assertSame(5, $direito['elegiveis']);        // a5 só tem uma aplicação
-        $this->assertSame(1, $direito['recorrente']);       // a0
-        $this->assertSame(1, $direito['persistente']);      // a1 (a4 teve uma acima do critério)
-        $this->assertSame(2, $direito['risco']);
-        $this->assertSame(20.0, $direito['pctRecorrente']);
-        $this->assertSame(20.0, $direito['pctPersistente']);
-        $this->assertSame(40.0, $direito['pctRisco']);
-        $this->assertSame(40.0, $risco['total']['pctRisco']);
+        $this->assertSame(1, $direito['porFalta']);         // a0
+        $this->assertSame(3, $direito['porAcerto']);        // a1, a4 e a5
+        $this->assertSame(4, $direito['risco']);
+        $this->assertSame(16.7, $direito['pctPorFalta']);
+        $this->assertSame(50.0, $direito['pctPorAcerto']);
+        $this->assertSame(66.7, $direito['pctRisco']);
+        $this->assertSame(66.7, $risco['total']['pctRisco']);
         $this->assertNull($risco['semestreAnterior']);
         $this->assertSame([3], $risco['periodos']);
-        $this->assertSame(40.0, $direito['periodos'][3]['pctRisco']);
+        $this->assertSame(66.7, $direito['periodos'][3]['pctRisco']);
+        $this->assertSame('média de acerto abaixo de 60% ou 2 faltas ou mais', $risco['regra']['descricao']);
+        $this->assertFalse($risco['regra']['faltasInalcancavel']);
+    }
+
+    /** @return array<string, mixed> */
+    private function riscoDoRecorte(Categoria $categoria): array
+    {
+        return app(ReitorRiscoService::class)->gerar(app(ReitorDashboardService::class)->contexto(['categoria' => (string) $categoria->id], []));
+    }
+
+    public function test_administracao_muda_o_limite_de_acerto_e_desliga_as_faltas(): void
+    {
+        $categoria = Categoria::create(['nome' => 'Simulado']);
+        $this->aplicacoes($this->seisAlunos('2026/1'), $this->matrizDeRisco(), $categoria->id, '2026/1', '2026-03-10');
+
+        RegraDeRisco::gravar(50.0, null, 'ou');
+        $risco = $this->riscoDoRecorte($categoria);
+
+        // só a1 (30) está abaixo de 50; a4 (53,3) e a5 (50, não é "abaixo") saem; faltas desligadas
+        $this->assertSame(1, $risco['cursos']['DIREITO']['risco']);
+        $this->assertSame(1, $risco['cursos']['DIREITO']['porAcerto']);
+        $this->assertSame(0, $risco['cursos']['DIREITO']['porFalta']);
+        $this->assertSame('média de acerto abaixo de 50%', $risco['regra']['descricao']);
+    }
+
+    public function test_operador_e_exige_os_dois_criterios(): void
+    {
+        $categoria = Categoria::create(['nome' => 'Simulado']);
+        $alunos = $this->seisAlunos('2026/1');
+        // a0: faltou 2 e foi mal na terceira (média 20) · a1: faltou 2 e foi bem · a2: nunca faltou, foi mal · demais bem
+        $this->aplicacoes($alunos, [
+            [0 => null, 1 => null, 2 => 3, 3 => 9, 4 => 9, 5 => 9],
+            [0 => null, 1 => null, 2 => 2, 3 => 9, 4 => 9, 5 => 9],
+            [0 => 2, 1 => 9, 2 => 2, 3 => 9, 4 => 9, 5 => 9],
+        ], $categoria->id, '2026/1', '2026-03-10');
+
+        RegraDeRisco::gravar(60.0, 2, 'ou');
+        $this->assertSame(3, $this->riscoDoRecorte($categoria)['cursos']['DIREITO']['risco']); // a0 (os dois), a1 (falta) e a2 (acerto)
+
+        RegraDeRisco::gravar(60.0, 2, 'e');
+        $e = $this->riscoDoRecorte($categoria)['cursos']['DIREITO'];
+        $this->assertSame(1, $e['risco']);      // só a0: faltou 2 E média abaixo de 60
+    }
+
+    public function test_avaliacao_pode_dispensar_a_falta_e_ter_limite_proprio(): void
+    {
+        $categoria = Categoria::create(['nome' => 'Simulado']);
+        $alunos = $this->seisAlunos('2026/1');
+        $avaliacoes = $this->aplicacoes($alunos, $this->matrizDeRisco(), $categoria->id, '2026/1', '2026-03-10');
+
+        // a0 faltou à 1ª e à 2ª: dispensando a falta da 1ª, sobra uma só e ele sai do risco por faltas
+        $avaliacoes[0]->update(['risco_ignora_falta' => true]);
+        $depois = $this->riscoDoRecorte($categoria)['cursos']['DIREITO'];
+        $this->assertSame(0, $depois['porFalta']);
+
+        // limite próprio na 3ª (30%): a1 (30) já não fica "abaixo" sozinho, mas a média das provas dele segue abaixo do padrão
+        RegraDeRisco::gravar(60.0, null, 'ou');
+        $avaliacoes[0]->update(['risco_ignora_falta' => false]);
+        $avaliacoes[2]->update(['risco_acerto' => 0]); // a 3ª prova sai do critério de acerto
+        $semTerceira = $this->riscoDoRecorte($categoria)['cursos']['DIREITO'];
+        // sem a 3ª: a1 (3 e 4 → 35), a4 (5 e 7 → 60, não é abaixo), a5 (50) → a1 e a5
+        $this->assertSame(2, $semTerceira['porAcerto']);
+    }
+
+    public function test_risco_nao_serve_numero_velho_quando_a_regra_muda(): void
+    {
+        $categoria = Categoria::create(['nome' => 'Simulado']);
+        $this->aplicacoes($this->seisAlunos('2026/1'), $this->matrizDeRisco(), $categoria->id, '2026/1', '2026-03-10');
+
+        $this->assertSame(4, $this->riscoDoRecorte($categoria)['cursos']['DIREITO']['risco']);
+        RegraDeRisco::gravar(40.0, 2, 'ou');
+        $this->assertSame(2, $this->riscoDoRecorte($categoria)['cursos']['DIREITO']['risco']); // a0 (faltas) e a1 (30)
+    }
+
+    public function test_regra_de_faltas_inalcancavel_com_uma_aplicacao_so_avisa(): void
+    {
+        $categoria = Categoria::create(['nome' => 'Simulado']);
+        $this->aplicacoes($this->seisAlunos('2026/1'), [[0 => null, 1 => 3, 2 => 8, 3 => 8, 4 => 5, 5 => 5]], $categoria->id, '2026/1', '2026-03-10');
+
+        $risco = $this->riscoDoRecorte($categoria);
+        $this->assertTrue($risco['regra']['faltasInalcancavel']);
+
+        $this->actingAs($this->reitor(), 'admin')->get(route('reitor.risco', ['categoria' => $categoria->id]))
+            ->assertOk()->assertSee('não pode ser atingida neste recorte');
     }
 
     public function test_grupo_pequeno_nao_mostra_percentual(): void
     {
         $categoria = Categoria::create(['nome' => 'Simulado']);
         $alunos = $this->seisAlunos('2026/1');
-        // só 3 alunos têm duas aplicações: abaixo do mínimo de elegíveis
+        // só 3 alunos têm resultado: abaixo do mínimo de estudantes
         $this->aplicacoes($alunos, [[0 => null, 1 => 3, 2 => 8, 3 => false, 4 => false, 5 => false], [0 => null, 1 => 4, 2 => 9, 3 => false, 4 => false, 5 => false]], $categoria->id, '2026/1', '2026-03-10');
 
         $risco = app(ReitorRiscoService::class)->gerar(app(ReitorDashboardService::class)->contexto(['categoria' => (string) $categoria->id], []));
 
-        $this->assertFalse($risco['temRecorrencia']);
-        $this->assertSame(3, $risco['cursos']['DIREITO']['elegiveis']);
+        $this->assertFalse($risco['temDados']);
+        $this->assertSame(3, $risco['cursos']['DIREITO']['pessoas']);
         $this->assertNull($risco['cursos']['DIREITO']['pctRisco']);
         $this->assertNull($risco['total']['pctRisco']);
 
         $this->actingAs($this->reitor(), 'admin')->get(route('reitor.risco', ['categoria' => $categoria->id]))
-            ->assertOk()->assertSee('poucos estudantes com duas ou mais aplicações');
+            ->assertOk()->assertSee('poucos estudantes');
     }
 
     public function test_risco_com_uma_aplicacao_so_avisa_e_nao_quebra(): void
@@ -1135,8 +1220,8 @@ class ReitorTest extends TestCase
 
         $this->assertSame('2025/2', $risco['semestreAnterior']);
         $this->assertSame(0.0, $risco['total']['anterior']['pctRisco']);
-        $this->assertSame(40.0, $risco['total']['deltaRisco']);
-        $this->assertSame(40.0, $risco['cursos']['DIREITO']['deltaRisco']);
+        $this->assertSame(66.7, $risco['total']['deltaRisco']);
+        $this->assertSame(66.7, $risco['cursos']['DIREITO']['deltaRisco']);
     }
 
     public function test_tela_de_risco_nao_mostra_nome_de_aluno_e_oferece_o_drill_down(): void
@@ -1147,13 +1232,14 @@ class ReitorTest extends TestCase
 
         $html = $this->actingAs($this->reitor(), 'admin')->get(route('reitor.risco', ['categoria' => $categoria->id]))
             ->assertOk()
-            ->assertSee('Ausência recorrente')
-            ->assertSee('Baixo desempenho persistente')
+            ->assertSee('Por faltas')
+            ->assertSee('Por acerto')
+            ->assertSee('média de acerto abaixo de 60% ou 2 faltas ou mais')
             ->assertDontSee('Fulano Sigiloso')
             ->getContent();
 
         $this->assertStringContainsString('situacao=atencao', $html);
-        $this->assertStringContainsString('40,0%', $html);
+        $this->assertStringContainsString('66,7%', $html);
     }
 
     public function test_drill_down_do_risco_abre_a_lista_de_alunos_em_atencao(): void

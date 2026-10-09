@@ -199,7 +199,77 @@ window.Viz = (function () {
     // capture=true para pegar rolagem de containers internos também.
     document.addEventListener('scroll', fecharExplicacoes, true);
 
+    /**
+     * Barras horizontais de acerto (0–100%) com uma LINHA TRACEJADA EM PÉ no mínimo/meta de cada barra — usado no
+     * boletim do aluno (acerto x mínimo esperado por avaliação, desempenho por área). Verde = chegou ao mínimo ou
+     * passou; amarelo = abaixo. O mínimo é por barra (muda de uma prova/área para outra), então a linha é desenhada por
+     * um plugin, não por um dataset. A cor nunca é a única pista: a tela traz a legenda e o tooltip diz os dois números.
+     *
+     * opcoes: { rotulos: string[], acertos: number[], minimos: number[], rotuloAcerto?: string, rotuloMinimo?: string }
+     */
+    function barrasComMinimo(canvas, opcoes) {
+        var verde = '#00b48d', amarelo = '#f59e0b';
+        var acertos = opcoes.acertos, minimos = opcoes.minimos;
+        var rotuloAcerto = opcoes.rotuloAcerto || 'Seu acerto';
+        var rotuloMinimo = opcoes.rotuloMinimo || 'Mínimo esperado';
+
+        var linhaDoMinimo = {
+            id: 'minimoEsperado',
+            afterDatasetsDraw: function (chart) {
+                var ctx = chart.ctx, x = chart.scales.x;
+                chart.getDatasetMeta(0).data.forEach(function (barra, i) {
+                    var px = x.getPixelForValue(minimos[i]);
+                    ctx.save();
+                    ctx.setLineDash([5, 3]);
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#334155';
+                    ctx.beginPath();
+                    ctx.moveTo(px, barra.y - barra.height / 2 - 6);
+                    ctx.lineTo(px, barra.y + barra.height / 2 + 6);
+                    ctx.stroke();
+                    ctx.restore();
+                });
+            },
+        };
+
+        return new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: opcoes.rotulos,
+                datasets: [{
+                    label: rotuloAcerto,
+                    data: acertos,
+                    backgroundColor: acertos.map(function (v, i) { return v >= minimos[i] ? verde : amarelo; }),
+                    borderRadius: 4,
+                    maxBarThickness: 26,
+                }],
+            },
+            options: {
+                indexAxis: 'y',
+                maintainAspectRatio: false,
+                layout: { padding: { right: 8 } },
+                scales: {
+                    x: { beginAtZero: true, max: 100, grid: { color: '#f1f5f9' }, ticks: { callback: function (v) { return v + '%'; } } },
+                    y: { grid: { display: false }, ticks: { autoSkip: false, callback: function (valor) {
+                        var rotulo = this.getLabelForValue(valor);
+
+                        return rotulo.length > 22 ? rotulo.slice(0, 21) + '…' : rotulo;
+                    } } },
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: {
+                        label: function (ctx) { return rotuloAcerto + ': ' + ctx.parsed.x + '%'; },
+                        afterLabel: function (ctx) { return rotuloMinimo + ': ' + minimos[ctx.dataIndex] + '%'; },
+                    } },
+                },
+            },
+            plugins: [linhaDoMinimo],
+        });
+    }
+
     return {
+        barrasComMinimo: barrasComMinimo,
         cores: cores,
         sequencial: sequencial,
         corSequencial: corSequencial,

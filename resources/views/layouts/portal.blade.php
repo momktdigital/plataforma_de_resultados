@@ -28,6 +28,9 @@
         };
     </script>
     @include('partials.accessibility-head')
+    @hasSection('tour')
+        <link rel="stylesheet" href="{{ asset('assets/css/portal-tour.css') }}?v={{ @filemtime(public_path('assets/css/portal-tour.css')) }}">
+    @endif
     <style>
         body { font-family: 'Inter', sans-serif; }
         .fade-in { animation: fadeIn .4s ease-in forwards; }
@@ -126,13 +129,28 @@
     @yield('content')
 </main>
 
-<footer class="py-6 text-center">
-    <a href="{{ route('login') }}" title="Área administrativa" aria-label="Área administrativa"
-       class="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors">
-        <i class="ph ph-lock-key"></i> Área administrativa
-    </a>
+<footer class="py-6 text-center flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+    @hasSection('tour')
+        <button type="button" id="portal-refazer-tour"
+                class="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors">
+            <i class="ph ph-compass" aria-hidden="true"></i> Refazer tour da página
+        </button>
+    @endif
+
+    {{-- O acesso à área administrativa fica só na tela de login do aluno (a página liga com @section('acesso-administrativo')). --}}
+    @hasSection('acesso-administrativo')
+        <a href="{{ route('login') }}" title="Área administrativa" aria-label="Área administrativa"
+           class="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors">
+            <i class="ph ph-lock-key"></i> Área administrativa
+        </a>
+    @endif
 </footer>
 
+@yield('tour')
+
 @include('partials.accessibility-scripts')
+@hasSection('tour')
+    <script src="{{ asset('assets/js/portal-tour.js') }}?v={{ @filemtime(public_path('assets/js/portal-tour.js')) }}" defer></script>
+@endif
 </body>
 </html>

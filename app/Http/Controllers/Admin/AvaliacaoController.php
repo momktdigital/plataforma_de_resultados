@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreAvaliacaoRequest;
-use App\Models\Avaliacao;
 use App\Models\Admin;
+use App\Models\Avaliacao;
 use App\Models\Categoria;
 use App\Models\Curso;
 use App\Models\Resposta;
@@ -192,6 +192,17 @@ class AvaliacaoController extends Controller
             $dados['meta_acerto_dificuldade'] = $metas === [] ? null : $metas;
         }
         unset($dados['meta_acerto']);
+
+        // Regra de risco própria desta avaliação (RegraDeRisco). Só o formulário de edição manda `risco_enviado`: sem
+        // ele (ou na criação) nada muda. Acerto vazio = usa o padrão da instituição; 0 = a prova não entra no acerto.
+        if ($request->boolean('risco_enviado')) {
+            $acerto = $dados['risco_acerto'] ?? null;
+            $dados['risco_acerto'] = $acerto === null || $acerto === '' ? null : (float) $acerto;
+            $dados['risco_ignora_falta'] = $request->boolean('risco_ignora_falta');
+        } else {
+            unset($dados['risco_acerto'], $dados['risco_ignora_falta']);
+        }
+        unset($dados['risco_enviado']);
 
         return $dados;
     }

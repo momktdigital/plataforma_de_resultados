@@ -83,6 +83,8 @@ class ComparacaoSemestresTest extends TestCase
         $this->assertEquals(16.7, $simulados['media']['delta']);
         $this->assertEquals(33.3, $simulados['abaixoPct']['atual']);
         $this->assertEquals(50.0, $simulados['abaixoPct']['referencia']);
+        // Sem o mínimo por período nas questões: segue o corte de 60%.
+        $this->assertFalse($simulados['comMeta']);
 
         $this->assertSame(['3º período'], array_column($simulados['periodosDoCurso'], 'rotulo'));
         $this->assertEquals(16.7, $simulados['periodosDoCurso'][0]['delta']);
@@ -91,7 +93,7 @@ class ComparacaoSemestresTest extends TestCase
         $disciplinas = collect($c['categorias'])->firstWhere('nome', 'Disciplinas');
         $this->assertFalse($disciplinas['emAmbos']);
         $this->assertSame('2026/2', $disciplinas['so']);
-        $this->assertNull($disciplinas['alunos']);
+        $this->assertNull($disciplinas['alunosPorPeriodo']);
         $this->assertNull($disciplinas['media']['delta']);
 
         $this->assertSame(3, $c['geral']['alunos']['atual']);
@@ -99,21 +101,23 @@ class ComparacaoSemestresTest extends TestCase
         $this->assertSame(1, $c['geral']['alunos']['delta'] === null ? null : (int) $c['geral']['alunos']['delta']);
     }
 
-    public function test_pareia_os_mesmos_alunos_nos_dois_periodos(): void
+    public function test_sem_a_meta_os_alunos_por_periodo_usam_o_corte_de_60(): void
     {
         $this->cenario();
 
-        $alunos = collect(app(ComparacaoSemestresService::class)->comparar($this->coordenador(), '', '2026/2', '2026/1')['categorias'])
-            ->firstWhere('nome', 'Simulados')['alunos'];
+        $simulados = collect(app(ComparacaoSemestresService::class)->comparar($this->coordenador(), '', '2026/2', '2026/1')['categorias'])->firstWhere('nome', 'Simulados');
+        $ap = $simulados['alunosPorPeriodo'];
 
-        $this->assertSame(2, $alunos['comparaveis'], 'Cris só fez o 2º semestre');
-        $this->assertSame(1, $alunos['subiram']);
-        $this->assertSame(1, $alunos['cairam']);
-        $this->assertSame(0, $alunos['estaveis']);
-        $this->assertSame('Bia', $alunos['maisSubiram'][0]['nome']);
-        $this->assertEquals(100.0, $alunos['maisSubiram'][0]['delta']);
-        $this->assertSame('Ana', $alunos['maisCairam'][0]['nome']);
-        $this->assertEquals(-100.0, $alunos['maisCairam'][0]['delta']);
+        // Todos no 3º período. 2026/1: Ana 100, Bia 0 → 1 de 2 (50%). 2026/2: Ana 0, Bia 100, Cris 100 → 2 de 3 (66,7%).
+        $this->assertCount(1, $ap['periodos']);
+        $p = $ap['periodos'][0];
+        $this->assertSame('3º período', $p['rotulo']);
+        $this->assertSame(['presentes' => 2, 'dentro' => 1, 'pct' => 50.0], $p['referencia']);
+        $this->assertSame(['presentes' => 3, 'dentro' => 2, 'pct' => 66.7], $p['atual']);
+        $this->assertSame(16.7, $p['deltaPct']);
+        $this->assertSame(1, $p['deltaAlunos']);
+        $this->assertSame('subiu', $p['sentido']);
+        $this->assertSame(1, $ap['subiram']);
     }
 
     public function test_pagina_de_comparacao_padrao_compara_com_o_periodo_anterior(): void
@@ -124,7 +128,8 @@ class ComparacaoSemestresTest extends TestCase
         $this->actingAs($coordenador, 'admin')->get('/painel/comparativo')
             ->assertOk()
             ->assertSee('O que mudou')
-            ->assertSee('Os mesmos alunos, nos dois períodos')
+            ->assertSee('Alunos dentro do esperado, por período do curso')
+            ->assertDontSee('Os mesmos alunos, nos dois períodos')
             ->assertSee('Esta categoria só teve avaliações em')
             ->assertSee('Comparar com')
             ->assertViewHas('atual', '2026/2')

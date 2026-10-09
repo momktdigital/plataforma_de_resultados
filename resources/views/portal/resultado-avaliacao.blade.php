@@ -14,9 +14,24 @@
 @section('title', "{$nomeAvaliacao} — {$aluno->ra}")
 @section('container-class', 'max-w-5xl')
 
+@section('tour')
+    @include('portal._tour', ['chave' => 'avaliacao', 'passos' => [
+        ['titulo' => 'Detalhes da avaliação', 'texto' => 'Aqui você vê, com calma, como foi o seu resultado nesta avaliação. Vamos percorrer o que há na tela.'],
+        ['alvo' => '[data-tour="voltar"]', 'titulo' => 'Voltar aos resultados', 'texto' => 'Use este botão para retornar à lista com todas as suas avaliações.'],
+        ['alvo' => '.btn-pdf-avaliacao', 'titulo' => 'Baixar em PDF', 'texto' => 'Gera um arquivo com esta página para você guardar ou imprimir.'],
+        ['alvo' => '[data-tour="nota"]', 'titulo' => 'Seu resultado', 'texto' => 'O círculo mostra o seu percentual de acerto. Ao lado está a quantidade de acertos sobre o total de questões.'],
+        ['alvo' => '[data-tour="leitura"]', 'titulo' => 'Como você foi nesta prova', 'texto' => 'Um resumo em texto, em linguagem simples, do que foi bem e do que merece mais atenção nos seus estudos.'],
+        ['alvo' => '[data-tour="respostas"]', 'titulo' => 'Detalhamento das respostas', 'texto' => 'Cada quadrado é uma questão: verde indica acerto e vermelho, erro. Clique em um deles para ver a área, o tema, a sua resposta e o gabarito. Os filtros permitem ver só uma área ou um tema.'],
+        ['alvo' => '[data-tour="areas"]', 'titulo' => 'Desempenho por área', 'texto' => 'As barras mostram o seu acerto em cada área. A linha tracejada é a meta daquela área para o seu período: barra verde significa meta atingida; amarela, abaixo da meta.'],
+        ['alvo' => '[data-tour="lacunas"]', 'titulo' => 'Lacunas e conhecimentos consolidados', 'texto' => 'Os cartões amarelos indicam conteúdos que precisam de reforço; os verdes, conteúdos que você já domina. Entram apenas as questões esperadas para o seu período.'],
+        ['alvo' => '[data-tour="trilha"]', 'titulo' => 'Trilha de estudo', 'texto' => 'Sugere por onde começar a estudar, em ordem de quanto cada tema vale na sua nota.'],
+        ['alvo' => '#portal-refazer-tour', 'titulo' => 'Rever este tour', 'texto' => 'Para ver estas explicações de novo, use a opção "Refazer tour da página" no rodapé.'],
+    ]])
+@endsection
+
 @section('content')
 <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4 fade-in">
-    <a href="{{ route('portal.resultados', $paramsVoltar) }}" class="inline-flex items-center text-sm font-medium text-slate-500 hover:text-primary transition-colors bg-white px-4 py-2 rounded-full shadow-sm border border-slate-200">
+    <a href="{{ route('portal.resultados', $paramsVoltar) }}" data-tour="voltar" class="inline-flex items-center text-sm font-medium text-slate-500 hover:text-primary transition-colors bg-white px-4 py-2 rounded-full shadow-sm border border-slate-200">
         <i class="ph-bold ph-arrow-left mr-2"></i> Voltar aos resultados
     </a>
     <button type="button" onclick="portalExportarPdfAvaliacao()" class="btn-pdf-avaliacao
@@ -41,7 +56,7 @@
                 </p>
             </div>
             @if ($estado['nota_geral']['visivelAluno'] && $r['total'] > 0)
-                <div class="flex items-center gap-3 shrink-0">
+                <div data-tour="nota" class="flex items-center gap-3 shrink-0">
                     <div class="text-right hidden sm:block">
                         <div class="text-xs text-slate-500 font-medium">{{ $r['acertos'] }}/{{ $r['total'] }}</div>
                         <div class="text-xs text-slate-500 font-medium">acertos</div>
@@ -136,7 +151,7 @@
                     </div>
                 @endif
             </div>
-            <div class="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2 mb-6">
+            <div data-tour="respostas" class="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2 mb-6">
                 @foreach ($r['respostas'] as $resposta)
                     @php
                         $anuladaModo = $r['anuladas'][$resposta->questao_numero] ?? null;
@@ -178,45 +193,36 @@
         @endif
 
         @php
-            $temComparativoTurma = $estado['comparativo_turma']['visivelAluno'] && $comparativoTurma;
-            $temRankingPercentil = $estado['ranking_percentil']['visivelAluno'] && $rankingPercentil;
             $temRadar = $estado['radar_disciplina']['visivelAluno'] && ! empty($radarDisciplina);
-            $temArea = $estado['desempenho_area']['visivelAluno'] && ! empty($desempenhoArea);
-            $temBloom = $estado['desempenho_bloom']['visivelAluno'] && ! empty($desempenhoBloom);
+            $temArea = $estado['desempenho_area']['visivelAluno'] && ! empty($desempenhoAreaMeta);
             $temMiller = $estado['desempenho_miller']['visivelAluno'] && ! empty($desempenhoMiller);
-            $temAlgumPainel = $temComparativoTurma || $temRankingPercentil || $temRadar || $temArea || $temBloom || $temMiller;
+            $temAlgumPainel = $temRadar || $temArea || $temMiller;
+            $temLeitura = $leituraDaProva['resumo'] !== null || $leituraDaProva['pontos'] !== [];
             $temLacunasConsolidados = $estado['lacunas_conhecimentos']['visivelAluno']
                 && ! empty($lacunasConsolidados)
                 && (! empty($lacunasConsolidados['lacunas']) || ! empty($lacunasConsolidados['consolidados']));
         @endphp
 
+        @if ($temLeitura)
+            <div data-tour="leitura" class="bg-emerald-50 border border-emerald-100 rounded-xl p-4 mb-6">
+                <p class="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                    <i class="ph-bold ph-chat-circle-text" aria-hidden="true"></i> Como você foi nesta prova
+                </p>
+                @if ($leituraDaProva['resumo'] !== null)
+                    <p class="text-sm font-semibold text-slate-800">{{ $leituraDaProva['resumo'] }}</p>
+                @endif
+                @if ($leituraDaProva['pontos'] !== [])
+                    <ul class="mt-2 space-y-1.5 text-sm text-slate-700 list-disc pl-5">
+                        @foreach ($leituraDaProva['pontos'] as $ponto)
+                            <li>{{ $ponto }}</li>
+                        @endforeach
+                    </ul>
+                @endif
+            </div>
+        @endif
+
         @if ($temAlgumPainel)
             <div class="grid sm:grid-cols-2 gap-4 mb-6">
-                @if ($temComparativoTurma)
-                    <div class="bg-slate-50 border border-slate-100 rounded-xl p-4">
-                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                            <i class="ph-bold ph-users-three text-primary"></i> Comparativo com a turma {{ $comparativoTurma['turma'] }}
-                        </p>
-                        <canvas id="grafico-comparativo-turma" height="110"></canvas>
-                        <p class="text-[11px] text-slate-500 mt-2">{{ $comparativoTurma['respondentesTurma'] }} respondente(s) na turma</p>
-                    </div>
-                @endif
-
-                @if ($temRankingPercentil)
-                    <div class="bg-slate-50 border border-slate-100 rounded-xl p-4 flex items-center gap-4">
-                        <div class="w-14 h-14 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
-                            <i class="ph-fill ph-medal text-primary text-2xl"></i>
-                        </div>
-                        <div>
-                            <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Posição relativa</p>
-                            <p class="text-sm text-slate-600">
-                                Você está entre os <span class="font-black text-emerald-700 text-base">top {{ round(100 - $rankingPercentil['percentil']) }}%</span>
-                                — posição {{ $rankingPercentil['posicao'] }} de {{ $rankingPercentil['totalRespondentes'] }}.
-                            </p>
-                        </div>
-                    </div>
-                @endif
-
                 @if ($temRadar)
                     <div class="bg-slate-50 border border-slate-100 rounded-xl p-4">
                         <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
@@ -227,23 +233,20 @@
                 @endif
 
                 @if ($temArea)
-                    <div class="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                    <div data-tour="areas" class="bg-slate-50 border border-slate-100 rounded-xl p-4 {{ count($desempenhoAreaMeta) > 6 ? 'sm:col-span-2' : '' }}">
                         <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                            <i class="ph-bold ph-chart-polar text-primary"></i> Desempenho por área
+                            <i class="ph-bold ph-chart-bar-horizontal text-primary" aria-hidden="true"></i> Desempenho por área
                         </p>
-                        <canvas id="grafico-area" height="200"></canvas>
+                        <div class="relative" style="height: {{ max(96, count($desempenhoAreaMeta) * 40 + 36) }}px">
+                            <canvas id="grafico-area" data-titulo="Seu acerto em cada área e a meta da área, em percentual"></canvas>
+                        </div>
+                        @include('portal._legenda_barras_minimo', ['verde' => 'meta atingida ou superada', 'amarelo' => 'abaixo da meta', 'linha' => 'meta da área'])
+                        <p class="text-[11px] text-slate-500 mt-2">
+                            A meta de cada área é a parte das questões dela que já cabem no seu período{{ $periodoAluno ? ' ('.\App\Support\PeriodoCurso::rotulo($periodoAluno).')' : '' }};
+                            sem essa informação, 60%.
+                        </p>
                     </div>
                 @endif
-
-                @if ($temBloom)
-                    <div class="bg-slate-50 border border-slate-100 rounded-xl p-4">
-                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                            <i class="ph-bold ph-brain text-primary"></i> Desempenho por nível de Bloom
-                        </p>
-                        <canvas id="grafico-bloom" height="180"></canvas>
-                    </div>
-                @endif
-
                 @if ($temMiller)
                     <div class="bg-slate-50 border border-slate-100 rounded-xl p-4">
                         <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
@@ -256,7 +259,13 @@
         @endif
 
         @if ($temLacunasConsolidados)
-            <div class="grid sm:grid-cols-2 gap-4 mb-6">
+            @if ($questoesAFrente > 0)
+                <p class="text-xs text-slate-500 mb-2">
+                    Aqui entram só as questões que você precisava acertar pelo seu {{ \App\Support\PeriodoCurso::rotulo($periodoAluno) }}
+                    — {{ $questoesAFrente }} questão(ões) de períodos à frente ficam de fora.
+                </p>
+            @endif
+            <div data-tour="lacunas" class="grid sm:grid-cols-2 gap-4 mb-6">
                 @if (! empty($lacunasConsolidados['lacunas']))
                     <div class="bg-amber-50 border border-amber-100 rounded-xl p-4">
                         <p class="text-xs font-bold text-amber-700 uppercase tracking-wide mb-3 flex items-center gap-1.5">
@@ -292,13 +301,17 @@
         @endif
 
         @if ($estado['trilha_estudo']['visivelAluno'] && ! empty($trilhaEstudo))
-            <div class="bg-white border border-slate-200 rounded-xl p-4 mb-6">
+            <div data-tour="trilha" class="bg-white border border-slate-200 rounded-xl p-4 mb-6">
                 <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 flex items-center gap-1.5">
                     <i class="ph-bold ph-list-checks text-primary"></i> Trilha de estudo
                 </p>
                 <p class="text-xs text-slate-500 mb-3">
                     Por onde começar, na ordem de quanto cada tema vale na sua nota.
                     O ganho é quanto você subiria nesta prova se tivesse acertado essas questões.
+                    @if ($questoesAFrente > 0)
+                        Só entram as questões que você precisava acertar pelo seu {{ \App\Support\PeriodoCurso::rotulo($periodoAluno) }}
+                        ({{ $questoesAFrente }} de períodos à frente ficam de fora).
+                    @endif
                 </p>
                 <ol class="space-y-2">
                     @foreach ($trilhaEstudo as $passo)
@@ -325,30 +338,6 @@
             </div>
         @endif
 
-        @if ($estado['comparativo_questao']['visivelAluno'] && ! empty($comparativoQuestao))
-            <div>
-                <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                    <i class="ph-bold ph-table text-primary"></i> Sua resposta x turma, por questão
-                </p>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                        <thead class="bg-slate-50 text-slate-500 text-left">
-                            <tr><th class="px-3 py-2">Questão</th><th class="px-3 py-2">Sua resposta</th><th class="px-3 py-2">Gabarito</th><th class="px-3 py-2">% turma acertou</th></tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100">
-                            @foreach ($comparativoQuestao as $q)
-                                <tr @if ($q['anulada']) title="Questão anulada — não conta na nota" @endif>
-                                    <td class="px-3 py-2 font-mono">Q{{ $q['numero'] }}{{ $q['anulada'] ? '*' : '' }}</td>
-                                    <td class="px-3 py-2 {{ $q['acertou'] ? 'text-green-600 font-bold' : 'text-red-600 font-bold' }}">{{ $q['sua_resposta'] ?: '—' }}</td>
-                                    <td class="px-3 py-2">{{ $q['gabarito'] }}</td>
-                                    <td class="px-3 py-2">{{ $q['taxa_acerto_turma'] }}%</td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        @endif
     </div>
 </div>
 
@@ -389,26 +378,6 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"></script>
 @include('_viz')
 <script>
-@if ($estado['comparativo_turma']['visivelAluno'] && $comparativoTurma)
-new Chart(document.getElementById('grafico-comparativo-turma'), {
-    type: 'bar',
-    data: {
-        labels: ['Você', 'Média da turma'],
-        datasets: [{
-            data: [{{ $comparativoTurma['suaMedia'] }}, {{ $comparativoTurma['mediaTurma'] }}],
-            backgroundColor: ['#00b48d', '#94a3b8'],
-            borderRadius: 4,
-            maxBarThickness: 28,
-        }],
-    },
-    options: {
-        indexAxis: 'y',
-        scales: { x: { beginAtZero: true, max: 100, grid: { color: '#f1f5f9' } }, y: { grid: { display: false } } },
-        plugins: { legend: { display: false } },
-    },
-});
-@endif
-
 @if ($estado['radar_disciplina']['visivelAluno'] && ! empty($radarDisciplina))
 new Chart(document.getElementById('grafico-radar-disciplina'), {
     type: 'radar',
@@ -420,28 +389,15 @@ new Chart(document.getElementById('grafico-radar-disciplina'), {
 });
 @endif
 
-@if ($estado['desempenho_area']['visivelAluno'] && ! empty($desempenhoArea))
-new Chart(document.getElementById('grafico-area'), {
-    type: 'radar',
-    data: {
-        labels: {{ Js::from(array_keys($desempenhoArea)) }},
-        datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($desempenhoArea)) }}, backgroundColor: 'rgba(0,180,141,0.2)', borderColor: '#00b48d' }],
-    },
-    options: { scales: { r: { beginAtZero: true, max: 100 } } },
+@if ($estado['desempenho_area']['visivelAluno'] && ! empty($desempenhoAreaMeta))
+Viz.barrasComMinimo(document.getElementById('grafico-area'), {
+    rotulos: {{ Js::from(array_column($desempenhoAreaMeta, 'area')) }},
+    acertos: {{ Js::from(array_column($desempenhoAreaMeta, 'percentual')) }},
+    minimos: {{ Js::from(array_column($desempenhoAreaMeta, 'meta')) }},
+    rotuloAcerto: 'Seu acerto',
+    rotuloMinimo: 'Meta da área',
 });
 @endif
-
-@if ($estado['desempenho_bloom']['visivelAluno'] && ! empty($desempenhoBloom))
-new Chart(document.getElementById('grafico-bloom'), {
-    type: 'bar',
-    data: {
-        labels: {{ Js::from(array_keys($desempenhoBloom)) }},
-        datasets: [{ label: '% de acerto', data: {{ Js::from(array_values($desempenhoBloom)) }}, backgroundColor: '#00b48d', borderRadius: 4, maxBarThickness: 24 }],
-    },
-    options: { indexAxis: 'y', scales: { x: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
-});
-@endif
-
 @if ($estado['desempenho_miller']['visivelAluno'] && ! empty($desempenhoMiller))
 new Chart(document.getElementById('grafico-miller'), {
     type: 'bar',

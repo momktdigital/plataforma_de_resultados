@@ -215,45 +215,6 @@ class ResultadoConsultaService
         return sprintf('%s-%010d', $data, $resultado['avaliacao']->codigo);
     }
 
-    /**
-     * Média de desempenho por categoria de topo (raiz da árvore de
-     * montarArvore()), somando recursivamente os resultados de todas as
-     * subcategorias — usado no resumo visual do boletim.
-     *
-     * @param  array  $arvore  saída de montarArvore()['arvore']
-     * @return array<int, array{nome: string, media: float, quantidade: int}>
-     */
-    public function resumoPorCategoria(array $arvore): array
-    {
-        $coletarPercentuais = function (array $no) use (&$coletarPercentuais): array {
-            $percentuais = collect($no['resultados'])->pluck('percentual')->filter(fn ($p) => $p !== null)->all();
-
-            foreach ($no['subcategorias'] as $sub) {
-                $percentuais = [...$percentuais, ...$coletarPercentuais($sub)];
-            }
-
-            return $percentuais;
-        };
-
-        $resumo = [];
-        foreach ($arvore as $no) {
-            $percentuais = $coletarPercentuais($no);
-            if (empty($percentuais)) {
-                continue;
-            }
-
-            $resumo[] = [
-                'nome' => $no['categoria']->nome,
-                'media' => round(array_sum($percentuais) / count($percentuais), 1),
-                'quantidade' => count($percentuais),
-            ];
-        }
-
-        usort($resumo, fn ($a, $b) => $b['media'] <=> $a['media']);
-
-        return $resumo;
-    }
-
     private function porAluno($query, Aluno $aluno): void
     {
         if (! $aluno->ra && ! $aluno->cpf) {

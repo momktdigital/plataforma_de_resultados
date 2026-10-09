@@ -68,6 +68,7 @@
                 $usuarioLogado = auth('admin')->user();
                 $ehCoordenador = $usuarioLogado->ehCoordenador();
                 $ehReitor = $usuarioLogado->ehReitor();
+                $ehColaborador = $usuarioLogado->ehColaborador();
                 // O reitor olhando UM curso como o coordenador dele vê (Admin::comoCoordenadorDe): sem sino de notificações.
                 $emVisaoDeCurso = $usuarioLogado->emVisaoDeCurso;
                 $sino = $ehCoordenador && ! $emVisaoDeCurso;
@@ -105,23 +106,31 @@
                             : ($ehCoordenador
                             ? [
                                 ['rota' => 'coordenador.painel', 'padrao' => 'coordenador.painel', 'icone' => 'ph-squares-four', 'label' => 'Visão geral'],
-                                ['rota' => 'coordenador.alunos', 'padrao' => 'coordenador.alunos*', 'icone' => 'ph-users-three', 'label' => 'Alunos do curso'],
                                 ['rota' => 'coordenador.desempenho', 'padrao' => 'coordenador.desempenho', 'icone' => 'ph-chart-line-up', 'label' => 'Desempenho'],
-                                ['rota' => 'coordenador.comparativo', 'padrao' => 'coordenador.comparativo', 'icone' => 'ph-arrows-left-right', 'label' => 'Comparar semestres'],
                                 ['rota' => 'avaliacoes.index', 'padrao' => 'avaliacoes.*', 'icone' => 'ph-exam', 'label' => 'Avaliações'],
+                                ['rota' => 'coordenador.comparativo', 'padrao' => 'coordenador.comparativo', 'icone' => 'ph-arrows-left-right', 'label' => 'Comparar semestres'],
+                                ['rota' => 'coordenador.alunos', 'padrao' => 'coordenador.alunos*', 'icone' => 'ph-users-three', 'label' => 'Alunos do curso'],
+                                ['rota' => 'cronograma.index', 'padrao' => 'cronograma.*', 'icone' => 'ph-calendar-check', 'label' => 'Cronograma'],
                                 ['rota' => 'notificacoes.index', 'padrao' => 'notificacoes.*', 'icone' => 'ph-bell', 'label' => 'Notificações'],
+                                ['rota' => 'perfil.edit', 'padrao' => 'perfil.*', 'icone' => 'ph-user-circle', 'label' => 'Meu Perfil'],
+                            ]
+                            : ($ehColaborador
+                            ? [
+                                ['rota' => 'colaborador.index', 'padrao' => ['colaborador.index', 'colaborador.atividades.*'], 'icone' => 'ph-calendar-check', 'label' => 'Cronograma'],
+                                ['rota' => 'colaborador.pendencias.index', 'padrao' => 'colaborador.pendencias.*', 'icone' => 'ph-warning-circle', 'label' => 'Pendências'],
                                 ['rota' => 'perfil.edit', 'padrao' => 'perfil.*', 'icone' => 'ph-user-circle', 'label' => 'Meu Perfil'],
                             ]
                             : [
                                 ['rota' => 'avaliacoes.index', 'padrao' => 'avaliacoes.*', 'icone' => 'ph-exam', 'label' => 'Avaliações'],
                                 ['rota' => 'reitor.visao', 'padrao' => 'reitor.*', 'icone' => 'ph-student', 'label' => 'Painel da reitoria'],
+                                ['rota' => 'colaborador.index', 'padrao' => 'colaborador.*', 'icone' => 'ph-calendar-check', 'label' => 'Cronograma de atividades'],
                                 ['rota' => 'alunos.index', 'padrao' => 'alunos.*', 'icone' => 'ph-identification-card', 'label' => 'Alunos'],
                                 ['rota' => 'categorias.index', 'padrao' => 'categorias.*', 'icone' => 'ph-tree-structure', 'label' => 'Categorias'],
                                 ['rota' => 'lixeira.index', 'padrao' => 'lixeira.*', 'icone' => 'ph-trash', 'label' => 'Lixeira'],
                                 ['rota' => 'usuarios.index', 'padrao' => 'usuarios.*', 'icone' => 'ph-users', 'label' => 'Usuários'],
                                 ['rota' => 'sistema.configuracoes.index', 'padrao' => 'sistema.*', 'icone' => 'ph-gear', 'label' => 'Configurações'],
                                 ['rota' => 'perfil.edit', 'padrao' => 'perfil.*', 'icone' => 'ph-user-circle', 'label' => 'Meu Perfil'],
-                            ]);
+                            ]));
                     @endphp
                     @if ($emVisaoDeCurso)
                         @php
@@ -130,7 +139,7 @@
                         @endphp
                     @endif
                     @foreach ($itensMenu as $item)
-                        @php($ativo = request()->routeIs($item['padrao']))
+                        @php($ativo = request()->routeIs(...(array) $item['padrao']))
                         <li>
                             <a href="{{ route($item['rota']) }}" @if ($ativo) aria-current="page" @endif
                                class="flex items-center px-3 py-2.5 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary {{ $ativo ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-slate-800 hover:text-white' }}">
@@ -158,7 +167,7 @@
             <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:hidden shrink-0 print:hidden">
                 <div class="flex items-center">
                     <i class="ph-fill ph-exam text-primary text-2xl mr-2"></i>
-                    <span class="font-bold text-slate-800">{{ $ehReitor ? 'Reitoria' : ($ehCoordenador ? 'Coordenação' : 'Admin') }}</span>
+                    <span class="font-bold text-slate-800">{{ $ehReitor ? 'Reitoria' : ($ehCoordenador ? 'Coordenação' : ($ehColaborador ? 'Colaboração' : 'Admin')) }}</span>
                 </div>
                 <div class="flex items-center gap-2">
                     @if ($sino)

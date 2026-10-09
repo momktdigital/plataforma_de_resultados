@@ -10,7 +10,10 @@ use App\Http\Controllers\Admin\CategoriaController;
 use App\Http\Controllers\Admin\CoordenadorAcompanhamentoController;
 use App\Http\Controllers\Admin\CoordenadorAlunosController;
 use App\Http\Controllers\Admin\CoordenadorComparativoController;
+use App\Http\Controllers\Admin\ColaboradorCronogramaController;
+use App\Http\Controllers\Admin\ColaboradorPendenciaController;
 use App\Http\Controllers\Admin\CoordenadorController;
+use App\Http\Controllers\Admin\CronogramaController;
 use App\Http\Controllers\Admin\LixeiraController;
 use App\Http\Controllers\Admin\NotificacaoController;
 use App\Http\Controllers\Admin\ReitorController;
@@ -131,6 +134,9 @@ Route::middleware('instalado')->group(function () {
             Route::get('/painel/alunos/exportar.xlsx', [CoordenadorAlunosController::class, 'xlsx'])->name('coordenador.alunos.xlsx');
             Route::get('/painel/alunos/{aluno}', [CoordenadorAlunosController::class, 'show'])->whereNumber('aluno')->name('coordenador.alunos.show');
             Route::post('/painel/alunos/{aluno}/acompanhamento', [CoordenadorAcompanhamentoController::class, 'store'])->whereNumber('aluno')->name('coordenador.alunos.acompanhamento');
+            // Cronograma de atividades (somente leitura): o coordenador vê as atividades dos cursos dele e as pendências.
+            Route::get('/cronograma', [CronogramaController::class, 'index'])->name('cronograma.index');
+            Route::get('/cronograma/atividades/{item}', [CronogramaController::class, 'show'])->whereNumber('item')->name('cronograma.show');
             Route::get('/avaliacoes', [AvaliacaoController::class, 'index'])->name('avaliacoes.index');
             Route::get('/avaliacoes/{avaliacao}/bi', [BiController::class, 'index'])->name('avaliacoes.bi');
             Route::get('/avaliacoes/{avaliacao}/bi/alunos.xlsx', [BiListaController::class, 'xlsx'])->name('avaliacoes.bi.alunos.xlsx');
@@ -162,6 +168,23 @@ Route::middleware('instalado')->group(function () {
             Route::get('/itens', [ReitorController::class, 'itens'])->name('itens');
             Route::get('/relatorio', [ReitorController::class, 'relatorio'])->name('relatorio');
             Route::get('/exportar.xlsx', [ReitorController::class, 'xlsx'])->name('xlsx');
+        });
+
+        // Cronograma de atividades: o colaborador (e o administrador) cadastra as atividades, indica os cursos e registra as
+        // pendências. Segmento literal (`nova`) ANTES do coringa {item}.
+        Route::middleware('perfil:colaborador,administrador')->prefix('colaboracao')->name('colaborador.')->group(function () {
+            Route::get('/', [ColaboradorCronogramaController::class, 'index'])->name('index');
+            Route::get('/atividades/nova', [ColaboradorCronogramaController::class, 'create'])->name('atividades.create');
+            Route::post('/atividades', [ColaboradorCronogramaController::class, 'store'])->name('atividades.store');
+            Route::get('/atividades/{item}', [ColaboradorCronogramaController::class, 'show'])->whereNumber('item')->name('atividades.show');
+            Route::get('/atividades/{item}/editar', [ColaboradorCronogramaController::class, 'edit'])->whereNumber('item')->name('atividades.edit');
+            Route::put('/atividades/{item}', [ColaboradorCronogramaController::class, 'update'])->whereNumber('item')->name('atividades.update');
+            Route::put('/atividades/{item}/situacao', [ColaboradorCronogramaController::class, 'situacao'])->whereNumber('item')->name('atividades.situacao');
+            Route::delete('/atividades/{item}', [ColaboradorCronogramaController::class, 'destroy'])->whereNumber('item')->name('atividades.destroy');
+            Route::get('/pendencias', [ColaboradorPendenciaController::class, 'index'])->name('pendencias.index');
+            Route::post('/atividades/{item}/pendencias', [ColaboradorPendenciaController::class, 'store'])->whereNumber('item')->name('pendencias.store');
+            Route::put('/pendencias/{pendencia}', [ColaboradorPendenciaController::class, 'update'])->whereNumber('pendencia')->name('pendencias.update');
+            Route::delete('/pendencias/{pendencia}', [ColaboradorPendenciaController::class, 'destroy'])->whereNumber('pendencia')->name('pendencias.destroy');
         });
 
         Route::redirect('/administradores', '/usuarios');

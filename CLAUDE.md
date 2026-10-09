@@ -129,6 +129,33 @@ auditada (`reitor.visao_de_curso`), com aviso fixo no layout; e só vale para o 
   (`reitor_corte_proficiencia`, `reitor_meta_participacao`) — o corte entra na chave
   do cache.
 
+## "Estudante em risco" é uma regra só (`RegraDeRisco`)
+
+Quem está em risco é definido pela administração (Configurações → Estudante em risco; padrão: média de acerto abaixo de
+60% ou 2 faltas, "ou"/"e"), com sobreposição por avaliação (`avaliacoes.risco_acerto`: vazio = padrão, 0 = fora do critério
+de acerto; `risco_ignora_falta`). A lista do coordenador (`CoordenadorAlunosService::classificar`), as notificações e o
+painel da reitoria (`ReitorRiscoService`, em SQL) usam essa MESMA regra e precisam contar as mesmas pessoas
+(`RegraDeRiscoTest` compara os dois). Não reintroduza um limiar fixo (60, 2 faltas) em tela nova — leia `RegraDeRisco::atual()`.
+O critério de acerto é "média do estudante < média dos limites das provas que ele fez"; a queda de nota do coordenador é um
+sinal à parte. A regra e a de cada avaliação entram na chave do cache dos agregados.
+
+## Cronograma de atividades e o perfil de colaborador
+
+`collaborator` é o quarto perfil de `admins.role` (e, como o `rector`, **exige migration que acrescente o valor ao ENUM do MySQL
+legado** — o SQLite dos testes não pega). Ele só alcança `/colaboracao/*` (grupo `perfil:colaborador,administrador`) e o perfil;
+`PerfilPermitido` leva um GET dele em tela de coordenador de volta ao cronograma, o resto é 403. Não o ligue a
+`Avaliacao::visivelPara` nem a nada de aluno/resultado.
+
+O cronograma (`CronogramaItem` → `cronograma_item_cursos` → `CronogramaPendencia`) tem duas faces: o colaborador/administrador grava
+(`ColaboradorCronogramaController`, `ColaboradorPendenciaController`) e o coordenador **só lê** (`CronogramaController`, no grupo do
+coordenador, então o reitor na visão de curso também lê). Curso se compara por `NomeCurso` (acento/caixa não distinguem); atividade de
+outro curso é 404. Pendência é histórico do coordenador: não mude curso/data do registro; o colaborador/administrador PODE excluí-la
+(`ColaboradorPendenciaController::destroy`, que grava o conteúdo na auditoria antes), mas não se exclui atividade (nem se tira o
+curso dela) enquanto tiver pendência — `SalvarCronogramaItemRequest` e `ColaboradorCronogramaController::destroy` barram. Calendário
+e lista usam os MESMOS filtros (`CronogramaService::filtros()/itens()`): tela nova de atividades reaproveita isso, e o filtro de
+curso/situação vale para os cursos do recorte do coordenador, nunca para os de outros. Tela nova que
+mostre pendência ao coordenador filtra pelos cursos dele (`CronogramaPendencia::dosCursos`).
+
 ## Acompanhamento de alunos e visão do reitor
 
 `acompanhamentos` é um LOG de eventos: nunca atualize nem apague um registro (o estado atual é o último). A observação é
@@ -278,3 +305,43 @@ renderizado antes/depois, não só se a página abre.
 - **Rotas com segmento literal + wildcard no mesmo prefixo**: registre o
   literal antes do wildcard (ex.: `/lixeira/restaurar-tudo` antes de
   `/lixeira/{id}`), senão o wildcard casa primeiro.
+
+## `questoes.periodo_minimo` é meta, não regra de acerto
+
+`periodo_minimo` (1–20, NULL = vale para todos) diz a partir de qual período do curso se espera que o aluno acerte a
+questão. É só classificação: **não** entra em `Anulacao`, em `resultado_resumos` nem na nota — quem estiver abaixo do
+período pode acertar sem problema. Para comparar com o aluno use o período dele **na data da prova** (`aluno_matriculas`
+via `CursoDoResultadoService`; `PeriodoCurso::ordinal()` normaliza "3º", "P3", "3º PERÍODO"), nunca o período atual de
+`alunos`. Não confundir com `questao_matrizes.periodo` (período da disciplina na matriz curricular, texto livre) — o
+import distingue pelo cabeçalho ("Matriz (período)" nunca vira período mínimo).
+
+O boletim do aluno usa essa meta em `AnaliseConsolidadaService::metaPorPeriodo()`: o mínimo esperado de cada avaliação é a
+fatia da prova que já cabe no período do aluno em `respostas.periodo` (agregado em SQL por avaliação × período × área × meta),
+e **60%** quando a prova não traz a meta (`MINIMO_PADRAO`). Na tela da avaliação (`resultadoAvaliacao`), a trilha de estudo e as lacunas/consolidados pulam as questões "à frente"
+(`PeriodoCurso::aFrente()`) e o desempenho por área usa a meta de cada área. O mapa de domínio por área usa a mesma regra por célula
+(`mapaDominio()['areas'][]['esperados']`): abaixo do mínimo = amarelo. O texto "Como você foi nesta prova" (`LeituraDaProva`) é para o estudante: sem jargão (nada de "Bloom", "TRI",
+"percentil") e sem coloquialismo (nada de "deu trabalho", "dá para", "pra", "bônus") — registro claro e cordial, nem técnico nem informal
+(`LeituraDaProvaTest` confere). O mesmo vale para os textos dos cards de resumo e da leitura rápida. O boletim **não compara o aluno com a
+turma** nos cards de resumo e fala em percentual, não em "pontos" (`InsightService`) — não reintroduza.
+
+## Portal do aluno: tour guiado e rodapé
+
+O tour (`public/assets/js/portal-tour.js`) é declarado na view da tela, em `@section('tour')` + `portal._tour` (chave e passos com
+`alvo` CSS, `titulo`, `texto`); o layout só liga o botão "Refazer tour da página" e carrega o JS quando a seção existe. Tela
+nova do portal: adicione `data-tour="..."`/ids nos elementos e uma `@section('tour')`. Alvo ausente ou oculto é pulado — mas
+confira o HTML renderizado (`PortalTourTest`). Texto do tour segue o registro do restante do portal (claro e cordial, sem
+gíria nem jargão). A tela de login do aluno (`portal/consulta`) não tem tour. O atalho para a área administrativa é só dela (`@section('acesso-administrativo')`): não o recoloque no layout para todas as telas.
+
+Na visão geral do coordenador, "Dentro do esperado" (`CoordenadorDashboardService::alunosDentroDoEsperado()`) conta, entre os presentes
+com nota, quem alcançou o mínimo do PRÓPRIO período (fatia da prova que cabe nele, meta `periodo_minimo`; período irreconhecível =
+60%). Prova sem meta em nenhuma questão não tem esperado: a coluna mostra só a média. A lista nominal de alunos em atenção não
+fica na visão geral (fica na aba Alunos).
+
+Na tela de desempenho do coordenador, `CoordenadorDashboardService::gerar(..., $opcoes)` só liga o que é caro com `detalhado => true`
+(esperado por período, Bloom, tema, abas por período); `ComparacaoSemestresService`/notificações chamam sem opções e não pagam isso. O
+filtro de período do curso é aplicado em PHP sobre agregados por período (cacheados), não em SQL. Os gráficos (`painel-desempenho.js`)
+são criados ao abrir o `<details>` da categoria: um canvas em `<details>` fechado tem tamanho zero.
+
+A comparação entre semestres (`ComparacaoSemestresService`) olha para o PERÍODO DO CURSO, não para a pessoa: não volte a parear o mesmo aluno
+nos dois semestres. Ela chama `gerar()` com `estrito => true` (um filtro de período do curso ausente num semestre fica vazio, não é
+ignorado) e `campos => false` (não precisa de Bloom/tema).

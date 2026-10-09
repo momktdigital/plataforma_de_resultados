@@ -10,6 +10,9 @@ namespace App\Support;
  */
 final class PeriodoCurso
 {
+    /** Maior período aceito — o mesmo teto de ordinal(). */
+    public const MAXIMO = 20;
+
     public static function ordinal(?string $periodo): ?int
     {
         if ($periodo === null) {
@@ -22,7 +25,16 @@ final class PeriodoCurso
 
         $n = (int) $m[1];
 
-        return $n >= 1 && $n <= 20 ? $n : null;
+        return $n >= 1 && $n <= self::MAXIMO ? $n : null;
+    }
+
+    /**
+     * A questão (meta `questoes.periodo_minimo`) é de um período À FRENTE do aluno? Sem meta ou sem período
+     * reconhecível não há como dizer — e então ela vale para todos, não fica de fora.
+     */
+    public static function aFrente(?int $periodoDoAluno, ?int $periodoMinimo): bool
+    {
+        return $periodoDoAluno !== null && $periodoMinimo !== null && $periodoMinimo > $periodoDoAluno;
     }
 
     public static function rotulo(int $ordinal): string

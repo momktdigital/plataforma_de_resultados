@@ -32,6 +32,8 @@ class Avaliacao extends Model
         'data_avaliacao',
         'status',
         'meta_acerto_dificuldade',
+        'risco_acerto',
+        'risco_ignora_falta',
     ];
 
     // Espelha o default da coluna no banco — sem isso, uma instância recém-
@@ -46,6 +48,8 @@ class Avaliacao extends Model
         return [
             'data_avaliacao' => 'date',
             'meta_acerto_dificuldade' => 'array',
+            'risco_acerto' => 'float',
+            'risco_ignora_falta' => 'boolean',
         ];
     }
 

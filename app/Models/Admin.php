@@ -17,7 +17,8 @@ use Illuminate\Support\Facades\DB;
  * `role` é a coluna legada: 'superadmin' (acesso total; também é o que vale
  * para linhas sem role), 'coordinator' (vê só avaliações dos cursos a que
  * está vinculado — ver cursos()) ou 'rector' (reitor: só leitura, enxerga os
- * indicadores agregados de TODOS os cursos — nunca dado nominal de aluno).
+ * indicadores agregados de TODOS os cursos — nunca dado nominal de aluno) ou 'collaborator' (colaborador: monta o
+ * cronograma de atividades dos coordenadores e registra as pendências; não enxerga resultados nem alunos).
  */
 class Admin extends Authenticatable
 {
@@ -30,6 +31,8 @@ class Admin extends Authenticatable
     public const ROLE_COORDENADOR = 'coordinator';
 
     public const ROLE_REITOR = 'rector';
+
+    public const ROLE_COLABORADOR = 'collaborator';
 
     protected $fillable = [
         'username',
@@ -61,7 +64,7 @@ class Admin extends Authenticatable
 
     /**
      * Perfil normalizado (caixa/espaços não distinguem): ROLE_ADMIN (inclui linhas legadas sem role),
-     * ROLE_COORDENADOR, ROLE_REITOR, ou null quando o valor gravado não é nenhum dos três. Null significa SEM acesso —
+     * ROLE_COORDENADOR, ROLE_REITOR, ROLE_COLABORADOR, ou null quando o valor gravado não é nenhum deles. Null significa SEM acesso —
      * antes, qualquer valor diferente de "coordinator" (ex.: "Coordinator", "coord", um erro de digitação)
      * caía no ramo "não é coordenador" e virava administrador completo (falha aberta).
      */
@@ -71,6 +74,7 @@ class Admin extends Authenticatable
             '', self::ROLE_ADMIN => self::ROLE_ADMIN,
             self::ROLE_COORDENADOR => self::ROLE_COORDENADOR,
             self::ROLE_REITOR => self::ROLE_REITOR,
+            self::ROLE_COLABORADOR => self::ROLE_COLABORADOR,
             default => null,
         };
     }
@@ -95,12 +99,18 @@ class Admin extends Authenticatable
         return $this->papel() === self::ROLE_REITOR;
     }
 
+    public function ehColaborador(): bool
+    {
+        return $this->papel() === self::ROLE_COLABORADOR;
+    }
+
     /** Nome da rota em que este usuário começa (depois do login e na raiz do sistema). */
     public function rotaInicial(): string
     {
         return match ($this->papel()) {
             self::ROLE_COORDENADOR => 'coordenador.painel',
             self::ROLE_REITOR => 'reitor.visao',
+            self::ROLE_COLABORADOR => 'colaborador.index',
             default => 'avaliacoes.index',
         };
     }
@@ -151,10 +161,15 @@ class Admin extends Authenticatable
         return $query->whereRaw('LOWER(TRIM(role)) = ?', [self::ROLE_REITOR]);
     }
 
-    /** Quem entra por código enviado ao e-mail, sem senha obrigatória: coordenadores e reitores. */
+    public function scopeColaboradores(Builder $query): Builder
+    {
+        return $query->whereRaw('LOWER(TRIM(role)) = ?', [self::ROLE_COLABORADOR]);
+    }
+
+    /** Quem entra por código enviado ao e-mail, sem senha obrigatória: coordenadores, reitores e colaboradores. */
     public function scopeEntramPorCodigo(Builder $query): Builder
     {
-        return $query->whereRaw('LOWER(TRIM(role)) IN (?, ?)', [self::ROLE_COORDENADOR, self::ROLE_REITOR]);
+        return $query->whereRaw('LOWER(TRIM(role)) IN (?, ?, ?)', [self::ROLE_COORDENADOR, self::ROLE_REITOR, self::ROLE_COLABORADOR]);
     }
 
     /** Administradores de fato: `superadmin` ou linha legada sem role. Perfil desconhecido não entra aqui. */

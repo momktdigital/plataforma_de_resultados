@@ -99,6 +99,12 @@
                     </div>
 
                     <div>
+                        <label class="block text-sm font-medium mb-1" for="forma_ingresso">Forma de ingresso</label>
+                        <input id="forma_ingresso" name="forma_ingresso" type="text" maxlength="100" value="{{ old('forma_ingresso', $aluno->forma_ingresso) }}" placeholder="Ex.: Vestibular, ENEM, PROUNI"
+                               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    </div>
+
+                    <div>
                         <label class="block text-sm font-medium mb-1" for="religiao">Religião</label>
                         <input id="religiao" name="religiao" type="text" value="{{ old('religiao', $aluno->religiao) }}"
                                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">

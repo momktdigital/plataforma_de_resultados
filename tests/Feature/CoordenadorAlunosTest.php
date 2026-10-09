@@ -386,7 +386,7 @@ class CoordenadorAlunosTest extends TestCase
         $this->assertCount(2, $filtrado);
     }
 
-    public function test_visao_geral_saudacao_abas_e_alunos_em_atencao(): void
+    public function test_visao_geral_saudacao_abas_e_sem_a_lista_nominal_de_atencao(): void
     {
         $this->cenarioDoSemestre();
         $coordenador = $this->coordenador('matheus.oliveira');
@@ -397,10 +397,13 @@ class CoordenadorAlunosTest extends TestCase
             ->assertSee('id="saudacao-coordenador"', false)
             ->assertSee('data-nome="Matheus"', false)
             ->assertSee('Boa tarde', false) // script da saudação
-            ->assertSee('Alunos que precisam de atenção')
-            ->assertSee('Cris Ausente')
-            ->assertSee('Bia Baixa')
-            ->assertDontSee('Caio Medicina')
+            // Saíram da visão geral: a lista nominal "Alunos que precisam de atenção" e o quadro "Situação dos alunos"
+            // (os alunos ficam na aba Alunos); o cartão "Precisam de atenção" continua, com link para a lista.
+            ->assertDontSee('Alunos que precisam de atenção')
+            ->assertDontSee('Situação dos alunos')
+            ->assertDontSee('Cris Ausente')
+            ->assertDontSee('Bia Baixa')
+            ->assertSee('Precisam de atenção')
             ->assertSee('Alunos por período do curso')
             ->assertSee('Prova 3')
             ->assertSee('aria-label="Seções do painel"', false)
@@ -408,7 +411,7 @@ class CoordenadorAlunosTest extends TestCase
             ->assertSee(route('coordenador.desempenho', ['periodo_letivo' => '2026/1']), false);
 
         $resposta->assertViewHas('resumoAlunos', fn ($r) => $r['total'] === 5 && $r['precisamAtencao'] === 4)
-            ->assertViewHas('emAtencao', fn ($lista) => count($lista) === 4);
+            ->assertViewMissing('emAtencao');
     }
 
     public function test_menu_do_coordenador_tem_as_secoes_do_painel(): void

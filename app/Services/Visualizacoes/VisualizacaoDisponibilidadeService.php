@@ -120,7 +120,7 @@ class VisualizacaoDisponibilidadeService
         $alunosVinculados = $this->alunoResolver->resolver($codigo);
         $temTurmaVinculada = $alunosVinculados->contains(fn ($a) => ! empty($a->turma));
         $temDadosDemograficos = $alunosVinculados->contains(
-            fn ($a) => ! empty($a->sexo) || ! empty($a->cor_raca) || ! empty($a->cidade) || ! empty($a->uf)
+            fn ($a) => ! empty($a->sexo) || ! empty($a->cor_raca) || ! empty($a->forma_ingresso) || ! empty($a->cidade) || ! empty($a->uf)
         );
 
         $temCategoria = $avaliacao->categoria_id !== null;

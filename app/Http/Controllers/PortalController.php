@@ -6,6 +6,7 @@ use App\Http\Requests\ConsultaResultadoRequest;
 use App\Models\Aluno;
 use App\Models\Avaliacao;
 use App\Models\Configuracao;
+use App\Models\Questao;
 use App\Models\VerificacaoEmail;
 use App\Services\Portal\AnaliseConsolidadaService;
 use App\Services\Portal\CaptchaVerifier;
@@ -16,6 +17,10 @@ use App\Services\Portal\RelatorioAlunoService;
 use App\Services\Portal\ResultadoConsultaService;
 use App\Services\Portal\SmtpEmailSender;
 use App\Services\Visualizacoes\VisualizacaoConfigService;
+use App\Support\Anulacao;
+use App\Support\LeituraDaProva;
+use App\Support\LeituraMetaPeriodo;
+use App\Support\PeriodoCurso;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -321,6 +326,7 @@ class PortalController extends Controller
         Request $request,
         ResultadoConsultaService $consultaService,
         RelatorioAlunoService $relatorioService,
+        AnaliseConsolidadaService $analiseService,
         VisualizacaoConfigService $visualizacaoConfig,
     ): View|RedirectResponse {
         $aluno = $this->alunoAutenticado();
@@ -342,20 +348,46 @@ class PortalController extends Controller
         $respostas = $resultado['respostas'];
         $gabaritos = $resultado['gabaritos'];
 
+        // Período do aluno NESTA prova (o da planilha de resultados): decide quais questões ele precisava acertar.
+        $periodoAluno = PeriodoCurso::ordinal($resultado['periodo']);
+        $questoesAFrente = $periodoAluno === null ? 0 : Anulacao::excluirDistribuidas(
+            Questao::where('avaliacao_codigo', $avaliacao->codigo)
+                ->whereNotNull('gabarito')->where('gabarito', '!=', '')
+                ->where('periodo_minimo', '>', $periodoAluno)
+        )->count();
+
+        $desempenhoAreaMeta = $visivel('desempenho_area') ? $relatorioService->desempenhoPorAreaComMeta($respostas, $gabaritos, $avaliacao, $periodoAluno) : null;
+        $trilhaEstudo = $visivel('trilha_estudo') ? $relatorioService->trilhaDeEstudo($respostas, $gabaritos, $avaliacao, 6, $periodoAluno) : null;
+
+        // Resultado geral x esperado para o período do aluno nesta prova (60% quando a prova não traz a meta).
+        $meta = $analiseService->metaPorPeriodo($aluno, [$avaliacao->codigo]);
+        $daProva = $meta['avaliacoes'][0] ?? null;
+
+        // Cada trecho da leitura só usa o que o aluno PODE ver nesta avaliação (a configuração de visuais vale também aqui).
+        $leituraDaProva = LeituraDaProva::gerar([
+            'percentual' => $estado['nota_geral']['visivelAluno'] ? ($resultado['percentual'] ?? $daProva['percentual'] ?? null) : null,
+            'minimo' => $daProva['minimo'] ?? AnaliseConsolidadaService::MINIMO_PADRAO,
+            'comMeta' => $daProva['comMeta'] ?? false,
+            'periodoAluno' => $periodoAluno,
+            'areas' => $desempenhoAreaMeta ?? [],
+            'bloom' => $visivel('desempenho_bloom') ? $relatorioService->desempenhoPorBloomComContagem($respostas, $gabaritos, $avaliacao) : [],
+            'adiante' => $meta['adiante'] ?? ['total' => 0, 'acertos' => 0],
+            'temTrilha' => ! empty($trilhaEstudo),
+        ]);
+
         return view('portal.resultado-avaliacao', [
             'aluno' => $aluno,
             'r' => $resultado,
             'estado' => $estado,
-            'comparativoTurma' => $visivel('comparativo_turma') ? $relatorioService->comparativoTurma($aluno, $avaliacao, $periodo) : null,
-            'rankingPercentil' => $visivel('ranking_percentil') ? $relatorioService->rankingPercentil($aluno, $avaliacao, $periodo) : null,
+            'periodoAluno' => $periodoAluno,
+            'questoesAFrente' => $questoesAFrente,
             'radarDisciplina' => $visivel('radar_disciplina') ? $relatorioService->radarDisciplina($respostas, $gabaritos, $avaliacao) : null,
-            'desempenhoArea' => $visivel('desempenho_area') ? $relatorioService->desempenhoPorArea($respostas, $gabaritos, $avaliacao) : null,
+            'desempenhoAreaMeta' => $desempenhoAreaMeta,
+            'leituraDaProva' => $leituraDaProva,
             'desempenhoAreaContagem' => $visivel('desempenho_area') ? $relatorioService->desempenhoPorAreaComContagem($respostas, $gabaritos, $avaliacao) : null,
-            'lacunasConsolidados' => $visivel('lacunas_conhecimentos') ? $relatorioService->lacunasEConsolidados($respostas, $gabaritos, $avaliacao) : null,
-            'trilhaEstudo' => $visivel('trilha_estudo') ? $relatorioService->trilhaDeEstudo($respostas, $gabaritos, $avaliacao) : null,
-            'desempenhoBloom' => $visivel('desempenho_bloom') ? $relatorioService->desempenhoPorBloom($respostas, $gabaritos, $avaliacao) : null,
+            'lacunasConsolidados' => $visivel('lacunas_conhecimentos') ? $relatorioService->lacunasEConsolidados($respostas, $gabaritos, $avaliacao, $periodoAluno) : null,
+            'trilhaEstudo' => $trilhaEstudo,
             'desempenhoMiller' => $visivel('desempenho_miller') ? $relatorioService->desempenhoPorMiller($respostas, $gabaritos, $avaliacao) : null,
-            'comparativoQuestao' => $visivel('comparativo_questao') ? $relatorioService->comparativoQuestao($avaliacao, $periodo, $respostas, $gabaritos) : null,
         ]);
     }
 
@@ -423,20 +455,20 @@ class PortalController extends Controller
             ? $todos
             : collect($todos)->filter(fn ($r) => $r['periodo_letivo'] === $periodoSelecionado)->values()->all();
 
-        $comPercentual = collect($resultados)->pluck('percentual')->filter(fn ($p) => $p !== null);
         $arvore = $consultaService->montarArvore($resultados);
         $avaliacaoCodigos = collect($resultados)->pluck('avaliacao.codigo')->unique()->values()->all();
 
-        // Estas duas continuam calculadas pro PERÍODO INTEIRO só porque
-        // InsightService::gerar() usa (comparativo geral com a turma,
-        // habilidade mais fraca/forte do período) — não são mais renderizadas
-        // como seção própria: cada categoria agora tem a sua, escopada só às
-        // avaliações dela (ver anexarAnaliseNaArvore()), pra não misturar
-        // categorias diferentes numa tela só nem virar uma tela só de gráficos
-        // quando o aluno tem muito resultado.
+        // Estas continuam calculadas pro PERÍODO INTEIRO só porque
+        // InsightService::gerar() usa (habilidade mais fraca/forte, nível de
+        // Bloom mais difícil) — não são renderizadas como seção própria: cada
+        // categoria tem a sua, escopada só às avaliações dela (ver
+        // anexarAnaliseNaArvore()), pra não misturar categorias diferentes
+        // numa tela só nem virar uma tela só de gráficos quando o aluno tem
+        // muito resultado. O boletim não compara o aluno com a turma nos
+        // cards de resumo.
         $evolucaoPorCategoria = $relatorioService->evolucaoPorCategoria($resultados);
-        $comparativoTurmaConsolidado = $relatorioService->comparativoTurmaConsolidado($aluno, $resultados);
         $coberturaHabilidade = $analiseService->coberturaHabilidade($aluno, $avaliacaoCodigos);
+        $bloom = $analiseService->bloomComContagem($aluno, $avaliacaoCodigos);
 
         $evolucaoPorCategoriaPorId = [];
         foreach ($evolucaoPorCategoria as $cat) {
@@ -448,7 +480,6 @@ class PortalController extends Controller
             $aluno,
             $arvore['arvore'],
             $evolucaoPorCategoriaPorId,
-            $relatorioService,
             $analiseService,
             $explicacaoService,
             $temAnaliseNaArvore,
@@ -457,11 +488,9 @@ class PortalController extends Controller
         return view('portal.resultados', [
             'aluno' => $aluno,
             'totalAvaliacoes' => count($resultados),
-            'mediaGeral' => $comPercentual->isNotEmpty() ? round($comPercentual->avg(), 1) : null,
             'periodosDisponiveis' => $periodosDisponiveis,
             'periodoSelecionado' => $periodoSelecionado,
-            'insights' => $insightService->gerar($aluno, $resultados, $evolucaoPorCategoria, $comparativoTurmaConsolidado, $coberturaHabilidade),
-            'resumoPorCategoria' => $consultaService->resumoPorCategoria($arvore['arvore']),
+            'insights' => $insightService->gerar($aluno, $resultados, $evolucaoPorCategoria, $coberturaHabilidade, $bloom),
             'temAnaliseNaArvore' => $temAnaliseNaArvore,
             ...$arvore,
         ]);
@@ -469,8 +498,8 @@ class PortalController extends Controller
 
     /**
      * Anexa, em CADA nó da árvore de categorias (montarArvore()), a evolução
-     * histórica e a análise consolidada (dificuldade, TRI, habilidade, Bloom/
-     * Miller, comparativo com turma, áreas divergentes) escopadas só às
+     * histórica, o acerto x esperado para o período do aluno e a análise consolidada (TRI, habilidade, Miller)
+     * escopadas só às
      * avaliações DAQUELE nó — mesmos serviços que antes calculavam isso pro
      * período inteiro (misturando categorias diferentes na mesma seção da
      * tela). Um nó "pasta" (só com subcategorias, sem avaliação própria) não
@@ -485,7 +514,6 @@ class PortalController extends Controller
         Aluno $aluno,
         array $nos,
         array $evolucaoPorCategoriaPorId,
-        RelatorioAlunoService $relatorioService,
         AnaliseConsolidadaService $analiseService,
         ExplicacaoVisualService $explicacaoService,
         bool &$temAlgumaAnalise,
@@ -498,15 +526,15 @@ class PortalController extends Controller
             // logo abaixo e ligaria a seção de análise sem nada dentro.
             $mapaDominio = $analiseService->mapaDominio($aluno, $avaliacaoCodigos);
 
+            $metaPeriodo = $analiseService->metaPorPeriodo($aluno, $avaliacaoCodigos);
+
             $no['analise'] = [
                 'evolucaoHistorica' => $evolucaoPorCategoriaPorId[$no['categoria']->id] ?? [],
-                'comparativoTurma' => $relatorioService->comparativoTurmaConsolidado($aluno, $no['resultados']),
-                'curvaDificuldade' => $analiseService->curvaDificuldadePedagogica($aluno, $avaliacaoCodigos),
+                'metaPeriodo' => $metaPeriodo,
+                'leituraRapida' => LeituraMetaPeriodo::gerar($metaPeriodo),
                 'dispersaoTri' => $analiseService->dispersaoTri($aluno, $avaliacaoCodigos),
                 'coberturaHabilidade' => $analiseService->coberturaHabilidade($aluno, $avaliacaoCodigos),
-                'bloom' => $analiseService->desempenhoBloomConsolidado($aluno, $avaliacaoCodigos),
                 'miller' => $analiseService->desempenhoMillerConsolidado($aluno, $avaliacaoCodigos),
-                'divergentes' => $analiseService->areasDivergentesDaTurma($aluno, $avaliacaoCodigos),
                 'mapaDominio' => $mapaDominio['areas'] === [] ? null : $mapaDominio,
             ];
 
@@ -521,7 +549,6 @@ class PortalController extends Controller
                     $aluno,
                     $no['subcategorias'],
                     $evolucaoPorCategoriaPorId,
-                    $relatorioService,
                     $analiseService,
                     $explicacaoService,
                     $temAlgumaAnalise,

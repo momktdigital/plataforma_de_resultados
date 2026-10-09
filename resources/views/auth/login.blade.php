@@ -31,7 +31,7 @@
             </div>
         @endif
 
-        {{-- Administrador entra com usuário e senha; coordenador e reitor, com um código enviado ao e-mail — ou, se tiverem senha, também com ela. --}}
+        {{-- Administrador entra com usuário e senha; coordenador, reitor e colaborador, com um código enviado ao e-mail — ou, se tiverem senha, também com ela. --}}
         @php $abaCoordenador = in_array($modo, ['codigo', 'coordenador'], true); @endphp
         <div class="grid grid-cols-2 gap-1 p-1 mb-6 bg-slate-900 rounded-xl border border-slate-700" role="tablist" aria-label="Tipo de acesso">
             <a href="{{ route('login') }}" role="tab" aria-selected="{{ $modo === 'senha' ? 'true' : 'false' }}"

@@ -27,6 +27,7 @@ class Questao extends Model
         'miller_nivel',
         'dificuldade_pedagogica',
         'dificuldade_tri',
+        'periodo_minimo',
     ];
 
     protected static function booted(): void
@@ -43,6 +44,7 @@ class Questao extends Model
         return [
             'numero' => 'integer',
             'dificuldade_tri' => 'decimal:4',
+            'periodo_minimo' => 'integer',
         ];
     }
 

@@ -6,7 +6,7 @@
 @php
     $nomeMenu = $usuarioLogado->username;
     $inicialMenu = mb_strtoupper(mb_substr($nomeMenu, 0, 1));
-    $papelMenu = $usuarioLogado->emVisaoDeCurso ? 'Reitor (visão do curso)' : ($usuarioLogado->ehReitor() ? 'Reitor' : ($usuarioLogado->ehCoordenador() ? 'Coordenador' : 'Administrador'));
+    $papelMenu = $usuarioLogado->emVisaoDeCurso ? 'Reitor (visão do curso)' : ($usuarioLogado->ehReitor() ? 'Reitor' : ($usuarioLogado->ehCoordenador() ? 'Coordenador' : ($usuarioLogado->ehColaborador() ? 'Colaborador' : 'Administrador')));
 @endphp
 <div class="relative" id="menu-usuario">
     <button type="button" id="menu-usuario-botao" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-usuario-lista"

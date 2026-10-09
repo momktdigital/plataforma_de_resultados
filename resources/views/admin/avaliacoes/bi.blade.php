@@ -29,8 +29,6 @@
 
 @include('admin.avaliacoes.bi._heatmap-habilidade')
 
-@include('admin.avaliacoes.bi._perfil-e-equidade')
-
 @include('admin.avaliacoes.bi._desempenho-area')
 
 @include('admin.avaliacoes.bi._desempenho-tema')
@@ -41,9 +39,10 @@
 
 @include('admin.avaliacoes.bi._correlacao-metricas')
 
-@include('admin.avaliacoes.bi._evolucao-categoria')
-
 @include('admin.avaliacoes.bi._alinhamento-referencias')
+
+{{-- A análise demográfica fica no fim do Dashboard. --}}
+@include('admin.avaliacoes.bi._perfil-e-equidade')
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"></script>
 @include('_viz')
@@ -53,12 +52,10 @@
 <script>
 @include('admin.avaliacoes.bi.scripts._comparacao')
 @include('admin.avaliacoes.bi.scripts._histograma-radar')
-@include('admin.avaliacoes.bi.scripts._area')
 @include('admin.avaliacoes.bi.scripts._turma')
 @include('admin.avaliacoes.bi.scripts._tri')
 @include('admin.avaliacoes.bi.scripts._bloom-miller')
 @include('admin.avaliacoes.bi.scripts._perfil-demografico')
-@include('admin.avaliacoes.bi.scripts._evolucao')
 @include('admin.avaliacoes.bi.scripts._ordenacao-alternativas')
 </script>
 @include('admin.avaliacoes.bi.scripts._lista-alunos')

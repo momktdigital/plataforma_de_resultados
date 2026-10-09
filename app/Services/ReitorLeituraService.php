@@ -84,9 +84,9 @@ class ReitorLeituraService
             'itens_lista' => 'Os itens com diagnóstico, do mais urgente (gabarito suspeito) ao menos. Em avaliações com estudantes de vários cursos, o acerto por curso mostra se o problema é da questão (baixo em todos) ou de um curso. O nome da avaliação abre o Dashboard dela (visão do coordenador). Itens com menos de {minimo_itens} respostas não são diagnosticados.',
             'itens_areas' => 'Percentual de itens com diagnóstico em cada área (campo "área" da questão). Uma área com muitos itens a revisar pede revisão das questões ou reforço do conteúdo, conforme o diagnóstico predominante.',
             'itens_avaliacoes' => 'Para cada avaliação do recorte: cursos com respondentes, confiabilidade (KR-20, de 0 a 1: acima de 0,70 é aceitável para a prova como um todo) e quantos itens têm diagnóstico.',
-            'risco_cursos' => 'Estudantes em risco, só em agregado (os nomes ficam com o coordenador do curso). "Elegível" é o estudante com resultado em duas ou mais aplicações do recorte: sem isso não dá para falar em recorrência. "Ausência recorrente": prova inteira em branco em duas ou mais aplicações. "Baixo desempenho persistente": presente em duas ou mais e abaixo do critério ({corte}%) em todas em que esteve presente. "Em risco" é um ou outro. Grupos com menos de {minimo_risco} elegíveis não mostram percentual (identificaria gente). O estudante é contado pelo cadastro; sem vínculo com o cadastro, chaves diferentes (CPF e RA) contam como pessoas diferentes, o que subestima a recorrência.',
-            'risco_grafico' => 'Compara os cursos nas duas situações de risco: ausência recorrente (faltou a duas ou mais aplicações) e baixo desempenho persistente (abaixo do critério em todas as aplicações a que compareceu). Os dois podem coexistir na mesma pessoa; o "em risco" da tabela conta cada pessoa uma vez.',
-            'risco_mapa' => 'Percentual de estudantes em risco por curso e período do curso. Células vazias: menos de {minimo_risco} estudantes elegíveis. Mostra em que ponto da trajetória o risco se concentra.',
+            'risco_cursos' => 'Estudantes em risco, só em agregado (os nomes ficam com o coordenador do curso). "Em risco" é o estudante que se enquadra na regra de risco da instituição (definida pela administração em Configurações; cada avaliação pode ter a sua): média de acerto abaixo de um limite e/ou número de faltas (prova inteira em branco), combinados por "ou" ou "e". É a mesma regra da lista de alunos em atenção do coordenador. "Por faltas" e "por acerto" mostram cada critério separado: os dois podem coexistir na mesma pessoa, e o "em risco" a conta uma vez. Grupos com menos de {minimo_risco} estudantes não mostram percentual (identificaria gente). O estudante é contado pelo cadastro; sem vínculo com o cadastro, chaves diferentes (CPF e RA) contam como pessoas diferentes, o que subestima as faltas.',
+            'risco_grafico' => 'Compara os cursos nos dois critérios da regra de risco: o percentual de estudantes que atingem o limite de faltas e o dos que ficam com média de acerto abaixo do limite. Os dois podem coexistir na mesma pessoa; o "em risco" da tabela conta cada pessoa uma vez. Um critério desligado na regra não aparece.',
+            'risco_mapa' => 'Percentual de estudantes em risco por curso e período do curso. Células vazias: menos de {minimo_risco} estudantes. Mostra em que ponto da trajetória o risco se concentra.',
             'evolucao_cursos' => 'Variação de cada curso entre o período letivo anterior e o selecionado, em pontos percentuais. Verde: melhorou; vermelho: piorou. Variações pequenas (menos de 3 pp) ficam em cinza: numa turma de poucas dezenas de estudantes, isso é ruído.',
         ];
 
@@ -95,7 +95,7 @@ class ReitorLeituraService
             '{meta}' => $m,
             '{minimo}' => (string) ReitorDashboardService::MINIMO_PERIODO,
             '{minimo_respostas}' => (string) ReitorCompetenciasService::MINIMO_RESPOSTAS,
-            '{minimo_risco}' => (string) ReitorRiscoService::MINIMO_ELEGIVEIS,
+            '{minimo_risco}' => (string) ReitorRiscoService::MINIMO_PESSOAS,
             '{d_minimo}' => number_format(Psicometria::D_MINIMO_ACEITAVEL, 2, ',', ''),
             '{acerto_baixo}' => (string) (int) ReitorItensService::ACERTO_MUITO_BAIXO,
             '{minimo_itens}' => (string) ReitorItensService::MINIMO_RESPOSTAS,
@@ -451,14 +451,22 @@ class ReitorLeituraService
     public function leiturasDeRisco(array $risco): array
     {
         $total = $risco['total'];
-        if (! $risco['temRecorrencia']) {
-            return ['risco_cursos' => ['tom' => 'atencao', 'texto' => 'Neste recorte quase nenhum estudante tem resultado em duas ou mais aplicações ('.$total['elegiveis'].' elegíveis), então não há como medir recorrência. Escolha uma categoria com várias aplicações (como os simulados) ou "Todos os períodos".']];
+        $regra = $risco['regra'];
+        if (! $risco['temDados']) {
+            return ['risco_cursos' => ['tom' => 'atencao', 'texto' => 'Neste recorte há poucos estudantes ('.$total['pessoas'].') para mostrar percentuais. Escolha uma categoria com mais avaliações ou "Todos os períodos".']];
         }
 
         $cursos = collect($risco['cursos'])->filter(fn ($c) => $c['pctRisco'] !== null)->sortByDesc('pctRisco')->values();
         $tom = $total['pctRisco'] === null ? null : ($total['pctRisco'] < 10 ? 'bom' : ($total['pctRisco'] < 25 ? 'atencao' : 'ruim'));
-        $texto = self::pct($total['pctRisco']).'% dos estudantes elegíveis ('.$total['risco'].' de '.$total['elegiveis'].') estão em risco: '
-            .self::pct($total['pctRecorrente']).'% com ausência recorrente e '.self::pct($total['pctPersistente']).'% com baixo desempenho persistente.';
+        $texto = self::pct($total['pctRisco']).'% dos estudantes ('.$total['risco'].' de '.$total['pessoas'].') estão em risco pela regra da instituição ('.$regra['descricao'].')';
+        $partes = [];
+        if ($regra['faltas'] !== null) {
+            $partes[] = self::pct($total['pctPorFalta']).'% pelas faltas';
+        }
+        if ($regra['acertoAtivo']) {
+            $partes[] = self::pct($total['pctPorAcerto']).'% pelo acerto';
+        }
+        $texto .= $partes === [] ? '.' : ': '.implode(' e ', $partes).'.';
         if ($cursos->count() >= 2) {
             $texto .= " O maior risco é o de {$cursos->first()['nome']} (".self::pct($cursos->first()['pctRisco'])."%) e o menor o de {$cursos->last()['nome']} (".self::pct($cursos->last()['pctRisco']).'%).';
         }
@@ -467,10 +475,15 @@ class ReitorLeituraService
         }
         $texto .= ' (Referência do tom: abaixo de 10% bom, 10–24% atenção, acima disso precisa de ação.)';
 
-        $recorrente = collect($risco['cursos'])->filter(fn ($c) => $c['pctRecorrente'] !== null)->sortByDesc('pctRecorrente')->first();
-        $persistente = collect($risco['cursos'])->filter(fn ($c) => $c['pctPersistente'] !== null)->sortByDesc('pctPersistente')->first();
-        $grafico = ($recorrente !== null ? "A maior ausência recorrente é a de {$recorrente['nome']} (".self::pct($recorrente['pctRecorrente']).'%)' : 'Sem curso com elegíveis suficientes')
-            .($persistente !== null ? "; o maior baixo desempenho persistente, o de {$persistente['nome']} (".self::pct($persistente['pctPersistente']).'%).' : '.');
+        $porFalta = collect($risco['cursos'])->filter(fn ($c) => $c['pctPorFalta'] !== null)->sortByDesc('pctPorFalta')->first();
+        $porAcerto = collect($risco['cursos'])->filter(fn ($c) => $c['pctPorAcerto'] !== null)->sortByDesc('pctPorAcerto')->first();
+        $grafico = [];
+        if ($regra['faltas'] !== null) {
+            $grafico[] = $porFalta !== null ? "O maior percentual por faltas é o de {$porFalta['nome']} (".self::pct($porFalta['pctPorFalta']).'%)' : 'Sem curso com estudantes suficientes para as faltas';
+        }
+        if ($regra['acertoAtivo']) {
+            $grafico[] = $porAcerto !== null ? "o maior por acerto, o de {$porAcerto['nome']} (".self::pct($porAcerto['pctPorAcerto']).'%)' : 'sem curso com estudantes suficientes para o acerto';
+        }
 
         $maior = null;
         foreach ($risco['cursos'] as $c) {
@@ -483,8 +496,8 @@ class ReitorLeituraService
 
         return [
             'risco_cursos' => ['tom' => $tom, 'texto' => $texto],
-            'risco_grafico' => ['tom' => null, 'texto' => $grafico],
-            'risco_mapa' => ['tom' => null, 'texto' => $maior === null ? 'Sem períodos do curso com elegíveis suficientes.' : "O maior risco do mapa é o de {$maior['curso']} no {$maior['rotulo']} período (".self::pct($maior['pct']).'%).'],
+            'risco_grafico' => ['tom' => null, 'texto' => $grafico === [] ? 'Nenhum critério de risco ligado.' : implode('; ', $grafico).'.'],
+            'risco_mapa' => ['tom' => null, 'texto' => $maior === null ? 'Sem períodos do curso com estudantes suficientes.' : "O maior risco do mapa é o de {$maior['curso']} no {$maior['rotulo']} período (".self::pct($maior['pct']).'%).'],
         ];
     }
 

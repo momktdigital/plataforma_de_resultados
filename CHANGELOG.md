@@ -20,6 +20,11 @@ linha, veja `git log`.
 - Categorias em árvore para agrupar avaliações no boletim do portal.
 - Status de avaliação (Ativa/Anulada) e exclusão em massa de questões.
 - Dashboard de BI com filtro por avaliação e gráficos (Chart.js).
+- **Meta por período (`questoes.periodo_minimo`)**: cada questão pode indicar o período
+  do curso a partir do qual se espera que o aluno acerte (3 = 3º período em diante;
+  vazio = vale para todos). Editável no formulário da questão, importado/exportado na
+  planilha ("Período mínimo") e listado na tabela e na impressão. Alimenta o gráfico acerto x esperado do boletim —
+  não altera acerto, nota nem resumos.
 
 ## Portal público do aluno
 
@@ -27,6 +32,18 @@ linha, veja `git log`.
   (código de 6 dígitos, expiração, limite de tentativas e bloqueio por IP).
 - CAPTCHA opcional (reCAPTCHA ou hCaptcha) na consulta.
 - Boletim por avaliação com exportação em PDF (html2pdf).
+- Tour guiado na primeira visita do boletim e do detalhe da avaliação (a tela de login não tem), com "Refazer tour da
+  página" no rodapé. O link da área administrativa ficou só na tela de login do aluno.
+- Boletim sem "média geral" no card do topo, sem comparação com a turma nos cards de
+  resumo e com percentuais em vez de "pontos". Novo card explicativo de Bloom e, em cada
+  categoria, gráfico de rendimento (acerto total) x mínimo esperado por avaliação (meta
+  `questoes.periodo_minimo`; 60% quando a prova não tem a meta) com "Leitura rápida" — substitui "Você x turma",
+  "Dificuldade pedagógica", "Nível de Bloom" e "Áreas onde você mais diverge da turma". O mapa de
+  domínio por área mostra o mínimo esperado em cada célula (amarelo abaixo, 60% sem a meta).
+- Detalhe da avaliação sem "Comparativo com a turma", "Posição relativa" e "Sua resposta x turma"; "Desempenho por
+  área" em barras com a meta de cada área; trilha de estudo e lacunas/consolidados só com as questões que o aluno
+  precisava acertar pelo período dele. O gráfico de nível de Bloom saiu dessa tela e deu lugar a "Como você foi nesta
+  prova", uma leitura em palavras simples (resultado, áreas, tipo de pergunta, questões de períodos à frente).
 - Regeneração de sessão no login e invalidação completa no logout.
 
 ## Administração
@@ -89,6 +106,20 @@ linha, veja `git log`.
 - Páginas de erro (404/403/500) com a identidade visual do sistema, em vez
   da página padrão do Laravel.
 
+## Perfil de colaborador e cronograma de atividades
+
+- **Colaborador** (`admins.role = 'collaborator'`, nova aba em Usuários; migration acrescenta o valor ao ENUM do banco
+  legado): monta o cronograma da checklist de auditoria ROC/ROD e registra as pendências. Entra por código no e-mail; não vê
+  resultados nem alunos.
+- **Cronograma**: o colaborador cadastra atividades (data, rotina ROD/ROC/Auditoria, projeto, o que conferir) e marca os cursos a
+  que se aplicam, cada um com a sua situação. O calendário do coordenador (`/cronograma`) mostra só as atividades dos cursos dele.
+- **Lista com filtros** além do calendário (coordenador e colaborador): busca, rotina, situação, curso e intervalo de datas, paginada.
+- O colaborador pode **excluir pendências** (o conteúdo fica na auditoria).
+- **Carga pela planilha**: `php artisan cronograma:importar` (simulação por padrão, `--gravar` para valer) importa o checklist e o
+  registro de pendências da "Tabela-base da Auditoria ROC/ROD", com mapa de colunas para cursos; repetível sem duplicar.
+- **Pendências** vinculadas à atividade e ao curso (pendência, encaminhamento, prazo, situação, responsável): o colaborador registra,
+  o coordenador só visualiza; ficam como histórico e tudo vai para a auditoria.
+
 ## Perfil de reitor e painel da reitoria
 
 - Novo perfil **reitor** (`admins.role = rector`): só leitura, todos os cursos,
@@ -114,8 +145,14 @@ linha, veja `git log`.
   cursos juntos, em **minigráficos** (um por curso, mesma escala) ou **um curso** só.
 - **Análise dos itens** (institucional): mapa acerto × discriminação, gabarito
   suspeito, problema da questão × lacuna de formação, por área e por avaliação.
-- **Estudantes em risco** (agregado): ausência recorrente e baixo desempenho
-  persistente por curso e período do curso, com tendência.
+- **Estudantes em risco** (agregado): por faltas, por acerto e no total, por curso e
+  período do curso, com tendência.
+- **Regra de "estudante em risco" definida pela administração** (Configurações →
+  Estudante em risco): percentual de acerto e/ou faltas, combinados por "ou"/"e", com
+  sobreposição por avaliação (limite de acerto próprio, dispensa de falta). Vale para a
+  lista de alunos em atenção do coordenador, para as notificações e para o painel da
+  reitoria — os dois contam as mesmas pessoas. Substitui o "ausência recorrente" e o
+  "baixo desempenho persistente" fixos do painel.
 - **Drill-down** nos gráficos e tabelas (abre a análise do curso no recorte
   clicado) e pontos de atenção que apontam para o quadro de origem.
 - **Ver como tabela** em todos os gráficos, com cópia para planilha.
@@ -138,17 +175,29 @@ linha, veja `git log`.
 
 - Saudação (Bom dia/Boa tarde/Boa noite) e navegação por abas: Visão geral,
   Alunos do curso, Desempenho e Avaliações.
-- Visão geral com alunos que precisam de atenção (e o motivo), situação dos
-  alunos, avaliações recentes e alunos por período do curso.
+- Visão geral com avaliações recentes e alunos por período do curso. Sem a lista "Alunos que precisam de atenção", sem o
+  quadro "Situação dos alunos" e sem "Em atenção" na faixa verde (o cartão "Precisam de atenção" continua, com a regra em
+  vigor e o link para a lista). Avaliações recentes ganharam "Dentro do esperado" (alunos que alcançaram o mínimo do
+  período deles, ex.: 5 (20%); sem a meta na prova, só a média) e alunos por período ganhou o % de acerto.
 - Lista dos alunos do curso por semestre (busca, filtros, ordenação,
   planilha .xlsx) e ficha individual (nota vs. média do curso, posição,
   evolução, áreas e matrículas).
-- O detalhamento por categoria foi para a aba Desempenho.
-- Comparar semestres: média, abaixo de 60%, presença, áreas e período do curso
-  de dois períodos letivos, por categoria, e os mesmos alunos pareados (quem
-  subiu, ficou estável ou caiu).
+- O detalhamento por categoria foi para a aba Desempenho. Nela, cada categoria virou um dropdown, com filtros de
+  categoria e período do curso, "alunos abaixo do desempenho esperado" (ou abaixo de 60% sem a meta), evolução dos alunos
+  que atingiram o esperado, gráficos de área, Bloom e tema com abas Geral/Por período, e a tabela de avaliações no fim.
+- Comparar semestres: média, alunos abaixo do esperado (ou de 60%), presença, áreas e
+  período do curso de dois períodos letivos, por categoria, com filtros de categoria e
+  período do curso; e, por período do curso, quantos alunos atingiram o esperado em cada
+  semestre (subiu, estável ou caiu). Menu na ordem Visão geral, Desempenho, Avaliações,
+  Comparar semestres, Alunos.
 - Notificações do coordenador (novos resultados, média em queda, presença
   baixa, alunos que passaram a precisar de atenção), com sino, marcar como lida
   e avisos do navegador com o sistema aberto.
 - Destaques da visão geral agora agrupados por categoria, e números dos
   insights no formato brasileiro (vírgula).
+
+## Dashboard da avaliação
+
+- Link do gabarito no cabeçalho; coluna "Acertos dentro do esperado" na lista de alunos; desempenho por área sem a teia; filtro de área na análise de
+  alternativas; análise demográfica no fim; sem "Evolução da média na categoria"; forma de ingresso (da planilha de alunos) no perfil demográfico e na
+  equidade.

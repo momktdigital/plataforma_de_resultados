@@ -21,7 +21,7 @@ class ExplicacaoVisualServiceTest extends TestCase
         $resultado = $this->service->gerar($this->analiseVazia());
 
         $this->assertSame(
-            ['evolucaoHistorica', 'comparativoTurma', 'curvaDificuldade', 'dispersaoTri', 'coberturaHabilidade', 'bloom', 'miller', 'divergentes', 'mapaDominio'],
+            ['evolucaoHistorica', 'metaPeriodo', 'dispersaoTri', 'coberturaHabilidade', 'miller', 'mapaDominio'],
             array_keys($resultado)
         );
         foreach ($resultado as $chave => $entrada) {
@@ -66,71 +66,13 @@ class ExplicacaoVisualServiceTest extends TestCase
         $this->assertStringContainsString('atenção', $pessoal);
     }
 
-    public function test_comparativo_turma_null_nao_tem_leitura_pessoal(): void
+    public function test_meta_periodo_explica_a_linha_tracejada_sem_repetir_a_leitura_rapida(): void
     {
-        $entrada = $this->service->gerar($this->analiseVazia())['comparativoTurma'];
+        $entrada = $this->service->gerar($this->analiseVazia())['metaPeriodo'];
 
+        $this->assertStringContainsString('linha tracejada', $entrada['generico']);
         $this->assertNull($entrada['pessoal']);
     }
-
-    public function test_comparativo_turma_acima_da_media(): void
-    {
-        $analise = $this->analiseVazia();
-        $analise['comparativoTurma'] = ['turma' => 'Turma A', 'suaMedia' => 70.0, 'mediaTurma' => 60.0, 'avaliacoesComparadas' => 3];
-
-        $pessoal = $this->service->gerar($analise)['comparativoTurma']['pessoal'];
-
-        $this->assertStringContainsString('acima', $pessoal);
-        $this->assertStringContainsString('10', $pessoal);
-    }
-
-    public function test_comparativo_turma_abaixo_da_media(): void
-    {
-        $analise = $this->analiseVazia();
-        $analise['comparativoTurma'] = ['turma' => 'Turma A', 'suaMedia' => 50.0, 'mediaTurma' => 65.0, 'avaliacoesComparadas' => 3];
-
-        $pessoal = $this->service->gerar($analise)['comparativoTurma']['pessoal'];
-
-        $this->assertStringContainsString('abaixo', $pessoal);
-        $this->assertStringContainsString('15', $pessoal);
-    }
-
-    public function test_curva_dificuldade_sem_facil_ou_dificil_nao_tem_leitura_pessoal(): void
-    {
-        $analise = $this->analiseVazia();
-        $analise['curvaDificuldade'] = ['medio' => ['label' => 'Médio', 'percentual' => 50.0, 'respostas' => 10]];
-
-        $entrada = $this->service->gerar($analise)['curvaDificuldade'];
-
-        $this->assertNull($entrada['pessoal']);
-    }
-
-    public function test_curva_dificuldade_dentro_do_esperado(): void
-    {
-        $analise = $this->analiseVazia();
-        $analise['curvaDificuldade'] = [
-            'facil' => ['label' => 'Fácil', 'percentual' => 80.0, 'respostas' => 10],
-            'dificil' => ['label' => 'Difícil', 'percentual' => 40.0, 'respostas' => 10],
-        ];
-
-        $pessoal = $this->service->gerar($analise)['curvaDificuldade']['pessoal'];
-
-        $this->assertStringContainsString('dentro do esperado', $pessoal);
-    }
-
-    public function test_curva_dificuldade_fora_do_padrao_quando_facil_e_menor(): void
-    {
-        $analise = $this->analiseVazia();
-        $analise['curvaDificuldade'] = [
-            'facil' => ['label' => 'Fácil', 'percentual' => 30.0, 'respostas' => 10],
-            'dificil' => ['label' => 'Difícil', 'percentual' => 70.0, 'respostas' => 10],
-        ];
-
-        $pessoal = $this->service->gerar($analise)['curvaDificuldade']['pessoal'];
-
-        $this->assertStringContainsString('foge do padrão', $pessoal);
-    }
-
     public function test_dispersao_tri_vazia_nao_tem_leitura_pessoal(): void
     {
         $entrada = $this->service->gerar($this->analiseVazia())['dispersaoTri'];
@@ -252,47 +194,17 @@ class ExplicacaoVisualServiceTest extends TestCase
         $this->assertStringContainsString('50', $pessoal);
     }
 
-    public function test_bloom_e_miller_tem_explicacoes_genericas_diferentes(): void
-    {
-        $resultado = $this->service->gerar($this->analiseVazia());
-
-        $this->assertStringContainsString('Bloom', $resultado['bloom']['generico']);
-        $this->assertStringContainsString('Miller', $resultado['miller']['generico']);
-        $this->assertNotSame($resultado['bloom']['generico'], $resultado['miller']['generico']);
-    }
-
     public function test_nivel_cognitivo_identifica_pior_e_melhor_nivel(): void
     {
         $analise = $this->analiseVazia();
-        $analise['bloom'] = ['Lembrar' => 80.0, 'Aplicar' => 40.0];
+        $analise['miller'] = ['Sabe' => 80.0, 'Faz' => 40.0];
 
-        $pessoal = $this->service->gerar($analise)['bloom']['pessoal'];
+        $entrada = $this->service->gerar($analise)['miller'];
 
-        $this->assertStringContainsString('Aplicar', $pessoal);
-        $this->assertStringContainsString('Lembrar', $pessoal);
+        $this->assertStringContainsString('Miller', $entrada['generico']);
+        $this->assertStringContainsString('Faz', $entrada['pessoal']);
+        $this->assertStringContainsString('Sabe', $entrada['pessoal']);
     }
-
-    public function test_divergentes_vazio_nao_tem_leitura_pessoal(): void
-    {
-        $entrada = $this->service->gerar($this->analiseVazia())['divergentes'];
-
-        $this->assertNull($entrada['pessoal']);
-    }
-
-    public function test_divergentes_cita_a_area_com_maior_diferenca(): void
-    {
-        $analise = $this->analiseVazia();
-        $analise['divergentes'] = [
-            ['area' => 'Clínica Médica', 'percentualAluno' => 40.0, 'percentualTurma' => 75.0, 'diferenca' => 35.0],
-        ];
-
-        $pessoal = $this->service->gerar($analise)['divergentes']['pessoal'];
-
-        $this->assertStringContainsString('Clínica Médica', $pessoal);
-        $this->assertStringContainsString('40', $pessoal);
-        $this->assertStringContainsString('75', $pessoal);
-    }
-
     public function test_mapa_dominio_aponta_consolidacao_e_queda(): void
     {
         $analise = $this->analiseVazia();
@@ -348,13 +260,9 @@ class ExplicacaoVisualServiceTest extends TestCase
     {
         return [
             'evolucaoHistorica' => [],
-            'comparativoTurma' => null,
-            'curvaDificuldade' => [],
             'dispersaoTri' => [],
             'coberturaHabilidade' => [],
-            'bloom' => [],
             'miller' => [],
-            'divergentes' => [],
             'mapaDominio' => null,
         ];
     }

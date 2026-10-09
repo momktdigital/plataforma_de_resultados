@@ -59,6 +59,12 @@ class CoordenadorDashboardService
     /** Áreas com menos respostas que isto não entram no ranking (amostra pequena demais). */
     private const MINIMO_RESPOSTAS_AREA = 30;
 
+    /** Respostas mínimas numa célula (item × período do curso) para ela aparecer na aba "por período". */
+    private const MINIMO_RESPOSTAS_CELULA = 10;
+
+    /** Mínimo esperado (% de acerto) de quem não tem período reconhecível — o mesmo padrão do boletim do aluno. */
+    public const MINIMO_PADRAO = 60.0;
+
     /** Períodos do curso com menos presentes que isto não entram no insight de melhor/pior. */
     private const MINIMO_PRESENTES_PERIODO = 10;
 
@@ -120,9 +126,12 @@ class CoordenadorDashboardService
 
     /**
      * @param  ?array<string, mixed>  $escopo  saída já calculada de escopo() (evita repetir as consultas)
+     * @param  array{detalhado?: bool, categoria?: string, periodo_curso?: int|string|null, estrito?: bool, campos?: bool}  $opcoes  só a tela de desempenho usa:
+     *                                                                                                  `categoria` ('' = todas, '0' = sem categoria, ou o id) e `periodo_curso` (ordinal) filtram o painel;
+     *                                                                                                  `detalhado` liga o que é mais caro (alunos dentro do esperado, Bloom, tema e as abas por período)
      * @return array<string, mixed>
      */
-    public function gerar(Admin $coordenador, string $cursoSelecionado = '', ?string $periodoLetivo = null, ?array $escopo = null): array
+    public function gerar(Admin $coordenador, string $cursoSelecionado = '', ?string $periodoLetivo = null, ?array $escopo = null, array $opcoes = []): array
     {
         $escopo ??= $this->escopo($coordenador, $cursoSelecionado, $periodoLetivo);
 
@@ -138,6 +147,30 @@ class CoordenadorDashboardService
         $doPeriodo = $escopo['doPeriodo'];
         $base = array_intersect_key($escopo, array_flip(['meusCursos', 'cursosEmFoco', 'cursoSelecionado']));
 
+        $detalhado = (bool) ($opcoes['detalhado'] ?? false);
+        // estrito: um filtro que não existe neste período letivo NÃO é ignorado (a comparação entre semestres precisa do vazio,
+        // senão o semestre sem aquela categoria/período do curso mostraria tudo).
+        $estrito = (bool) ($opcoes['estrito'] ?? false);
+        $filtroCategoria = (string) ($opcoes['categoria'] ?? '');
+        $filtroPeriodoCurso = isset($opcoes['periodo_curso']) && $opcoes['periodo_curso'] !== '' ? (int) $opcoes['periodo_curso'] : null;
+        $nomesCategoria = $this->nomesDeCategoria();
+
+        // Categorias que existem no período letivo (antes de filtrar), para o seletor da tela.
+        $categoriasDisponiveis = $doPeriodo
+            ->map(fn ($a) => (int) ($a['categoriaId'] ?? 0))
+            ->unique()
+            ->map(fn ($id) => ['id' => $id, 'nome' => $nomesCategoria[$id] ?? 'Sem categoria'])
+            ->sortBy(fn ($c) => $c['id'] === 0 ? 'zzz' : mb_strtolower($c['nome']))
+            ->values()
+            ->all();
+        // Categoria que não existe no período letivo escolhido é ignorada (em vez de esvaziar a tela).
+        if (! $estrito && $filtroCategoria !== '' && ! in_array((int) $filtroCategoria, array_column($categoriasDisponiveis, 'id'), true)) {
+            $filtroCategoria = '';
+        }
+        if ($filtroCategoria !== '') {
+            $doPeriodo = $doPeriodo->filter(fn ($a) => (int) ($a['categoriaId'] ?? 0) === (int) $filtroCategoria)->values();
+        }
+
         // Histórico das categorias presentes no período: inclui períodos
         // anteriores, que é de onde vem a "avaliação anterior" de cada uma.
         $categoriasNoPeriodo = $doPeriodo->pluck('categoriaId')->filter()->unique()->all();
@@ -146,7 +179,18 @@ class CoordenadorDashboardService
         $codigosPeriodo = $doPeriodo->pluck('codigo')->all();
         $linhas = $this->estatisticas($variantes, $cursos, $doPeriodo->pluck('codigo')->merge($historico->pluck('codigo'))->unique()->values()->all());
 
-        $nomesCategoria = $this->nomesDeCategoria();
+        // Períodos do curso (1º, 2º...) que têm resultado nas avaliações do recorte — antes de filtrar, para o seletor.
+        $periodosCursoDisponiveis = $linhas
+            ->filter(fn ($l) => in_array($l->codigo, $codigosPeriodo, true))
+            ->map(fn ($l) => PeriodoCurso::ordinal((string) $l->periodo))
+            ->filter()->unique()->sort()->values()->all();
+        if (! $estrito && $filtroPeriodoCurso !== null && ! in_array($filtroPeriodoCurso, $periodosCursoDisponiveis, true)) {
+            $filtroPeriodoCurso = null;
+        }
+        if ($filtroPeriodoCurso !== null) {
+            $linhas = $linhas->filter(fn ($l) => PeriodoCurso::ordinal((string) $l->periodo) === $filtroPeriodoCurso)->values();
+        }
+
         $blocos = $doPeriodo
             ->groupBy(fn ($a) => $a['categoriaId'] ?? 0)
             ->map(fn (Collection $grupo, $categoriaId) => $this->blocoDaCategoria(
@@ -157,6 +201,7 @@ class CoordenadorDashboardService
                 $linhas,
                 $variantes,
                 $cursos,
+                ['detalhado' => $detalhado, 'periodo_curso' => $filtroPeriodoCurso, 'campos' => (bool) ($opcoes['campos'] ?? true)],
             ))
             ->sortBy(fn ($b) => $b['id'] === null ? 'zzz' : mb_strtolower($b['nome']))
             ->values()
@@ -170,6 +215,9 @@ class CoordenadorDashboardService
             'periodoSelecionado' => $periodoSelecionado,
             'geral' => $geral,
             'categorias' => $blocos,
+            'categoriasDisponiveis' => $categoriasDisponiveis,
+            'periodosCursoDisponiveis' => $periodosCursoDisponiveis,
+            'filtros' => ['categoria' => $filtroCategoria, 'periodoCurso' => $filtroPeriodoCurso],
             'insights' => $this->insightsGerais($geral),
         ];
     }
@@ -181,9 +229,11 @@ class CoordenadorDashboardService
      * @param  Collection<int, array<string, mixed>>  $historico  avaliações de TODAS as categorias do período, em todos os períodos
      * @return array<string, mixed>
      */
-    private function blocoDaCategoria(?int $categoriaId, string $nome, Collection $doPeriodo, Collection $historico, Collection $linhas, array $variantes, array $cursos): array
+    private function blocoDaCategoria(?int $categoriaId, string $nome, Collection $doPeriodo, Collection $historico, Collection $linhas, array $variantes, array $cursos, array $opcoes = []): array
     {
         $codigos = $doPeriodo->pluck('codigo')->all();
+        $detalhado = (bool) ($opcoes['detalhado'] ?? false);
+        $filtroPeriodoCurso = $opcoes['periodo_curso'] ?? null;
 
         // Avaliações da categoria, de qualquer período, da mais antiga pra mais nova.
         $daCategoria = $categoriaId === null
@@ -194,11 +244,32 @@ class CoordenadorDashboardService
 
         $resumos = $daCategoria->mapWithKeys(fn ($a) => [$a['codigo'] => $this->resumirAvaliacao($a, $linhas->where('codigo', $a['codigo']))]);
 
+        // Alunos dentro do esperado (só no modo detalhado): por avaliação e período do curso, já com o filtro de período.
+        $esperado = $detalhado
+            ? $this->dentroDoEsperadoPorPeriodo($variantes, $daCategoria->pluck('codigo')->merge($codigos)->unique()->values()->all())
+            : [];
+        $agregar = function (int $codigo, ?int $soOrdinal = null) use ($esperado, $filtroPeriodoCurso): array {
+            $soma = ['presentes' => 0, 'dentro' => 0];
+            foreach (($esperado[$codigo]['periodos'] ?? []) as $ordinal => $p) {
+                if ($soOrdinal !== null && $ordinal !== $soOrdinal) {
+                    continue;
+                }
+                if ($filtroPeriodoCurso !== null && $ordinal !== $filtroPeriodoCurso) {
+                    continue;
+                }
+                $soma['presentes'] += $p['presentes'];
+                $soma['dentro'] += $p['dentro'];
+            }
+
+            return $soma;
+        };
+
         $avaliacoes = $doPeriodo
             ->sortBy(fn ($a) => [$a['data'] ?? '9999-12-31', $a['codigo']])
             ->values()
-            ->map(function ($a) use ($linhas, $daCategoria, $resumos) {
+            ->map(function ($a) use ($linhas, $daCategoria, $resumos, $detalhado, $agregar, $esperado) {
                 $linha = $this->resumirAvaliacao($a, $linhas->where('codigo', $a['codigo']));
+                $ag = $detalhado ? $agregar($a['codigo']) : null;
 
                 // Anterior = a avaliação imediatamente anterior DA MESMA CATEGORIA
                 // (qualquer período letivo). Sem data não há "anterior".
@@ -211,6 +282,14 @@ class CoordenadorDashboardService
                     ...$linha,
                     'anterior' => $anterior ? ['codigo' => $anterior['codigo'], 'nome' => $anterior['nome'], 'periodoLetivo' => $anterior['periodoLetivo'], 'media' => $mediaAnterior] : null,
                     'delta' => $linha['media'] !== null && $mediaAnterior !== null ? round($linha['media'] - $mediaAnterior, 1) : null,
+                    // Só no modo detalhado: quantos ficaram abaixo do esperado (ou abaixo de 60% se a prova não traz a meta).
+                    'esperado' => $ag === null ? null : [
+                        'comMeta' => $esperado[$a['codigo']]['comMeta'] ?? false,
+                        'presentes' => $ag['presentes'],
+                        'dentro' => $ag['dentro'],
+                        'abaixo' => $ag['presentes'] - $ag['dentro'],
+                        'abaixoPct' => $ag['presentes'] > 0 ? round(($ag['presentes'] - $ag['dentro']) / $ag['presentes'] * 100, 1) : null,
+                    ],
                 ];
             })
             ->filter(fn ($a) => $a['inscritos'] > 0)
@@ -224,7 +303,11 @@ class CoordenadorDashboardService
         if (count($porCurso) < 2) {
             $porCurso = [];
         }
-        $porArea = $this->desempenhoPorArea($variantes, $cursos, $codigos);
+        // Modo detalhado: área, Bloom e tema (no geral e por período do curso), já com o filtro de período.
+        $campos = $detalhado && ($opcoes['campos'] ?? true) ? $this->desempenhoPorCampos($variantes, $codigos, $filtroPeriodoCurso) : null;
+        $porArea = $campos !== null
+            ? array_map(fn ($g) => ['area' => $g['rotulo'], 'percentual' => $g['percentual'], 'respostas' => $g['respostas']], $campos['area']['geral'])
+            : $this->desempenhoPorArea($variantes, $cursos, $codigos);
 
         $evolucao = $resumos->filter(fn ($r) => $r['media'] !== null)->map(fn ($r) => [
             'codigo' => $r['codigo'],
@@ -234,6 +317,91 @@ class CoordenadorDashboardService
             'media' => $r['media'],
             'noPeriodo' => in_array($r['codigo'], $codigos, true),
         ])->values()->all();
+
+        $detalhe = null;
+        if ($detalhado) {
+            $comMeta = collect($esperado)->contains(fn ($e) => $e['comMeta']);
+
+            $somaPeriodo = ['presentes' => 0, 'dentro' => 0];
+            foreach ($codigos as $codigo) {
+                $ag = $agregar((int) $codigo);
+                $somaPeriodo['presentes'] += $ag['presentes'];
+                $somaPeriodo['dentro'] += $ag['dentro'];
+            }
+            $abaixoEsperado = [
+                'abaixo' => $somaPeriodo['presentes'] - $somaPeriodo['dentro'],
+                'total' => $somaPeriodo['presentes'],
+                'pct' => $somaPeriodo['presentes'] > 0 ? round(($somaPeriodo['presentes'] - $somaPeriodo['dentro']) / $somaPeriodo['presentes'] * 100, 1) : null,
+            ];
+
+            // Evolução entre as avaliações da categoria (todos os períodos letivos): no geral e por período do curso.
+            $pontos = [];
+            $periodosEvolucao = [];
+            foreach ($daCategoria as $a) {
+                $doPonto = $linhas->where('codigo', $a['codigo']);
+                $resumo = $this->somar($doPonto);
+                if ($resumo['presentes'] === 0) {
+                    continue;
+                }
+
+                $ag = $agregar($a['codigo']);
+                $porPeriodo = [];
+                foreach ($doPonto->groupBy(fn ($l) => PeriodoCurso::ordinal((string) $l->periodo) ?? 0) as $ordinal => $grupo) {
+                    if ($ordinal === 0) {
+                        continue;
+                    }
+                    $r = $this->somar($grupo);
+                    $agp = $agregar($a['codigo'], (int) $ordinal);
+                    $porPeriodo[(int) $ordinal] = [
+                        'media' => $r['media'],
+                        'dentro' => $agp['dentro'],
+                        'presentes' => $agp['presentes'],
+                        'pct' => $agp['presentes'] > 0 ? round($agp['dentro'] / $agp['presentes'] * 100, 1) : null,
+                    ];
+                    $periodosEvolucao[(int) $ordinal] = true;
+                }
+                ksort($porPeriodo);
+
+                $pontos[] = [
+                    'codigo' => $a['codigo'],
+                    'nome' => $a['nome'],
+                    'data' => $a['data'],
+                    'periodoLetivo' => $a['periodoLetivo'],
+                    'noPeriodo' => in_array($a['codigo'], $codigos, true),
+                    'geral' => [
+                        'media' => $resumo['media'],
+                        'dentro' => $ag['dentro'],
+                        'presentes' => $ag['presentes'],
+                        'pct' => $ag['presentes'] > 0 ? round($ag['dentro'] / $ag['presentes'] * 100, 1) : null,
+                    ],
+                    'porPeriodo' => $porPeriodo,
+                ];
+            }
+            ksort($periodosEvolucao);
+
+            // Alunos dentro do esperado de cada PERÍODO DO CURSO (ordinal), somando as avaliações do período letivo — a
+            // comparação entre semestres olha para o período, não para o aluno.
+            $porPeriodoCurso = [];
+            foreach ($codigos as $codigo) {
+                foreach (($esperado[(int) $codigo]['periodos'] ?? []) as $ordinal => $p) {
+                    if ($ordinal === 0 || ($filtroPeriodoCurso !== null && $ordinal !== $filtroPeriodoCurso)) {
+                        continue;
+                    }
+                    $porPeriodoCurso[$ordinal]['presentes'] = ($porPeriodoCurso[$ordinal]['presentes'] ?? 0) + $p['presentes'];
+                    $porPeriodoCurso[$ordinal]['dentro'] = ($porPeriodoCurso[$ordinal]['dentro'] ?? 0) + $p['dentro'];
+                }
+            }
+            ksort($porPeriodoCurso);
+
+            $detalhe = [
+                'comMeta' => $comMeta,
+                'abaixoEsperado' => $abaixoEsperado,
+                'porPeriodoCurso' => $porPeriodoCurso,
+                'evolucao' => count($pontos) >= 2 ? $pontos : [],
+                'periodosEvolucao' => array_keys($periodosEvolucao),
+                'campos' => $campos,
+            ];
+        }
 
         return [
             'id' => $categoriaId,
@@ -245,7 +413,8 @@ class CoordenadorDashboardService
             'periodosOmitidos' => $periodosOmitidos,
             'porCurso' => $porCurso,
             'porArea' => $porArea,
-            'insights' => $this->insightsDaCategoria($nome, $totais, $avaliacoes, $porPeriodoDoCurso, $porArea, $porCurso),
+            'detalhe' => $detalhe,
+            'insights' => $this->insightsDaCategoria($nome, $totais, $avaliacoes, $porPeriodoDoCurso, $porArea, $porCurso, $detalhe !== null && $detalhe['comMeta'] ? $detalhe['abaixoEsperado'] : null),
         ];
     }
 
@@ -269,8 +438,8 @@ class CoordenadorDashboardService
     public function avaliacoesDoCurso(?array $variantes): Collection
     {
         $linhas = $this->resumos($variantes)
-            ->groupBy('av.codigo', 'av.nome', 'av.data_avaliacao', 'av.categoria_id')
-            ->selectRaw('av.codigo as codigo, av.nome as nome, av.data_avaliacao as data, av.categoria_id as categoria_id')
+            ->groupBy('av.codigo', 'av.nome', 'av.data_avaliacao', 'av.categoria_id', 'av.risco_acerto', 'av.risco_ignora_falta')
+            ->selectRaw('av.codigo as codigo, av.nome as nome, av.data_avaliacao as data, av.categoria_id as categoria_id, av.risco_acerto as risco_acerto, av.risco_ignora_falta as risco_ignora_falta')
             ->get();
 
         // Avaliação sem data não tem como cair em "jan–jun = /1, jul–dez = /2": sem outra pista ela só aparecia
@@ -292,6 +461,9 @@ class CoordenadorDashboardService
                         ? $data->year.'/'.($data->month <= 6 ? 1 : 2)
                         : (self::periodoLetivoDoNome((string) $l->nome) ?? $porMatricula[(int) $l->codigo] ?? ''),
                     'categoriaId' => $l->categoria_id !== null ? (int) $l->categoria_id : null,
+                    // Regra de risco própria da avaliação (RegraDeRisco): limite de acerto (null = padrão, 0 = fora do critério) e dispensa de falta.
+                    'riscoAcerto' => $l->risco_acerto !== null ? (float) $l->risco_acerto : null,
+                    'riscoIgnoraFalta' => (bool) $l->risco_ignora_falta,
                 ];
             })
             ->sortByDesc(fn ($a) => $a['data'] ?? '')
@@ -356,6 +528,242 @@ class CoordenadorDashboardService
         return $todas->map($caminho)->all();
     }
 
+    /**
+     * Quantos alunos ficaram DENTRO DO ESPERADO em cada avaliação — o aluno cujo acerto na prova alcançou o mínimo esperado
+     * para o período em que ele estava (meta `questoes.periodo_minimo`: a fatia da prova que já cabe no período dele).
+     * Só entram os presentes com nota, e só os alunos do(s) curso(s) em foco.
+     *
+     * `comMeta = false` quando a prova não especifica a meta em nenhuma questão: não há "esperado" para mostrar (`pct`
+     * null) e a tela da visão geral exibe só a média no lugar.
+     *
+     * @param  array<int, string>  $variantes  grafias do curso em foco
+     * @param  array<int, int>  $codigos  avaliações pedidas
+     * @return array<int, array{comMeta: bool, presentes: int, dentro: int, pct: ?float}>  por código da avaliação
+     */
+    public function alunosDentroDoEsperado(array $variantes, array $codigos): array
+    {
+        $resultado = [];
+
+        foreach ($this->dentroDoEsperadoPorPeriodo($variantes, $codigos) as $codigo => $dados) {
+            $presentes = array_sum(array_column($dados['periodos'], 'presentes'));
+            $dentro = array_sum(array_column($dados['periodos'], 'dentro'));
+
+            $resultado[(int) $codigo] = [
+                'comMeta' => $dados['comMeta'],
+                'presentes' => $presentes,
+                'dentro' => $dentro,
+                'pct' => $dados['comMeta'] && $presentes > 0 ? round($dentro / $presentes * 100, 1) : null,
+            ];
+        }
+
+        return $resultado;
+    }
+
+    /**
+     * O mesmo cálculo de alunosDentroDoEsperado(), aberto POR PERÍODO DO CURSO (ordinal; 0 = período não reconhecível) —
+     * base das abas "por período" e do filtro de período do curso da tela de desempenho.
+     *
+     * Prova sem a meta em nenhuma questão (`comMeta` false) é medida pelo mínimo padrão (MINIMO_PADRAO, 60%); com a meta,
+     * quem não tem período reconhecível também cai no padrão. Agrega em SQL (período × percentual, poucas linhas) e aplica
+     * a regra em PHP, pois o mínimo muda com o período. Em cache (só arrays).
+     *
+     * @param  array<int, string>  $variantes
+     * @param  array<int, int>  $codigos
+     * @return array<int, array{comMeta: bool, periodos: array<int, array{presentes: int, dentro: int}>}>
+     */
+    public function dentroDoEsperadoPorPeriodo(array $variantes, array $codigos): array
+    {
+        if ($codigos === []) {
+            return [];
+        }
+
+        return CacheDeAnalise::lembrarVarias(
+            'painel-esperado',
+            $codigos,
+            ['variantes' => $variantes],
+            fn () => $this->calcularDentroDoEsperado($variantes, $codigos),
+        );
+    }
+
+    /** @return array<int, array{comMeta: bool, periodos: array<int, array{presentes: int, dentro: int}>}> */
+    private function calcularDentroDoEsperado(array $variantes, array $codigos): array
+    {
+        // Questões válidas por (avaliação × período mínimo): a fatia esperada de um período sai daqui.
+        $questoes = Anulacao::excluirDistribuidas(
+            DB::table('questoes')
+                ->whereIn('avaliacao_codigo', $codigos)
+                ->whereNull('deleted_at')
+                ->whereNotNull('gabarito')->where('gabarito', '!=', '')
+        )
+            ->groupBy('avaliacao_codigo', 'periodo_minimo')
+            ->selectRaw('avaliacao_codigo as codigo, periodo_minimo as minimo, COUNT(*) as n')
+            ->get()
+            ->groupBy(fn ($l) => (int) $l->codigo);
+
+        $notas = $this->resumos($variantes)
+            ->whereIn('rr.avaliacao_codigo', $codigos)
+            ->where('rr.ausente', false)
+            ->whereNotNull('rr.percentual')
+            ->groupBy('rr.avaliacao_codigo', 'rr.periodo', 'rr.percentual')
+            ->selectRaw('rr.avaliacao_codigo as codigo, rr.periodo as periodo, rr.percentual as percentual, COUNT(*) as n')
+            ->get()
+            ->groupBy(fn ($l) => (int) $l->codigo);
+
+        $resultado = [];
+        foreach ($codigos as $codigo) {
+            $daProva = $questoes->get($codigo, collect());
+            $totalQuestoes = (int) $daProva->sum('n');
+            $comMeta = $totalQuestoes > 0 && $daProva->contains(fn ($l) => $l->minimo !== null);
+
+            $periodos = [];
+            foreach ($notas->get($codigo, collect()) as $linha) {
+                $n = (int) $linha->n;
+                $ordinal = PeriodoCurso::ordinal((string) $linha->periodo);
+                $minimo = $comMeta && $ordinal !== null
+                    ? ($totalQuestoes - (int) $daProva->filter(fn ($l) => PeriodoCurso::aFrente($ordinal, $l->minimo !== null ? (int) $l->minimo : null))->sum('n')) / $totalQuestoes * 100
+                    : self::MINIMO_PADRAO;
+
+                $p = &$periodos[$ordinal ?? 0];
+                $p ??= ['presentes' => 0, 'dentro' => 0];
+                $p['presentes'] += $n;
+                // 0,005 = a precisão (2 casas) em que o percentual é gravado.
+                $p['dentro'] += (float) $linha->percentual + 0.005 >= $minimo ? $n : 0;
+                unset($p);
+            }
+            ksort($periodos);
+
+            $resultado[(int) $codigo] = ['comMeta' => $comMeta, 'periodos' => $periodos];
+        }
+
+        return $resultado;
+    }
+
+    /**
+     * Acerto por ÁREA, nível de BLOOM e TEMA nas avaliações pedidas (de UMA categoria), só entre os presentes — no geral e
+     * por período do curso (ordinal) — para os gráficos de abas da tela de desempenho. `$periodoCurso` restringe tudo a
+     * um período do curso (filtro da tela). Mesma regra de anulação do resto do sistema (Anulacao).
+     *
+     * O bruto (item × período) é cacheado; o filtro e os cortes (mínimo de respostas, limite de itens) são aplicados aqui.
+     *
+     * @param  array<int, string>  $variantes
+     * @param  array<int, int>  $codigos
+     * @return array<string, array{geral: array<int, array{rotulo: string, percentual: float, respostas: int}>, porPeriodo: array<int, array<string, ?float>>, periodos: array<int, int>}>
+     */
+    public function desempenhoPorCampos(array $variantes, array $codigos, ?int $periodoCurso = null): array
+    {
+        $vazio = ['geral' => [], 'porPeriodo' => [], 'periodos' => []];
+        $saida = ['area' => $vazio, 'bloom' => $vazio, 'tema' => $vazio];
+
+        if ($codigos === []) {
+            return $saida;
+        }
+
+        // Bloom: o nível; se a planilha só trouxe o verbo (Lembrar, Aplicar...), cai para ele.
+        foreach (['area' => ['area'], 'bloom' => ['bloom_nivel', 'bloom_verbo'], 'tema' => ['tema']] as $chave => $colunas) {
+            foreach ($colunas as $coluna) {
+                $linhas = CacheDeAnalise::lembrarVarias(
+                    'painel-campo-'.$coluna,
+                    $codigos,
+                    ['variantes' => $variantes],
+                    fn () => $this->calcularCampoPorPeriodo($variantes, $codigos, $coluna),
+                );
+
+                if ($linhas !== []) {
+                    $saida[$chave] = $this->resumirCampo($linhas, $periodoCurso, $chave === 'tema' ? 15 : 20);
+                    break;
+                }
+            }
+        }
+
+        return $saida;
+    }
+
+    /** @return array<int, array{item: string, ord: int, total: int, acertos: int}> */
+    private function calcularCampoPorPeriodo(array $variantes, array $codigos, string $coluna): array
+    {
+        $presentes = $this->resumos($variantes)
+            ->whereIn('rr.avaliacao_codigo', $codigos)
+            ->where('rr.ausente', false)
+            ->select('rr.avaliacao_codigo', 'rr.aluno_chave', 'rr.periodo')
+            ->distinct();
+
+        return DB::table('respostas as r')
+            ->joinSub($presentes, 'pr', function ($join) {
+                $join->on('pr.avaliacao_codigo', '=', 'r.avaliacao_codigo')
+                    ->on('pr.aluno_chave', '=', 'r.aluno_chave')
+                    ->on('pr.periodo', '=', 'r.periodo');
+            })
+            ->join('questoes as q', function ($join) use ($coluna) {
+                Anulacao::excluirDistribuidas(
+                    $join->on('q.numero', '=', 'r.questao_numero')
+                        ->on('q.avaliacao_codigo', '=', 'r.avaliacao_codigo')
+                        ->whereNull('q.deleted_at')
+                        ->whereNotNull('q.gabarito')->where('q.gabarito', '!=', '')
+                        ->whereNotNull("q.{$coluna}")->where("q.{$coluna}", '!=', ''),
+                    'q.anulada_modo',
+                );
+            })
+            ->whereNull('r.deleted_at')
+            ->groupBy("q.{$coluna}", 'pr.periodo')
+            ->selectRaw("q.{$coluna} as item, pr.periodo as periodo, COUNT(*) as total")
+            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
+            ->get()
+            ->map(fn ($l) => [
+                'item' => (string) $l->item,
+                'ord' => PeriodoCurso::ordinal((string) $l->periodo) ?? 0,
+                'total' => (int) $l->total,
+                'acertos' => (int) $l->acertos,
+            ])
+            ->all();
+    }
+
+    /**
+     * @param  array<int, array{item: string, ord: int, total: int, acertos: int}>  $linhas
+     * @return array{geral: array<int, array{rotulo: string, percentual: float, respostas: int}>, porPeriodo: array<int, array<string, ?float>>, periodos: array<int, int>}
+     */
+    private function resumirCampo(array $linhas, ?int $periodoCurso, int $limite): array
+    {
+        $itens = [];
+        $celulas = [];
+
+        foreach ($linhas as $l) {
+            if ($periodoCurso !== null && $l['ord'] !== $periodoCurso) {
+                continue;
+            }
+
+            $itens[$l['item']]['total'] = ($itens[$l['item']]['total'] ?? 0) + $l['total'];
+            $itens[$l['item']]['acertos'] = ($itens[$l['item']]['acertos'] ?? 0) + $l['acertos'];
+
+            if ($l['ord'] > 0) {
+                $celulas[$l['ord']][$l['item']] = $l;
+            }
+        }
+
+        $geral = [];
+        foreach ($itens as $item => $t) {
+            if ($t['total'] >= self::MINIMO_RESPOSTAS_AREA) {
+                $geral[] = ['rotulo' => (string) $item, 'percentual' => round($t['acertos'] / $t['total'] * 100, 1), 'respostas' => $t['total']];
+            }
+        }
+        usort($geral, fn ($a, $b) => [$a['percentual'], $a['rotulo']] <=> [$b['percentual'], $b['rotulo']]);
+        $geral = array_slice($geral, 0, $limite);
+
+        // Por período: só os itens que aparecem no geral, e célula só com respostas suficientes (senão é ruído).
+        ksort($celulas);
+        $porPeriodo = [];
+        foreach ($celulas as $ord => $porItem) {
+            foreach ($geral as $g) {
+                $c = $porItem[$g['rotulo']] ?? null;
+                $porPeriodo[$ord][$g['rotulo']] = $c !== null && $c['total'] >= self::MINIMO_RESPOSTAS_CELULA
+                    ? round($c['acertos'] / $c['total'] * 100, 1)
+                    : null;
+            }
+        }
+        // Período sem nenhuma célula válida não vira série.
+        $porPeriodo = array_filter($porPeriodo, fn ($linha) => array_filter($linha, fn ($v) => $v !== null) !== []);
+
+        return ['geral' => $geral, 'porPeriodo' => $porPeriodo, 'periodos' => array_keys($porPeriodo)];
+    }
     /**
      * Subconsulta (avaliação × aluno) dos PRESENTES — quem não ficou com a prova inteira em branco —, restrita
      * aos alunos do curso e às avaliações pedidas. Vem de `resultado_resumos.ausente`, sem tocar em `respostas`.
@@ -582,7 +990,7 @@ class CoordenadorDashboardService
      * @param  Collection<int, array<string, mixed>>  $avaliacoes  da categoria, no período, em ordem de data
      * @return array<int, array{tom: string, icone: string, texto: string}>
      */
-    private function insightsDaCategoria(string $categoria, array $totais, Collection $avaliacoes, array $porPeriodoDoCurso, array $porArea, array $porCurso): array
+    private function insightsDaCategoria(string $categoria, array $totais, Collection $avaliacoes, array $porPeriodoDoCurso, array $porArea, array $porCurso, ?array $abaixoEsperado = null): array
     {
         $cartoes = [];
 
@@ -600,7 +1008,16 @@ class CoordenadorDashboardService
             ];
         }
 
-        if ($totais['abaixoPct'] !== null && $totais['abaixoPct'] / 100 >= self::LIMIAR_ALERTA_ABAIXO) {
+        if ($abaixoEsperado !== null) {
+            // A categoria traz o mínimo esperado por período: o alerta é sobre ele, não sobre os 60% fixos.
+            if ($abaixoEsperado['pct'] !== null && $abaixoEsperado['pct'] / 100 >= self::LIMIAR_ALERTA_ABAIXO) {
+                $cartoes[] = [
+                    'tom' => 'atencao',
+                    'icone' => 'ph-warning-circle',
+                    'texto' => self::pct($abaixoEsperado['pct'])."% dos alunos presentes ficaram abaixo do desempenho esperado para o período em que estão ({$abaixoEsperado['abaixo']} de {$abaixoEsperado['total']}).",
+                ];
+            }
+        } elseif ($totais['abaixoPct'] !== null && $totais['abaixoPct'] / 100 >= self::LIMIAR_ALERTA_ABAIXO) {
             $cartoes[] = [
                 'tom' => 'atencao',
                 'icone' => 'ph-warning-circle',

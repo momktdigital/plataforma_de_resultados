@@ -12,3 +12,19 @@ function ordenarTabelaAlternativas(campo) {
         label.textContent = campo === 'numero' ? '(ordenado por número da questão)' : '(ordenado por % de acerto)';
     }
 }
+
+// Filtro por área: esconde as questões de outras áreas (a ordenação continua valendo sobre as linhas visíveis).
+function filtrarAlternativasPorArea(area) {
+    var tabela = document.getElementById('tabela-alternativas');
+    if (!tabela) return;
+    var visiveis = 0;
+    tabela.querySelectorAll('tbody tr').forEach(function (linha) {
+        var mostrar = area === '' || linha.dataset.area === area;
+        linha.hidden = !mostrar;
+        if (mostrar) visiveis++;
+    });
+    var contagem = document.getElementById('alternativas-contagem');
+    if (contagem) {
+        contagem.textContent = visiveis + ' questão(ões)' + (area !== '' ? ' em ' + area : '');
+    }
+}

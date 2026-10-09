@@ -15,7 +15,7 @@ use Illuminate\View\View;
  */
 class CoordenadorController extends PainelController
 {
-    /** Visão geral: o que importa agora — quantos alunos, quem precisa de atenção, como foram as últimas provas. */
+    /** Visão geral: o que importa agora — quantos alunos, como foram as últimas provas. */
     public function painel(Request $request, CoordenadorDashboardService $servico, CoordenadorAlunosService $alunosServico): View|RedirectResponse
     {
         if (($usuario = $this->coordenador()) === null) {
@@ -40,13 +40,12 @@ class CoordenadorController extends PainelController
 
             $dados += [
                 'resumoAlunos' => $alunosServico->resumo($alunos),
-                'emAtencao' => $alunosServico->emAtencao($alunos, 6),
-                'recentes' => collect($painel['categorias'])
+                'recentes' => $this->comDentroDoEsperado($servico, $escopo, collect($painel['categorias'])
                     ->flatMap(fn ($c) => array_map(fn ($a) => [...$a, 'categoria' => $c['nome']], $c['avaliacoes']))
                     ->sortByDesc(fn ($a) => ($a['data'] ?? '0000-00-00').'|'.$a['codigo'])
                     ->take(6)
                     ->values()
-                    ->all(),
+                    ->all()),
                 // Os destaques, SEMPRE separados por categoria: provas de categorias diferentes não são comparáveis, e
                 // "área com menor desempenho" de uma categoria não pode parecer contradizer a de outra.
                 'destaques' => collect([['titulo' => 'Geral do curso', 'insights' => $painel['insights']]])
@@ -60,6 +59,21 @@ class CoordenadorController extends PainelController
         return view('coordenador.painel', $dados);
     }
 
+    /**
+     * Acrescenta a cada avaliação recente quantos alunos ficaram dentro do esperado (`dentroDoEsperado`: comMeta,
+     * presentes, dentro, pct) — ver CoordenadorDashboardService::alunosDentroDoEsperado().
+     *
+     * @param  array<string, mixed>  $escopo
+     * @param  array<int, array<string, mixed>>  $recentes
+     * @return array<int, array<string, mixed>>
+     */
+    private function comDentroDoEsperado(CoordenadorDashboardService $servico, array $escopo, array $recentes): array
+    {
+        $esperado = $servico->alunosDentroDoEsperado($escopo['variantes'], array_column($recentes, 'codigo'));
+
+        return array_map(fn ($a) => [...$a, 'dentroDoEsperado' => $esperado[$a['codigo']] ?? ['comMeta' => false, 'presentes' => 0, 'dentro' => 0, 'pct' => null]], $recentes);
+    }
+
     /** Desempenho detalhado: uma seção por categoria de avaliação (médias, evolução, áreas, períodos do curso). */
     public function desempenho(Request $request, CoordenadorDashboardService $servico): View|RedirectResponse
     {
@@ -67,7 +81,11 @@ class CoordenadorController extends PainelController
             return redirect()->route('avaliacoes.index');
         }
 
-        $painel = $servico->gerar($usuario, $this->cursoEscolhido($request), $this->periodoEscolhido($request));
+        $painel = $servico->gerar($usuario, $this->cursoEscolhido($request), $this->periodoEscolhido($request), null, [
+            'detalhado' => true,
+            'categoria' => trim((string) $request->query('categoria', '')),
+            'periodo_curso' => trim((string) $request->query('periodo_curso', '')),
+        ]);
 
         return view('coordenador.desempenho', [
             'usuario' => $usuario,

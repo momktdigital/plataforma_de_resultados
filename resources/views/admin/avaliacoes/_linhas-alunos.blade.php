@@ -26,6 +26,16 @@
         <td class="px-4 py-3">{{ $r['curso'] ?: '—' }}</td>
         <td class="px-4 py-3 whitespace-nowrap">{{ $r['periodo_curso'] ?: '—' }}</td>
         <td class="px-4 py-3">{{ $r['turma'] ?: '—' }}</td>
+        @if ($comEsperadas ?? false)
+            <td class="px-4 py-3 whitespace-nowrap">
+                @if ($r['esperadas'] === null)
+                    <span class="text-slate-500">—</span>
+                @else
+                    <span class="tabular-nums font-semibold text-slate-700">{{ $r['esperadas']['acertos'] }}</span>
+                    <span class="text-xs text-slate-500">de {{ $r['esperadas']['total'] }}</span>
+                @endif
+            </td>
+        @endif
         <td class="px-4 py-3">
             @if ($r['percentual'] === null)
                 <span class="text-slate-500">—</span>

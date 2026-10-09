@@ -6,6 +6,7 @@ use App\Models\Aluno;
 use App\Support\Anulacao;
 use App\Support\CacheDeAnalise;
 use App\Support\Dificuldade;
+use App\Support\PeriodoCurso;
 use Illuminate\Contracts\Database\Query\Builder as BuilderContract;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +23,9 @@ use Illuminate\Support\Facades\DB;
  */
 class AnaliseConsolidadaService
 {
+    /** Mínimo esperado (% de acerto) de uma prova que não traz a meta por período nas questões. */
+    public const MINIMO_PADRAO = 60.0;
+
     /**
      * "Você errou mais questões fáceis do que difíceis?" — % de acerto do
      * aluno por dificuldade pedagógica, somando todas as avaliações do
@@ -121,6 +125,173 @@ class AnaliseConsolidadaService
         return $this->percentualPorCampo($aluno, $avaliacaoCodigos, 'miller_nivel')->all();
     }
 
+    /**
+     * Acerto por nível de Bloom COM a contagem de questões de cada nível — o card "o que mais pesou" do resumo só
+     * afirma "foram as mais difíceis pra você" quando o nível tem questões suficientes (ver InsightService). Usa o nível
+     * de Bloom; se a planilha só trouxe o verbo (Lembrar, Aplicar...), cai para ele.
+     *
+     * @param  array<int, int>  $avaliacaoCodigos
+     * @return array<string, array{percentual: float, total: int}>
+     */
+    public function bloomComContagem(Aluno $aluno, array $avaliacaoCodigos): array
+    {
+        foreach (['bloom_nivel', 'bloom_verbo'] as $campo) {
+            $niveis = $this->mediaPorCampoAgregado($aluno, $avaliacaoCodigos, $campo)
+                ->filter(fn ($l) => (int) $l->total > 0)
+                ->mapWithKeys(fn ($l) => [$l->campo => [
+                    'percentual' => round((int) $l->acertos / (int) $l->total * 100, 1),
+                    'total' => (int) $l->total,
+                ]])
+                ->all();
+
+            if ($niveis !== []) {
+                return $niveis;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * Acerto TOTAL do aluno em cada avaliação x o MÍNIMO ESPERADO para o período dele (a meta `questoes.periodo_minimo`):
+     * uma questão marcada "a partir do 3º período" é esperada de quem está no 3º em diante; para quem está antes, acertar
+     * é bônus. O mínimo esperado é a fatia da prova que já cabe no período do aluno — esperadas / total. Se a prova não
+     * traz essa informação (nenhuma questão com meta, ou período do aluno irreconhecível), o mínimo é MINIMO_PADRAO (60%).
+     *
+     * O período do aluno é o de `respostas.periodo` DAQUELA prova (o mesmo valor da turma), nunca o do cadastro atual.
+     * Questão sem meta conta como esperada para todos; anulada com distribuição de pontuação não entra na conta.
+     *
+     * Agrega em SQL por (avaliação, período, área, meta) — poucas linhas — e só então aplica a regra em PHP, porque o
+     * período do aluno pode mudar de uma prova para outra. `geral`/`areas`/`adiante` somam todas as avaliações dadas e
+     * só alimentam a "Leitura rápida"; o gráfico usa `avaliacoes`.
+     *
+     * @param  array<int, int>  $avaliacaoCodigos
+     * @return array{avaliacoes: array<int, array{codigo: int, nome: string, data: ?string, percentual: float, minimo: float, comMeta: bool, periodoAluno: ?int, total: int}>, comMeta: bool, periodoAluno: ?int, geral: array{percentual: float, esperado: ?float, total: int}, areas: array<int, array{area: string, percentual: float, esperado: ?float, total: int}>, adiante: array{total: int, acertos: int}}|null
+     */
+    public function metaPorPeriodo(Aluno $aluno, array $avaliacaoCodigos, int $maximoAreas = 12): ?array
+    {
+        if (empty($avaliacaoCodigos)) {
+            return null;
+        }
+
+        $linhas = DB::table('respostas as r')
+            ->join('questoes as q', function ($join) use ($avaliacaoCodigos) {
+                Anulacao::excluirDistribuidas(
+                    $join->on('q.numero', '=', 'r.questao_numero')
+                        ->on('q.avaliacao_codigo', '=', 'r.avaliacao_codigo')
+                        ->whereIn('q.avaliacao_codigo', $avaliacaoCodigos)
+                        ->whereNull('q.deleted_at')
+                        ->whereNotNull('q.gabarito')->where('q.gabarito', '!=', ''),
+                    'q.anulada_modo',
+                );
+            })
+            ->whereIn('r.avaliacao_codigo', $avaliacaoCodigos)
+            ->whereNull('r.deleted_at')
+            ->where(fn ($q) => $this->porAluno($q, $aluno))
+            ->groupBy('r.avaliacao_codigo', 'r.periodo', 'q.area', 'q.periodo_minimo')
+            ->selectRaw('r.avaliacao_codigo as codigo, r.periodo as periodo_aluno, q.area as area, q.periodo_minimo as minimo')
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
+            ->get();
+
+        if ($linhas->isEmpty()) {
+            return null;
+        }
+
+        $zerado = fn () => ['total' => 0, 'acertos' => 0, 'esperadas' => 0, 'haMeta' => false, 'periodoConhecido' => false, 'periodo' => null];
+        $porAvaliacao = [];
+        $geral = $zerado();
+        $areas = [];
+        $adiante = ['total' => 0, 'acertos' => 0];
+
+        foreach ($linhas as $linha) {
+            $total = (int) $linha->total;
+            $acertos = (int) $linha->acertos;
+            $ordinal = PeriodoCurso::ordinal($linha->periodo_aluno);
+            $minimo = $linha->minimo !== null ? (int) $linha->minimo : null;
+
+            $aFrente = $ordinal !== null && $minimo !== null && $minimo > $ordinal;
+            $esperadas = $aFrente ? 0 : $total;
+
+            if ($aFrente) {
+                $adiante['total'] += $total;
+                $adiante['acertos'] += $acertos;
+            }
+
+            $codigo = (int) $linha->codigo;
+            $porAvaliacao[$codigo] ??= $zerado();
+
+            foreach ([&$geral, &$porAvaliacao[$codigo]] as &$alvo) {
+                $alvo['total'] += $total;
+                $alvo['acertos'] += $acertos;
+                $alvo['esperadas'] += $esperadas;
+                $alvo['haMeta'] = $alvo['haMeta'] || $minimo !== null;
+                $alvo['periodoConhecido'] = $alvo['periodoConhecido'] || $ordinal !== null;
+                $alvo['periodo'] = $ordinal !== null ? max($alvo['periodo'] ?? 0, $ordinal) : $alvo['periodo'];
+            }
+            unset($alvo);
+
+            $area = trim((string) $linha->area);
+            if ($area !== '') {
+                $areas[$area] ??= ['total' => 0, 'acertos' => 0, 'esperadas' => 0];
+                $areas[$area]['total'] += $total;
+                $areas[$area]['acertos'] += $acertos;
+                $areas[$area]['esperadas'] += $esperadas;
+            }
+        }
+
+        if ($geral['total'] === 0) {
+            return null;
+        }
+
+        $comMeta = $geral['haMeta'] && $geral['periodoConhecido'];
+        $montar = fn (array $a) => [
+            'percentual' => round($a['acertos'] / $a['total'] * 100, 1),
+            'esperado' => $comMeta ? round($a['esperadas'] / $a['total'] * 100, 1) : null,
+            'total' => $a['total'],
+        ];
+
+        $listaAreas = [];
+        foreach ($areas as $nome => $a) {
+            $listaAreas[] = ['area' => (string) $nome] + $montar($a);
+        }
+
+        // Quem está mais longe do esperado vem primeiro (sem meta: o menor acerto) — é onde o aluno olha primeiro.
+        usort($listaAreas, fn ($a, $b) => ($a['percentual'] - ($a['esperado'] ?? 100)) <=> ($b['percentual'] - ($b['esperado'] ?? 100))
+            ?: strcmp($a['area'], $b['area']));
+
+        $avaliacoes = DB::table('avaliacoes')
+            ->whereIn('codigo', array_keys($porAvaliacao))
+            ->orderBy('data_avaliacao')
+            ->orderBy('codigo')
+            ->select('codigo', 'nome', 'data_avaliacao')
+            ->get()
+            ->map(function ($av) use ($porAvaliacao) {
+                $a = $porAvaliacao[(int) $av->codigo];
+                $comMetaDaProva = $a['haMeta'] && $a['periodoConhecido'];
+
+                return [
+                    'codigo' => (int) $av->codigo,
+                    'nome' => $av->nome ?: 'Avaliação #'.$av->codigo,
+                    'data' => $av->data_avaliacao,
+                    'percentual' => round($a['acertos'] / $a['total'] * 100, 1),
+                    'minimo' => $comMetaDaProva ? round($a['esperadas'] / $a['total'] * 100, 1) : self::MINIMO_PADRAO,
+                    'comMeta' => $comMetaDaProva,
+                    'periodoAluno' => $a['periodo'],
+                    'total' => $a['total'],
+                ];
+            })
+            ->all();
+
+        return [
+            'avaliacoes' => $avaliacoes,
+            'comMeta' => $comMeta,
+            'periodoAluno' => $geral['periodo'],
+            'geral' => $montar($geral),
+            'areas' => array_slice($listaAreas, 0, $maximoAreas),
+            'adiante' => $adiante,
+        ];
+    }
     /**
      * Áreas onde o aluno mais fica atrás da turma: % de acerto do aluno por
      * área (somando todas as avaliações do período) comparado ao % médio de
@@ -262,8 +433,13 @@ class AnaliseConsolidadaService
      * Uma célula vazia (null) significa que aquela avaliação não tinha questão
      * da área — diferente de "foi mal", e a tela precisa distinguir os dois.
      *
+     * Cada célula também traz o MÍNIMO ESPERADO (`esperados`, mesma chave de `valores`): das questões daquela área
+     * naquela prova, a fatia que o aluno já deveria acertar pelo período dele (meta `questoes.periodo_minimo`, período
+     * de `respostas.periodo` — ver metaPorPeriodo()). Sem meta nas questões da célula (ou sem período reconhecível), é
+     * MINIMO_PADRAO. A tela pinta a célula de amarelo quando o acerto fica abaixo do mínimo.
+     *
      * @param  array<int, int>  $avaliacaoCodigos
-     * @return array{avaliacoes: array<int, array{codigo: int, nome: ?string}>, areas: array<int, array{area: string, valores: array<int, ?float>}>}
+     * @return array{avaliacoes: array<int, array{codigo: int, nome: ?string}>, areas: array<int, array{area: string, valores: array<int, ?float>, esperados: array<int, ?float>}>}
      */
     public function mapaDominio(Aluno $aluno, array $avaliacaoCodigos): array
     {
@@ -286,8 +462,8 @@ class AnaliseConsolidadaService
             ->whereIn('r.avaliacao_codigo', $avaliacaoCodigos)
             ->whereNull('r.deleted_at')
             ->where(fn ($q) => $this->porAluno($q, $aluno))
-            ->groupBy('r.avaliacao_codigo', 'q.area')
-            ->selectRaw('r.avaliacao_codigo as codigo, q.area as area')
+            ->groupBy('r.avaliacao_codigo', 'q.area', 'r.periodo', 'q.periodo_minimo')
+            ->selectRaw('r.avaliacao_codigo as codigo, q.area as area, r.periodo as periodo_aluno, q.periodo_minimo as minimo')
             ->selectRaw('COUNT(*) as total')
             ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
             ->get();
@@ -308,24 +484,38 @@ class AnaliseConsolidadaService
             ->map(fn ($a) => ['codigo' => (int) $a->codigo, 'nome' => $a->nome])
             ->all();
 
-        $porArea = [];
+        // Várias linhas por célula (uma por período do aluno × meta da questão): soma antes de calcular.
+        $celulas = [];
         foreach ($linhas as $linha) {
-            $porArea[$linha->area][(int) $linha->codigo] = (int) $linha->total > 0
-                ? round((int) $linha->acertos / (int) $linha->total * 100, 1)
-                : null;
+            $total = (int) $linha->total;
+            $ordinal = PeriodoCurso::ordinal($linha->periodo_aluno);
+            $minimo = $linha->minimo !== null ? (int) $linha->minimo : null;
+            $aFrente = $ordinal !== null && $minimo !== null && $minimo > $ordinal;
+
+            $c = &$celulas[$linha->area][(int) $linha->codigo];
+            $c ??= ['total' => 0, 'acertos' => 0, 'esperadas' => 0, 'comMeta' => false];
+            $c['total'] += $total;
+            $c['acertos'] += (int) $linha->acertos;
+            $c['esperadas'] += $aFrente ? 0 : $total;
+            $c['comMeta'] = $c['comMeta'] || ($minimo !== null && $ordinal !== null);
+            unset($c);
         }
 
-        ksort($porArea);
+        ksort($celulas);
 
         $areas = [];
-        foreach ($porArea as $area => $valoresPorCodigo) {
+        foreach ($celulas as $area => $porCodigo) {
             $valores = [];
+            $esperados = [];
             foreach ($avaliacoes as $avaliacao) {
-                $valores[$avaliacao['codigo']] = $valoresPorCodigo[$avaliacao['codigo']] ?? null;
+                $c = $porCodigo[$avaliacao['codigo']] ?? null;
+                $temDado = $c !== null && $c['total'] > 0;
+                $valores[$avaliacao['codigo']] = $temDado ? round($c['acertos'] / $c['total'] * 100, 1) : null;
+                $esperados[$avaliacao['codigo']] = ! $temDado ? null
+                    : ($c['comMeta'] ? round($c['esperadas'] / $c['total'] * 100, 1) : self::MINIMO_PADRAO);
             }
-            $areas[] = ['area' => (string) $area, 'valores' => $valores];
+            $areas[] = ['area' => (string) $area, 'valores' => $valores, 'esperados' => $esperados];
         }
-
         return ['avaliacoes' => $avaliacoes, 'areas' => $areas];
     }
 

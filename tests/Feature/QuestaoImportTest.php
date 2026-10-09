@@ -257,6 +257,59 @@ class QuestaoImportTest extends TestCase
         $this->assertCount(1, $questao->referencias()->where('tipo', 'dcn')->get());
     }
 
+    public function test_importa_periodo_minimo_em_varios_formatos_sem_confundir_com_a_matriz(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+
+        $csv = "Questão,Gabarito,Período mínimo,Matriz (período)\n"
+            ."1,A,3,1\n"
+            ."2,B,5º período,2\n"
+            ."3,C,P4,\n"
+            ."4,D,,3\n"
+            ."5,A,primeiro,\n";
+        $this->actingAs($this->admin(), 'admin')->post("/avaliacoes/{$avaliacao->codigo}/questoes/import", [
+            'arquivo' => UploadedFile::fake()->createWithContent('gabarito.csv', $csv),
+        ]);
+
+        $porNumero = Questao::where('avaliacao_codigo', $avaliacao->codigo)->pluck('periodo_minimo', 'numero')->all();
+        $this->assertSame([1 => 3, 2 => 5, 3 => 4, 4 => null, 5 => null], $porNumero);
+        // A coluna "Matriz (período)" continua indo para a matriz curricular, não para o período mínimo.
+        $this->assertSame(1, Questao::where('numero', 1)->firstOrFail()->matrizes[0]->periodo);
+    }
+
+    public function test_periodo_minimo_tambem_e_reconhecido_por_period_esperado_e_a_partir_do_periodo(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        $admin = $this->admin();
+
+        $this->actingAs($admin, 'admin')->post("/avaliacoes/{$avaliacao->codigo}/questoes/import", [
+            'arquivo' => UploadedFile::fake()->createWithContent('a.csv', "Questão,Gabarito,Período esperado\n1,A,2\n"),
+        ]);
+        $this->actingAs($admin, 'admin')->post("/avaliacoes/{$avaliacao->codigo}/questoes/import", [
+            'arquivo' => UploadedFile::fake()->createWithContent('b.csv', "Questão,Gabarito,A partir do período\n2,A,6\n"),
+        ]);
+
+        $this->assertSame(2, Questao::where('numero', 1)->firstOrFail()->periodo_minimo);
+        $this->assertSame(6, Questao::where('numero', 2)->firstOrFail()->periodo_minimo);
+    }
+
+    public function test_reimportar_sem_a_coluna_de_periodo_minimo_nao_apaga_o_valor_salvo(): void
+    {
+        $avaliacao = Avaliacao::create([]);
+        $admin = $this->admin();
+
+        $this->actingAs($admin, 'admin')->post("/avaliacoes/{$avaliacao->codigo}/questoes/import", [
+            'arquivo' => UploadedFile::fake()->createWithContent('a.csv', "Questão,Gabarito,Período mínimo\n1,A,4\n"),
+        ]);
+        $this->actingAs($admin, 'admin')->post("/avaliacoes/{$avaliacao->codigo}/questoes/import", [
+            'arquivo' => UploadedFile::fake()->createWithContent('b.csv', "Questão,Gabarito\n1,B\n"),
+        ]);
+
+        $questao = Questao::where('numero', 1)->firstOrFail();
+        $this->assertSame('B', $questao->gabarito);
+        $this->assertSame(4, $questao->periodo_minimo);
+    }
+
     public function test_reimportar_planilha_parcial_nao_zera_os_metadados_que_ela_nao_traz(): void
     {
         $avaliacao = Avaliacao::create([]);

@@ -37,6 +37,27 @@ class StoreAvaliacaoRequest extends FormRequest
             'cursos.*' => ['string', 'max:200'],
             'usuarios_acesso' => ['nullable', 'array'],
             'usuarios_acesso.*' => ['integer'],
+            // Estudante em risco só nesta avaliação (App\Support\RegraDeRisco): acerto vazio = padrão da instituição,
+            // 0 = esta prova não entra no critério de acerto; `risco_ignora_falta` = faltar a ela não conta como falta.
+            'risco_enviado' => ['nullable', 'boolean'],
+            'risco_acerto' => ['nullable', 'numeric', 'between:0,100'],
+            'risco_ignora_falta' => ['nullable', 'boolean'],
+        ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        // "62,5" também vale.
+        if (is_string($this->input('risco_acerto'))) {
+            $this->merge(['risco_acerto' => str_replace(',', '.', trim($this->input('risco_acerto')))]);
+        }
+    }
+
+    public function messages(): array
+    {
+        return [
+            'risco_acerto.numeric' => 'Informe o percentual de acerto do risco como número (ex.: 50), ou deixe em branco para usar o padrão.',
+            'risco_acerto.between' => 'O percentual de acerto do risco deve ficar entre 0 e 100.',
         ];
     }
 }

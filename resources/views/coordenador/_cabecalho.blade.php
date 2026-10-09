@@ -20,9 +20,9 @@
 
     $abas = [
         ['id' => 'visao', 'rota' => 'coordenador.painel', 'icone' => 'ph-squares-four', 'rotulo' => 'Visão geral'],
-        ['id' => 'alunos', 'rota' => 'coordenador.alunos', 'icone' => 'ph-users-three', 'rotulo' => 'Alunos'],
         ['id' => 'desempenho', 'rota' => 'coordenador.desempenho', 'icone' => 'ph-chart-line-up', 'rotulo' => 'Desempenho'],
         ['id' => 'comparativo', 'rota' => 'coordenador.comparativo', 'icone' => 'ph-arrows-left-right', 'rotulo' => 'Comparar semestres'],
+        ['id' => 'alunos', 'rota' => 'coordenador.alunos', 'icone' => 'ph-users-three', 'rotulo' => 'Alunos'],
     ];
 @endphp
 <div class="relative overflow-hidden rounded-2xl shadow-lg mb-6" style="background: linear-gradient(135deg, #00b48d 0%, #009e7d 55%, #007a61 100%);">
