@@ -30,6 +30,7 @@
             ['E se não houver tempo para executar?', 'Redimensione a ação para algo viável antes da próxima aplicação. Uma proposta só de longo prazo não atende ao objetivo deste ciclo.'],
         ],
         5 => [
+            ['Preciso preencher tudo?', 'Não. Nenhuma etapa é obrigatória: você pode salvar e enviar o plano com o que tiver. O que ficar em branco aparece como lacuna para o colaborador, que pode pedir ajustes.'],
             ['O que acontece depois que eu enviar?', 'O colaborador analisa o plano e decide: aprovar, pedir ajustes (o plano volta para você editar e reenviar) ou recusar — sempre com justificativa. Você é avisado pelas notificações.'],
             ['Posso mudar o plano depois de aprovado?', 'O conteúdo aprovado não muda. Você acompanha a execução: atualiza a situação das ações, reprograma prazos (com justificativa) e registra o andamento. Se o plano precisar mudar de rumo, cancele e crie outro a partir dele.'],
             ['A meta atingida prova que a ação funcionou?', 'O resultado da próxima avaliação permite ver o avanço frente à meta, mas atribuir causalidade à ação exige cautela e análise das evidências. O plano mostrará a comparação quando houver a avaliação seguinte.'],

@@ -77,11 +77,11 @@
         </div>
     @endif
 
-    @if ($plano->editavel() && $pendencias !== [])
+    @if ($plano->editavel() && $lacunas !== [])
         <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status">
-            <p class="font-bold flex items-center gap-2"><i class="ph-bold ph-list-checks" aria-hidden="true"></i> Falta completar antes de enviar</p>
+            <p class="font-bold flex items-center gap-2"><i class="ph-bold ph-list-checks" aria-hidden="true"></i> Ainda em branco <span class="font-normal">(nada é obrigatório: você pode enviar assim mesmo)</span></p>
             <ul class="list-disc pl-5 mt-1 space-y-0.5">
-                @foreach ($pendencias as $falta)
+                @foreach ($lacunas as $falta)
                     <li>{{ $falta['mensagem'] }} @if ($podeEscrever)<a href="{{ route('coordenador.planos.edit', [$plano, 'etapa' => $falta['etapa']]) }}" class="underline font-semibold">Ir para a etapa {{ $falta['etapa'] }}</a>@endif</li>
                 @endforeach
             </ul>

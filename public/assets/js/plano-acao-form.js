@@ -3,8 +3,8 @@
  * <form>. Sem JavaScript todas as etapas aparecem empilhadas e o envio funciona igual; com ele, uma etapa por vez, a
  * pontuação das causas, as ações dinâmicas, "Inserir sugestão do painel" e a síntese ao vivo.
  *
- * A conferência de "o que falta" daqui (conferirFaltas) é só um adiantamento da tela: quem decide se o plano pode ser
- * enviado é o servidor (App\Support\PlanoAcaoChecagem) — manter as duas em sintonia.
+ * Nenhuma etapa é obrigatória. A conferência de "o que está em branco" daqui (conferirFaltas) só INFORMA, como
+ * App\Support\PlanoAcaoChecagem::lacunas no servidor — manter as duas em sintonia.
  */
 (function () {
     'use strict';
@@ -283,14 +283,10 @@
     if (enviar) {
         enviar.addEventListener('click', function (e) {
             var faltas = conferirFaltas();
-            if (faltas.length) {
-                e.preventDefault();
-                mostrarFaltas(faltas);
-                var caixa = document.getElementById('faltas');
-                if (caixa) caixa.scrollIntoView({ block: 'center', behavior: 'smooth' });
-                return;
-            }
-            if (!window.confirm('Enviar o plano para análise do colaborador?')) e.preventDefault();
+            var aviso = faltas.length
+                ? 'Há ' + faltas.length + ' ponto(s) em branco. Nenhuma etapa é obrigatória, mas o colaborador verá o que faltou.\n\nEnviar o plano para análise mesmo assim?'
+                : 'Enviar o plano para análise do colaborador?';
+            if (!window.confirm(aviso)) e.preventDefault();
         });
     }
 

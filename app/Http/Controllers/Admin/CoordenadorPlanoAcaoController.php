@@ -11,7 +11,6 @@ use App\Services\PlanoAcaoService;
 use App\Support\PlanoAcaoChecagem;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 /**
@@ -69,7 +68,6 @@ class CoordenadorPlanoAcaoController extends PlanoAcaoPainelController
             'plano' => new PlanoAcao(['status' => PlanoAcao::RASCUNHO]),
             'origem' => $origem,
             'etapa' => 1,
-            'faltas' => [],
         ]);
     }
 
@@ -97,7 +95,7 @@ class CoordenadorPlanoAcaoController extends PlanoAcaoPainelController
         return view('plano.show', [
             'usuario' => $usuario,
             'plano' => $plano,
-            'pendencias' => $plano->editavel() ? PlanoAcaoChecagem::pendencias($plano) : [],
+            'lacunas' => $plano->editavel() ? PlanoAcaoChecagem::lacunas($plano) : [],
             'alertas' => PlanoAcaoChecagem::alertas($plano),
             'resultado' => in_array($plano->status, [PlanoAcao::APROVADO, PlanoAcao::CONCLUIDO], true) ? $resultados->calcular($plano) : null,
             'podeEscrever' => ! $usuario->emVisaoDeCurso,
@@ -120,7 +118,6 @@ class CoordenadorPlanoAcaoController extends PlanoAcaoPainelController
             'plano' => $plano,
             'origem' => $this->origemDoPlano($usuario, $plano, $origemServico),
             'etapa' => max(1, min(5, (int) $request->query('etapa', 1))),
-            'faltas' => session('faltas', []),
         ]);
     }
 
@@ -196,11 +193,6 @@ class CoordenadorPlanoAcaoController extends PlanoAcaoPainelController
 
         try {
             $this->servico->enviar($plano->fresh(), $usuario);
-        } catch (ValidationException $e) {
-            // O conteúdo já está salvo; a tela lista o que falta, por etapa.
-            return redirect()->route('coordenador.planos.edit', [$plano, 'etapa' => 5])
-                ->with('faltas', PlanoAcaoChecagem::pendencias($plano->fresh()->load('acoes')))
-                ->with('erro', 'Rascunho salvo, mas o plano ainda não pode ser enviado: complete o que está listado abaixo.');
         } catch (\DomainException $e) {
             return redirect()->route('coordenador.planos.show', $plano)->with('erro', $e->getMessage());
         }

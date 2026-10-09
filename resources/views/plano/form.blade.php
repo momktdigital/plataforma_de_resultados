@@ -342,16 +342,12 @@
                 <section data-etapa="5" aria-labelledby="titulo-etapa-5" class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 space-y-5">
                     <div>
                         <h2 id="titulo-etapa-5" class="text-lg font-bold">5. Síntese e envio</h2>
-                        <p class="text-sm text-slate-600">Revise o que foi preenchido. Ao enviar, o plano segue para a análise do colaborador; você será avisado da decisão.</p>
+                        <p class="text-sm text-slate-600">Revise o que foi preenchido. Nenhuma etapa é obrigatória: o que ficar em branco é só sinalizado. Ao enviar, o plano segue para a análise do colaborador; você será avisado da decisão.</p>
                     </div>
 
-                    <div id="faltas" class="{{ $faltas === [] ? 'hidden' : '' }} rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status">
-                        <p class="font-bold flex items-center gap-2"><i class="ph-bold ph-list-checks" aria-hidden="true"></i> Falta completar antes de enviar</p>
-                        <ul id="lista-faltas" class="list-disc pl-5 mt-1 space-y-0.5">
-                            @foreach ($faltas as $falta)
-                                <li>{{ $falta['mensagem'] }} <button type="button" data-ir-etapa="{{ $falta['etapa'] }}" class="underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded">Ir para a etapa {{ $falta['etapa'] }}</button></li>
-                            @endforeach
-                        </ul>
+                    <div id="faltas" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status">
+                        <p class="font-bold flex items-center gap-2"><i class="ph-bold ph-list-checks" aria-hidden="true"></i> Ainda em branco <span class="font-normal">(nada é obrigatório: você pode enviar assim mesmo)</span></p>
+                        <ul id="lista-faltas" class="list-disc pl-5 mt-1 space-y-0.5"></ul>
                     </div>
 
                     <div id="sintese" class="rounded-xl border border-slate-200 divide-y divide-slate-100 text-sm" aria-live="polite"></div>

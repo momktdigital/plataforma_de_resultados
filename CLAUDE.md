@@ -175,7 +175,8 @@ enxerga resultados nem alunos. Por isso:
   "sem resultado" (não troque por um número de outro recorte com o rótulo deste).
 - **Só dado agregado** em `planos_acao` (incluindo o `contexto` JSON): nunca nome, RA ou CPF de aluno. Há teste (`PlanoAcaoTest`).
 - **Estado muda só em `PlanoAcaoService`** (grava o evento, a auditoria e avisa o coordenador). `plano_acao_eventos` é log só de
-  acrescentar, como `acompanhamentos`. "O que falta para enviar" é `PlanoAcaoChecagem` — a conferência do `plano-acao-form.js` é só um
+  acrescentar, como `acompanhamentos`. **Nenhuma etapa do plano é obrigatória** (decisão do produto): "o que está em branco" é `PlanoAcaoChecagem::lacunas()` e só informa — não volte a barrar
+  salvar ou enviar. A conferência do `plano-acao-form.js` é só um
   adiantamento da tela; mantenha as duas em sintonia.
 - Quem vê: coordenador, planos dos cursos dele (`PlanoAcao::scopeVisivelPara`; plano de outro curso é **404**); colaborador e
   administrador, só os **enviados** (rascunho é privado: 404). Rota nova que GRAVA no grupo do coordenador já é barrada para o reitor
