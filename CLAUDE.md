@@ -181,6 +181,11 @@ enxerga resultados nem alunos. Por isso:
 - Quem vê: coordenador, planos dos cursos dele (`PlanoAcao::scopeVisivelPara`; plano de outro curso é **404**); colaborador e
   administrador, só os **enviados** (rascunho é privado: 404). Rota nova que GRAVA no grupo do coordenador já é barrada para o reitor
   pelo `VisaoDeCursoDoReitor`; os controllers conferem `emVisaoDeCurso` mesmo assim (`coordenadorQueEscreve()`).
+- As **avaliações do recorte** ficam em `contexto.avaliacoes` e o link é o Dashboard (`avaliacoes.bi`), que mostra dados de aluno:
+  `PlanoAcaoService::avaliacoesAcessiveis()` decide quem abre (coordenador do curso e administrador; o colaborador não). Não linke o
+  Dashboard para o colaborador.
+- E-mail do plano (`PlanoAcaoEmailService`) é complemento, nunca dependência: respeita `smtp_ativo`, engole falha de envio e não leva
+  dado de aluno (só rótulo do plano, curso e o texto da justificativa/comentário).
 - O número do menu (`comAjustes`/`aguardandoAnalise`) roda em TODA página: mantenha-o barato (sem `NomeCurso::variantes`).
 
 ## Perfil (`admins.role`) falha fechado

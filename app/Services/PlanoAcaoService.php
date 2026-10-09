@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Admin;
+use App\Models\Avaliacao;
 use App\Models\Notificacao;
 use App\Models\PlanoAcao;
 use App\Models\PlanoAcaoAcao;
@@ -10,6 +11,7 @@ use App\Models\PlanoAcaoEvento;
 use App\Support\AtividadeLogger;
 use App\Support\NomeCurso;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -31,6 +33,8 @@ use Illuminate\Validation\ValidationException;
  */
 class PlanoAcaoService
 {
+    public function __construct(private readonly PlanoAcaoEmailService $email) {}
+
     /** Decisões do colaborador → estado em que o plano fica. */
     public const DECISOES = [
         'aprovar' => PlanoAcao::APROVADO,
@@ -71,6 +75,7 @@ class PlanoAcaoService
                 'origem_rotulo' => $origem['rotulo'],
                 'contexto' => [
                     'linhas' => $origem['linhas'] ?? [],
+                    'avaliacoes' => $origem['avaliacoes'] ?? [],
                     'categoria' => $origem['categoria_nome'] ?? null,
                     'categoria_automatica' => (bool) ($origem['categoria_automatica'] ?? false),
                     'recorte_indicadores' => $ind['recorte'] ?? null,
@@ -129,6 +134,24 @@ class PlanoAcaoService
         return $plano;
     }
 
+    /**
+     * Planos ainda vivos (rascunho, em análise, ajustes, em execução) sobre o MESMO recorte e o mesmo visual/item — para avisar
+     * o coordenador antes de abrir um plano repetido. Só informa: nada é barrado.
+     *
+     * @return Collection<int, PlanoAcao>
+     */
+    public function semelhantes(string $curso, string $periodoLetivo, ?int $categoriaId, string $visual, ?string $item): Collection
+    {
+        return PlanoAcao::dosCursos([$curso])
+            ->whereIn('status', [PlanoAcao::RASCUNHO, PlanoAcao::EM_ANALISE, PlanoAcao::AJUSTES, PlanoAcao::APROVADO])
+            ->where('periodo_letivo', $periodoLetivo)
+            ->where('origem_visual', $visual)
+            ->when($categoriaId !== null, fn ($q) => $q->where('categoria_id', $categoriaId), fn ($q) => $q->whereNull('categoria_id'))
+            ->when($item !== null, fn ($q) => $q->where('origem_item', $item), fn ($q) => $q->whereNull('origem_item'))
+            ->orderByDesc('id')
+            ->get();
+    }
+
     /** Só rascunho some de verdade: o que já foi enviado fica no histórico (cancele em vez de apagar). */
     public function excluir(PlanoAcao $plano): void
     {
@@ -160,6 +183,7 @@ class PlanoAcaoService
 
         $this->registrar($plano, $autor, $reenvio ? PlanoAcaoEvento::REENVIADO : PlanoAcaoEvento::ENVIADO, null, ['envio' => $plano->envios]);
         AtividadeLogger::registrar('plano_acao.enviado', 'PlanoAcao', $plano->id, ['curso' => $plano->curso, 'envio' => $plano->envios]);
+        $this->email->planoEnviado($plano, $reenvio);
 
         return $plano;
     }
@@ -217,6 +241,7 @@ class PlanoAcaoService
             'recusar' => ['Plano de ação recusado', 'plano_recusado'],
         };
         $this->avisar($plano, $tipoAviso, "{$titulo}: {$plano->origem_rotulo}", $justificativa !== '' ? Str::limit($justificativa, 280) : 'O plano foi aprovado e já pode ser executado e acompanhado.', "plano:{$plano->id}:decisao:{$evento->id}");
+        $this->email->decisaoOuComentario($plano, "{$titulo}: {$plano->origem_rotulo}", $justificativa !== '' ? $justificativa : 'O plano foi aprovado e já pode ser executado e acompanhado.');
 
         return $plano;
     }
@@ -226,8 +251,11 @@ class PlanoAcaoService
     {
         $evento = $this->registrar($plano, $autor, PlanoAcaoEvento::COMENTARIO, trim($texto));
 
-        if (! $autor->ehCoordenador()) {
+        if ($autor->ehCoordenador()) {
+            $this->email->comentarioDoCoordenador($plano, trim($texto));
+        } else {
             $this->avisar($plano, 'plano', "Novo comentário no plano: {$plano->origem_rotulo}", Str::limit(trim($texto), 280), "plano:{$plano->id}:comentario:{$evento->id}");
+            $this->email->decisaoOuComentario($plano, "Novo comentário no plano: {$plano->origem_rotulo}", trim($texto));
         }
 
         return $evento;
@@ -329,6 +357,26 @@ class PlanoAcaoService
         AtividadeLogger::registrar('plano_acao.cancelado', 'PlanoAcao', $plano->id, ['curso' => $plano->curso]);
 
         return $plano;
+    }
+
+    /**
+     * Dessas avaliações, as que o usuário pode abrir no Dashboard (que mostra dados de alunos): o coordenador, as dos cursos
+     * dele; o administrador, todas; o colaborador, nenhuma (ele vê o nome, a data e o código, sem o link).
+     *
+     * @param  array<int, int>  $codigos
+     * @return array<int, int>
+     */
+    public static function avaliacoesAcessiveis(Admin $usuario, array $codigos): array
+    {
+        if ($codigos === []) {
+            return [];
+        }
+
+        if ($usuario->ehCoordenador()) {
+            return Avaliacao::visivelPara($usuario)->whereIn('codigo', $codigos)->pluck('codigo')->map(fn ($c) => (int) $c)->all();
+        }
+
+        return $usuario->ehAdministrador() ? Avaliacao::whereIn('codigo', $codigos)->pluck('codigo')->map(fn ($c) => (int) $c)->all() : [];
     }
 
     // ---------------------------------------------------------------------------------------------------------------

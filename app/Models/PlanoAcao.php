@@ -226,6 +226,22 @@ class PlanoAcao extends Model
         return $this->eventos->first()?->created_at ?? $this->updated_at;
     }
 
+    /**
+     * As avaliações a que o plano se refere (a lista guardada na criação; planos antigos sem lista caem na avaliação de
+     * origem, se houver), para o link de cada uma.
+     *
+     * @return array<int, array{codigo: int, nome: string, data: ?string, periodoLetivo: ?string}>
+     */
+    public function avaliacoesDoRecorte(): array
+    {
+        $lista = $this->contexto['avaliacoes'] ?? [];
+        if ($lista === [] && $this->avaliacao_codigo !== null && ($a = Avaliacao::find($this->avaliacao_codigo)) !== null) {
+            $lista = [['codigo' => (int) $a->codigo, 'nome' => $a->nome ?: "Avaliação #{$a->codigo}", 'data' => $a->data_avaliacao?->format('Y-m-d'), 'periodoLetivo' => null]];
+        }
+
+        return $lista;
+    }
+
     /** Em execução, com ações abertas e sem nenhuma movimentação há PlanoAcaoLembreteService::DIAS_PARADO dias ou mais. */
     public function estaParado(): bool
     {

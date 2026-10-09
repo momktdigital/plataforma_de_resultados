@@ -6,6 +6,7 @@ use App\Models\Admin;
 use App\Models\Aluno;
 use App\Models\Avaliacao;
 use App\Models\Categoria;
+use App\Models\Configuracao;
 use App\Models\Notificacao;
 use App\Models\PlanoAcao;
 use App\Models\PlanoAcaoAcao;
@@ -13,6 +14,7 @@ use App\Models\PlanoAcaoEvento;
 use App\Models\Questao;
 use App\Models\Resposta;
 use App\Services\PlanoAcaoLembreteService;
+use App\Services\Portal\SmtpEmailSender;
 use App\Services\PlanoAcaoResultadoService;
 use App\Services\ResumoResultadoService;
 use App\Support\PlanoAcaoChecagem;
@@ -674,6 +676,144 @@ class PlanoAcaoTest extends TestCase
         $this->assertSame(PlanoAcao::EM_ANALISE, $plano->fresh()->status);
         $this->assertSame(1, Notificacao::where('admin_id', $coordenador->id)->where('tipo', 'plano')->count());
         $this->actingAs($coordenador, 'admin')->get("/painel/planos/{$plano->id}")->assertSee('Qual a turma-alvo da primeira ação?');
+    }
+
+    // ---- link para a avaliação ----
+
+    public function test_plano_guarda_as_avaliacoes_do_recorte_e_cada_perfil_ve_o_que_pode_abrir(): void
+    {
+        $d1 = $this->avaliacao('D1', '2026-03-10');
+        $this->avaliacao('D2', '2026-09-10'); // outro período letivo: fora do recorte
+        $plano = $this->criar($this->coordenador(), [], 'enviar');
+
+        $this->assertSame([$d1->codigo], array_column($plano->fresh()->avaliacoesDoRecorte(), 'codigo'));
+
+        $link = route('avaliacoes.bi', $d1->codigo);
+        // o coordenador do curso abre o Dashboard da avaliação, e também volta ao painel de desempenho do recorte
+        $this->actingAs($plano->autor, 'admin')->get("/painel/planos/{$plano->id}")->assertOk()
+            ->assertSee('Avaliação do plano')->assertSee('D1')->assertSee($link, false)->assertSee('Ver este dado no painel de desempenho');
+        // o administrador também abre
+        $admin = Admin::create(['username' => 'adm', 'password_hash' => bcrypt('x'), 'role' => Admin::ROLE_ADMIN]);
+        $this->actingAs($admin, 'admin')->get("/colaboracao/planos/{$plano->id}")->assertOk()->assertSee($link, false);
+        // o colaborador vê a avaliação, mas o Dashboard (com alunos) não abre para ele: sem link
+        $this->actingAs($this->colaborador(), 'admin')->get("/colaboracao/planos/{$plano->id}")->assertOk()
+            ->assertSee('D1')->assertSee('#'.$d1->codigo)->assertDontSee($link, false)->assertSee('só abre para o coordenador do curso e o administrador');
+    }
+
+    public function test_formulario_mostra_as_avaliacoes_do_recorte_com_link(): void
+    {
+        $d1 = $this->avaliacao('D1', '2026-03-10');
+
+        $this->actingAs($this->coordenador(), 'admin')->get('/painel/planos/novo?visual=geral&periodo_letivo=2026/1&categoria='.$this->categoria->id)->assertOk()
+            ->assertSee('Avaliação do plano')->assertSee(route('avaliacoes.bi', $d1->codigo), false)->assertSee('target="_blank"', false);
+    }
+
+    public function test_plano_de_avaliacao_especifica_aponta_so_para_ela(): void
+    {
+        $this->avaliacao('D1', '2026-03-10');
+        $d2 = $this->avaliacao('D1b', '2026-04-10');
+
+        $origem = $this->actingAs($this->coordenador(), 'admin')->get("/painel/planos/novo?visual=avaliacao&avaliacao={$d2->codigo}")->assertOk()->viewData('origem');
+
+        $this->assertSame([$d2->codigo], array_column($origem['avaliacoes'], 'codigo'));
+    }
+
+    // ---- melhorias do processo ----
+
+    public function test_avisa_quando_ja_existe_plano_sobre_o_mesmo_recorte(): void
+    {
+        $this->avaliacao('D1', '2026-03-10');
+        $coordenador = $this->coordenador();
+        $existente = $this->criar($coordenador); // visual=area, item=Clínica
+
+        $url = '/painel/planos/novo?visual=area&item=Clínica&periodo_letivo=2026/1&categoria='.$this->categoria->id;
+        $this->actingAs($coordenador, 'admin')->get($url)->assertOk()->assertSee('Já existe plano sobre este mesmo recorte')->assertSee(route('coordenador.planos.show', $existente), false);
+
+        // outro item ou um plano já recusado: sem aviso
+        $this->get('/painel/planos/novo?visual=area&item=Outra&periodo_letivo=2026/1&categoria='.$this->categoria->id)->assertDontSee('Já existe plano');
+        $existente->update(['status' => PlanoAcao::RECUSADO]);
+        $this->get($url)->assertDontSee('Já existe plano');
+    }
+
+    public function test_tela_do_plano_tem_botao_de_imprimir(): void
+    {
+        $plano = $this->enviado();
+
+        $this->actingAs($plano->autor, 'admin')->get("/painel/planos/{$plano->id}")->assertOk()->assertSee('Imprimir / salvar em PDF');
+        $this->actingAs($this->colaborador(), 'admin')->get("/colaboracao/planos/{$plano->id}")->assertOk()->assertSee('Imprimir / salvar em PDF');
+    }
+
+    /** Um SmtpEmailSender que só guarda o que seria enviado (ou falha). */
+    private function remetenteFalso(bool $falha = false): object
+    {
+        $falso = new class($falha) extends SmtpEmailSender
+        {
+            /** @var array<int, array{0: string, 1: string, 2: string}> */
+            public array $enviados = [];
+
+            public function __construct(private readonly bool $falha) {}
+
+            public function enviar(string $destinatario, string $assunto, string $corpoHtml): void
+            {
+                if ($this->falha) {
+                    throw new \RuntimeException('SMTP fora do ar');
+                }
+                $this->enviados[] = [$destinatario, $assunto, $corpoHtml];
+            }
+        };
+        $this->app->instance(SmtpEmailSender::class, $falso);
+
+        return $falso;
+    }
+
+    private function configurarSmtp(): void
+    {
+        Configuracao::definir('smtp_ativo', '1');
+        Configuracao::definir('smtp_host', 'smtp.example.test');
+        Configuracao::definir('smtp_from_email', 'avisos@example.test');
+    }
+
+    public function test_email_avisa_o_colaborador_do_plano_enviado_e_o_coordenador_da_decisao(): void
+    {
+        $this->configurarSmtp();
+        $falso = $this->remetenteFalso();
+        $this->avaliacao('D1', '2026-03-10');
+        $coordenador = $this->coordenador();
+        $colaborador = $this->colaborador();
+
+        $this->criar($coordenador, [], 'enviar');
+        $plano = PlanoAcao::firstOrFail();
+
+        $this->assertCount(1, $falso->enviados);
+        $this->assertSame('colab@example.test', $falso->enviados[0][0]);
+        $this->assertStringContainsString('Novo plano de ação para análise', $falso->enviados[0][1]);
+        $this->assertStringContainsString(route('colaborador.planos.show', $plano), $falso->enviados[0][2]);
+
+        $this->actingAs($colaborador, 'admin')->post("/colaboracao/planos/{$plano->id}/decisao", ['decisao' => 'ajustes', 'justificativa' => 'Detalhe melhor a verificação.']);
+
+        $this->assertCount(2, $falso->enviados);
+        $this->assertSame('coord@example.test', $falso->enviados[1][0]);
+        $this->assertStringContainsString('devolvido para ajustes', $falso->enviados[1][1]);
+        $this->assertStringContainsString('Detalhe melhor a verificação.', $falso->enviados[1][2]);
+
+        $this->actingAs($coordenador, 'admin')->post("/painel/planos/{$plano->id}/comentarios", ['texto' => 'Vou detalhar hoje.']);
+        $this->assertSame('colab@example.test', end($falso->enviados)[0]);
+    }
+
+    public function test_sem_smtp_configurado_nao_envia_e_falha_de_envio_nao_quebra_o_fluxo(): void
+    {
+        $falso = $this->remetenteFalso();
+        $this->avaliacao('D1', '2026-03-10');
+        $colaborador = $this->colaborador();
+
+        $plano = $this->criar($this->coordenador(), [], 'enviar');
+        $this->assertSame([], $falso->enviados); // SMTP não configurado
+        $this->assertSame(PlanoAcao::EM_ANALISE, $plano->fresh()->status);
+
+        $this->configurarSmtp();
+        $this->remetenteFalso(falha: true);
+        $this->actingAs($colaborador, 'admin')->post("/colaboracao/planos/{$plano->id}/decisao", ['decisao' => 'aprovar'])->assertSessionHasNoErrors();
+        $this->assertSame(PlanoAcao::APROVADO, $plano->fresh()->status);
     }
 
     // ---- resultado, lembretes, menu ----

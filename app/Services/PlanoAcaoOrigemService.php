@@ -107,6 +107,16 @@ class PlanoAcaoOrigemService
 
         $indicadores = $this->indicadores->calcular($curso, $periodo, $categoriaId, $avaliacao);
 
+        // As avaliações do recorte: a pedida, ou as do período na categoria (todas do período se não há categoria). O plano
+        // guarda esta lista para quem o analisa poder ir até elas.
+        $avaliacoesDoRecorte = $escopo['doPeriodo']
+            ->filter(fn ($a) => $avaliacao !== null ? $a['codigo'] === $avaliacao : ($categoriaId === null || $a['categoriaId'] === $categoriaId))
+            ->sortBy(fn ($a) => [$a['data'] ?? '9999-12-31', $a['codigo']])
+            ->take(20)
+            ->map(fn ($a) => ['codigo' => $a['codigo'], 'nome' => $a['nome'], 'data' => $a['data'], 'periodoLetivo' => $a['periodoLetivo']])
+            ->values()
+            ->all();
+
         $leitura = match ($visual) {
             'area', 'bloom', 'tema' => $this->campo($visual, $item, $bloco, $periodo),
             'evolucao' => $this->evolucao($bloco),
@@ -130,6 +140,7 @@ class PlanoAcaoOrigemService
             'categoria_automatica' => $automatica,
             'categorias' => $disponiveis,
             'avaliacao_codigo' => $avaliacao,
+            'avaliacoes' => $avaliacoesDoRecorte,
             'indicadores' => $indicadores,
             'linhas' => $leitura['linhas'],
             'sugestoes' => [

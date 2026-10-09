@@ -50,8 +50,16 @@
     @if (! empty($ctx['mistura']))
         <p class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">Os números reúnem avaliações de categorias diferentes, que não são comparáveis entre si.</p>
     @endif
+    <div class="mt-4 space-y-3">
+        @include('plano._avaliacoes', ['listaAvaliacoes' => $plano->avaliacoesDoRecorte(), 'avaliacoesAcessiveis' => $avaliacoesAcessiveis ?? []])
+        @if (! empty($urlDoPainel))
+            <a href="{{ $urlDoPainel }}" class="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded">
+                <i class="ph-bold ph-chart-line-up" aria-hidden="true"></i> Ver este dado no painel de desempenho
+            </a>
+        @endif
+    </div>
     @if (! empty($ctx['linhas']))
-        <details class="mt-3 rounded-xl border border-slate-200">
+        <details data-imprimir class="mt-3 rounded-xl border border-slate-200">
             <summary class="cursor-pointer px-4 py-2.5 text-sm font-semibold text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-xl">O dado que originou o plano ({{ count($ctx['linhas']) }} linha(s))</summary>
             <table class="w-full text-sm border-t border-slate-100">
                 <caption class="sr-only">Dados do visual em que o plano foi iniciado</caption>
@@ -137,6 +145,13 @@
         </ol>
     @endif
 </section>
+
+<script>
+    // Impressão / PDF: o que está recolhido (o dado que originou o plano) sai aberto no papel.
+    window.addEventListener('beforeprint', function () {
+        document.querySelectorAll('details[data-imprimir]').forEach(function (d) { d.open = true; });
+    });
+</script>
 
 @if (! empty($alertas))
     <section class="rounded-xl border border-amber-200 bg-amber-50 p-5" aria-labelledby="resumo-alertas">
