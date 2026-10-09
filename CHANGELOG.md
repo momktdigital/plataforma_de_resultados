@@ -120,6 +120,20 @@ linha, veja `git log`.
 - **Pendências** vinculadas à atividade e ao curso (pendência, encaminhamento, prazo, situação, responsável): o colaborador registra,
   o coordenador só visualiza; ficam como histórico e tudo vai para a auditoria.
 
+## Plano de ação do coordenador
+
+- **Ícone "iniciar plano de ação"** em cada visual e dado do painel do coordenador (cartões, gráficos de evolução, área, Bloom e
+  tema, barras por período e por curso, linhas de avaliações, destaques, Comparar semestres e Dashboard da avaliação). Num visual com
+  itens, abre um menu: o visual inteiro ou um item (uma área, um nível de Bloom...).
+- **Roteiro em cinco etapas** (ponto de partida, leitura do dado, causas com Ishikawa e 5 Porquês, ações, síntese e envio) já
+  preenchido com o curso, a participação atual, a meta de participação e a proficiência atual, mais o dado do visual e sugestões de
+  texto. Os números são recalculados no servidor, nunca vêm do navegador.
+- **Aprovação pelo colaborador** (e administrador): fila, critérios, e decisão de aprovar, pedir ajustes ou recusar, com
+  justificativa obrigatória nas duas últimas. Plano devolvido volta ao coordenador, que edita e reenvia.
+- **Acompanhamento** do plano aprovado: situação das ações, notas de andamento, prazo reprogramável com justificativa, encerramento
+  com síntese, cancelamento com motivo e comparação com o DI seguinte (linha de base x meta). Lembretes diários
+  (`planos:lembretes`) de prazo próximo, prazo vencido e plano parado. Histórico só de acrescentar e auditoria.
+
 ## Perfil de reitor e painel da reitoria
 
 - Novo perfil **reitor** (`admins.role = rector`): só leitura, todos os cursos,

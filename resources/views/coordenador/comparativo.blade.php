@@ -139,6 +139,7 @@
                 </div>
             @else
                 @php
+                    $ctxPlano = ['curso' => $painel['cursoSelecionado'] ?? '', 'periodo_letivo' => $atual, 'categoria' => $cat['id']];
                     $metricas = [
                         ['rotulo' => 'Média', 'par' => $cat['media'], 'inverter' => false, 'cor' => true],
                         // Com o mínimo esperado por período na categoria, o corte é o esperado de cada aluno; sem ele, os 60% de sempre.
@@ -151,7 +152,10 @@
                 <div class="grid gap-4 sm:grid-cols-3 mb-4">
                     @foreach ($metricas as $m)
                         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-                            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ $m['rotulo'] }}</p>
+                            <div class="flex items-start justify-between gap-2">
+                                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ $m['rotulo'] }}</p>
+                                @include('plano._botao', ['visual' => $m['rotulo'] === 'Presença' ? 'participacao' : 'proficiencia', 'titulo' => $m['rotulo'].' (comparação de semestres)', 'ctx' => $ctxPlano])
+                            </div>
                             <p class="text-3xl font-bold mt-2 tracking-tight {{ $m['cor'] ? CorDesempenho::classeTexto($m['par']['atual']) : '' }}">{{ $fmt($m['par']['atual']) }}<span class="text-lg font-medium text-slate-500">%</span></p>
                             <p class="text-xs text-slate-500 mt-1">{{ $atual }} &middot; em {{ $referencia }}: {{ $fmt($m['par']['referencia']) }}%</p>
                             <p class="mt-2">@include('coordenador._variacao', ['delta' => $m['par']['delta'], 'inverter' => $m['inverter']])</p>
@@ -161,11 +165,19 @@
 
                 <div class="grid gap-4 lg:grid-cols-2 mb-4">
                     @foreach ([
-                        ['titulo' => 'Desempenho por área', 'sub' => 'Da que mais piorou para a que mais melhorou.', 'itens' => $cat['areas'], 'vazio' => 'Sem áreas com respostas suficientes em algum dos períodos.'],
-                        ['titulo' => 'Desempenho por período do curso', 'sub' => 'Média de cada período do curso (1º, 2º...) em cada semestre.', 'itens' => $cat['periodosDoCurso'], 'vazio' => 'Sem período do curso válido na planilha de resultados.'],
+                        ['visual' => 'area', 'titulo' => 'Desempenho por área', 'sub' => 'Da que mais piorou para a que mais melhorou.', 'itens' => $cat['areas'], 'vazio' => 'Sem áreas com respostas suficientes em algum dos períodos.'],
+                        ['visual' => 'periodo_curso', 'titulo' => 'Desempenho por período do curso', 'sub' => 'Média de cada período do curso (1º, 2º...) em cada semestre.', 'itens' => $cat['periodosDoCurso'], 'vazio' => 'Sem período do curso válido na planilha de resultados.'],
                     ] as $quadro)
                         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-                            <h3 class="font-semibold mb-1">{{ $quadro['titulo'] }}</h3>
+                            <div class="flex items-start justify-between gap-3">
+                                <h3 class="font-semibold mb-1">{{ $quadro['titulo'] }}</h3>
+                                @if (! empty($quadro['itens']))
+                                    @include('plano._botao', [
+                                        'visual' => $quadro['visual'], 'titulo' => $quadro['titulo'].' ('.$atual.')', 'ctx' => $ctxPlano,
+                                        'planoItens' => array_map(fn ($it) => ['rotulo' => $it['rotulo'], 'valor' => $it['atual'] !== null ? $fmt($it['atual']).'%' : null], $quadro['itens']),
+                                    ])
+                                @endif
+                            </div>
                             <p class="text-sm text-slate-500 mb-3">{{ $quadro['sub'] }}</p>
                             @if (empty($quadro['itens']))
                                 <p class="text-sm text-slate-500">{{ $quadro['vazio'] }}</p>

@@ -3,6 +3,7 @@
         <div class="flex items-center gap-2 mb-4">
             <h2 class="font-semibold">Desempenho por área</h2>
             @include('_explicacao', ['explicacao' => $explicacoes['desempenho_area'] ?? null])
+            <span class="ml-auto">@include('plano._botao', ['visual' => 'area', 'titulo' => 'Desempenho por área', 'ctx' => ['curso' => '', 'avaliacao' => $avaliacao->codigo], 'planoItens' => collect($mediaPorArea)->sort()->map(fn ($p, $area) => ['rotulo' => $area, 'valor' => $p.'%'])->values()->all()])</span>
         </div>
         @if (empty($mediaPorArea))
             <p class="text-sm text-slate-500">Sem dados suficientes.</p>

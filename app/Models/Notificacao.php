@@ -48,6 +48,11 @@ class Notificacao extends Model
             'atencao' => ['icone' => 'ph-warning-circle', 'tom' => 'atencao'],
             'presenca' => ['icone' => 'ph-user-minus', 'tom' => 'atencao'],
             'queda' => ['icone' => 'ph-trend-down', 'tom' => 'atencao'],
+            'plano' => ['icone' => 'ph-clipboard-text', 'tom' => 'neutro'],
+            'plano_aprovado' => ['icone' => 'ph-check-circle', 'tom' => 'positivo'],
+            'plano_ajustes' => ['icone' => 'ph-pencil-line', 'tom' => 'atencao'],
+            'plano_recusado' => ['icone' => 'ph-x-circle', 'tom' => 'atencao'],
+            'plano_prazo' => ['icone' => 'ph-calendar-dots', 'tom' => 'atencao'],
             default => ['icone' => 'ph-bell', 'tom' => 'neutro'],
         };
     }

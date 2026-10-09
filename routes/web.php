@@ -11,8 +11,11 @@ use App\Http\Controllers\Admin\CoordenadorAcompanhamentoController;
 use App\Http\Controllers\Admin\CoordenadorAlunosController;
 use App\Http\Controllers\Admin\CoordenadorComparativoController;
 use App\Http\Controllers\Admin\ColaboradorCronogramaController;
+use App\Http\Controllers\Admin\ColaboradorPlanoAcaoController;
 use App\Http\Controllers\Admin\ColaboradorPendenciaController;
 use App\Http\Controllers\Admin\CoordenadorController;
+use App\Http\Controllers\Admin\CoordenadorPlanoAcaoController;
+use App\Http\Controllers\Admin\CoordenadorPlanoExecucaoController;
 use App\Http\Controllers\Admin\CronogramaController;
 use App\Http\Controllers\Admin\LixeiraController;
 use App\Http\Controllers\Admin\NotificacaoController;
@@ -134,6 +137,21 @@ Route::middleware('instalado')->group(function () {
             Route::get('/painel/alunos/exportar.xlsx', [CoordenadorAlunosController::class, 'xlsx'])->name('coordenador.alunos.xlsx');
             Route::get('/painel/alunos/{aluno}', [CoordenadorAlunosController::class, 'show'])->whereNumber('aluno')->name('coordenador.alunos.show');
             Route::post('/painel/alunos/{aluno}/acompanhamento', [CoordenadorAcompanhamentoController::class, 'store'])->whereNumber('aluno')->name('coordenador.alunos.acompanhamento');
+            // Planos de ação: o coordenador inicia a partir de um dado do painel, preenche o roteiro (dado → causa → ação), envia ao
+            // colaborador e acompanha a execução. Segmento literal (`novo`) ANTES do coringa {plano}.
+            Route::get('/painel/planos', [CoordenadorPlanoAcaoController::class, 'index'])->name('coordenador.planos.index');
+            Route::get('/painel/planos/novo', [CoordenadorPlanoAcaoController::class, 'novo'])->name('coordenador.planos.novo');
+            Route::post('/painel/planos', [CoordenadorPlanoAcaoController::class, 'store'])->name('coordenador.planos.store');
+            Route::get('/painel/planos/{plano}', [CoordenadorPlanoAcaoController::class, 'show'])->whereNumber('plano')->name('coordenador.planos.show');
+            Route::get('/painel/planos/{plano}/editar', [CoordenadorPlanoAcaoController::class, 'edit'])->whereNumber('plano')->name('coordenador.planos.edit');
+            Route::put('/painel/planos/{plano}', [CoordenadorPlanoAcaoController::class, 'update'])->whereNumber('plano')->name('coordenador.planos.update');
+            Route::delete('/painel/planos/{plano}', [CoordenadorPlanoAcaoController::class, 'destroy'])->whereNumber('plano')->name('coordenador.planos.destroy');
+            Route::post('/painel/planos/{plano}/retirar', [CoordenadorPlanoAcaoController::class, 'retirar'])->whereNumber('plano')->name('coordenador.planos.retirar');
+            Route::post('/painel/planos/{plano}/duplicar', [CoordenadorPlanoAcaoController::class, 'duplicar'])->whereNumber('plano')->name('coordenador.planos.duplicar');
+            Route::put('/painel/planos/{plano}/acoes/{acao}', [CoordenadorPlanoExecucaoController::class, 'atualizarAcao'])->whereNumber(['plano', 'acao'])->name('coordenador.planos.acoes.update');
+            Route::post('/painel/planos/{plano}/comentarios', [CoordenadorPlanoExecucaoController::class, 'comentar'])->whereNumber('plano')->name('coordenador.planos.comentarios.store');
+            Route::post('/painel/planos/{plano}/encerrar', [CoordenadorPlanoExecucaoController::class, 'encerrar'])->whereNumber('plano')->name('coordenador.planos.encerrar');
+            Route::post('/painel/planos/{plano}/cancelar', [CoordenadorPlanoExecucaoController::class, 'cancelar'])->whereNumber('plano')->name('coordenador.planos.cancelar');
             // Cronograma de atividades (somente leitura): o coordenador vê as atividades dos cursos dele e as pendências.
             Route::get('/cronograma', [CronogramaController::class, 'index'])->name('cronograma.index');
             Route::get('/cronograma/atividades/{item}', [CronogramaController::class, 'show'])->whereNumber('item')->name('cronograma.show');
@@ -181,6 +199,12 @@ Route::middleware('instalado')->group(function () {
             Route::put('/atividades/{item}', [ColaboradorCronogramaController::class, 'update'])->whereNumber('item')->name('atividades.update');
             Route::put('/atividades/{item}/situacao', [ColaboradorCronogramaController::class, 'situacao'])->whereNumber('item')->name('atividades.situacao');
             Route::delete('/atividades/{item}', [ColaboradorCronogramaController::class, 'destroy'])->whereNumber('item')->name('atividades.destroy');
+            // Planos de ação enviados pelos coordenadores: a fila de análise (aprovar, pedir ajustes, recusar — sempre com
+            // justificativa) e o acompanhamento dos que estão em execução.
+            Route::get('/planos', [ColaboradorPlanoAcaoController::class, 'index'])->name('planos.index');
+            Route::get('/planos/{plano}', [ColaboradorPlanoAcaoController::class, 'show'])->whereNumber('plano')->name('planos.show');
+            Route::post('/planos/{plano}/decisao', [ColaboradorPlanoAcaoController::class, 'decidir'])->whereNumber('plano')->name('planos.decidir');
+            Route::post('/planos/{plano}/comentarios', [ColaboradorPlanoAcaoController::class, 'comentar'])->whereNumber('plano')->name('planos.comentar');
             Route::get('/pendencias', [ColaboradorPendenciaController::class, 'index'])->name('pendencias.index');
             Route::post('/atividades/{item}/pendencias', [ColaboradorPendenciaController::class, 'store'])->whereNumber('item')->name('pendencias.store');
             Route::put('/pendencias/{pendencia}', [ColaboradorPendenciaController::class, 'update'])->whereNumber('pendencia')->name('pendencias.update');

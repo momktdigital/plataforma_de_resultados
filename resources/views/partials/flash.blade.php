@@ -5,6 +5,13 @@
     </div>
 @endif
 
+@if (session('erro'))
+    <div role="alert" class="mb-6 rounded-xl border border-red-200 bg-red-50 text-red-800 px-4 py-3 text-sm flex items-start gap-2 shadow-sm">
+        <i class="ph-fill ph-warning-circle text-red-500 text-lg mt-0.5" aria-hidden="true"></i>
+        <span>{{ session('erro') }}</span>
+    </div>
+@endif
+
 @if ($errors->any())
     <div id="erros-do-formulario" data-resumo-erros role="alert" class="mb-6 rounded-xl border border-red-200 bg-red-50 text-red-800 px-4 py-3 text-sm flex items-start gap-2 shadow-sm">
         <i class="ph-fill ph-warning-circle text-red-500 text-lg mt-0.5" aria-hidden="true"></i>

@@ -163,6 +163,25 @@ dado sensível — vai só para quem coordena o `curso` do registro (`Acompanham
 por `NomeCurso::variantes`) e NUNCA para `AtividadeLogger`. Qualquer rota nova que GRAVE algo no grupo do coordenador
 já é bloqueada para o reitor pelo middleware `VisaoDeCursoDoReitor` (só métodos seguros); não crie atalho em volta disso.
 
+## Plano de ação: números do servidor, só agregado
+
+O plano de ação (`planos_acao`, ver README) nasce de um dado do painel do coordenador e é lido pelo **colaborador**, que não
+enxerga resultados nem alunos. Por isso:
+
+- **Os números nunca vêm do navegador.** O link do ícone (`plano/_botao.blade.php`) só leva *onde* o coordenador estava (curso,
+  período, categoria, visual, item); `PlanoAcaoOrigemService::montar()` recalcula tudo, só para os cursos dele, e o `store` o chama de
+  novo. Participação, meta e proficiência vêm do `ReitorDashboardService` (via `PlanoAcaoIndicadoresService`) para o plano e o painel
+  nunca discordarem; ele cai silenciosamente no período/categoria mais recente quando o pedido não existe, e o serviço trata isso como
+  "sem resultado" (não troque por um número de outro recorte com o rótulo deste).
+- **Só dado agregado** em `planos_acao` (incluindo o `contexto` JSON): nunca nome, RA ou CPF de aluno. Há teste (`PlanoAcaoTest`).
+- **Estado muda só em `PlanoAcaoService`** (grava o evento, a auditoria e avisa o coordenador). `plano_acao_eventos` é log só de
+  acrescentar, como `acompanhamentos`. "O que falta para enviar" é `PlanoAcaoChecagem` — a conferência do `plano-acao-form.js` é só um
+  adiantamento da tela; mantenha as duas em sintonia.
+- Quem vê: coordenador, planos dos cursos dele (`PlanoAcao::scopeVisivelPara`; plano de outro curso é **404**); colaborador e
+  administrador, só os **enviados** (rascunho é privado: 404). Rota nova que GRAVA no grupo do coordenador já é barrada para o reitor
+  pelo `VisaoDeCursoDoReitor`; os controllers conferem `emVisaoDeCurso` mesmo assim (`coordenadorQueEscreve()`).
+- O número do menu (`comAjustes`/`aguardandoAnalise`) roda em TODA página: mantenha-o barato (sem `NomeCurso::variantes`).
+
 ## Perfil (`admins.role`) falha fechado
 
 Nunca escreva `! $usuario->ehCoordenador()` para decidir "então é administrador":

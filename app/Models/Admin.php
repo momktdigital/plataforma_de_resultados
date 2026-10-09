@@ -18,7 +18,8 @@ use Illuminate\Support\Facades\DB;
  * para linhas sem role), 'coordinator' (vê só avaliações dos cursos a que
  * está vinculado — ver cursos()) ou 'rector' (reitor: só leitura, enxerga os
  * indicadores agregados de TODOS os cursos — nunca dado nominal de aluno) ou 'collaborator' (colaborador: monta o
- * cronograma de atividades dos coordenadores e registra as pendências; não enxerga resultados nem alunos).
+ * cronograma de atividades dos coordenadores, registra as pendências e analisa os planos de ação que eles enviam; não enxerga
+ * resultados nem alunos — o plano só traz números agregados do curso).
  */
 class Admin extends Authenticatable
 {

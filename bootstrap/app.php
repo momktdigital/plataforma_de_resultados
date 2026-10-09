@@ -29,6 +29,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // sem supervisão contraria a confirmação manual de tag/hash exigida
         // na tela de atualização (ver AtualizacaoController).
         $schedule->command('sistema:atualizar --check')->daily()->onOneServer();
+
+        // Lembretes dos planos de ação em execução (prazo próximo ou vencido, plano parado); cada um é criado uma vez.
+        $schedule->command('planos:lembretes')->dailyAt('07:00')->onOneServer();
     })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([

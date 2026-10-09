@@ -470,7 +470,7 @@ aluno×avaliação×período) e toca `respostas` apenas na ficha de UM aluno.
 
 A checklist de auditoria ROC/ROD (planilha "Tabela-base da Auditoria") vira um **calendário por coordenador**. Quem monta é o
 **colaborador** (`admins.role = 'collaborator'`, quarta aba de `/usuarios`; entra por código no e-mail como o coordenador; só alcança
-o cronograma e o próprio perfil — o resto responde 403 e um GET fora do lugar volta para `/colaboracao`). O administrador também
+o cronograma, a análise dos planos de ação (ver abaixo) e o próprio perfil — o resto responde 403 e um GET fora do lugar volta para `/colaboracao`). O administrador também
 gerencia (sem ele ninguém corrigiria nada se o colaborador saísse).
 
 - **Atividade** (`cronograma_itens`): data, rotina (**ROD** = docentes, **ROC** = coordenação, **Auditoria** = conferência final),
@@ -505,6 +505,77 @@ php artisan cronograma:importar planilha.xlsx --mapa="Medicina Veterinária Inte
 Leituras em `CronogramaService`; o recorte por curso compara pelo nome sem acento/caixa (`NomeCurso`). Os cursos selecionáveis são os
 de `Curso::nomesDisponiveis()` (vindos da matrícula): um nome que a planilha usa e não existe lá (por exemplo, "Cursos EAD")
 precisa existir como curso para poder ser marcado.
+
+## Plano de ação (`/painel/planos`, `/colaboracao/planos`)
+
+O resultado do DI vira **ação pedagógica** dentro da própria plataforma. O coordenador inicia um plano a partir de um dado do
+painel, percorre o roteiro **dado → causa → ação**, envia ao **colaborador** (que aprova, pede ajustes ou recusa, sempre com
+justificativa) e, depois de aprovado, acompanha a execução até o encerramento. O roteiro é o do "Assistente interativo DI"
+(leitura orientada, Ishikawa, 5 Porquês, ação com verbo no infinitivo).
+
+**Onde começa.** Cada visual e cada dado do painel tem o ícone de prancheta (`resources/views/plano/_botao.blade.php`, só para o
+coordenador que pode gravar): os cartões de presença/média/abaixo do esperado, os gráficos de evolução, área, Bloom e tema, as
+barras por período do curso e por curso, as linhas das tabelas de avaliações, os "destaques", os cartões e quadros de **Comparar
+semestres** e os gráficos de área e Bloom do **Dashboard da avaliação**. Num visual com itens o ícone abre um menu — "plano sobre
+o visual inteiro" ou sobre **um item** (uma área, um nível de Bloom, um período do curso, uma avaliação...); é uma lista de links
+(teclado e leitor de tela), não depende de clicar no gráfico. O reitor na visão do curso e o administrador não veem o ícone.
+
+**O que já vem preenchido** (`PlanoAcaoOrigemService`, `PlanoAcaoIndicadoresService`). A URL só diz *onde* o coordenador estava
+(curso, período letivo, categoria ou avaliação, visual, item); **os números são recalculados no servidor**, só para os cursos
+dele, e nunca vêm do navegador:
+
+1. **Identificação do curso**, período letivo e categoria de avaliação;
+2. **Participação atual**, **meta de participação** (a institucional, de Configurações) e **proficiência atual** — os mesmos
+   números do painel da reitoria para aquele curso (`ReitorDashboardService`: participação = fizeram ÷ previstos pela matrícula;
+   proficiência = % dos presentes no corte institucional, 60% por padrão), de modo que plano e painel nunca discordem;
+3. o **dado do visual** (as linhas que o gráfico mostra, com o item clicado em destaque), guardado dentro do plano — o colaborador
+   não enxerga o painel de resultados e analisa só com o que está no plano — e **sugestões de texto** para a etapa de leitura
+   ("Inserir sugestão do painel"), sempre editáveis.
+
+A **meta de proficiência** é a única que o coordenador pactua (sem ela o plano não tem como ser avaliado depois).
+
+**O roteiro** (formulário único em `plano/form.blade.php`, cinco etapas; sem JavaScript as etapas ficam empilhadas e o envio
+funciona igual): 1 *Ponto de partida* · 2 *Leitura do dado* (recorte, resultado, fragilidades, dados que sustentam) · 3 *Causas*
+(Ishikawa em seis dimensões, priorização por Impacto × Evidência × Governabilidade de 1 a 3, 5 Porquês, causa-raiz acionável) ·
+4 *Ações* (uma ou mais: verbo no infinitivo, como será executada, responsável, prazo, como se verifica a execução e os sinais de
+aprendizagem) · 5 *Síntese e envio* (resumo ao vivo e lista do que falta). Cada etapa tem "Dúvidas desta etapa" (texto fixo do
+roteiro, sem IA). "Salvar rascunho" a qualquer momento. `PlanoAcaoChecagem` é a fonte única do que **bloqueia o envio** (campo
+vazio, ação sem verbo no infinitivo, prazo no passado, falta meta) e do que só **alerta** (ação depois do próximo DI, plano só de
+reuniões, sem 5 Porquês, causa com pontuação baixa).
+
+**Estados** (`PlanoAcao::STATUS`, transições só em `PlanoAcaoService`):
+
+```
+rascunho ──enviar──▶ em_analise ──aprovar──▶ aprovado (em execução) ──encerrar──▶ concluido
+   ▲  ▲                 │  │                      └──cancelar──▶ cancelado
+   │  └──retirar────────┘  └─recusar──▶ recusado (fim)
+   └──── ajustes ◀──pedir ajustes─┘   (o coordenador edita e reenvia)
+```
+
+- **Análise** (`/colaboracao/planos`, colaborador e administrador): fila "Aguardando análise" (os mais antigos primeiro), quadro dos
+  planos em execução, ações com prazo vencido e planos parados. Na tela do plano: critérios (o dado sustenta o resultado? a causa-raiz
+  é acionável? as ações respondem à causa? prazos viáveis? há como verificar?) e a decisão. **Pedir ajustes e recusar exigem
+  justificativa**; aprovar aceita observação. Os critérios não atendidos aparecem ao coordenador na devolução. Rascunho é
+  privado do coordenador (o colaborador recebe 404).
+- **Acompanhamento** (coordenador, plano aprovado): situação de cada ação (não iniciada, em andamento, concluída, cancelada), notas
+  de andamento, prazo reprogramável. **Concluir uma ação e mudar um prazo exigem a nota** (evidência / justificativa); o novo prazo não
+  pode ir para o passado. O plano é encerrado com uma síntese do que foi feito e aprendido, quando não há ação aberta; ou cancelado, com o motivo.
+- **Funcionou?** (`PlanoAcaoResultadoService`): compara a linha de base (foto dos indicadores na criação) com o primeiro período
+  letivo posterior com resultado na mesma categoria e com as metas. É um sinal, não uma prova — a tela diz isso.
+- **Histórico** (`plano_acao_eventos`): log só de acrescentar (criado, enviado, decisão com justificativa e critérios, andamento,
+  prazo reprogramado, comentário, encerrado...). Cada mudança de estado vai também para a auditoria (`plano_acao.*`).
+- **Avisos**: a decisão e os comentários do colaborador chegam ao coordenador pelo sino (`notificacoes`, tipos `plano*`). O
+  colaborador vê o número de planos aguardando no menu. `php artisan planos:lembretes` (agendado todo dia às 07:00) avisa o
+  coordenador de ação que vence em até 7 dias, ação vencida e plano sem movimento há 30 dias — cada lembrete é criado uma vez.
+- **Cópia**: um plano concluído, recusado, cancelado ou em execução pode virar um **novo rascunho** (indicadores recalculados, sem
+  prazos nem situação) para o ciclo seguinte.
+
+**Quem vê o quê.** Dois coordenadores do mesmo curso enxergam os mesmos planos (e qualquer um deles edita); plano de outro curso é
+**404**. O reitor na visão do curso lê a lista e o plano (só leitura, pelo `VisaoDeCursoDoReitor`); fora da visão é redirecionado.
+O colaborador e o administrador analisam planos enviados de qualquer curso. **O plano só guarda dado agregado** — nunca nome, RA ou
+CPF de aluno (há teste para isso) — porque é lido por quem não enxerga alunos.
+
+Tabelas: `planos_acao` (o plano e a foto dos indicadores), `plano_acao_acoes`, `plano_acao_eventos`.
 
 ## Painel da reitoria (`/reitoria`)
 
