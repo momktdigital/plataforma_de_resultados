@@ -532,6 +532,11 @@ dele, e nunca vêm do navegador:
    não enxerga o painel de resultados e analisa só com o que está no plano — e **sugestões de texto** para a etapa de leitura
    ("Inserir sugestão do painel"), sempre editáveis.
 
+4. as **avaliações do recorte** (a pedida, ou as do período na categoria), com o **link para o Dashboard de cada uma**
+   (`avaliacoes.bi`) — guardadas no plano (`contexto.avaliacoes`) e mostradas no formulário, na tela do plano e na análise. O link
+   abre para quem pode ver alunos: o coordenador do curso e o administrador; o colaborador vê nome, data e código, sem link. Há
+   também "Ver este dado no painel de desempenho" (curso, período e categoria do plano).
+
 A **meta de proficiência** é a única que o coordenador pactua (sem ela o plano não tem como ser avaliado depois).
 
 **O roteiro** (formulário único em `plano/form.blade.php`, cinco etapas; sem JavaScript as etapas ficam empilhadas e o envio
@@ -567,6 +572,12 @@ rascunho ──enviar──▶ em_analise ──aprovar──▶ aprovado (em ex
 - **Avisos**: a decisão e os comentários do colaborador chegam ao coordenador pelo sino (`notificacoes`, tipos `plano*`). O
   colaborador vê o número de planos aguardando no menu. `php artisan planos:lembretes` (agendado todo dia às 07:00) avisa o
   coordenador de ação que vence em até 7 dias, ação vencida e plano sem movimento há 30 dias — cada lembrete é criado uma vez.
+- **E-mail** (`PlanoAcaoEmailService`, mesmo SMTP do código de acesso; só se "Ativar envio de e-mail" estiver ligado em Configurações →
+  Portal público): o colaborador, que não tem sino, é avisado de plano enviado/reenviado e de comentário do coordenador; o coordenador,
+  da decisão e dos comentários. É complemento: sem SMTP nada é enviado e uma falha de envio vai só para o log.
+- **Plano repetido**: ao abrir um plano sobre o mesmo curso, período, categoria e visual/item de um plano vivo (rascunho, em análise,
+  ajustes ou em execução), o formulário avisa e linka o existente (só informa).
+- **Imprimir / salvar em PDF** na tela do plano (coordenador e colaborador): sem menu, formulários e o que está recolhido aberto.
 - **Cópia**: um plano concluído, recusado, cancelado ou em execução pode virar um **novo rascunho** (indicadores recalculados, sem
   prazos nem situação) para o ciclo seguinte.
 

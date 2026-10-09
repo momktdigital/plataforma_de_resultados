@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Models\Admin;
 use App\Models\PlanoAcao;
+use App\Services\PlanoAcaoService;
 use App\Support\NomeCurso;
 
 /**
@@ -18,6 +19,12 @@ abstract class PlanoAcaoPainelController extends PainelController
         abort_if($usuario === null || $usuario->emVisaoDeCurso, 403, 'Seu perfil não pode criar nem alterar planos de ação.');
 
         return $usuario;
+    }
+
+    /** @param  array<int, int>  $codigos  @return array<int, int> ver PlanoAcaoService::avaliacoesAcessiveis() */
+    protected function avaliacoesAcessiveis(Admin $usuario, array $codigos): array
+    {
+        return PlanoAcaoService::avaliacoesAcessiveis($usuario, $codigos);
     }
 
     /** O coordenador (ou o reitor na visão do curso) e o plano de um curso dele; qualquer outro curso responde 404. */

@@ -61,6 +61,18 @@
         @endif
     </div>
 
+    @if (! $existe && isset($semelhantes) && $semelhantes->isNotEmpty())
+        <div class="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="note">
+            <p class="font-bold flex items-center gap-2"><i class="ph-bold ph-copy" aria-hidden="true"></i> Já existe plano sobre este mesmo recorte</p>
+            <ul class="mt-1 list-disc pl-5 space-y-0.5">
+                @foreach ($semelhantes as $outro)
+                    <li><a href="{{ route('coordenador.planos.show', $outro) }}" class="font-semibold underline">{{ $outro->origem_rotulo }}</a> — {{ $outro->rotuloStatus() }}, atualizado em {{ $outro->updated_at?->format('d/m/Y') }}</li>
+                @endforeach
+            </ul>
+            <p class="mt-1">Vale continuar o que já existe em vez de abrir um segundo plano. Se este é de fato outra ação, siga normalmente.</p>
+        </div>
+    @endif
+
     {{-- Recorte do plano (só antes de criar): curso, período letivo e categoria. Muda o que o painel calcula. --}}
     @unless ($existe)
         @if (true)
@@ -217,6 +229,8 @@
                             <p class="text-xs text-slate-500 mt-1">Esta cópia dos números fica guardada no plano, para quem for analisá-lo.</p>
                         </div>
                     @endif
+
+                    @include('plano._avaliacoes', ['listaAvaliacoes' => $existe ? $plano->avaliacoesDoRecorte() : ($origem['avaliacoes'] ?? []), 'avaliacoesAcessiveis' => $avaliacoesAcessiveis ?? [], 'novaAba' => true])
 
                     <div class="max-w-xs">
                         <label for="data_proxima_avaliacao" class="{{ $etiqueta }}">Data prevista da próxima avaliação <span class="font-normal text-slate-500">(opcional)</span></label>

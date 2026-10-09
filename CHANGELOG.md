@@ -127,6 +127,10 @@ linha, veja `git log`.
   itens, abre um menu: o visual inteiro ou um item (uma área, um nível de Bloom...).
 - **Nenhuma etapa é obrigatória**: o plano pode ser salvo e enviado com o que houver; o que ficou em branco só é sinalizado ao
   coordenador e ao colaborador.
+- **Link para a avaliação**: o plano guarda as avaliações do recorte e linka o Dashboard de cada uma (coordenador do curso e
+  administrador), mais "Ver este dado no painel". O colaborador vê o nome, a data e o código.
+- **Melhorias do processo**: e-mail ao colaborador (plano enviado, comentário) e ao coordenador (decisão, comentário) quando o SMTP
+  está ativo; aviso de plano repetido no mesmo recorte; imprimir / salvar em PDF.
 - **Roteiro em cinco etapas** (ponto de partida, leitura do dado, causas com Ishikawa e 5 Porquês, ações, síntese e envio) já
   preenchido com o curso, a participação atual, a meta de participação e a proficiência atual, mais o dado do visual e sugestões de
   texto. Os números são recalculados no servidor, nunca vêm do navegador.

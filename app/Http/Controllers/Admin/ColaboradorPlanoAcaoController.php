@@ -80,6 +80,7 @@ class ColaboradorPlanoAcaoController extends Controller
         return view('colaborador.plano', [
             'plano' => $plano,
             'lacunas' => PlanoAcaoChecagem::lacunas($plano),
+            'avaliacoesAcessiveis' => PlanoAcaoService::avaliacoesAcessiveis(Auth::guard('admin')->user(), array_column($plano->avaliacoesDoRecorte(), 'codigo')),
             'alertas' => PlanoAcaoChecagem::alertas($plano),
             'criterios' => PlanoAcaoService::CRITERIOS,
             'resultado' => in_array($plano->status, [PlanoAcao::APROVADO, PlanoAcao::CONCLUIDO], true) ? $resultados->calcular($plano) : null,

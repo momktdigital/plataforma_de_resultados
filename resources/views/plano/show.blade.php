@@ -27,8 +27,9 @@
                 </p>
             </div>
 
+            <div class="flex flex-wrap gap-2 print:hidden">
+                <button type="button" onclick="window.print()" class="print:hidden inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"><i class="ph-bold ph-printer" aria-hidden="true"></i> Imprimir / salvar em PDF</button>
             @if ($podeEscrever)
-                <div class="flex flex-wrap gap-2">
                     @if ($plano->editavel())
                         <a href="{{ route('coordenador.planos.edit', $plano) }}" class="inline-flex items-center gap-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 px-4 py-2 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"><i class="ph-bold ph-pencil-simple" aria-hidden="true"></i> {{ $plano->status === PlanoAcao::AJUSTES ? 'Fazer os ajustes' : 'Continuar editando' }}</a>
                     @endif
@@ -51,8 +52,8 @@
                             <button type="submit" class="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"><i class="ph-bold ph-trash" aria-hidden="true"></i> Excluir rascunho</button>
                         </form>
                     @endif
-                </div>
             @endif
+            </div>
         </div>
     </div>
 
@@ -98,7 +99,7 @@
 
     {{-- Encerrar ou cancelar o plano --}}
     @if ($podeEscrever && $plano->emExecucao())
-        <section class="bg-white border border-slate-200 rounded-xl shadow-sm p-6" aria-labelledby="titulo-encerrar">
+        <section class="print:hidden bg-white border border-slate-200 rounded-xl shadow-sm p-6" aria-labelledby="titulo-encerrar">
             <h2 id="titulo-encerrar" class="text-lg font-bold mb-1">Encerrar o plano</h2>
             <p class="text-sm text-slate-600 mb-3">Quando todas as ações estiverem concluídas (ou canceladas), registre a síntese do que foi feito e aprendido.
                 @if ($progresso['total'] - $progresso['concluidas'] > 0) Ainda há {{ $progresso['total'] - $progresso['concluidas'] }} ação(ões) aberta(s). @endif</p>
@@ -145,7 +146,7 @@
 
     {{-- Comentário solto (conversa com o colaborador) --}}
     @if ($podeEscrever && $plano->status !== PlanoAcao::RASCUNHO)
-        <section class="bg-white border border-slate-200 rounded-xl shadow-sm p-6" aria-labelledby="titulo-comentar">
+        <section class="print:hidden bg-white border border-slate-200 rounded-xl shadow-sm p-6" aria-labelledby="titulo-comentar">
             <h2 id="titulo-comentar" class="text-lg font-bold mb-2">Comentar</h2>
             <form method="POST" action="{{ route('coordenador.planos.comentarios.store', $plano) }}" class="space-y-2">
                 @csrf

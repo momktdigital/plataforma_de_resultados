@@ -68,6 +68,10 @@ class CoordenadorPlanoAcaoController extends PlanoAcaoPainelController
             'plano' => new PlanoAcao(['status' => PlanoAcao::RASCUNHO]),
             'origem' => $origem,
             'etapa' => 1,
+            'semelhantes' => ($origem['curso'] ?? null) !== null && empty($origem['semDados'])
+                ? $this->servico->semelhantes($origem['curso'], (string) ($origem['periodo_letivo'] ?? ''), $origem['categoria_id'] ?? null, $origem['visual'], $origem['item'] ?? null)
+                : collect(),
+            'avaliacoesAcessiveis' => $this->avaliacoesAcessiveis($usuario, array_column($origem['avaliacoes'] ?? [], 'codigo')),
         ]);
     }
 
@@ -99,6 +103,12 @@ class CoordenadorPlanoAcaoController extends PlanoAcaoPainelController
             'alertas' => PlanoAcaoChecagem::alertas($plano),
             'resultado' => in_array($plano->status, [PlanoAcao::APROVADO, PlanoAcao::CONCLUIDO], true) ? $resultados->calcular($plano) : null,
             'podeEscrever' => ! $usuario->emVisaoDeCurso,
+            'avaliacoesAcessiveis' => $this->avaliacoesAcessiveis($usuario, array_column($plano->avaliacoesDoRecorte(), 'codigo')),
+            'urlDoPainel' => route('coordenador.desempenho', [
+                'curso' => $plano->curso,
+                'periodo_letivo' => $plano->periodo_letivo,
+                ...($plano->categoria_id !== null ? ['categoria' => $plano->categoria_id] : []),
+            ]),
         ]);
     }
 
@@ -118,6 +128,7 @@ class CoordenadorPlanoAcaoController extends PlanoAcaoPainelController
             'plano' => $plano,
             'origem' => $this->origemDoPlano($usuario, $plano, $origemServico),
             'etapa' => max(1, min(5, (int) $request->query('etapa', 1))),
+            'avaliacoesAcessiveis' => $this->avaliacoesAcessiveis($usuario, array_column($plano->avaliacoesDoRecorte(), 'codigo')),
         ]);
     }
 

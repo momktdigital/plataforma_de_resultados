@@ -21,11 +21,12 @@
             <span>por {{ $plano->autor?->username ?? '—' }}</span>
             @if ($plano->enviado_em)<span>enviado em {{ $plano->enviado_em->format('d/m/Y') }}@if ($plano->envios > 1) ({{ $plano->envios }}º envio)@endif</span>@endif
         </p>
+        <div class="mt-3 print:hidden"><button type="button" onclick="window.print()" class="print:hidden inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"><i class="ph-bold ph-printer" aria-hidden="true"></i> Imprimir / salvar em PDF</button></div>
     </div>
 
     {{-- A decisão --}}
     @if ($plano->aguardandoAnalise())
-        <section class="bg-white border-2 border-sky-300 rounded-xl shadow-sm p-6" aria-labelledby="titulo-decisao">
+        <section class="print:hidden bg-white border-2 border-sky-300 rounded-xl shadow-sm p-6" aria-labelledby="titulo-decisao">
             <h2 id="titulo-decisao" class="text-lg font-bold flex items-center gap-2"><i class="ph-bold ph-gavel text-sky-800" aria-hidden="true"></i> Sua decisão</h2>
             <p class="text-sm text-slate-600 mt-1">Leia o plano abaixo e marque o que ele atende. Para pedir ajustes ou recusar, a justificativa é obrigatória — ela é o que o coordenador vai ler.</p>
 
@@ -100,7 +101,7 @@
 
     @include('plano._resumo', ['plano' => $plano, 'alertas' => $alertas])
 
-    <section class="bg-white border border-slate-200 rounded-xl shadow-sm p-6" aria-labelledby="titulo-comentar">
+    <section class="print:hidden bg-white border border-slate-200 rounded-xl shadow-sm p-6" aria-labelledby="titulo-comentar">
         <h2 id="titulo-comentar" class="text-lg font-bold mb-2">Comentar com o coordenador</h2>
         <p class="text-sm text-slate-600 mb-2">Um comentário não muda a situação do plano; o coordenador recebe uma notificação.</p>
         <form method="POST" action="{{ route('colaborador.planos.comentar', $plano) }}" class="space-y-2">
