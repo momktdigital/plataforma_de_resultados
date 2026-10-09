@@ -128,6 +128,12 @@ class PlanoAcao extends Model
         return $this->hasMany(PlanoAcaoEvento::class, 'plano_id')->orderByDesc('id');
     }
 
+    /** @return HasMany<PlanoAcaoAnexo, $this> */
+    public function anexos(): HasMany
+    {
+        return $this->hasMany(PlanoAcaoAnexo::class, 'plano_id')->orderBy('id');
+    }
+
     // ---------------------------------------------------------------------------------------------------------------
     // Quem enxerga o quê
     // ---------------------------------------------------------------------------------------------------------------
@@ -240,6 +246,24 @@ class PlanoAcao extends Model
         }
 
         return $lista;
+    }
+
+    /**
+     * A foto do conteúdo do plano (o que o coordenador preenche, sem os indicadores). O PlanoAcaoService a guarda no evento de
+     * cada envio, para mostrar ao colaborador "o que mudou" quando o plano volta de uma devolução.
+     *
+     * @return array<string, mixed>
+     */
+    public function conteudo(): array
+    {
+        return [
+            ...$this->only(['meta_proficiencia', 'recorte', 'resultado', 'fragilidades', 'evidencias', 'causas', 'causa_priorizada', 'nota_impacto', 'nota_evidencia', 'nota_governabilidade', 'porques', 'causa_raiz']),
+            'data_proxima_avaliacao' => $this->data_proxima_avaliacao?->format('d/m/Y'),
+            'acoes' => $this->acoes()->get()->map(fn (PlanoAcaoAcao $a) => [
+                'id' => $a->id, 'descricao' => $a->descricao, 'execucao' => $a->execucao, 'responsavel' => $a->responsavel,
+                'prazo' => $a->prazo?->format('d/m/Y'), 'verificacao' => $a->verificacao,
+            ])->all(),
+        ];
     }
 
     /** Em execução, com ações abertas e sem nenhuma movimentação há PlanoAcaoLembreteService::DIAS_PARADO dias ou mais. */

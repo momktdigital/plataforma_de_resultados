@@ -58,6 +58,40 @@ class PlanoAcaoEmailService
     }
 
     /**
+     * Resumo dos planos que passaram do prazo de análise, para os colaboradores.
+     *
+     * @param  Collection<int, PlanoAcao>  $planos
+     */
+    public function analiseAtrasada(Collection $planos, int $prazoDias): void
+    {
+        if ($planos->isEmpty() || ! $this->configurado()) {
+            return;
+        }
+
+        $site = (string) Configuracao::valor('site_title', 'Resultados DI');
+        $itens = $planos->map(fn (PlanoAcao $p) => '<li><a href="'.e(route('colaborador.planos.show', $p)).'">'.e($p->origem_rotulo).'</a> — '.e($p->curso).', aguardando há '.(int) $p->enviado_em?->diffInDays(now()).' dias</li>')->implode('');
+        $corpo = '<p style="font-family:Arial,sans-serif;font-size:15px;color:#1e293b">'.($planos->count() === 1 ? '1 plano de ação aguarda' : $planos->count().' planos de ação aguardam').' análise há mais de '.$prazoDias.' dias:</p>'
+            .'<ul style="font-family:Arial,sans-serif;font-size:14px;color:#334155">'.$itens.'</ul>'
+            .'<p><a href="'.e(route('colaborador.planos.index')).'" style="font-family:Arial,sans-serif;font-size:14px;color:#047857;font-weight:bold">Abrir a fila de análise</a></p>';
+
+        $this->enviarCorpo($this->revisores(), 'Planos de ação aguardando análise há mais de '.$prazoDias.' dias', $corpo, $site);
+    }
+
+    /**
+     * @param  Collection<int, Admin>  $destinatarios
+     */
+    private function enviarCorpo(Collection $destinatarios, string $assunto, string $corpo, string $site, ?int $planoId = null): void
+    {
+        foreach ($destinatarios as $admin) {
+            try {
+                $this->remetente->enviar((string) $admin->email, "[{$site}] {$assunto}", $corpo);
+            } catch (\Throwable $e) {
+                Log::warning('E-mail do plano de ação não enviado: '.$e->getMessage(), ['plano' => $planoId, 'admin' => $admin->id]);
+            }
+        }
+    }
+
+    /**
      * @param  Collection<int, Admin>  $destinatarios
      */
     private function enviarPara(Collection $destinatarios, string $assunto, string $texto, PlanoAcao $plano, string $url, string $botao): void
@@ -72,13 +106,7 @@ class PlanoAcaoEmailService
             .'<p><a href="'.e($url).'" style="font-family:Arial,sans-serif;font-size:14px;color:#047857;font-weight:bold">'.e($botao).'</a></p>'
             .'<p style="font-family:Arial,sans-serif;font-size:12px;color:#64748b">Você recebeu este e-mail porque participa do fluxo de planos de ação do '.e($site).'.</p>';
 
-        foreach ($destinatarios as $admin) {
-            try {
-                $this->remetente->enviar((string) $admin->email, "[{$site}] {$assunto}", $corpo);
-            } catch (\Throwable $e) {
-                Log::warning('E-mail do plano de ação não enviado: '.$e->getMessage(), ['plano' => $plano->id, 'admin' => $admin->id]);
-            }
-        }
+        $this->enviarCorpo($destinatarios, $assunto, $corpo, $site, $plano->id);
     }
 
     /** @return Collection<int, Admin> colaboradores com e-mail; sem nenhum, os administradores com e-mail */

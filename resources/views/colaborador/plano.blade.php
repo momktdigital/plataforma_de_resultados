@@ -77,6 +77,10 @@
         <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 flex items-center gap-2" role="status"><i class="ph-bold ph-pencil-line text-lg" aria-hidden="true"></i> Devolvido ao coordenador para ajustes. Quando ele reenviar, o plano volta para a fila.</div>
     @endif
 
+    @if ($plano->aguardandoAnalise())
+        @include('plano._mudancas', ['mudancasDoEnvio' => $mudancasDoEnvio])
+    @endif
+
     @if ($lacunas !== [] && $plano->aguardandoAnalise())
         <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="note">
             <p class="font-bold">Pontos deixados em branco pelo coordenador (nenhuma etapa é obrigatória):</p>
@@ -96,6 +100,7 @@
         <section class="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-900" aria-labelledby="titulo-conclusao">
             <h2 id="titulo-conclusao" class="font-bold flex items-center gap-2"><i class="ph-bold ph-flag-checkered" aria-hidden="true"></i> Síntese do encerramento ({{ $plano->encerrado_em?->format('d/m/Y') }})</h2>
             <p class="mt-1 whitespace-pre-line">{{ $plano->conclusao }}</p>
+            @include('plano._anexos', ['listaAnexos' => $plano->anexos->where('acao_id', null)->whereNotNull('evento_id'), 'plano' => $plano])
         </section>
     @endif
 
@@ -111,6 +116,24 @@
             <button type="submit" class="{{ $botaoNeutro }}"><i class="ph-bold ph-chat-text" aria-hidden="true"></i> Registrar comentário</button>
         </form>
     </section>
+
+    @if ($outrosDoCurso->isNotEmpty())
+        <section class="print:hidden bg-white border border-slate-200 rounded-xl shadow-sm p-6" aria-labelledby="titulo-outros">
+            <h2 id="titulo-outros" class="text-lg font-bold mb-2">Outros planos deste curso</h2>
+            <p class="text-sm text-slate-600 mb-3">O que já foi proposto antes para {{ $plano->curso }}, para julgar este plano com o histórico em mente.</p>
+            <ul class="divide-y divide-slate-100 text-sm">
+                @foreach ($outrosDoCurso as $outro)
+                    <li class="flex flex-wrap items-center justify-between gap-2 py-2">
+                        <span class="min-w-0">
+                            <a href="{{ route('colaborador.planos.show', $outro) }}" class="font-semibold text-slate-900 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded">{{ $outro->origem_rotulo }}</a>
+                            <span class="block text-xs text-slate-500">{{ $outro->periodo_letivo ?: 'todos os períodos' }}@if ($outro->causa_raiz) · causa-raiz: {{ \Illuminate\Support\Str::limit($outro->causa_raiz, 90) }}@endif</span>
+                        </span>
+                        @include('plano._status', ['status' => $outro->status, 'pequeno' => true])
+                    </li>
+                @endforeach
+            </ul>
+        </section>
+    @endif
 
     @include('plano._linha-do-tempo', ['plano' => $plano])
 </div>

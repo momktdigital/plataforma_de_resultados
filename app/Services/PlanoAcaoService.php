@@ -7,11 +7,13 @@ use App\Models\Avaliacao;
 use App\Models\Notificacao;
 use App\Models\PlanoAcao;
 use App\Models\PlanoAcaoAcao;
+use App\Models\PlanoAcaoAnexo;
 use App\Models\PlanoAcaoEvento;
 use App\Support\AtividadeLogger;
 use App\Support\NomeCurso;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -181,7 +183,8 @@ class PlanoAcaoService
             'decidido_por' => null,
         ])->save();
 
-        $this->registrar($plano, $autor, $reenvio ? PlanoAcaoEvento::REENVIADO : PlanoAcaoEvento::ENVIADO, null, ['envio' => $plano->envios]);
+        // A foto do conteúdo fica no evento: é com ela que o colaborador vê o que mudou num reenvio.
+        $this->registrar($plano, $autor, $reenvio ? PlanoAcaoEvento::REENVIADO : PlanoAcaoEvento::ENVIADO, null, ['envio' => $plano->envios, 'conteudo' => $plano->conteudo()]);
         AtividadeLogger::registrar('plano_acao.enviado', 'PlanoAcao', $plano->id, ['curso' => $plano->curso, 'envio' => $plano->envios]);
         $this->email->planoEnviado($plano, $reenvio);
 
@@ -271,7 +274,9 @@ class PlanoAcaoService
      *  - mudar o prazo exige a nota (por que foi reprogramado) e não pode ir para o passado;
      *  - sem mudar nada, a nota vira um registro de andamento.
      *
-     * @param  array{status?: ?string, prazo?: ?string, nota?: ?string}  $dados
+     * Evidências (link e/ou arquivo) podem acompanhar qualquer atualização — e, sozinhas, já valem como um registro de andamento.
+     *
+     * @param  array{status?: ?string, prazo?: ?string, nota?: ?string, link_url?: ?string, link_titulo?: ?string, arquivo?: ?UploadedFile}  $dados
      */
     public function atualizarAcao(PlanoAcao $plano, PlanoAcaoAcao $acao, Admin $autor, array $dados): PlanoAcaoAcao
     {
@@ -287,8 +292,8 @@ class PlanoAcaoService
         $mudouStatus = $novoStatus !== $acao->status;
         $mudouPrazo = ($novoPrazo?->toDateString()) !== ($acao->prazo?->toDateString());
 
-        if (! $mudouStatus && ! $mudouPrazo && $nota === '') {
-            throw ValidationException::withMessages(['nota' => ['Informe a nova situação, um novo prazo ou escreva uma nota de andamento.']]);
+        if (! $mudouStatus && ! $mudouPrazo && $nota === '' && ! self::temAnexo($dados)) {
+            throw ValidationException::withMessages(['nota' => ['Informe a nova situação, um novo prazo, escreva uma nota de andamento ou anexe uma evidência.']]);
         }
         if ($mudouStatus && $novoStatus === PlanoAcaoAcao::CONCLUIDA && mb_strlen($nota) < 10) {
             throw ValidationException::withMessages(['nota' => ['Para concluir, descreva o que foi feito e a evidência (mínimo de 10 caracteres).']]);
@@ -300,7 +305,7 @@ class PlanoAcaoService
             throw ValidationException::withMessages(['prazo' => ['O novo prazo não pode estar no passado.']]);
         }
 
-        DB::transaction(function () use ($plano, $acao, $autor, $nota, $novoStatus, $novoPrazo, $mudouStatus, $mudouPrazo) {
+        DB::transaction(function () use ($plano, $acao, $autor, $nota, $novoStatus, $novoPrazo, $mudouStatus, $mudouPrazo, $dados) {
             $de = ['status' => $acao->status, 'prazo' => $acao->prazo?->toDateString()];
             $acao->forceFill([
                 'status' => $novoStatus,
@@ -308,22 +313,25 @@ class PlanoAcaoService
                 'concluida_em' => $novoStatus === PlanoAcaoAcao::CONCLUIDA ? ($acao->concluida_em ?? now()) : null,
             ])->save();
 
+            $evento = null;
             if ($mudouStatus) {
-                $this->registrar($plano, $autor, PlanoAcaoEvento::ACAO_STATUS, $nota !== '' ? $nota : null, ['de' => $de['status'], 'para' => $novoStatus], $acao->id);
+                $evento = $this->registrar($plano, $autor, PlanoAcaoEvento::ACAO_STATUS, $nota !== '' ? $nota : null, ['de' => $de['status'], 'para' => $novoStatus], $acao->id);
             }
             if ($mudouPrazo) {
-                $this->registrar($plano, $autor, PlanoAcaoEvento::PRAZO, $nota, ['de' => $de['prazo'], 'para' => $novoPrazo->toDateString()], $acao->id);
+                $evento = $this->registrar($plano, $autor, PlanoAcaoEvento::PRAZO, $nota, ['de' => $de['prazo'], 'para' => $novoPrazo->toDateString()], $acao->id);
             }
             if (! $mudouStatus && ! $mudouPrazo) {
-                $this->registrar($plano, $autor, PlanoAcaoEvento::ANDAMENTO, $nota, null, $acao->id);
+                $evento = $this->registrar($plano, $autor, PlanoAcaoEvento::ANDAMENTO, $nota !== '' ? $nota : null, null, $acao->id);
             }
+
+            $this->guardarAnexos($plano, $acao->id, $evento, $autor, $dados);
         });
 
         return $acao;
     }
 
     /** Fecha o plano: todas as ações concluídas (ou canceladas) e uma síntese do que foi feito e aprendido. */
-    public function encerrar(PlanoAcao $plano, Admin $autor, string $conclusao): PlanoAcao
+    public function encerrar(PlanoAcao $plano, Admin $autor, string $conclusao, array $anexos = []): PlanoAcao
     {
         $this->exigirEstado($plano, [PlanoAcao::APROVADO], 'Só um plano em execução pode ser encerrado.');
 
@@ -336,7 +344,8 @@ class PlanoAcaoService
         }
 
         $plano->forceFill(['status' => PlanoAcao::CONCLUIDO, 'encerrado_em' => now(), 'conclusao' => $conclusao])->save();
-        $this->registrar($plano, $autor, PlanoAcaoEvento::ENCERRADO, $conclusao);
+        $evento = $this->registrar($plano, $autor, PlanoAcaoEvento::ENCERRADO, $conclusao);
+        $this->guardarAnexos($plano, null, $evento, $autor, $anexos);
         AtividadeLogger::registrar('plano_acao.encerrado', 'PlanoAcao', $plano->id, ['curso' => $plano->curso]);
 
         return $plano;
@@ -361,7 +370,7 @@ class PlanoAcaoService
 
     /**
      * Dessas avaliações, as que o usuário pode abrir no Dashboard (que mostra dados de alunos): o coordenador, as dos cursos
-     * dele; o administrador, todas; o colaborador, nenhuma (ele vê o nome, a data e o código, sem o link).
+     * dele; o administrador e o colaborador, todas.
      *
      * @param  array<int, int>  $codigos
      * @return array<int, int>
@@ -376,7 +385,8 @@ class PlanoAcaoService
             return Avaliacao::visivelPara($usuario)->whereIn('codigo', $codigos)->pluck('codigo')->map(fn ($c) => (int) $c)->all();
         }
 
-        return $usuario->ehAdministrador() ? Avaliacao::whereIn('codigo', $codigos)->pluck('codigo')->map(fn ($c) => (int) $c)->all() : [];
+        // Administrador e colaborador (que já têm acesso às planilhas importadas) abrem qualquer avaliação.
+        return $usuario->ehAdministrador() || $usuario->ehColaborador() ? Avaliacao::whereIn('codigo', $codigos)->pluck('codigo')->map(fn ($c) => (int) $c)->all() : [];
     }
 
     // ---------------------------------------------------------------------------------------------------------------
@@ -412,6 +422,47 @@ class PlanoAcaoService
     // ---------------------------------------------------------------------------------------------------------------
     // Internos
     // ---------------------------------------------------------------------------------------------------------------
+
+    /** @param array<string, mixed> $dados */
+    private static function temAnexo(array $dados): bool
+    {
+        return trim((string) ($dados['link_url'] ?? '')) !== '' || ($dados['arquivo'] ?? null) instanceof UploadedFile;
+    }
+
+    /**
+     * Guarda as evidências informadas (um link e/ou um arquivo) ligadas ao evento do histórico. O arquivo vai para o disco
+     * PRIVADO (planos/{plano}/...): só sai pela rota autenticada, nunca por URL pública.
+     *
+     * @param  array<string, mixed>  $dados  link_url, link_titulo, arquivo
+     */
+    private function guardarAnexos(PlanoAcao $plano, ?int $acaoId, ?PlanoAcaoEvento $evento, Admin $autor, array $dados): void
+    {
+        $base = ['plano_id' => $plano->id, 'acao_id' => $acaoId, 'evento_id' => $evento?->id, 'admin_id' => $autor->id];
+        $titulo = trim((string) ($dados['link_titulo'] ?? ''));
+
+        $url = trim((string) ($dados['link_url'] ?? ''));
+        if ($url !== '') {
+            PlanoAcaoAnexo::create([...$base, 'tipo' => PlanoAcaoAnexo::LINK, 'url' => $url, 'titulo' => $titulo !== '' ? Str::limit($titulo, 190, '') : Str::limit((string) (parse_url($url, PHP_URL_HOST) ?: $url), 190, '')]);
+        }
+
+        $arquivo = $dados['arquivo'] ?? null;
+        if ($arquivo instanceof UploadedFile) {
+            $nome = trim(preg_replace('/[\x00-\x1F\x7F\/\\\\]+/u', '_', $arquivo->getClientOriginalName()) ?? 'arquivo');
+            PlanoAcaoAnexo::create([
+                ...$base,
+                'tipo' => PlanoAcaoAnexo::ARQUIVO,
+                'titulo' => $titulo !== '' && $url === '' ? Str::limit($titulo, 190, '') : Str::limit($nome, 190, ''),
+                'caminho' => $arquivo->store(PlanoAcaoAnexo::PASTA.'/'.$plano->id, PlanoAcaoAnexo::DISCO),
+                'nome_original' => Str::limit($nome, 250, ''),
+                'mime' => $arquivo->getMimeType(),
+                'tamanho' => $arquivo->getSize(),
+            ]);
+        }
+
+        if ($url !== '' || $arquivo instanceof UploadedFile) {
+            AtividadeLogger::registrar('plano_acao.evidencia_anexada', 'PlanoAcao', $plano->id, ['curso' => $plano->curso, 'link' => $url !== '', 'arquivo' => $arquivo instanceof UploadedFile]);
+        }
+    }
 
     /** @param array<int, string> $permitidos */
     private function exigirEstado(PlanoAcao $plano, array $permitidos, string $mensagem): void

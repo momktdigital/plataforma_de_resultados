@@ -142,9 +142,11 @@ sinal à parte. A regra e a de cada avaliação entram na chave do cache dos agr
 ## Cronograma de atividades e o perfil de colaborador
 
 `collaborator` é o quarto perfil de `admins.role` (e, como o `rector`, **exige migration que acrescente o valor ao ENUM do MySQL
-legado** — o SQLite dos testes não pega). Ele só alcança `/colaboracao/*` (grupo `perfil:colaborador,administrador`) e o perfil;
-`PerfilPermitido` leva um GET dele em tela de coordenador de volta ao cronograma, o resto é 403. Não o ligue a
-`Avaliacao::visivelPara` nem a nada de aluno/resultado.
+legado** — o SQLite dos testes não pega). Ele alcança `/colaboracao/*` (grupo `perfil:colaborador,administrador`), o perfil e, **só leitura**, a lista de avaliações e o
+Dashboard de cada uma (`avaliacoes.index`, `avaliacoes.bi*`, grupo `perfil:administrador,coordenador,colaborador`): o colaborador já tem
+acesso às planilhas importadas, então `Avaliacao::visivelPara` devolve todas as avaliações para ele, como para o administrador.
+`PerfilPermitido` leva um GET dele em tela de coordenador (painel, alunos...) de volta ao cronograma, o resto é 403. Não amplie
+além disso (alunos, gestão, painel do coordenador) sem decisão explícita.
 
 O cronograma (`CronogramaItem` → `cronograma_item_cursos` → `CronogramaPendencia`) tem duas faces: o colaborador/administrador grava
 (`ColaboradorCronogramaController`, `ColaboradorPendenciaController`) e o coordenador **só lê** (`CronogramaController`, no grupo do

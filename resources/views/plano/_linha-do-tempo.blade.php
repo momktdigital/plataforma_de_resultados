@@ -29,6 +29,9 @@
                         @if ($evento->texto)
                             <p class="mt-1 whitespace-pre-line text-slate-700">{{ $evento->texto }}</p>
                         @endif
+                        @if ($evento->relationLoaded('anexos'))
+                            @include('plano._anexos', ['listaAnexos' => $evento->anexos, 'plano' => $plano])
+                        @endif
                         @if (! empty($evento->dados['criterios']))
                             <ul class="mt-1 space-y-0.5 text-xs">
                                 @foreach ($evento->dados['criterios'] as $chave => $ok)

@@ -34,6 +34,12 @@
         </div>
     @endif
 
+    @if ($total > 0)
+        <div class="mb-3 flex justify-end">
+            <a href="{{ route('coordenador.planos.exportar', $filtro === 'todos' ? [] : ['status' => $filtro]) }}" class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"><i class="ph-bold ph-file-xls" aria-hidden="true"></i> Exportar .xlsx</a>
+        </div>
+    @endif
+
     <nav class="flex flex-wrap gap-2 mb-4" aria-label="Filtrar planos por situação">
         @foreach ($abas as [$chave, $rotulo, $quantos])
             @php $ativa = $filtro === $chave; @endphp

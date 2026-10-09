@@ -48,7 +48,7 @@
         @elseif ($colaboradores)
             <p class="px-4 pt-4 text-sm text-slate-500">
                 Colaboradores montam o <strong>cronograma de atividades</strong> (a checklist de auditoria): cadastram as atividades, indicam a quais cursos se aplicam
-                (o que monta o calendário de cada coordenador) e registram as pendências. Também analisam os <strong>planos de ação</strong> enviados pelos coordenadores (aprovam, pedem ajustes ou recusam, com justificativa) e acompanham a execução. Não enxergam resultados nem dados de alunos — o plano só traz números agregados do curso.
+                (o que monta o calendário de cada coordenador) e registram as pendências. Também analisam os <strong>planos de ação</strong> enviados pelos coordenadores (aprovam, pedem ajustes ou recusam, com justificativa) e acompanham a execução. Também consultam as avaliações e o Dashboard de cada uma, só leitura (já têm acesso às planilhas importadas), mas não gerenciam nada.
             </p>
         @endif
         <table class="w-full text-sm">

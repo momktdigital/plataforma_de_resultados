@@ -3,7 +3,7 @@
     Variáveis:
       $listaAvaliacoes  [['codigo', 'nome', 'data', 'periodoLetivo']]
       $avaliacoesAcessiveis  códigos que o usuário pode abrir (o Dashboard mostra alunos: coordenador do curso e administrador);
-                             quem não pode (colaborador) vê só o nome, a data e o código
+                             quem não pode vê só o nome, a data e o código
       $novaAba          (opcional) abre os links em outra aba (no formulário, para não perder o que foi digitado)
 --}}
 @php $novaAba = $novaAba ?? false; @endphp
@@ -28,7 +28,7 @@
             @endforeach
         </ul>
         @if (empty(array_intersect(array_column($listaAvaliacoes, 'codigo'), $avaliacoesAcessiveis ?? [])))
-            <p class="mt-1 text-xs text-slate-500">O Dashboard da avaliação mostra dados de alunos e só abre para o coordenador do curso e o administrador.</p>
+            <p class="mt-1 text-xs text-slate-500">O Dashboard da avaliação mostra dados de alunos e só abre para o coordenador do curso, o colaborador e o administrador.</p>
         @endif
     </div>
 @endif

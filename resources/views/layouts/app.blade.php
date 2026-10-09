@@ -105,6 +105,7 @@
                                 ['rota' => 'reitor.itens', 'padrao' => 'reitor.itens', 'icone' => 'ph-list-checks', 'label' => 'Análise dos itens'],
                                 ['rota' => 'reitor.risco', 'padrao' => 'reitor.risco', 'icone' => 'ph-warning-diamond', 'label' => 'Estudantes em risco'],
                                 ['rota' => 'reitor.cursos', 'padrao' => 'reitor.cursos', 'icone' => 'ph-graduation-cap', 'label' => 'Análise do curso'],
+                                ['rota' => 'reitor.planos', 'padrao' => 'reitor.planos', 'icone' => 'ph-clipboard-text', 'label' => 'Planos de ação'],
                                 ['rota' => 'perfil.edit', 'padrao' => 'perfil.*', 'icone' => 'ph-user-circle', 'label' => 'Meu Perfil'],
                             ]
                             : ($ehCoordenador
@@ -124,6 +125,7 @@
                                 ['rota' => 'colaborador.index', 'padrao' => ['colaborador.index', 'colaborador.atividades.*'], 'icone' => 'ph-calendar-check', 'label' => 'Cronograma'],
                                 ['rota' => 'colaborador.pendencias.index', 'padrao' => 'colaborador.pendencias.*', 'icone' => 'ph-warning-circle', 'label' => 'Pendências'],
                                 ['rota' => 'colaborador.planos.index', 'padrao' => 'colaborador.planos.*', 'icone' => 'ph-clipboard-text', 'label' => 'Planos de ação', 'badge' => $planosPendentes],
+                                ['rota' => 'avaliacoes.index', 'padrao' => 'avaliacoes.*', 'icone' => 'ph-exam', 'label' => 'Avaliações'],
                                 ['rota' => 'perfil.edit', 'padrao' => 'perfil.*', 'icone' => 'ph-user-circle', 'label' => 'Meu Perfil'],
                             ]
                             : [

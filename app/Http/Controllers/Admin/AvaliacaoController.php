@@ -71,7 +71,7 @@ class AvaliacaoController extends Controller
             'opcoesCategoria' => Categoria::opcoesSelect(),
             'sort' => $sort,
             'direction' => $direction,
-            'somenteLeitura' => $usuario->ehCoordenador(),
+            'somenteLeitura' => ! $usuario->ehAdministrador(),
         ]);
     }
 

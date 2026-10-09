@@ -5,13 +5,19 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Requests\SalvarPlanoAcaoRequest;
 use App\Models\Admin;
 use App\Models\PlanoAcao;
+use App\Services\PlanoAcaoBancoDeAcoes;
+use App\Services\PlanoAcaoExportService;
 use App\Services\PlanoAcaoOrigemService;
 use App\Services\PlanoAcaoResultadoService;
 use App\Services\PlanoAcaoService;
+use App\Support\AtividadeLogger;
 use App\Support\PlanoAcaoChecagem;
+use App\Support\PlanoAcaoComparacao;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Os planos de ação do curso do coordenador: iniciar a partir de um dado do painel (o ícone nos visuais), preencher o
@@ -57,8 +63,29 @@ class CoordenadorPlanoAcaoController extends PlanoAcaoPainelController
         ]);
     }
 
+    /** A planilha dos planos do curso (com os rascunhos dele), na situação filtrada. */
+    public function exportar(Request $request, PlanoAcaoExportService $exportacao): StreamedResponse|RedirectResponse
+    {
+        if (($usuario = $this->coordenador()) === null) {
+            return redirect()->route('avaliacoes.index');
+        }
+
+        $filtro = (string) $request->query('status', 'todos');
+        $planos = PlanoAcao::dosCursos($usuario->cursos())
+            ->when(isset(PlanoAcao::STATUS[$filtro]), fn ($q) => $q->where('status', $filtro))
+            ->with(['acoes', 'autor'])->orderBy('curso')->orderBy('id')->get();
+
+        AtividadeLogger::registrar('plano_acao.exportado', 'PlanoAcao', null, ['cursos' => $usuario->cursos(), 'planos' => $planos->count()]);
+
+        $writer = new Xlsx($exportacao->planilha($planos));
+
+        return response()->streamDownload(fn () => $writer->save('php://output'), 'planos-de-acao-'.now()->format('Y-m-d').'.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
     /** Abre o roteiro já preenchido com o que o painel sabe (indicadores, dados do visual); nada é gravado ainda. */
-    public function novo(Request $request, PlanoAcaoOrigemService $origemServico): View|RedirectResponse
+    public function novo(Request $request, PlanoAcaoOrigemService $origemServico, PlanoAcaoBancoDeAcoes $banco): View|RedirectResponse
     {
         $usuario = $this->coordenadorQueEscreve();
         $origem = $origemServico->montar($usuario, $request->query());
@@ -68,6 +95,7 @@ class CoordenadorPlanoAcaoController extends PlanoAcaoPainelController
             'plano' => new PlanoAcao(['status' => PlanoAcao::RASCUNHO]),
             'origem' => $origem,
             'etapa' => 1,
+            'bancoDeAcoes' => $banco->sugerir($origem['visual'], $origem['item'] ?? null, $origem['categoria_id'] ?? null),
             'semelhantes' => ($origem['curso'] ?? null) !== null && empty($origem['semDados'])
                 ? $this->servico->semelhantes($origem['curso'], (string) ($origem['periodo_letivo'] ?? ''), $origem['categoria_id'] ?? null, $origem['visual'], $origem['item'] ?? null)
                 : collect(),
@@ -94,13 +122,14 @@ class CoordenadorPlanoAcaoController extends PlanoAcaoPainelController
     public function show(PlanoAcao $plano, PlanoAcaoResultadoService $resultados): View
     {
         $usuario = $this->doCoordenador($plano);
-        $plano->load(['acoes', 'eventos.admin', 'autor', 'decididoPor']);
+        $plano->load(['acoes', 'eventos.admin', 'eventos.anexos', 'anexos', 'autor', 'decididoPor']);
 
         return view('plano.show', [
             'usuario' => $usuario,
             'plano' => $plano,
             'lacunas' => $plano->editavel() ? PlanoAcaoChecagem::lacunas($plano) : [],
             'alertas' => PlanoAcaoChecagem::alertas($plano),
+            'mudancasDoEnvio' => PlanoAcaoComparacao::doUltimoEnvio($plano),
             'resultado' => in_array($plano->status, [PlanoAcao::APROVADO, PlanoAcao::CONCLUIDO], true) ? $resultados->calcular($plano) : null,
             'podeEscrever' => ! $usuario->emVisaoDeCurso,
             'avaliacoesAcessiveis' => $this->avaliacoesAcessiveis($usuario, array_column($plano->avaliacoesDoRecorte(), 'codigo')),
@@ -112,7 +141,7 @@ class CoordenadorPlanoAcaoController extends PlanoAcaoPainelController
         ]);
     }
 
-    public function edit(Request $request, PlanoAcao $plano, PlanoAcaoOrigemService $origemServico): View|RedirectResponse
+    public function edit(Request $request, PlanoAcao $plano, PlanoAcaoOrigemService $origemServico, PlanoAcaoBancoDeAcoes $banco): View|RedirectResponse
     {
         $usuario = $this->coordenadorQueEscreve();
         $this->doCoordenador($plano);
@@ -128,6 +157,7 @@ class CoordenadorPlanoAcaoController extends PlanoAcaoPainelController
             'plano' => $plano,
             'origem' => $this->origemDoPlano($usuario, $plano, $origemServico),
             'etapa' => max(1, min(5, (int) $request->query('etapa', 1))),
+            'bancoDeAcoes' => $banco->sugerir($plano->origem_visual, $plano->origem_item, $plano->categoria_id !== null ? (int) $plano->categoria_id : null, $plano->id),
             'avaliacoesAcessiveis' => $this->avaliacoesAcessiveis($usuario, array_column($plano->avaliacoesDoRecorte(), 'codigo')),
         ]);
     }

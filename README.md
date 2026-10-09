@@ -469,8 +469,8 @@ aluno×avaliação×período) e toca `respostas` apenas na ficha de UM aluno.
 ## Cronograma de atividades (`/colaboracao`, `/cronograma`)
 
 A checklist de auditoria ROC/ROD (planilha "Tabela-base da Auditoria") vira um **calendário por coordenador**. Quem monta é o
-**colaborador** (`admins.role = 'collaborator'`, quarta aba de `/usuarios`; entra por código no e-mail como o coordenador; só alcança
-o cronograma, a análise dos planos de ação (ver abaixo) e o próprio perfil — o resto responde 403 e um GET fora do lugar volta para `/colaboracao`). O administrador também
+**colaborador** (`admins.role = 'collaborator'`, quarta aba de `/usuarios`; entra por código no e-mail como o coordenador; alcança
+o cronograma, a análise dos planos de ação (ver abaixo), a lista de avaliações e o Dashboard de cada uma (só leitura: já tem acesso às planilhas importadas) e o próprio perfil — o resto responde 403 e um GET fora do lugar volta para `/colaboracao`). O administrador também
 gerencia (sem ele ninguém corrigiria nada se o colaborador saísse).
 
 - **Atividade** (`cronograma_itens`): data, rotina (**ROD** = docentes, **ROC** = coordenação, **Auditoria** = conferência final),
@@ -534,7 +534,7 @@ dele, e nunca vêm do navegador:
 
 4. as **avaliações do recorte** (a pedida, ou as do período na categoria), com o **link para o Dashboard de cada uma**
    (`avaliacoes.bi`) — guardadas no plano (`contexto.avaliacoes`) e mostradas no formulário, na tela do plano e na análise. O link
-   abre para quem pode ver alunos: o coordenador do curso e o administrador; o colaborador vê nome, data e código, sem link. Há
+   abre para o coordenador do curso (só as avaliações do curso dele), o colaborador e o administrador. Há
    também "Ver este dado no painel de desempenho" (curso, período e categoria do plano).
 
 A **meta de proficiência** é a única que o coordenador pactua (sem ela o plano não tem como ser avaliado depois).
@@ -578,13 +578,30 @@ rascunho ──enviar──▶ em_analise ──aprovar──▶ aprovado (em ex
 - **Plano repetido**: ao abrir um plano sobre o mesmo curso, período, categoria e visual/item de um plano vivo (rascunho, em análise,
   ajustes ou em execução), o formulário avisa e linka o existente (só informa).
 - **Imprimir / salvar em PDF** na tela do plano (coordenador e colaborador): sem menu, formulários e o que está recolhido aberto.
+- **Evidências anexas** (`plano_acao_anexos`): ao atualizar uma ação ou encerrar o plano, o coordenador pode anexar um **link** e/ou um
+  **arquivo** (pdf, doc(x), xls(x), ppt(x), png, jpg, txt, csv; até 10 MB). O arquivo vai para o disco **privado** (`storage/app/private/planos/{plano}/`),
+  nunca para `public/`, e só sai por rota autenticada (`.../anexos/{anexo}`: coordenador do curso ou colaborador/administrador); só link
+  `http(s)`. Fica ligado ao evento do histórico e à ação; só se acrescenta.
+- **Banco de ações** (`PlanoAcaoBancoDeAcoes`): na etapa "Ações", ideias tiradas de planos **concluídos** sobre o mesmo visual e item,
+  só de ações concluídas, **anônimas** (sem curso, responsável ou autor) — "Usar esta ação" copia o texto para o plano.
+- **O que mudou no reenvio** (`PlanoAcaoComparacao`): a cada envio o plano guarda uma foto do conteúdo (no evento do histórico); depois de
+  pedir ajustes, o colaborador vê lado a lado só o que mudou (campos, causas, ações novas/alteradas/removidas).
+- **Selo "já existe plano"** (`PlanoAcaoMarcas`): o ícone de cada visual ganha um ponto verde quando o curso tem plano vivo sobre aquele dado, e o
+  item do menu mostra a situação — uma consulta por requisição.
+- **Mais lembretes** (`planos:lembretes`): rascunho parado há 14 dias e plano devolvido há 7 dias sem reenvio (sino do coordenador); plano
+  esperando análise além de 7 dias (`PRAZO_ANALISE_DIAS`) gera um resumo por e-mail aos colaboradores, no máximo uma vez a cada 7 dias.
+- **Exportar .xlsx** (`PlanoAcaoExportService`): abas "Planos" e "Ações", para o coordenador (os planos do curso dele) e para o
+  colaborador/administrador (os filtros da fila). Texto sempre como string (sem injeção de fórmula). Cada exportação vai para a auditoria.
+- **Visão do colaborador**: busca na fila, "quadro por curso" (situações, ações concluídas/atrasadas, dias de análise), "outros planos deste
+  curso" na análise, e o Dashboard das avaliações do plano.
+- **Reitoria** (`/reitoria/planos`): só **números por curso** (`PlanoAcaoQuadroService`) — nunca o texto de um plano.
 - **Cópia**: um plano concluído, recusado, cancelado ou em execução pode virar um **novo rascunho** (indicadores recalculados, sem
   prazos nem situação) para o ciclo seguinte.
 
 **Quem vê o quê.** Dois coordenadores do mesmo curso enxergam os mesmos planos (e qualquer um deles edita); plano de outro curso é
 **404**. O reitor na visão do curso lê a lista e o plano (só leitura, pelo `VisaoDeCursoDoReitor`); fora da visão é redirecionado.
 O colaborador e o administrador analisam planos enviados de qualquer curso. **O plano só guarda dado agregado** — nunca nome, RA ou
-CPF de aluno (há teste para isso) — porque é lido por quem não enxerga alunos.
+CPF de aluno (há teste para isso): ele circula entre coordenador, colaborador, administrador e reitoria, e o dado de aluno fica no Dashboard.
 
 Tabelas: `planos_acao` (o plano e a foto dos indicadores), `plano_acao_acoes`, `plano_acao_eventos`.
 
