@@ -39,7 +39,7 @@
         <div class="rounded-xl border border-emerald-300 bg-emerald-50 p-4">
             <p class="text-xs font-bold uppercase tracking-wide text-emerald-800">Meta de proficiência</p>
             <p class="text-2xl font-bold mt-1">{{ $fmt($plano->meta_proficiencia) }}</p>
-            <p class="text-xs text-emerald-900 mt-1">para o próximo DI{{ $plano->data_proximo_di ? ' ('.$plano->data_proximo_di->format('d/m/Y').')' : '' }}</p>
+            <p class="text-xs text-emerald-900 mt-1">para a próxima avaliação{{ $plano->data_proxima_avaliacao ? ' ('.$plano->data_proxima_avaliacao->format('d/m/Y').')' : '' }}</p>
         </div>
     </div>
 

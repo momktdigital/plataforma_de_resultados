@@ -131,7 +131,7 @@ linha, veja `git log`.
 - **Aprovação pelo colaborador** (e administrador): fila, critérios, e decisão de aprovar, pedir ajustes ou recusar, com
   justificativa obrigatória nas duas últimas. Plano devolvido volta ao coordenador, que edita e reenvia.
 - **Acompanhamento** do plano aprovado: situação das ações, notas de andamento, prazo reprogramável com justificativa, encerramento
-  com síntese, cancelamento com motivo e comparação com o DI seguinte (linha de base x meta). Lembretes diários
+  com síntese, cancelamento com motivo e comparação com a avaliação seguinte (linha de base x meta). Lembretes diários
   (`planos:lembretes`) de prazo próximo, prazo vencido e plano parado. Histórico só de acrescentar e auditoria.
 
 ## Perfil de reitor e painel da reitoria

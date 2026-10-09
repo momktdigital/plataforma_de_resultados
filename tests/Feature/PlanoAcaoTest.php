@@ -94,7 +94,7 @@ class PlanoAcaoTest extends TestCase
     {
         return [
             'meta_proficiencia' => '70',
-            'data_proximo_di' => now()->addDays(90)->toDateString(),
+            'data_proxima_avaliacao' => now()->addDays(90)->toDateString(),
             'recorte' => '3º período, alunos abaixo de 60%',
             'resultado' => 'Baixo acerto em Clínica',
             'fragilidades' => 'Clínica (58%)',
@@ -738,14 +738,14 @@ class PlanoAcaoTest extends TestCase
         }
     }
 
-    public function test_alertas_apontam_prazo_depois_do_proximo_di_e_plano_so_de_reunioes(): void
+    public function test_alertas_apontam_prazo_depois_da_proxima_avaliacao_e_plano_so_de_reunioes(): void
     {
-        $plano = new PlanoAcao(['data_proximo_di' => now()->addDays(20)->toDateString(), 'causa_raiz' => 'Falta de casos', 'nota_impacto' => 1, 'nota_evidencia' => 1, 'nota_governabilidade' => 2]);
+        $plano = new PlanoAcao(['data_proxima_avaliacao' => now()->addDays(20)->toDateString(), 'causa_raiz' => 'Falta de casos', 'nota_impacto' => 1, 'nota_evidencia' => 1, 'nota_governabilidade' => 2]);
         $plano->setRelation('acoes', collect([new PlanoAcaoAcao(['descricao' => 'Realizar reunião com docentes', 'prazo' => now()->addDays(40)->toDateString(), 'status' => 'nao_iniciada'])]));
 
         $alertas = implode(' | ', PlanoAcaoChecagem::alertas($plano));
 
-        $this->assertStringContainsString('prazo depois do próximo DI', $alertas);
+        $this->assertStringContainsString('prazo depois da próxima avaliação', $alertas);
         $this->assertStringContainsString('articulação', $alertas);
         $this->assertStringContainsString('5 Porquês', $alertas);
         $this->assertStringContainsString('pontuação baixa (2 de 27)', $alertas);

@@ -19,7 +19,7 @@
     <div class="mb-5">
         <h1 class="text-2xl font-black flex items-center gap-2"><i class="ph-bold ph-clipboard-text text-primary" aria-hidden="true"></i> Planos de ação</h1>
         <p class="text-sm text-slate-600 mt-1 max-w-3xl">
-            Do resultado do DI à ação pedagógica. Cada plano nasce de um dado do painel: procure o ícone
+            Do resultado da avaliação à ação pedagógica. Cada plano nasce de um dado do painel: procure o ícone
             <span class="inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white align-middle text-slate-600"><i class="ph-bold ph-clipboard-text" aria-hidden="true"></i></span>
             <span class="sr-only">(prancheta)</span>
             nos gráficos, indicadores e tabelas de <a href="{{ route('coordenador.desempenho') }}" class="font-semibold text-emerald-700 hover:underline">Desempenho</a> e da

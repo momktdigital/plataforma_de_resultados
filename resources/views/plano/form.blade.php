@@ -38,7 +38,7 @@
     <div class="mt-2 mb-5">
         <h1 class="text-2xl font-black flex items-center gap-2"><i class="ph-bold ph-clipboard-text text-primary" aria-hidden="true"></i> {{ $existe ? 'Editar plano de ação' : 'Novo plano de ação' }}</h1>
         <p class="text-sm text-slate-600 mt-1">
-            Do dado à ação pedagógica: leia o resultado, investigue as causas com o NDE e defina o que muda antes do próximo DI.
+            Do dado à ação pedagógica: leia o resultado, investigue as causas com o NDE e defina o que muda antes da próxima avaliação.
             Origem: <strong>{{ $existe ? $plano->origem_rotulo : $origem['rotulo'] }}</strong>.
         </p>
         @if ($existe && $plano->status === PlanoAcao::AJUSTES)
@@ -188,7 +188,7 @@
                             <input id="meta_proficiencia" name="meta_proficiencia" type="text" inputmode="decimal" maxlength="5" placeholder="Ex.: 70"
                                    value="{{ old('meta_proficiencia', $plano->meta_proficiencia !== null ? rtrim(rtrim(number_format($plano->meta_proficiencia, 1, ',', ''), '0'), ',') : '') }}"
                                    class="mt-1 w-full rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-lg font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-                            <p class="text-xs text-emerald-900 mt-1">pactuada com o NDE para o próximo DI</p>
+                            <p class="text-xs text-emerald-900 mt-1">pactuada com o NDE para a próxima avaliação</p>
                         </div>
                     </div>
 
@@ -219,9 +219,9 @@
                     @endif
 
                     <div class="max-w-xs">
-                        <label for="data_proximo_di" class="{{ $etiqueta }}">Data prevista do próximo DI <span class="font-normal text-slate-500">(opcional)</span></label>
+                        <label for="data_proxima_avaliacao" class="{{ $etiqueta }}">Data prevista da próxima avaliação <span class="font-normal text-slate-500">(opcional)</span></label>
                         <p class="{{ $dica }}">Serve para conferir se os prazos das ações cabem antes da próxima aplicação.</p>
-                        <input id="data_proximo_di" name="data_proximo_di" type="date" value="{{ old('data_proximo_di', $plano->data_proximo_di?->toDateString()) }}" class="{{ $campo }}">
+                        <input id="data_proxima_avaliacao" name="data_proxima_avaliacao" type="date" value="{{ old('data_proxima_avaliacao', $plano->data_proxima_avaliacao?->toDateString()) }}" class="{{ $campo }}">
                     </div>
                 </section>
 
@@ -311,7 +311,7 @@
 
                     <div>
                         <label for="causa_raiz" class="{{ $etiqueta }}">Causa-raiz acionável</label>
-                        <p class="{{ $dica }}">Algo específico, sustentado por evidências e modificável antes do próximo DI.</p>
+                        <p class="{{ $dica }}">Algo específico, sustentado por evidências e modificável antes da próxima avaliação.</p>
                         <textarea id="causa_raiz" name="causa_raiz" rows="3" maxlength="5000" class="{{ $campo }}">{{ old('causa_raiz', $plano->causa_raiz) }}</textarea>
                     </div>
                 </section>
@@ -320,7 +320,7 @@
                 <section data-etapa="4" aria-labelledby="titulo-etapa-4" class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 space-y-5">
                     <div>
                         <h2 id="titulo-etapa-4" class="text-lg font-bold">4. Ações</h2>
-                        <p class="text-sm text-slate-600">Transforme a análise em intervenção: uma mudança concreta na experiência de aprendizagem, ligada à causa-raiz e executável antes do próximo DI. Um plano pode ter mais de uma ação.</p>
+                        <p class="text-sm text-slate-600">Transforme a análise em intervenção: uma mudança concreta na experiência de aprendizagem, ligada à causa-raiz e executável antes da próxima avaliação. Um plano pode ter mais de uma ação.</p>
                     </div>
 
                     <div id="lista-acoes" class="space-y-4">

@@ -185,7 +185,7 @@
         function curto(t) { return String(t || '').trim().length < 5; }
         var hoje = new Date(); hoje.setHours(0, 0, 0, 0);
 
-        if (valor('meta_proficiencia') === '') falta(1, 'Defina a meta de proficiência para o próximo DI.');
+        if (valor('meta_proficiencia') === '') falta(1, 'Defina a meta de proficiência para a próxima avaliação.');
         if (curto(valor('recorte'))) falta(2, 'Diga qual recorte merece atenção (período, grupo, faixa de desempenho).');
         if (curto(valor('resultado'))) falta(2, 'Descreva o resultado que precisa ser enfrentado.');
         if (curto(valor('fragilidades'))) falta(2, 'Registre as competências, objetivos de aprendizagem ou níveis cognitivos com fragilidade.');
@@ -206,7 +206,7 @@
             if (!a.responsavel) falta(4, 'Ação ' + n + ': informe o responsável.');
             if (!a.prazo) falta(4, 'Ação ' + n + ': informe o prazo.');
             else if (new Date(a.prazo + 'T00:00:00') < hoje) falta(4, 'Ação ' + n + ': o prazo já passou — informe uma data a partir de hoje.');
-            if (curto(a.verificacao)) falta(4, 'Ação ' + n + ': diga como a execução e os sinais de aprendizagem serão verificados antes do próximo DI.');
+            if (curto(a.verificacao)) falta(4, 'Ação ' + n + ': diga como a execução e os sinais de aprendizagem serão verificados antes da próxima avaliação.');
         });
 
         return faltas;

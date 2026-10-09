@@ -44,7 +44,7 @@ class PlanoAcaoService
         'dados' => 'O resultado a enfrentar está sustentado pelos dados do painel.',
         'causa' => 'A causa-raiz é específica, acionável e tem evidências.',
         'acoes' => 'As ações respondem à causa-raiz e mudam a experiência de aprendizagem.',
-        'viabilidade' => 'Responsáveis e prazos são viáveis antes do próximo DI.',
+        'viabilidade' => 'Responsáveis e prazos são viáveis antes da próxima avaliação.',
         'verificacao' => 'Há como verificar a execução e os sinais de aprendizagem.',
     ];
 
@@ -408,8 +408,8 @@ class PlanoAcaoService
             $plano->meta_proficiencia = ($v = str_replace(',', '.', trim((string) $dados['meta_proficiencia']))) === '' ? null : round((float) $v, 1);
         }
 
-        if (array_key_exists('data_proximo_di', $dados)) {
-            $plano->data_proximo_di = $texto($dados['data_proximo_di']);
+        if (array_key_exists('data_proxima_avaliacao', $dados)) {
+            $plano->data_proxima_avaliacao = $texto($dados['data_proxima_avaliacao']);
         }
 
         if (array_key_exists('causas', $dados)) {
