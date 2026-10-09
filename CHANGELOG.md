@@ -125,6 +125,8 @@ linha, veja `git log`.
 - **Ícone "iniciar plano de ação"** em cada visual e dado do painel do coordenador (cartões, gráficos de evolução, área, Bloom e
   tema, barras por período e por curso, linhas de avaliações, destaques, Comparar semestres e Dashboard da avaliação). Num visual com
   itens, abre um menu: o visual inteiro ou um item (uma área, um nível de Bloom...).
+- **Nenhuma etapa é obrigatória**: o plano pode ser salvo e enviado com o que houver; o que ficou em branco só é sinalizado ao
+  coordenador e ao colaborador.
 - **Roteiro em cinco etapas** (ponto de partida, leitura do dado, causas com Ishikawa e 5 Porquês, ações, síntese e envio) já
   preenchido com o curso, a participação atual, a meta de participação e a proficiência atual, mais o dado do visual e sugestões de
   texto. Os números são recalculados no servidor, nunca vêm do navegador.

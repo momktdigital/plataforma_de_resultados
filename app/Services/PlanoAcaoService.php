@@ -9,7 +9,6 @@ use App\Models\PlanoAcaoAcao;
 use App\Models\PlanoAcaoEvento;
 use App\Support\AtividadeLogger;
 use App\Support\NomeCurso;
-use App\Support\PlanoAcaoChecagem;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -143,18 +142,12 @@ class PlanoAcaoService
     // ---------------------------------------------------------------------------------------------------------------
 
     /**
-     * Envia ao colaborador. O conteúdo precisa estar completo (PlanoAcaoChecagem::pendencias); senão nada muda e a
-     * exceção traz o que falta — o rascunho continua salvo.
+     * Envia ao colaborador. Nenhuma etapa é obrigatória: o que estiver em branco aparece como lacuna
+     * (PlanoAcaoChecagem::lacunas) para quem analisa, mas não impede o envio.
      */
     public function enviar(PlanoAcao $plano, Admin $autor): PlanoAcao
     {
         $this->exigirEstado($plano, [PlanoAcao::RASCUNHO, PlanoAcao::AJUSTES], 'Este plano não pode ser enviado agora.');
-
-        $plano->unsetRelation('acoes');
-        $faltas = PlanoAcaoChecagem::pendencias($plano);
-        if ($faltas !== []) {
-            throw ValidationException::withMessages(['plano' => array_column($faltas, 'mensagem')]);
-        }
 
         $reenvio = $plano->envios > 0;
         $plano->forceFill([

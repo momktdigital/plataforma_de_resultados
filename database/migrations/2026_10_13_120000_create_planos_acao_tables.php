@@ -41,7 +41,7 @@ return new class extends Migration
             $table->decimal('meta_participacao', 5, 1)->nullable();
             $table->decimal('proficiencia_atual', 5, 1)->nullable();
             $table->decimal('meta_proficiencia', 5, 1)->nullable();
-            $table->date('data_proxima_avaliacao')->nullable();
+            $table->date('data_proximo_di')->nullable();
 
             // 2. Leitura do dado.
             $table->text('recorte')->nullable();

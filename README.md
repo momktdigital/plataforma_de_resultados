@@ -538,10 +538,10 @@ A **meta de proficiência** é a única que o coordenador pactua (sem ela o plan
 funciona igual): 1 *Ponto de partida* · 2 *Leitura do dado* (recorte, resultado, fragilidades, dados que sustentam) · 3 *Causas*
 (Ishikawa em seis dimensões, priorização por Impacto × Evidência × Governabilidade de 1 a 3, 5 Porquês, causa-raiz acionável) ·
 4 *Ações* (uma ou mais: verbo no infinitivo, como será executada, responsável, prazo, como se verifica a execução e os sinais de
-aprendizagem) · 5 *Síntese e envio* (resumo ao vivo e lista do que falta). Cada etapa tem "Dúvidas desta etapa" (texto fixo do
-roteiro, sem IA). "Salvar rascunho" a qualquer momento. `PlanoAcaoChecagem` é a fonte única do que **bloqueia o envio** (campo
-vazio, ação sem verbo no infinitivo, prazo no passado, falta meta) e do que só **alerta** (ação depois da próxima avaliação, plano só de
-reuniões, sem 5 Porquês, causa com pontuação baixa).
+aprendizagem) · 5 *Síntese e envio* (resumo ao vivo e lista do que ficou em branco). Cada etapa tem "Dúvidas desta etapa" (texto fixo do
+roteiro, sem IA). "Salvar rascunho" a qualquer momento. **Nenhuma etapa é obrigatória**: dá para salvar e enviar o plano com o
+que houver. `PlanoAcaoChecagem` só **informa**: as *lacunas* (campo em branco, ação sem verbo no infinitivo, prazo no passado, sem meta) e os
+*alertas* (ação depois da próxima avaliação, plano só de reuniões, sem 5 Porquês, causa com pontuação baixa) aparecem na síntese e para o colaborador.
 
 **Estados** (`PlanoAcao::STATUS`, transições só em `PlanoAcaoService`):
 

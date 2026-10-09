@@ -296,21 +296,47 @@ class PlanoAcaoTest extends TestCase
         $this->assertSame(50.0, $plano->proficiencia_atual);
     }
 
-    public function test_enviar_incompleto_mantem_o_rascunho_e_lista_o_que_falta(): void
+    public function test_nenhuma_etapa_e_obrigatoria_enviar_incompleto_funciona_e_as_lacunas_so_informam(): void
     {
         $this->avaliacao('D1', '2026-03-10');
 
         $plano = $this->criar($this->coordenador(), ['causa_raiz' => '', 'acoes' => [['descricao' => 'Reunião com docentes', 'execucao' => '', 'responsavel' => '', 'prazo' => '', 'verificacao' => '']]], 'enviar');
 
         $plano->refresh();
-        $this->assertSame(PlanoAcao::RASCUNHO, $plano->status);
-        $this->assertSame(0, $plano->envios);
+        $this->assertSame(PlanoAcao::EM_ANALISE, $plano->status);
+        $this->assertSame(1, $plano->envios);
 
-        $faltas = collect(PlanoAcaoChecagem::pendencias($plano->load('acoes')))->pluck('mensagem')->implode(' | ');
-        $this->assertStringContainsString('causa-raiz', $faltas);
-        $this->assertStringContainsString('inicie com um verbo no infinitivo', $faltas);
-        $this->assertStringContainsString('informe o responsável', $faltas);
-        $this->assertStringContainsString('informe o prazo', $faltas);
+        $lacunas = collect(PlanoAcaoChecagem::lacunas($plano->load('acoes')))->pluck('mensagem')->implode(' | ');
+        $this->assertStringContainsString('causa-raiz', $lacunas);
+        $this->assertStringContainsString('inicie com um verbo no infinitivo', $lacunas);
+        $this->assertStringContainsString('informe o responsável', $lacunas);
+        $this->assertStringContainsString('informe o prazo', $lacunas);
+
+        // o colaborador vê o que ficou em branco, mas pode analisar normalmente
+        $this->actingAs($this->colaborador(), 'admin')->get("/colaboracao/planos/{$plano->id}")->assertOk()
+            ->assertSee('Pontos deixados em branco pelo coordenador')->assertSee('informe o responsável');
+    }
+
+    public function test_plano_totalmente_vazio_pode_ser_salvo_enviado_e_aprovado(): void
+    {
+        $this->avaliacao('D1', '2026-03-10');
+        $coordenador = $this->coordenador();
+
+        $this->actingAs($coordenador, 'admin')->post('/painel/planos', [
+            'acao' => 'enviar',
+            'origem' => ['curso' => 'MEDICINA', 'periodo_letivo' => '2026/1', 'categoria' => $this->categoria->id, 'visual' => 'geral'],
+        ])->assertSessionHasNoErrors();
+
+        $plano = PlanoAcao::firstOrFail();
+        $this->assertSame(PlanoAcao::EM_ANALISE, $plano->status);
+        $this->assertSame(0, $plano->acoes()->count());
+
+        $this->get("/painel/planos/{$plano->id}")->assertOk()->assertSee('Não informado');
+        $this->actingAs($this->colaborador(), 'admin')->post("/colaboracao/planos/{$plano->id}/decisao", ['decisao' => 'aprovar'])->assertSessionHasNoErrors();
+        $this->assertSame(PlanoAcao::APROVADO, $plano->fresh()->status);
+
+        $this->actingAs($coordenador, 'admin')->get("/painel/planos/{$plano->id}")->assertOk();
+        $this->get('/painel/planos')->assertOk()->assertSee($plano->origem_rotulo);
     }
 
     public function test_enviar_completo_vai_para_analise_e_registra_o_evento(): void
@@ -326,7 +352,7 @@ class PlanoAcaoTest extends TestCase
         $this->assertNotSame('Mudei', $plano->fresh()->recorte);
     }
 
-    public function test_prazo_no_passado_e_acao_sem_verbo_impedem_o_envio(): void
+    public function test_prazo_no_passado_e_acao_sem_verbo_viram_lacunas_e_nao_impedem_o_envio(): void
     {
         $this->avaliacao('D1', '2026-03-10');
 
@@ -334,10 +360,10 @@ class PlanoAcaoTest extends TestCase
             'descricao' => 'Atividades integradoras', 'execucao' => 'Quinzenal', 'responsavel' => 'Ana', 'prazo' => now()->subDay()->toDateString(), 'verificacao' => 'Mini-teste',
         ]]], 'enviar');
 
-        $faltas = collect(PlanoAcaoChecagem::pendencias($plano->fresh()->load('acoes')))->pluck('mensagem')->implode(' | ');
-        $this->assertSame(PlanoAcao::RASCUNHO, $plano->fresh()->status);
-        $this->assertStringContainsString('verbo no infinitivo', $faltas);
-        $this->assertStringContainsString('o prazo já passou', $faltas);
+        $lacunas = collect(PlanoAcaoChecagem::lacunas($plano->fresh()->load('acoes')))->pluck('mensagem')->implode(' | ');
+        $this->assertSame(PlanoAcao::EM_ANALISE, $plano->fresh()->status);
+        $this->assertStringContainsString('verbo no infinitivo', $lacunas);
+        $this->assertStringContainsString('o prazo já passou', $lacunas);
     }
 
     public function test_coordenador_retira_o_plano_da_analise(): void

@@ -6,12 +6,11 @@ use App\Models\PlanoAcao;
 use App\Models\PlanoAcaoAcao;
 
 /**
- * Conferência de um plano de ação: o que FALTA para poder enviá-lo (pendências, bloqueiam) e o que merece uma segunda
- * olhada (alertas, não bloqueiam — o teste de coerência do roteiro: "se a ação for executada, ela enfrenta a causa-raiz e
- * pode contribuir para a meta?").
+ * Conferência de um plano de ação: o que está EM BRANCO (lacunas) e o que merece uma segunda olhada (alertas — o teste de
+ * coerência do roteiro: "se a ação for executada, ela enfrenta a causa-raiz e pode contribuir para a meta?").
  *
- * É a fonte única dessa regra: o coordenador a vê na síntese antes de enviar, o envio a exige e o colaborador a vê ao
- * analisar. Só olha o que dá para conferir por máquina (campo vazio, verbo, prazo, data da próxima avaliação); a qualidade do raciocínio
+ * NENHUMA etapa do plano é obrigatória: lacunas e alertas só informam — o coordenador os vê na síntese antes de enviar e o
+ * colaborador ao analisar, mas nada impede salvar nem enviar. Só olha o que dá para conferir por máquina (campo vazio, verbo, prazo, data da próxima avaliação); a qualidade do raciocínio
  * é do colaborador.
  */
 final class PlanoAcaoChecagem
@@ -20,9 +19,9 @@ final class PlanoAcaoChecagem
     private const MINIMO = 5;
 
     /**
-     * @return array<int, array{etapa: int, mensagem: string}> o que impede o envio, por etapa do roteiro (1 a 4)
+     * @return array<int, array{etapa: int, mensagem: string}> o que está em branco, por etapa do roteiro (1 a 4); não impede o envio
      */
-    public static function pendencias(PlanoAcao $plano): array
+    public static function lacunas(PlanoAcao $plano): array
     {
         $faltas = [];
         $falta = function (int $etapa, string $mensagem) use (&$faltas): void {
@@ -87,7 +86,7 @@ final class PlanoAcaoChecagem
     }
 
     /**
-     * O que não impede o envio, mas o colaborador (e o próprio coordenador) deveria olhar.
+     * Pontos que merecem uma segunda olhada (também não impedem nada).
      *
      * @return array<int, string>
      */

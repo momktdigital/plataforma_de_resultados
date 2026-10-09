@@ -76,10 +76,10 @@
         <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 flex items-center gap-2" role="status"><i class="ph-bold ph-pencil-line text-lg" aria-hidden="true"></i> Devolvido ao coordenador para ajustes. Quando ele reenviar, o plano volta para a fila.</div>
     @endif
 
-    @if ($pendencias !== [] && $plano->aguardandoAnalise())
-        <div class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900" role="note">
-            <p class="font-bold">O plano tem campos obrigatórios em branco (não deveria ter sido enviado):</p>
-            <ul class="list-disc pl-5 mt-1">@foreach ($pendencias as $falta)<li>{{ $falta['mensagem'] }}</li>@endforeach</ul>
+    @if ($lacunas !== [] && $plano->aguardandoAnalise())
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="note">
+            <p class="font-bold">Pontos deixados em branco pelo coordenador (nenhuma etapa é obrigatória):</p>
+            <ul class="list-disc pl-5 mt-1">@foreach ($lacunas as $falta)<li>{{ $falta['mensagem'] }}</li>@endforeach</ul>
         </div>
     @endif
 
