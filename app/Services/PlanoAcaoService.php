@@ -19,39 +19,21 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Tudo que muda um plano de ação: criar e editar o rascunho, enviar para análise, a decisão do colaborador (aprovar,
- * pedir ajustes, recusar), o acompanhamento das ações, o encerramento. Cada mudança de estado grava um evento (o
- * histórico do plano) e a auditoria do sistema, e avisa o coordenador do curso quando a decisão é de outra pessoa.
+ * Tudo que muda um plano de ação: criar e editar o rascunho, PUBLICAR, o acompanhamento das ações, o encerramento. Cada mudança
+ * de estado grava um evento (o histórico do plano) e a auditoria do sistema.
  *
- * O fluxo:
+ * Não há aprovação. O fluxo:
  *
- *   rascunho ──enviar──▶ em_analise ──aprovar──▶ aprovado ──encerrar──▶ concluido
- *      ▲  ▲                 │  │                    └──cancelar──▶ cancelado
- *      │  └──retirar────────┘  └─recusar──▶ recusado (fim)
- *      └──── ajustes ◀──pedir ajustes─┘   (o coordenador edita e reenvia)
+ *   rascunho ──publicar──▶ em_execucao ──encerrar──▶ concluido
+ *                                      └──cancelar──▶ cancelado
  *
- * Quem pode o quê é decidido pelos controllers (perfil e curso); aqui só vale a ordem das etapas — uma transição fora do
- * fluxo (decidir um plano que já foi decidido, por exemplo, com duas abas abertas) lança \DomainException.
+ * Ao publicar, os e-mails definidos em Configurações recebem o plano completo (PlanoAcaoEmailService). O colaborador só acompanha
+ * (lê, comenta, exporta). Quem pode o quê é decidido pelos controllers (perfil e curso); aqui só vale a ordem das etapas — uma
+ * transição fora do fluxo lança \DomainException.
  */
 class PlanoAcaoService
 {
     public function __construct(private readonly PlanoAcaoEmailService $email) {}
-
-    /** Decisões do colaborador → estado em que o plano fica. */
-    public const DECISOES = [
-        'aprovar' => PlanoAcao::APROVADO,
-        'ajustes' => PlanoAcao::AJUSTES,
-        'recusar' => PlanoAcao::RECUSADO,
-    ];
-
-    /** Critérios que o colaborador marca ao analisar (o que não for marcado aparece para o coordenador numa devolução). */
-    public const CRITERIOS = [
-        'dados' => 'O resultado a enfrentar está sustentado pelos dados do painel.',
-        'causa' => 'A causa-raiz é específica, acionável e tem evidências.',
-        'acoes' => 'As ações respondem à causa-raiz e mudam a experiência de aprendizagem.',
-        'viabilidade' => 'Responsáveis e prazos são viáveis antes da próxima avaliação.',
-        'verificacao' => 'Há como verificar a execução e os sinais de aprendizagem.',
-    ];
 
     // ---------------------------------------------------------------------------------------------------------------
     // Rascunho
@@ -82,6 +64,7 @@ class PlanoAcaoService
                     'categoria_automatica' => (bool) ($origem['categoria_automatica'] ?? false),
                     'recorte_indicadores' => $ind['recorte'] ?? null,
                     'corte' => $ind['corte'] ?? null,
+                    'criterio' => $ind['criterio'] ?? 'corte',
                     'previstos' => $ind['previstos'] ?? null,
                     'fizeram' => $ind['fizeram'] ?? null,
                     'mistura' => (bool) ($ind['mistura'] ?? false),
@@ -107,7 +90,7 @@ class PlanoAcaoService
     /** @param array<string, mixed> $dados */
     public function atualizar(PlanoAcao $plano, array $dados): PlanoAcao
     {
-        $this->exigirEstado($plano, [PlanoAcao::RASCUNHO, PlanoAcao::AJUSTES], 'Este plano não pode mais ser editado.');
+        $this->exigirEstado($plano, [PlanoAcao::RASCUNHO], 'Este plano já foi publicado e não pode mais ser editado.');
 
         return DB::transaction(function () use ($plano, $dados) {
             $this->preencher($plano, $dados);
@@ -137,7 +120,7 @@ class PlanoAcaoService
     }
 
     /**
-     * Planos ainda vivos (rascunho, em análise, ajustes, em execução) sobre o MESMO recorte e o mesmo visual/item — para avisar
+     * Planos ainda vivos (rascunho ou em execução) sobre o MESMO recorte e o mesmo visual/item — para avisar
      * o coordenador antes de abrir um plano repetido. Só informa: nada é barrado.
      *
      * @return Collection<int, PlanoAcao>
@@ -145,7 +128,7 @@ class PlanoAcaoService
     public function semelhantes(string $curso, string $periodoLetivo, ?int $categoriaId, string $visual, ?string $item): Collection
     {
         return PlanoAcao::dosCursos([$curso])
-            ->whereIn('status', [PlanoAcao::RASCUNHO, PlanoAcao::EM_ANALISE, PlanoAcao::AJUSTES, PlanoAcao::APROVADO])
+            ->whereIn('status', [PlanoAcao::RASCUNHO, PlanoAcao::EM_EXECUCAO])
             ->where('periodo_letivo', $periodoLetivo)
             ->where('origem_visual', $visual)
             ->when($categoriaId !== null, fn ($q) => $q->where('categoria_id', $categoriaId), fn ($q) => $q->whereNull('categoria_id'))
@@ -163,102 +146,35 @@ class PlanoAcaoService
     }
 
     // ---------------------------------------------------------------------------------------------------------------
-    // Envio e decisão
+    // Publicação
     // ---------------------------------------------------------------------------------------------------------------
 
     /**
-     * Envia ao colaborador. Nenhuma etapa é obrigatória: o que estiver em branco aparece como lacuna
-     * (PlanoAcaoChecagem::lacunas) para quem analisa, mas não impede o envio.
+     * Publica o plano: sai do rascunho e entra em execução, e os e-mails definidos em Configurações recebem o plano completo.
+     * Nenhuma etapa é obrigatória: o que estiver em branco aparece como lacuna (PlanoAcaoChecagem::lacunas) para quem acompanha,
+     * mas não impede a publicação.
      */
-    public function enviar(PlanoAcao $plano, Admin $autor): PlanoAcao
+    public function publicar(PlanoAcao $plano, Admin $autor): PlanoAcao
     {
-        $this->exigirEstado($plano, [PlanoAcao::RASCUNHO, PlanoAcao::AJUSTES], 'Este plano não pode ser enviado agora.');
+        $this->exigirEstado($plano, [PlanoAcao::RASCUNHO], 'Este plano já foi publicado.');
 
-        $reenvio = $plano->envios > 0;
-        $plano->forceFill([
-            'status' => PlanoAcao::EM_ANALISE,
-            'envios' => $plano->envios + 1,
-            'enviado_em' => now(),
-            'decidido_em' => null,
-            'decidido_por' => null,
-        ])->save();
+        $plano->forceFill(['status' => PlanoAcao::EM_EXECUCAO, 'envios' => 1, 'enviado_em' => now()])->save();
 
-        // A foto do conteúdo fica no evento: é com ela que o colaborador vê o que mudou num reenvio.
-        $this->registrar($plano, $autor, $reenvio ? PlanoAcaoEvento::REENVIADO : PlanoAcaoEvento::ENVIADO, null, ['envio' => $plano->envios, 'conteudo' => $plano->conteudo()]);
-        AtividadeLogger::registrar('plano_acao.enviado', 'PlanoAcao', $plano->id, ['curso' => $plano->curso, 'envio' => $plano->envios]);
-        $this->email->planoEnviado($plano, $reenvio);
+        $this->registrar($plano, $autor, PlanoAcaoEvento::PUBLICADO);
+        AtividadeLogger::registrar('plano_acao.publicado', 'PlanoAcao', $plano->id, ['curso' => $plano->curso]);
+        $this->email->novoPlano($plano->fresh(['acoes', 'autor']));
 
         return $plano;
     }
 
-    /** O coordenador desiste do envio enquanto ninguém decidiu: volta a ser rascunho. */
-    public function retirar(PlanoAcao $plano, Admin $autor): PlanoAcao
-    {
-        $this->exigirEstado($plano, [PlanoAcao::EM_ANALISE], 'O plano não está em análise.');
-
-        $plano->forceFill(['status' => PlanoAcao::RASCUNHO])->save();
-        $this->registrar($plano, $autor, PlanoAcaoEvento::RETIRADO);
-        AtividadeLogger::registrar('plano_acao.retirado', 'PlanoAcao', $plano->id, ['curso' => $plano->curso]);
-
-        return $plano;
-    }
-
-    /**
-     * A decisão do colaborador. Pedir ajustes e recusar exigem justificativa (o coordenador precisa saber o que mudar ou por
-     * quê não); aprovar aceita uma observação opcional.
-     *
-     * @param  'aprovar'|'ajustes'|'recusar'  $decisao
-     * @param  array<int, string>  $criteriosAtendidos  chaves de CRITERIOS marcadas
-     */
-    public function decidir(PlanoAcao $plano, Admin $revisor, string $decisao, ?string $justificativa, array $criteriosAtendidos = []): PlanoAcao
-    {
-        if (! isset(self::DECISOES[$decisao])) {
-            throw new \InvalidArgumentException("Decisão desconhecida: {$decisao}");
-        }
-        $this->exigirEstado($plano, [PlanoAcao::EM_ANALISE], 'Este plano não está aguardando análise (talvez já tenha sido decidido).');
-
-        $justificativa = trim((string) $justificativa);
-        if ($decisao !== 'aprovar' && mb_strlen($justificativa) < 10) {
-            throw ValidationException::withMessages(['justificativa' => [
-                $decisao === 'ajustes'
-                    ? 'Explique o que o coordenador precisa ajustar (mínimo de 10 caracteres).'
-                    : 'Justifique a recusa (mínimo de 10 caracteres).',
-            ]]);
-        }
-
-        $criterios = [];
-        foreach (self::CRITERIOS as $chave => $texto) {
-            $criterios[$chave] = in_array($chave, $criteriosAtendidos, true);
-        }
-
-        $novo = self::DECISOES[$decisao];
-        $plano->forceFill(['status' => $novo, 'decidido_em' => now(), 'decidido_por' => $revisor->id])->save();
-
-        $tipo = ['aprovar' => PlanoAcaoEvento::APROVADO, 'ajustes' => PlanoAcaoEvento::AJUSTES, 'recusar' => PlanoAcaoEvento::RECUSADO][$decisao];
-        $evento = $this->registrar($plano, $revisor, $tipo, $justificativa !== '' ? $justificativa : null, ['criterios' => $criterios]);
-        AtividadeLogger::registrar('plano_acao.'.$tipo, 'PlanoAcao', $plano->id, ['curso' => $plano->curso, 'decisao' => $decisao]);
-
-        [$titulo, $tipoAviso] = match ($decisao) {
-            'aprovar' => ['Plano de ação aprovado', 'plano_aprovado'],
-            'ajustes' => ['Plano de ação devolvido para ajustes', 'plano_ajustes'],
-            'recusar' => ['Plano de ação recusado', 'plano_recusado'],
-        };
-        $this->avisar($plano, $tipoAviso, "{$titulo}: {$plano->origem_rotulo}", $justificativa !== '' ? Str::limit($justificativa, 280) : 'O plano foi aprovado e já pode ser executado e acompanhado.', "plano:{$plano->id}:decisao:{$evento->id}");
-        $this->email->decisaoOuComentario($plano, "{$titulo}: {$plano->origem_rotulo}", $justificativa !== '' ? $justificativa : 'O plano foi aprovado e já pode ser executado e acompanhado.');
-
-        return $plano;
-    }
-
-    /** Comentário solto no plano (sem decisão). Quando vem do colaborador, o coordenador é avisado. */
+    /** Comentário solto no plano. Quando vem de quem acompanha (colaborador, administrador), o coordenador é avisado. */
     public function comentar(PlanoAcao $plano, Admin $autor, string $texto): PlanoAcaoEvento
     {
         $evento = $this->registrar($plano, $autor, PlanoAcaoEvento::COMENTARIO, trim($texto));
 
-        if ($autor->ehCoordenador()) {
-            $this->email->comentarioDoCoordenador($plano, trim($texto));
-        } else {
+        if (! $autor->ehCoordenador()) {
             $this->avisar($plano, 'plano', "Novo comentário no plano: {$plano->origem_rotulo}", Str::limit(trim($texto), 280), "plano:{$plano->id}:comentario:{$evento->id}");
-            $this->email->decisaoOuComentario($plano, "Novo comentário no plano: {$plano->origem_rotulo}", trim($texto));
+            $this->email->comentarioParaOCoordenador($plano, trim($texto));
         }
 
         return $evento;
@@ -280,7 +196,7 @@ class PlanoAcaoService
      */
     public function atualizarAcao(PlanoAcao $plano, PlanoAcaoAcao $acao, Admin $autor, array $dados): PlanoAcaoAcao
     {
-        $this->exigirEstado($plano, [PlanoAcao::APROVADO], 'As ações só são acompanhadas enquanto o plano está em execução.');
+        $this->exigirEstado($plano, [PlanoAcao::EM_EXECUCAO], 'As ações só são acompanhadas enquanto o plano está em execução.');
 
         $nota = trim((string) ($dados['nota'] ?? ''));
         $novoStatus = ($dados['status'] ?? '') !== '' ? (string) $dados['status'] : $acao->status;
@@ -333,7 +249,7 @@ class PlanoAcaoService
     /** Fecha o plano: todas as ações concluídas (ou canceladas) e uma síntese do que foi feito e aprendido. */
     public function encerrar(PlanoAcao $plano, Admin $autor, string $conclusao, array $anexos = []): PlanoAcao
     {
-        $this->exigirEstado($plano, [PlanoAcao::APROVADO], 'Só um plano em execução pode ser encerrado.');
+        $this->exigirEstado($plano, [PlanoAcao::EM_EXECUCAO], 'Só um plano em execução pode ser encerrado.');
 
         $conclusao = trim($conclusao);
         if (mb_strlen($conclusao) < 10) {
@@ -351,10 +267,10 @@ class PlanoAcaoService
         return $plano;
     }
 
-    /** Cancela um plano em execução ou devolvido para ajustes (com o motivo). */
+    /** Cancela um plano em execução (com o motivo). */
     public function cancelar(PlanoAcao $plano, Admin $autor, string $motivo): PlanoAcao
     {
-        $this->exigirEstado($plano, [PlanoAcao::APROVADO, PlanoAcao::AJUSTES], 'Este plano não pode ser cancelado agora.');
+        $this->exigirEstado($plano, [PlanoAcao::EM_EXECUCAO], 'Só um plano em execução pode ser cancelado.');
 
         $motivo = trim($motivo);
         if (mb_strlen($motivo) < 10) {
@@ -390,30 +306,30 @@ class PlanoAcaoService
     }
 
     // ---------------------------------------------------------------------------------------------------------------
-    // Contadores do menu
+    // Contador do menu
     // ---------------------------------------------------------------------------------------------------------------
 
-    /** Quantos planos aguardam a análise do colaborador (o número do menu). Zero se a tabela ainda não existe. */
-    public static function aguardandoAnalise(): int
-    {
-        try {
-            return PlanoAcao::where('status', PlanoAcao::EM_ANALISE)->count();
-        } catch (\Throwable) {
-            return 0;
-        }
-    }
-
     /**
-     * Quantos planos do coordenador foram devolvidos para ajustes (pedem ação dele). Roda em TODA página do coordenador
-     * (o número do menu): por isso lê só os cursos dos planos devolvidos (poucos) e compara em PHP, em vez de resolver as
-     * grafias do curso no cadastro de alunos a cada requisição.
+     * Quantos planos em execução têm ação com o prazo vencido (o número do menu). Quem acompanha vê os de todos os cursos; o
+     * coordenador, os dos cursos dele. Roda em TODA página: uma consulta só, e a comparação de curso em PHP. Zero se a tabela
+     * ainda não existe.
      */
-    public static function comAjustes(Admin $coordenador): int
+    public static function comAcaoAtrasada(Admin $usuario): int
     {
         try {
-            $cursos = $coordenador->cursos();
+            $planos = PlanoAcaoAcao::query()
+                ->join('planos_acao as p', 'p.id', '=', 'plano_acao_acoes.plano_id')
+                ->where('p.status', PlanoAcao::EM_EXECUCAO)
+                ->whereIn('plano_acao_acoes.status', [PlanoAcaoAcao::NAO_INICIADA, PlanoAcaoAcao::EM_ANDAMENTO])
+                ->whereDate('plano_acao_acoes.prazo', '<', today())
+                ->select('p.id', 'p.curso')->distinct()->get();
 
-            return PlanoAcao::where('status', PlanoAcao::AJUSTES)->pluck('curso')->filter(fn ($curso) => NomeCurso::estaEm($curso, $cursos))->count();
+            if ($usuario->ehCoordenador()) {
+                $cursos = $usuario->cursos();
+                $planos = $planos->filter(fn ($p) => NomeCurso::estaEm($p->curso, $cursos));
+            }
+
+            return $planos->count();
         } catch (\Throwable) {
             return 0;
         }

@@ -64,22 +64,22 @@ class PortalMetaPeriodoTest extends TestCase
 
         $this->assertTrue($meta['comMeta']);
         $this->assertSame(2, $meta['periodoAluno']);
-        // 2 acertos em 4 = 50%; esperadas 3 de 4 (a do 3º período fica de fora) = 75%.
+        // 2 acertos em 4 = 50%; cabem 3 de 4 (a do 3º período fica de fora) = 75% da prova, e a meta é 60% disso = 45%.
         $this->assertSame(50.0, $meta['geral']['percentual']);
-        $this->assertSame(75.0, $meta['geral']['esperado']);
+        $this->assertSame(45.0, $meta['geral']['esperado']);
         $this->assertSame(['total' => 1, 'acertos' => 0], $meta['adiante']);
 
         // O gráfico usa o acerto total e o mínimo esperado da avaliação (a fatia que já cabe no período do aluno).
         $this->assertCount(1, $meta['avaliacoes']);
         $this->assertSame(50.0, $meta['avaliacoes'][0]['percentual']);
-        $this->assertSame(75.0, $meta['avaliacoes'][0]['minimo']);
+        $this->assertSame(45.0, $meta['avaliacoes'][0]['minimo']);
         $this->assertTrue($meta['avaliacoes'][0]['comMeta']);
 
         $porArea = collect($meta['areas'])->keyBy('area');
         $this->assertSame(50.0, $porArea['Cardiologia']['percentual']);
-        $this->assertSame(50.0, $porArea['Cardiologia']['esperado']);
+        $this->assertSame(30.0, $porArea['Cardiologia']['esperado']); // cabe 1 de 2 (50%) → meta de 60% disso
         $this->assertSame(50.0, $porArea['Pneumologia']['percentual']);
-        $this->assertSame(100.0, $porArea['Pneumologia']['esperado']);
+        $this->assertSame(60.0, $porArea['Pneumologia']['esperado']); // as duas cabem → 60%
         // O mais distante do esperado vem primeiro.
         $this->assertSame('Pneumologia', $meta['areas'][0]['area']);
     }
@@ -95,7 +95,7 @@ class PortalMetaPeriodoTest extends TestCase
         $meta = app(AnaliseConsolidadaService::class)->metaPorPeriodo($aluno, [$avaliacao->codigo]);
 
         $this->assertSame(7, $meta['periodoAluno']);
-        $this->assertSame(100.0, $meta['geral']['esperado']);
+        $this->assertSame(60.0, $meta['geral']['esperado']); // tudo cabe: 60% da prova
         $this->assertSame(0, $meta['adiante']['total']);
     }
 
@@ -129,8 +129,8 @@ class PortalMetaPeriodoTest extends TestCase
 
         $meta = app(AnaliseConsolidadaService::class)->metaPorPeriodo($aluno, [$semMeta->codigo, $comMeta->codigo]);
 
-        // Em ordem cronológica: primeiro a prova de março (com meta: 1 de 2 esperadas = 50%), depois a de abril (padrão 60%).
-        $this->assertSame([50.0, 60.0], array_column($meta['avaliacoes'], 'minimo'));
+        // Em ordem cronológica: primeiro a prova de março (com meta: cabe 1 de 2 = 50% da prova, e a meta é 60% disso = 30%), depois a de abril (tudo cabe: 60%).
+        $this->assertSame([30.0, 60.0], array_column($meta['avaliacoes'], 'minimo'));
         $this->assertSame([50.0, 100.0], array_column($meta['avaliacoes'], 'percentual'));
     }
 
@@ -158,7 +158,7 @@ class PortalMetaPeriodoTest extends TestCase
     public function test_mapa_de_dominio_traz_o_minimo_esperado_de_cada_celula(): void
     {
         $aluno = $this->aluno();
-        // Prova com meta: aluno do 2º período. Cardiologia: 1 esperada (acertou) + 1 do 4º período (errou, não pesa) → mínimo 50% (1 de 2), acerto 50%.
+        // Prova com meta: aluno do 2º período. Cardiologia: 1 esperada (acertou) + 1 do 4º período (errou, não pesa) → cabe 1 de 2 (50%) e a meta é 60% disso = 30%; acerto 50%.
         // Pneumologia: sem meta nas questões da célula → mínimo padrão de 60%.
         $comMeta = $this->prova($aluno, '2º', [['Cardiologia', 1, 'A'], ['Cardiologia', 4, 'B'], ['Pneumologia', null, 'A'], ['Pneumologia', null, 'B']]);
         // Prova sem nenhuma meta: tudo cai no padrão.
@@ -168,7 +168,7 @@ class PortalMetaPeriodoTest extends TestCase
         $areas = collect($mapa['areas'])->keyBy('area');
 
         $this->assertSame(50.0, $areas['Cardiologia']['valores'][$comMeta->codigo]);
-        $this->assertSame(50.0, $areas['Cardiologia']['esperados'][$comMeta->codigo]);
+        $this->assertSame(30.0, $areas['Cardiologia']['esperados'][$comMeta->codigo]);
         $this->assertSame(50.0, $areas['Pneumologia']['valores'][$comMeta->codigo]);
         $this->assertSame(60.0, $areas['Pneumologia']['esperados'][$comMeta->codigo]);
         $this->assertSame(60.0, $areas['Cardiologia']['esperados'][$semMeta->codigo]);

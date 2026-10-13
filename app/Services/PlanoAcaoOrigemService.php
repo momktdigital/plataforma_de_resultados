@@ -233,7 +233,7 @@ class PlanoAcaoOrigemService
         if ($ind !== null) {
             $dist = $ind['participacao'] !== null ? round($ind['participacao'] - $ind['meta_participacao'], 1) : null;
             $linhas[] = $this->linha('Participação', $this->pct($ind['participacao']), "{$ind['fizeram']} de {$ind['previstos']} previstos; meta ".$this->pct($ind['meta_participacao']), $visual === 'participacao');
-            $linhas[] = $this->linha('Proficiência', $this->pct($ind['proficiencia']), 'proficiente = '.(int) $ind['corte'].'% ou mais de acerto; '.$ind['com_nota'].' presentes com nota', $visual === 'proficiencia');
+            $linhas[] = $this->linha('Proficiência', $this->pct($ind['proficiencia']), ($ind['criterio'] === 'periodo' ? 'proficiente = alcançou 60% do que cabe no período dele; ' : 'proficiente = '.(int) $ind['corte'].'% ou mais de acerto; ').$ind['com_nota'].' presentes com nota', $visual === 'proficiencia');
             if ($ind['media'] !== null) {
                 $linhas[] = $this->linha('Média de acerto', $this->pct($ind['media']), 'só presentes');
             }
@@ -246,12 +246,12 @@ class PlanoAcaoOrigemService
                     .($dist >= 0 ? $this->pct(abs($dist)).' acima' : $this->pct(abs($dist)).' abaixo').' da meta de '.$this->pct($ind['meta_participacao']).'.';
             }
             if ($visual !== 'participacao' && $ind['proficiencia'] !== null) {
-                $evidencias[] = $this->pct($ind['proficiencia']).' dos presentes com nota atingiram '.(int) $ind['corte'].'% de acerto ('.$ind['com_nota'].' estudantes avaliados).';
+                $evidencias[] = $this->pct($ind['proficiencia']).' dos presentes com nota '.($ind['criterio'] === 'periodo' ? 'alcançaram a meta do período deles (60% do que cabe nele)' : 'atingiram '.(int) $ind['corte'].'% de acerto').' ('.$ind['com_nota'].' estudantes avaliados).';
             }
 
             $resultado = match ($visual) {
                 'participacao' => $ind['participacao'] !== null ? 'Participação de '.$this->pct($ind['participacao']).', '.($dist >= 0 ? 'dentro da' : 'abaixo da').' meta de '.$this->pct($ind['meta_participacao']).'.' : '',
-                'proficiencia' => $ind['proficiencia'] !== null ? 'Apenas '.$this->pct($ind['proficiencia']).' dos estudantes presentes atingiram o corte de proficiência ('.(int) $ind['corte'].'% de acerto).' : '',
+                'proficiencia' => $ind['proficiencia'] !== null ? 'Apenas '.$this->pct($ind['proficiencia']).' dos estudantes presentes '.($ind['criterio'] === 'periodo' ? 'alcançaram a meta do período deles (60% do que cabe nele).' : 'atingiram o corte de proficiência ('.(int) $ind['corte'].'% de acerto).') : '',
                 default => 'Participação de '.$this->pct($ind['participacao']).' e proficiência de '.$this->pct($ind['proficiencia']).'.',
             };
 

@@ -10,16 +10,49 @@ use App\Support\NomeCurso;
  *
  * Não calcula nada de novo: pede ao painel da reitoria (ReitorDashboardService) o mesmo que ele mostra para o curso, para
  * que o plano e o painel nunca discordem. Participação = quem fez ÷ previstos pela matrícula; proficiência = % dos
- * presentes com acerto no corte institucional (60% por padrão); meta = a de Configurações.
+ * presentes que alcançaram a meta; meta de participação = a de Configurações.
+ *
+ * PROFICIÊNCIA: quando a prova define o período das questões (`questoes.periodo_minimo`), é a % de alunos que alcançaram a META DO
+ * PERÍODO deles — 60% do que cabe no período (PeriodoCurso::metaDoPeriodo): num 1º período com 10 de 100 questões ao alcance, são 6
+ * questões, não 10. Sem essa informação, é o corte institucional sobre a prova inteira (60% por padrão), como no painel da reitoria.
+ * `criterio` diz qual dos dois foi usado ('periodo' | 'corte').
  */
 class PlanoAcaoIndicadoresService
 {
-    public function __construct(private readonly ReitorDashboardService $reitor) {}
+    public function __construct(
+        private readonly ReitorDashboardService $reitor,
+        private readonly CoordenadorDashboardService $dashboard,
+    ) {}
 
     /**
-     * @return ?array{participacao: ?float, meta_participacao: float, proficiencia: ?float, corte: float, previstos: int, fizeram: int, com_nota: int, media: ?float, periodos: array<int, array<string, mixed>>, recorte: string, categoria_nome: ?string, avaliacoes: int, mistura: bool}
+     * @return ?array{participacao: ?float, meta_participacao: float, proficiencia: ?float, criterio: string, corte: float, previstos: int, fizeram: int, com_nota: int, media: ?float, periodos: array<int, array<string, mixed>>, recorte: string, categoria_nome: ?string, avaliacoes: int, mistura: bool}
      *                                                                                                                                                                                                                                                                  null quando o curso não tem resultado nesse recorte
      */
+    /**
+     * Proficiência do curso nas avaliações do recorte. Havendo meta por período em alguma delas, conta quem alcançou a meta do
+     * PRÓPRIO período (CoordenadorDashboardService::alunosDentroDoEsperado — a mesma conta de "dentro do esperado" do painel do
+     * coordenador); senão, o valor do corte institucional.
+     *
+     * @param  array<int, int>  $codigos  avaliações do recorte (de todos os cursos; a conta filtra pelo curso)
+     * @return array{0: ?float, 1: string} [% de proficientes, 'periodo' | 'corte']
+     */
+    private function proficiencia(string $curso, array $codigos, ?float $doCorte): array
+    {
+        if ($codigos === []) {
+            return [$doCorte, 'corte'];
+        }
+
+        $porAvaliacao = $this->dashboard->alunosDentroDoEsperado(NomeCurso::variantes([$curso]), array_map('intval', $codigos));
+        if (! collect($porAvaliacao)->contains(fn ($a) => $a['comMeta'])) {
+            return [$doCorte, 'corte'];
+        }
+
+        $presentes = array_sum(array_column($porAvaliacao, 'presentes'));
+        $dentro = array_sum(array_column($porAvaliacao, 'dentro'));
+
+        return $presentes > 0 ? [round($dentro / $presentes * 100, 1), 'periodo'] : [$doCorte, 'corte'];
+    }
+
     public function calcular(string $curso, string $periodoLetivo, ?int $categoriaId = null, ?int $avaliacaoCodigo = null): ?array
     {
         $contexto = $this->reitor->contexto([
@@ -51,11 +84,13 @@ class PlanoAcaoIndicadoresService
         }
 
         $avaliacao = $contexto['avaliacao'];
+        [$proficiencia, $criterio] = $this->proficiencia($curso, $avaliacao['codigos'] ?? [], $estatisticas['proficienciaPct']);
 
         return [
             'participacao' => $estatisticas['participacao'],
             'meta_participacao' => $contexto['meta'],
-            'proficiencia' => $estatisticas['proficienciaPct'],
+            'proficiencia' => $proficiencia,
+            'criterio' => $criterio,
             'corte' => $contexto['corte'],
             'previstos' => $estatisticas['previstos'],
             'fizeram' => $estatisticas['fizeram'],

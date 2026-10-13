@@ -18,6 +18,9 @@ class PlanoAcaoEvento extends Model
 
     public const CRIADO = 'criado';
 
+    public const PUBLICADO = 'publicado';
+
+    // Tipos do tempo em que o plano passava por aprovação: continuam aqui só para mostrar o histórico antigo.
     public const ENVIADO = 'enviado';
 
     public const REENVIADO = 'reenviado';
@@ -47,6 +50,7 @@ class PlanoAcaoEvento extends Model
     /** @var array<string, array{rotulo: string, icone: string}> */
     public const TIPOS = [
         self::CRIADO => ['rotulo' => 'Plano criado', 'icone' => 'ph-file-plus'],
+        self::PUBLICADO => ['rotulo' => 'Plano publicado', 'icone' => 'ph-paper-plane-tilt'],
         self::ENVIADO => ['rotulo' => 'Enviado para análise', 'icone' => 'ph-paper-plane-tilt'],
         self::REENVIADO => ['rotulo' => 'Reenviado para análise', 'icone' => 'ph-paper-plane-tilt'],
         self::RETIRADO => ['rotulo' => 'Retirado da análise', 'icone' => 'ph-arrow-u-up-left'],
@@ -60,6 +64,15 @@ class PlanoAcaoEvento extends Model
         self::ENCERRADO => ['rotulo' => 'Plano encerrado', 'icone' => 'ph-flag-checkered'],
         self::CANCELADO => ['rotulo' => 'Plano cancelado', 'icone' => 'ph-prohibit'],
         self::LEMBRETE => ['rotulo' => 'Lembrete enviado', 'icone' => 'ph-bell-ringing'],
+    ];
+
+    /** Os critérios que o colaborador marcava quando o plano passava por aprovação — só para mostrar o histórico antigo. */
+    public const CRITERIOS_ANTIGOS = [
+        'dados' => 'O resultado a enfrentar está sustentado pelos dados do painel.',
+        'causa' => 'A causa-raiz é específica, acionável e tem evidências.',
+        'acoes' => 'As ações respondem à causa-raiz e mudam a experiência de aprendizagem.',
+        'viabilidade' => 'Responsáveis e prazos são viáveis antes da próxima avaliação.',
+        'verificacao' => 'Há como verificar a execução e os sinais de aprendizagem.',
     ];
 
     protected $fillable = ['plano_id', 'acao_id', 'admin_id', 'tipo', 'texto', 'dados'];

@@ -41,24 +41,6 @@
             Do dado à ação pedagógica: leia o resultado, investigue as causas com o NDE e defina o que muda antes da próxima avaliação.
             Origem: <strong>{{ $existe ? $plano->origem_rotulo : $origem['rotulo'] }}</strong>.
         </p>
-        @if ($existe && $plano->status === PlanoAcao::AJUSTES)
-            @php $devolucao = $plano->eventos()->where('tipo', \App\Models\PlanoAcaoEvento::AJUSTES)->latest('id')->first(); @endphp
-            @if ($devolucao)
-                <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="note">
-                    <p class="font-bold flex items-center gap-2"><i class="ph-bold ph-pencil-line" aria-hidden="true"></i> O colaborador pediu ajustes</p>
-                    <p class="mt-1 whitespace-pre-line">{{ $devolucao->texto }}</p>
-                    @php $naoAtendidos = collect($devolucao->dados['criterios'] ?? [])->filter(fn ($ok) => ! $ok)->keys(); @endphp
-                    @if ($naoAtendidos->isNotEmpty())
-                        <p class="mt-2 font-semibold">Critérios não atendidos:</p>
-                        <ul class="list-disc pl-5">
-                            @foreach ($naoAtendidos as $chave)
-                                <li>{{ \App\Services\PlanoAcaoService::CRITERIOS[$chave] ?? $chave }}</li>
-                            @endforeach
-                        </ul>
-                    @endif
-                </div>
-            @endif
-        @endif
     </div>
 
     @if (! $existe && isset($semelhantes) && $semelhantes->isNotEmpty())
@@ -193,7 +175,7 @@
                         <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
                             <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Proficiência atual</p>
                             <p class="text-2xl font-bold mt-1">{{ $fmt($proficiencia) }}</p>
-                            <p class="text-xs text-slate-500 mt-1">estudantes com ≥ {{ (int) ($ind['corte'] ?? ($plano->contexto['corte'] ?? 60)) }}% de acerto</p>
+                            <p class="text-xs text-slate-500 mt-1">{{ ($ind['criterio'] ?? ($plano->contexto['criterio'] ?? 'corte')) === 'periodo' ? 'alunos que alcançaram 60% do que cabe no período deles' : 'estudantes com ≥ '.(int) ($ind['corte'] ?? ($plano->contexto['corte'] ?? 60)).'% de acerto' }}</p>
                         </div>
                         <div class="rounded-xl border border-emerald-300 bg-emerald-50 p-4">
                             <label for="meta_proficiencia" class="block text-xs font-semibold uppercase tracking-wide text-emerald-800">Meta de proficiência (%)</label>
@@ -358,22 +340,22 @@
                 <section data-etapa="5" aria-labelledby="titulo-etapa-5" class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 space-y-5">
                     <div>
                         <h2 id="titulo-etapa-5" class="text-lg font-bold">5. Síntese e envio</h2>
-                        <p class="text-sm text-slate-600">Revise o que foi preenchido. Nenhuma etapa é obrigatória: o que ficar em branco é só sinalizado. Ao enviar, o plano segue para a análise do colaborador; você será avisado da decisão.</p>
+                        <p class="text-sm text-slate-600">Revise o que foi preenchido. Nenhuma etapa é obrigatória: o que ficar em branco é só sinalizado. Ao publicar, o plano entra em execução, o colaborador passa a acompanhá-lo e os e-mails definidos em Configurações recebem o plano completo. Não há aprovação.</p>
                     </div>
 
                     <div id="faltas" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status">
-                        <p class="font-bold flex items-center gap-2"><i class="ph-bold ph-list-checks" aria-hidden="true"></i> Ainda em branco <span class="font-normal">(nada é obrigatório: você pode enviar assim mesmo)</span></p>
+                        <p class="font-bold flex items-center gap-2"><i class="ph-bold ph-list-checks" aria-hidden="true"></i> Ainda em branco <span class="font-normal">(nada é obrigatório: você pode publicar assim mesmo)</span></p>
                         <ul id="lista-faltas" class="list-disc pl-5 mt-1 space-y-0.5"></ul>
                     </div>
 
                     <div id="sintese" class="rounded-xl border border-slate-200 divide-y divide-slate-100 text-sm" aria-live="polite"></div>
 
                     <div class="flex flex-wrap items-center gap-3 pt-2">
-                        <button type="submit" name="acao" value="enviar" data-enviar
+                        <button type="submit" name="acao" value="publicar" data-enviar
                                 class="inline-flex items-center gap-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 px-5 py-2.5 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
-                            <i class="ph-bold ph-paper-plane-tilt" aria-hidden="true"></i> Enviar para análise
+                            <i class="ph-bold ph-paper-plane-tilt" aria-hidden="true"></i> Publicar plano
                         </button>
-                        <span class="text-xs text-slate-500">Enquanto estiver em análise, você pode retirar o plano para editar de novo.</span>
+                        <span class="text-xs text-slate-500">Depois de publicado, o plano entra em execução e não pode mais ser editado (só acompanhado).</span>
                     </div>
                 </section>
 

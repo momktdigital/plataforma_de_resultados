@@ -668,7 +668,7 @@ class RelatorioAlunoService
             $resultado[] = [
                 'area' => (string) $area,
                 'percentual' => round($a['acertos'] / $a['total'] * 100, 1),
-                'meta' => $a['comMeta'] ? round($a['esperadas'] / $a['total'] * 100, 1) : AnaliseConsolidadaService::MINIMO_PADRAO,
+                'meta' => $a['comMeta'] ? PeriodoCurso::metaDoPeriodo($a['esperadas'], $a['total']) : AnaliseConsolidadaService::MINIMO_PADRAO,
                 'comMeta' => $a['comMeta'],
                 'acertos' => $a['acertos'],
                 'total' => $a['total'],

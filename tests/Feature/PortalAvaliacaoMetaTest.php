@@ -122,12 +122,12 @@ class PortalAvaliacaoMetaTest extends TestCase
         $areas = collect(app(RelatorioAlunoService::class)->desempenhoPorAreaComMeta($respostas, $gabaritos, $avaliacao, 2))->keyBy('area');
 
         $this->assertSame(50.0, $areas['Cardiologia']['percentual']);
-        $this->assertSame(50.0, $areas['Cardiologia']['meta']); // 1 de 2 questões cabe no 2º período
+        $this->assertSame(30.0, $areas['Cardiologia']['meta']); // 1 de 2 questões cabe no 2º período (50%); a meta é 60% disso
         $this->assertTrue($areas['Cardiologia']['comMeta']);
         $this->assertSame(50.0, $areas['Pneumologia']['percentual']);
         $this->assertSame(60.0, $areas['Pneumologia']['meta']); // padrão
         $this->assertFalse($areas['Pneumologia']['comMeta']);
-        // Mais longe da meta primeiro: Pneumologia (50 vs 60) antes de Cardiologia (50 vs 50).
+        // Mais longe da meta primeiro: Pneumologia (50 vs 60) antes de Cardiologia (50 vs 30).
         $this->assertSame('Pneumologia', array_values($areas->all())[0]['area'] ?? null);
     }
 
@@ -158,8 +158,9 @@ class PortalAvaliacaoMetaTest extends TestCase
         $avaliacao = $this->prova($aluno, '2º', [
             ['Cardiologia', 'Arritmias', 1, 'B'],
             ['Cardiologia', 'Valvulopatias', 5, 'B'],
-            ['Pneumologia', 'Asma', null, 'A'],
+            ['Pneumologia', 'Asma', null, 'B'],
         ]);
+        // 0% de acerto; a meta é 60% das 2 questões que cabem no 2º período (de 3) = 40%: claramente abaixo do esperado.
 
         $this->followingRedirects()->post('/portal/consultar', ['cpf' => '123.456.789-09', 'data_nascimento' => '15/03/2000']);
         $response = $this->get(route('portal.resultados.avaliacao', ['avaliacao' => $avaliacao->codigo, 'periodo' => '2º']));

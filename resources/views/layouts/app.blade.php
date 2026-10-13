@@ -73,10 +73,8 @@
                 $emVisaoDeCurso = $usuarioLogado->emVisaoDeCurso;
                 $sino = $ehCoordenador && ! $emVisaoDeCurso;
                 $naoLidas = $ehCoordenador ? $usuarioLogado->notificacoesNaoLidas() : 0;
-                // Planos de ação: o coordenador vê quantos foram devolvidos para ajustes; quem analisa (colaborador, administrador), quantos aguardam.
-                $planosPendentes = $ehCoordenador
-                    ? \App\Services\PlanoAcaoService::comAjustes($usuarioLogado)
-                    : (($ehColaborador || $usuarioLogado->ehAdministrador()) ? \App\Services\PlanoAcaoService::aguardandoAnalise() : 0);
+                // Planos de ação: quantos têm ação com o prazo vencido (o coordenador, os do curso dele; quem acompanha, os de todos).
+                $planosPendentes = ($ehCoordenador || $ehColaborador || $usuarioLogado->ehAdministrador()) ? \App\Services\PlanoAcaoService::comAcaoAtrasada($usuarioLogado) : 0;
             @endphp
 
             {{-- Busca global procura alunos de qualquer curso: só administrador. --}}
@@ -154,7 +152,7 @@
                                class="flex items-center px-3 py-2.5 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary {{ $ativo ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-slate-800 hover:text-white' }}">
                                 <i class="ph {{ $item['icone'] }} text-xl mr-3 {{ $ativo ? 'text-primary' : '' }}" aria-hidden="true"></i> {{ $item['label'] }}
                                 @if (! empty($item['badge']))
-                                    <span class="ml-auto min-w-[1.4rem] rounded-full bg-primary px-1.5 py-0.5 text-center text-xs font-bold text-slate-900"><span aria-hidden="true">{{ $item['badge'] > 99 ? '99+' : $item['badge'] }}</span><span class="sr-only">{{ $item['badge'] }} {{ $ehCoordenador ? 'devolvido(s) para ajustes' : 'aguardando análise' }}</span></span>
+                                    <span class="ml-auto min-w-[1.4rem] rounded-full bg-primary px-1.5 py-0.5 text-center text-xs font-bold text-slate-900"><span aria-hidden="true">{{ $item['badge'] > 99 ? '99+' : $item['badge'] }}</span><span class="sr-only">{{ $item['badge'] }} com ação atrasada</span></span>
                                 @endif
                                 @if ($item['rota'] === 'notificacoes.index')
                                     <span data-notificacoes-contagem class="ml-auto min-w-[1.4rem] rounded-full bg-primary px-1.5 py-0.5 text-center text-xs font-bold text-slate-900 {{ $naoLidas > 0 ? '' : 'hidden' }}"><span aria-hidden="true">{{ $naoLidas > 99 ? '99+' : $naoLidas }}</span><span class="sr-only">{{ $naoLidas }} não lida(s)</span></span>

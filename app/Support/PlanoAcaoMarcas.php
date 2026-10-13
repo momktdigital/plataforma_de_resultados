@@ -8,7 +8,7 @@ use Illuminate\Support\Collection;
 
 /**
  * Onde JÁ existe plano de ação: o ícone de cada visual do painel ganha um selo quando o coordenador tem plano vivo (rascunho,
- * em análise, ajustes ou em execução) sobre aquele dado, e o menu de itens marca o item que já tem plano.
+ * ou em execução) sobre aquele dado, e o menu de itens marca o item que já tem plano.
  *
  * Uma única consulta por requisição (guardada nos atributos da requisição — nunca em propriedade estática, que vazaria entre
  * requisições): o painel desenha dezenas de ícones e não pode fazer uma consulta por ícone.
@@ -16,7 +16,7 @@ use Illuminate\Support\Collection;
 final class PlanoAcaoMarcas
 {
     /** @var array<int, string> */
-    private const VIVOS = [PlanoAcao::RASCUNHO, PlanoAcao::EM_ANALISE, PlanoAcao::AJUSTES, PlanoAcao::APROVADO];
+    private const VIVOS = [PlanoAcao::RASCUNHO, PlanoAcao::EM_EXECUCAO];
 
     /**
      * Os planos vivos do coordenador que correspondem a este visual (e item) no recorte dado.

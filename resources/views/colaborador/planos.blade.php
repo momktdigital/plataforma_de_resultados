@@ -7,14 +7,14 @@
     <div class="mb-5">
         <h1 class="text-2xl font-black flex items-center gap-2"><i class="ph-bold ph-clipboard-text text-primary" aria-hidden="true"></i> Planos de ação</h1>
         <p class="text-sm text-slate-600 mt-1 max-w-3xl">
-            Os planos que os coordenadores enviaram a partir do painel de resultados. Analise o plano, decida (aprovar, pedir ajustes ou recusar — sempre com justificativa) e acompanhe a execução das ações aprovadas.
+            Os planos que os coordenadores publicaram a partir do painel de resultados. Você acompanha: lê cada plano, vê como anda a execução das ações, comenta com o coordenador e exporta. Não há aprovação.
         </p>
     </div>
 
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         @foreach ([
-            [$painel['aguardando'], 'Aguardando análise', false],
             [$painel['emExecucao'], 'Em execução', false],
+            [$painel['concluidos'], 'Concluídos', false],
             [$painel['acoesAtrasadas'], 'Ações com prazo vencido', $painel['acoesAtrasadas'] > 0],
             [$painel['parados'], 'Planos sem atualização', $painel['parados'] > 0],
         ] as [$numero, $rotulo, $alerta])
@@ -63,7 +63,7 @@
     @if ($planos->isEmpty())
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-8 text-center text-sm text-slate-600">
             <i class="ph-bold ph-tray text-4xl text-slate-500" aria-hidden="true"></i>
-            <p class="mt-2 font-semibold text-slate-800">Nenhum plano {{ $aba === 'analise' ? 'aguardando análise' : 'nesta situação' }}.</p>
+            <p class="mt-2 font-semibold text-slate-800">Nenhum plano nesta situação.</p>
         </div>
     @else
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-x-auto">
@@ -74,7 +74,7 @@
                         <th scope="col" class="px-4 py-3">Plano</th>
                         <th scope="col" class="px-4 py-3">Curso</th>
                         <th scope="col" class="px-4 py-3">Situação</th>
-                        <th scope="col" class="px-4 py-3">{{ $aba === 'analise' ? 'Aguardando há' : 'Ações' }}</th>
+                        <th scope="col" class="px-4 py-3">Ações</th>
                         <th scope="col" class="px-4 py-3">Última movimentação</th>
                         <th scope="col" class="px-4 py-3"><span class="sr-only">Abrir</span></th>
                     </tr>
@@ -94,10 +94,7 @@
                             <td class="px-4 py-3">{{ $plano->curso }}</td>
                             <td class="px-4 py-3 whitespace-nowrap">@include('plano._status', ['status' => $plano->status])</td>
                             <td class="px-4 py-3 whitespace-nowrap">
-                                @if ($aba === 'analise')
-                                    @php $dias = $plano->enviado_em ? (int) $plano->enviado_em->diffInDays(now()) : 0; @endphp
-                                    <span class="font-semibold {{ $dias >= \App\Services\PlanoAcaoLembreteService::PRAZO_ANALISE_DIAS ? 'text-red-700' : '' }}">{{ $dias === 0 ? 'hoje' : $dias.' '.($dias === 1 ? 'dia' : 'dias') }}</span>
-                                @elseif ($p['total'] === 0)
+                                @if ($p['total'] === 0)
                                     <span class="text-slate-500">—</span>
                                 @else
                                     <span class="font-semibold">{{ $p['concluidas'] }}/{{ $p['total'] }}</span>
@@ -109,7 +106,7 @@
                                 @if ($parado)<span class="block text-xs font-semibold text-amber-700">sem atualização há {{ (int) $ultima->diffInDays(now()) }} dias</span>@endif
                             </td>
                             <td class="px-4 py-3 text-right whitespace-nowrap">
-                                <a href="{{ route('colaborador.planos.show', $plano) }}" class="text-emerald-700 font-semibold hover:underline">{{ $plano->aguardandoAnalise() ? 'Analisar' : 'Abrir' }}</a>
+                                <a href="{{ route('colaborador.planos.show', $plano) }}" class="text-emerald-700 font-semibold hover:underline">Abrir</a>
                             </td>
                         </tr>
                     @endforeach

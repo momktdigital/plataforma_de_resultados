@@ -51,6 +51,28 @@
         </fieldset>
 
         <fieldset class="border-t border-slate-200 pt-5">
+            <legend class="text-sm font-semibold text-slate-800 pr-2">Plano de ação</legend>
+            <input type="hidden" name="plano_emails_enviado" value="1">
+            <label class="block text-sm font-medium mb-1 mt-3" for="plano_emails">E-mails que recebem o plano publicado</label>
+            <textarea id="plano_emails" name="plano_emails" rows="4" placeholder="um@dominio.com.br&#10;outro@dominio.com.br"
+                      class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono">{{ old('plano_emails', $planoEmails) }}</textarea>
+            @error('plano_emails')
+                <p class="text-sm text-red-700 mt-1" role="alert">{{ $message }}</p>
+            @enderror
+            <p class="text-xs text-slate-600 mt-1 max-w-2xl">
+                Quando um coordenador <strong>publica</strong> um plano de ação, cada endereço daqui recebe um e-mail com <strong>todas as informações do plano</strong>
+                (curso, indicadores, avaliações, leitura do dado, causas e ações). Um endereço por linha (ou separados por vírgula). Deixe em branco para não enviar.
+                Não há aprovação: o colaborador só acompanha os planos no sistema.
+            </p>
+            @unless ($planoEmailPronto)
+                <p class="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2 max-w-2xl" role="note">
+                    O envio de e-mail está desligado ou sem remetente: os endereços ficam salvos, mas nada será enviado até ativar em
+                    <a href="{{ route('sistema.portal.index') }}" class="underline font-semibold">Portal público &rarr; E-mail (SMTP)</a>.
+                </p>
+            @endunless
+        </fieldset>
+
+        <fieldset class="border-t border-slate-200 pt-5">
             <legend class="text-sm font-semibold text-slate-800 pr-2">Estudante em risco</legend>
             <input type="hidden" name="risco_enviado" value="1">
             <p class="text-xs text-slate-600 mt-1 max-w-2xl">

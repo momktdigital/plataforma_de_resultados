@@ -37,7 +37,7 @@
                                 @foreach ($evento->dados['criterios'] as $chave => $ok)
                                     <li class="flex items-start gap-1.5 {{ $ok ? 'text-emerald-800' : 'text-amber-800' }}">
                                         <i class="ph-bold {{ $ok ? 'ph-check-circle' : 'ph-warning-circle' }} mt-0.5" aria-hidden="true"></i>
-                                        <span><span class="sr-only">{{ $ok ? 'Atendido: ' : 'Não atendido: ' }}</span>{{ \App\Services\PlanoAcaoService::CRITERIOS[$chave] ?? $chave }}</span>
+                                        <span><span class="sr-only">{{ $ok ? 'Atendido: ' : 'Não atendido: ' }}</span>{{ \App\Models\PlanoAcaoEvento::CRITERIOS_ANTIGOS[$chave] ?? $chave }}</span>
                                     </li>
                                 @endforeach
                             </ul>

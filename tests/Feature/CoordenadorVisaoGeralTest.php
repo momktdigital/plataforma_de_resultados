@@ -81,11 +81,11 @@ class CoordenadorVisaoGeralTest extends TestCase
         $segundo = $this->aluno('2º');
         $terceiro = $this->aluno('3º');
         $quarto = $this->aluno('4º');
-        // Questões: 1º, 2º, 3º e 4º período. Mínimo esperado: 2º → 50% (2 de 4), 3º → 75%, 4º → 100%.
+        // Questões: 1º, 2º, 3º e 4º período. A meta é 60% do que cabe no período: 2º → 60% de 50% (2 de 4) = 30%, 3º → 60% de 75% = 45%, 4º → 60%.
         $avaliacao = $this->avaliacao('Diagnóstico', '2026-03-10', [1, 2, 3, 4], [
-            [$segundo, 2], // 50% ≥ 50% → dentro
-            [$terceiro, 2], // 50% < 75% → fora
-            [$quarto, 4],   // 100% ≥ 100% → dentro
+            [$segundo, 2], // 50% ≥ 30% → dentro
+            [$terceiro, 1], // 25% < 45% → fora
+            [$quarto, 4],   // 100% ≥ 60% → dentro
         ]);
 
         $esperado = app(CoordenadorDashboardService::class)->alunosDentroDoEsperado(['MEDICINA'], [$avaliacao->codigo]);

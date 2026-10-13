@@ -10,8 +10,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Plano de ação de um curso, iniciado pelo coordenador a partir de um dado do painel (ver a migration
- * `create_planos_acao_tables`). Percorre: rascunho → em análise (enviado ao colaborador) → aprovado (em execução) →
- * concluído; o colaborador pode pedir ajustes (volta ao coordenador) ou recusar (fim).
+ * `create_planos_acao_tables`). Não há aprovação: o coordenador monta o rascunho e PUBLICA — o plano entra em execução e os
+ * e-mails definidos em Configurações recebem o plano completo. O colaborador só ACOMPANHA. Termina concluído ou cancelado.
  *
  * A mudança de estado passa SEMPRE por PlanoAcaoService (que grava o evento e avisa quem precisa saber); este modelo só
  * descreve o plano e responde "o que posso fazer agora?".
@@ -22,13 +22,7 @@ class PlanoAcao extends Model
 
     public const RASCUNHO = 'rascunho';
 
-    public const EM_ANALISE = 'em_analise';
-
-    public const AJUSTES = 'ajustes';
-
-    public const APROVADO = 'aprovado';
-
-    public const RECUSADO = 'recusado';
+    public const EM_EXECUCAO = 'em_execucao';
 
     public const CONCLUIDO = 'concluido';
 
@@ -37,10 +31,7 @@ class PlanoAcao extends Model
     /** @var array<string, string> */
     public const STATUS = [
         self::RASCUNHO => 'Rascunho',
-        self::EM_ANALISE => 'Em análise',
-        self::AJUSTES => 'Ajustes solicitados',
-        self::APROVADO => 'Em execução',
-        self::RECUSADO => 'Recusado',
+        self::EM_EXECUCAO => 'Em execução',
         self::CONCLUIDO => 'Concluído',
         self::CANCELADO => 'Cancelado',
     ];
@@ -144,7 +135,7 @@ class PlanoAcao extends Model
         return $cursos === [] ? $query->whereRaw('1 = 0') : $query->whereIn('curso', NomeCurso::variantes($cursos));
     }
 
-    /** Planos que já foram enviados ao menos uma vez: o rascunho é privado do coordenador. */
+    /** Planos já publicados: o rascunho é privado do coordenador. */
     public function scopeEnviados(Builder $query): Builder
     {
         return $query->where('status', '!=', self::RASCUNHO);
@@ -177,27 +168,22 @@ class PlanoAcao extends Model
         return self::STATUS[$this->status] ?? (string) $this->status;
     }
 
-    /** O coordenador ainda pode mexer no conteúdo (rascunho, ou devolvido para ajustes). */
+    /** O coordenador ainda pode mexer no conteúdo: só no rascunho. Publicado, o plano não muda (cópia, se precisar refazer). */
     public function editavel(): bool
     {
-        return in_array($this->status, [self::RASCUNHO, self::AJUSTES], true);
+        return $this->status === self::RASCUNHO;
     }
 
-    public function aguardandoAnalise(): bool
-    {
-        return $this->status === self::EM_ANALISE;
-    }
-
-    /** Aprovado e em andamento: as ações são acompanhadas. */
+    /** Publicado e em andamento: as ações são acompanhadas. */
     public function emExecucao(): bool
     {
-        return $this->status === self::APROVADO;
+        return $this->status === self::EM_EXECUCAO;
     }
 
-    /** Já terminou (não muda mais): recusado, concluído ou cancelado. */
+    /** Já terminou (não muda mais): concluído ou cancelado. */
     public function finalizado(): bool
     {
-        return in_array($this->status, [self::RECUSADO, self::CONCLUIDO, self::CANCELADO], true);
+        return in_array($this->status, [self::CONCLUIDO, self::CANCELADO], true);
     }
 
     /** Impacto × Evidência × Governabilidade (1 a 27), ou null se alguma nota falta. */

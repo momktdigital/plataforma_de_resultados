@@ -148,7 +148,6 @@ Route::middleware('instalado')->group(function () {
             Route::get('/painel/planos/{plano}/editar', [CoordenadorPlanoAcaoController::class, 'edit'])->whereNumber('plano')->name('coordenador.planos.edit');
             Route::put('/painel/planos/{plano}', [CoordenadorPlanoAcaoController::class, 'update'])->whereNumber('plano')->name('coordenador.planos.update');
             Route::delete('/painel/planos/{plano}', [CoordenadorPlanoAcaoController::class, 'destroy'])->whereNumber('plano')->name('coordenador.planos.destroy');
-            Route::post('/painel/planos/{plano}/retirar', [CoordenadorPlanoAcaoController::class, 'retirar'])->whereNumber('plano')->name('coordenador.planos.retirar');
             Route::post('/painel/planos/{plano}/duplicar', [CoordenadorPlanoAcaoController::class, 'duplicar'])->whereNumber('plano')->name('coordenador.planos.duplicar');
             Route::put('/painel/planos/{plano}/acoes/{acao}', [CoordenadorPlanoExecucaoController::class, 'atualizarAcao'])->whereNumber(['plano', 'acao'])->name('coordenador.planos.acoes.update');
             Route::post('/painel/planos/{plano}/comentarios', [CoordenadorPlanoExecucaoController::class, 'comentar'])->whereNumber('plano')->name('coordenador.planos.comentarios.store');
@@ -208,12 +207,11 @@ Route::middleware('instalado')->group(function () {
             Route::put('/atividades/{item}', [ColaboradorCronogramaController::class, 'update'])->whereNumber('item')->name('atividades.update');
             Route::put('/atividades/{item}/situacao', [ColaboradorCronogramaController::class, 'situacao'])->whereNumber('item')->name('atividades.situacao');
             Route::delete('/atividades/{item}', [ColaboradorCronogramaController::class, 'destroy'])->whereNumber('item')->name('atividades.destroy');
-            // Planos de ação enviados pelos coordenadores: a fila de análise (aprovar, pedir ajustes, recusar — sempre com
-            // justificativa) e o acompanhamento dos que estão em execução.
+            // Planos de ação publicados pelos coordenadores: o colaborador (e o administrador) só ACOMPANHA — fila, quadro por curso,
+            // comentários e exportação. Não há aprovação.
             Route::get('/planos', [ColaboradorPlanoAcaoController::class, 'index'])->name('planos.index');
             Route::get('/planos/exportar.xlsx', [ColaboradorPlanoAcaoController::class, 'exportar'])->name('planos.exportar');
             Route::get('/planos/{plano}', [ColaboradorPlanoAcaoController::class, 'show'])->whereNumber('plano')->name('planos.show');
-            Route::post('/planos/{plano}/decisao', [ColaboradorPlanoAcaoController::class, 'decidir'])->whereNumber('plano')->name('planos.decidir');
             Route::get('/planos/{plano}/anexos/{anexo}', [ColaboradorPlanoAcaoController::class, 'anexo'])->whereNumber(['plano', 'anexo'])->name('planos.anexos.show');
             Route::post('/planos/{plano}/comentarios', [ColaboradorPlanoAcaoController::class, 'comentar'])->whereNumber('plano')->name('planos.comentar');
             Route::get('/pendencias', [ColaboradorPendenciaController::class, 'index'])->name('pendencias.index');

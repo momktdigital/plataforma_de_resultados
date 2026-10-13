@@ -27,13 +27,6 @@
         </p>
     </div>
 
-    @if (($contagens[PlanoAcao::AJUSTES] ?? 0) > 0)
-        <div class="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 flex items-center gap-2" role="status">
-            <i class="ph-bold ph-pencil-line text-lg" aria-hidden="true"></i>
-            {{ $contagens[PlanoAcao::AJUSTES] === 1 ? '1 plano foi devolvido' : $contagens[PlanoAcao::AJUSTES].' planos foram devolvidos' }} pelo colaborador para ajustes.
-        </div>
-    @endif
-
     @if ($total > 0)
         <div class="mb-3 flex justify-end">
             <a href="{{ route('coordenador.planos.exportar', $filtro === 'todos' ? [] : ['status' => $filtro]) }}" class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"><i class="ph-bold ph-file-xls" aria-hidden="true"></i> Exportar .xlsx</a>
@@ -72,7 +65,7 @@
                 <tbody class="divide-y divide-slate-100">
                     @foreach ($planos as $plano)
                         @php $p = $plano->progresso(); @endphp
-                        <tr class="{{ $plano->status === PlanoAcao::AJUSTES ? 'bg-amber-50/50' : '' }}">
+                        <tr>
                             <td class="px-4 py-3 min-w-[16rem]">
                                 <a href="{{ route('coordenador.planos.show', $plano) }}" class="font-semibold text-slate-900 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded">{{ $plano->origem_rotulo }}</a>
                                 <span class="block text-xs text-slate-500">{{ $plano->curso }} · {{ $plano->periodo_letivo ?: 'todos os períodos' }}@if (! empty($plano->contexto['categoria'])) · {{ $plano->contexto['categoria'] }}@endif</span>
