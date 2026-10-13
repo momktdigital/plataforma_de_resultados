@@ -65,7 +65,7 @@ class CoordenadorDesempenhoTest extends TestCase
         return $avaliacao;
     }
 
-    /** Quatro alunos do 2º período (esperado 50%) e quatro do 4º (esperado 100%). */
+    /** Quatro alunos do 2º período (cabem 5 de 10 questões: meta de 30% da prova) e quatro do 4º (cabem as 10: meta de 60%). */
     private function turmas(array $acertos2, array $acertos4): array
     {
         return [
@@ -82,13 +82,13 @@ class CoordenadorDesempenhoTest extends TestCase
 
         $resposta = $this->actingAs($this->coordenador(), 'admin')->get('/painel/desempenho?periodo_letivo=2026/1')->assertOk();
 
-        // 2º período (mínimo 50%): 5 e 5 passam; 2 e 0 não. 4º período (mínimo 100%): só os dois 10 passam → 4 de 8 abaixo.
+        // 2º período (meta 30% = 60% das 5 que cabem): 5 e 5 passam; 2 (20%) e 0 não. 4º período (meta 60%): 10, 10 e 7 passam; só o 4 (40%) não → 3 de 8 abaixo.
         $resposta->assertSee('Alunos abaixo do desempenho esperado');
         $resposta->assertDontSee('Abaixo de 60%');
-        $resposta->assertSee('4 de 8 resultados', false);
+        $resposta->assertSee('3 de 8 resultados', false);
         $resposta->assertViewHas('painel', fn ($p) => $p['categorias'][0]['detalhe']['comMeta'] === true
-            && $p['categorias'][0]['detalhe']['abaixoEsperado']['abaixo'] === 4
-            && $p['categorias'][0]['detalhe']['abaixoEsperado']['pct'] === 50.0);
+            && $p['categorias'][0]['detalhe']['abaixoEsperado']['abaixo'] === 3
+            && $p['categorias'][0]['detalhe']['abaixoEsperado']['pct'] === 37.5);
     }
 
     public function test_sem_meta_o_cartao_continua_abaixo_de_60(): void
@@ -117,10 +117,10 @@ class CoordenadorDesempenhoTest extends TestCase
         $resposta->assertDontSee('Evolução da média nesta categoria');
 
         $pontos = $resposta->viewData('painel')['categorias'][0]['detalhe']['evolucao'];
-        $this->assertSame([50.0, 100.0], array_column(array_column($pontos, 'geral'), 'pct'));
-        // Por período do curso: no 2º, D1 tem 2 de 4 dentro (50%); no 4º, 2 de 4 (50%). Em D2, todos (100%).
+        $this->assertSame([62.5, 100.0], array_column(array_column($pontos, 'geral'), 'pct'));
+        // Por período do curso: no 2º, D1 tem 2 de 4 dentro (50%); no 4º, 3 de 4 (75%). Em D2, todos (100%).
         $this->assertSame(50.0, $pontos[0]['porPeriodo'][2]['pct']);
-        $this->assertSame(50.0, $pontos[0]['porPeriodo'][4]['pct']);
+        $this->assertSame(75.0, $pontos[0]['porPeriodo'][4]['pct']);
         $this->assertSame(100.0, $pontos[1]['porPeriodo'][2]['pct']);
     }
 

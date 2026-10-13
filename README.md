@@ -382,7 +382,7 @@ maioria dos alunos dela estava matriculada):
 
 - **Visão geral** (`/painel`): alunos, quantos precisam de atenção (com a regra em vigor), presença e
   nº de avaliações; destaques em texto; avaliações mais recentes, com a coluna **Dentro do esperado** (alunos presentes que
-  alcançaram o mínimo esperado para o período deles — a fatia da prova que cabe no período, meta `periodo_minimo` —, ex.:
+  alcançaram a meta do período deles — **60% da fatia da prova que cabe no período** (meta `periodo_minimo`; `PeriodoCurso::metaDoPeriodo()`) —, ex.:
   `5 (20%)`; numa prova sem a meta, só a média no lugar); alunos por período do curso, com presença e **% de acerto**; atalhos.
   A lista nominal de quem precisa de atenção fica na aba Alunos.
 - **Alunos do curso** (`/painel/alunos`): todos os alunos do semestre (quem
@@ -400,7 +400,7 @@ maioria dos alunos dela estava matriculada):
   de avaliação** (provas de categorias diferentes não são comparáveis). Filtros:
   curso, período letivo, **categoria** e **período do curso**. Cada categoria é um
   **dropdown** (fechado por padrão; abre sozinho com uma só categoria ou ao filtrar por ela) com: média, **alunos abaixo do
-  desempenho esperado** (o aluno que não alcançou o mínimo do próprio período — a fatia da prova que cabe nele, meta
+  desempenho esperado** (o aluno que não alcançou a meta do próprio período — 60% da fatia da prova que cabe nele, meta
   `periodo_minimo`; sem a meta nas questões, o cartão volta a ser "Abaixo de 60%"), presença e avaliações; gráficos de
   **evolução** (alunos que atingiram o esperado a cada avaliação; sem a meta, a média), **área**, **nível de Bloom** e **tema**,
   cada um com as abas **Geral** e **Por período** (do curso); e, no fim, a tabela das avaliações da categoria. A "avaliação
@@ -509,8 +509,8 @@ precisa existir como curso para poder ser marcado.
 ## Plano de ação (`/painel/planos`, `/colaboracao/planos`)
 
 O resultado da avaliação vira **ação pedagógica** dentro da própria plataforma. O coordenador inicia um plano a partir de um dado do
-painel, percorre o roteiro **dado → causa → ação**, envia ao **colaborador** (que aprova, pede ajustes ou recusa, sempre com
-justificativa) e, depois de aprovado, acompanha a execução até o encerramento. O roteiro é o do "Assistente interativo" (Do dashboard à ação pedagógica)
+painel, percorre o roteiro **dado → causa → ação**, **publica** (não há aprovação: o plano entra direto em execução e o **colaborador só acompanha**, comentando quando quiser)
+e acompanha a execução até o encerramento. O roteiro é o do "Assistente interativo" (Do dashboard à ação pedagógica)
 (leitura orientada, Ishikawa, 5 Porquês, ação com verbo no infinitivo).
 
 **Onde começa.** Cada visual e cada dado do painel tem o ícone de prancheta (`resources/views/plano/_botao.blade.php`, só para o
@@ -543,40 +543,43 @@ A **meta de proficiência** é a única que o coordenador pactua (sem ela o plan
 funciona igual): 1 *Ponto de partida* · 2 *Leitura do dado* (recorte, resultado, fragilidades, dados que sustentam) · 3 *Causas*
 (Ishikawa em seis dimensões, priorização por Impacto × Evidência × Governabilidade de 1 a 3, 5 Porquês, causa-raiz acionável) ·
 4 *Ações* (uma ou mais: verbo no infinitivo, como será executada, responsável, prazo, como se verifica a execução e os sinais de
-aprendizagem) · 5 *Síntese e envio* (resumo ao vivo e lista do que ficou em branco). Cada etapa tem "Dúvidas desta etapa" (texto fixo do
-roteiro, sem IA). "Salvar rascunho" a qualquer momento. **Nenhuma etapa é obrigatória**: dá para salvar e enviar o plano com o
+aprendizagem) · 5 *Síntese e publicação* (resumo ao vivo e lista do que ficou em branco). Cada etapa tem "Dúvidas desta etapa" (texto fixo do
+roteiro, sem IA). "Salvar rascunho" a qualquer momento. **Nenhuma etapa é obrigatória**: dá para salvar e publicar o plano com o
 que houver. `PlanoAcaoChecagem` só **informa**: as *lacunas* (campo em branco, ação sem verbo no infinitivo, prazo no passado, sem meta) e os
-*alertas* (ação depois da próxima avaliação, plano só de reuniões, sem 5 Porquês, causa com pontuação baixa) aparecem na síntese e para o colaborador.
+*alertas* (ação depois da próxima avaliação, plano só de reuniões, sem 5 Porquês, causa com pontuação baixa) aparecem na síntese, no e-mail e para o colaborador.
 
 **Estados** (`PlanoAcao::STATUS`, transições só em `PlanoAcaoService`):
 
 ```
-rascunho ──enviar──▶ em_analise ──aprovar──▶ aprovado (em execução) ──encerrar──▶ concluido
-   ▲  ▲                 │  │                      └──cancelar──▶ cancelado
-   │  └──retirar────────┘  └─recusar──▶ recusado (fim)
-   └──── ajustes ◀──pedir ajustes─┘   (o coordenador edita e reenvia)
+rascunho ──publicar──▶ em_execucao ──encerrar──▶ concluido
+                            └──cancelar──▶ cancelado
 ```
 
-- **Análise** (`/colaboracao/planos`, colaborador e administrador): fila "Aguardando análise" (os mais antigos primeiro), quadro dos
-  planos em execução, ações com prazo vencido e planos parados. Na tela do plano: critérios (o dado sustenta o resultado? a causa-raiz
-  é acionável? as ações respondem à causa? prazos viáveis? há como verificar?) e a decisão. **Pedir ajustes e recusar exigem
-  justificativa**; aprovar aceita observação. Os critérios não atendidos aparecem ao coordenador na devolução. Rascunho é
-  privado do coordenador (o colaborador recebe 404).
-- **Acompanhamento** (coordenador, plano aprovado): situação de cada ação (não iniciada, em andamento, concluída, cancelada), notas
+- **Publicar** (`acao=publicar`): grava `enviado_em`, o evento `publicado` e a auditoria `plano_acao.publicado`, e **trava o conteúdo**: depois de
+  publicado o plano não se edita (só o acompanhamento das ações); para mudar, cria-se uma **cópia como rascunho**. Rascunho é privado do coordenador
+  (o colaborador recebe 404).
+- **E-mail do plano novo** (`PlanoAcaoEmailService::novoPlano`): em **Configurações → Plano de ação** o administrador define os e-mails (um por
+  linha; no máximo 20; endereço inválido é recusado) que recebem, ao publicar, **todas as informações do plano** — identificação, indicadores,
+  avaliações com link do Dashboard, dado de origem, leitura, causas (Ishikawa, priorização, 5 Porquês, causa-raiz), ações e pontos de atenção —,
+  com o texto livre escapado. A lista fica em `configuracoes_sistema.plano_emails`; a mudança vai para a auditoria (`configuracao.plano_emails_alterado`).
+  É complemento: sem lista, com o SMTP desligado (Portal público → E-mail) ou com falha de envio, o plano é publicado do mesmo jeito (falha só no log).
+- **Acompanhamento pelo colaborador** (`/colaboracao/planos`, colaborador e administrador; **sem decisão**): abas "Em execução" / "Finalizados" /
+  "Todos", ações com prazo vencido, planos parados, busca e quadro por curso. Na tela do plano ele lê tudo e **comenta com o coordenador**
+  (sino + e-mail ao coordenador do curso).
+- **Acompanhamento** (coordenador, plano em execução): situação de cada ação (não iniciada, em andamento, concluída, cancelada), notas
   de andamento, prazo reprogramável. **Concluir uma ação e mudar um prazo exigem a nota** (evidência / justificativa); o novo prazo não
   pode ir para o passado. O plano é encerrado com uma síntese do que foi feito e aprendido, quando não há ação aberta; ou cancelado, com o motivo.
 - **Funcionou?** (`PlanoAcaoResultadoService`): compara a linha de base (foto dos indicadores na criação) com o primeiro período
   letivo posterior com resultado na mesma categoria e com as metas. É um sinal, não uma prova — a tela diz isso.
-- **Histórico** (`plano_acao_eventos`): log só de acrescentar (criado, enviado, decisão com justificativa e critérios, andamento,
-  prazo reprogramado, comentário, encerrado...). Cada mudança de estado vai também para a auditoria (`plano_acao.*`).
-- **Avisos**: a decisão e os comentários do colaborador chegam ao coordenador pelo sino (`notificacoes`, tipos `plano*`). O
-  colaborador vê o número de planos aguardando no menu. `php artisan planos:lembretes` (agendado todo dia às 07:00) avisa o
-  coordenador de ação que vence em até 7 dias, ação vencida e plano sem movimento há 30 dias — cada lembrete é criado uma vez.
-- **E-mail** (`PlanoAcaoEmailService`, mesmo SMTP do código de acesso; só se "Ativar envio de e-mail" estiver ligado em Configurações →
-  Portal público): o colaborador, que não tem sino, é avisado de plano enviado/reenviado e de comentário do coordenador; o coordenador,
-  da decisão e dos comentários. É complemento: sem SMTP nada é enviado e uma falha de envio vai só para o log.
-- **Plano repetido**: ao abrir um plano sobre o mesmo curso, período, categoria e visual/item de um plano vivo (rascunho, em análise,
-  ajustes ou em execução), o formulário avisa e linka o existente (só informa).
+- **Histórico** (`plano_acao_eventos`): log só de acrescentar (criado, publicado, andamento, prazo reprogramado, comentário, encerrado...).
+  Cada mudança de estado vai também para a auditoria (`plano_acao.*`). Os eventos do fluxo antigo (decisão, ajustes) continuam aparecendo nos
+  planos que os têm; a migration `remove_aprovacao_do_plano_de_acao` converteu análise/ajustes/aprovado em **em execução** e recusado em **cancelado**.
+- **Avisos**: os comentários do colaborador chegam ao coordenador pelo sino (`notificacoes`, tipos `plano*`). O número do menu é a
+  quantidade de planos com **ação atrasada** (`PlanoAcaoService::comAcaoAtrasada`). `php artisan planos:lembretes` (agendado todo dia às 07:00)
+  avisa o coordenador de ação que vence em até 7 dias, ação vencida, plano em execução sem movimento há 30 dias e rascunho parado há 14 dias —
+  cada lembrete é criado uma vez.
+- **Plano repetido**: ao abrir um plano sobre o mesmo curso, período, categoria e visual/item de um plano vivo (rascunho ou em execução), o
+  formulário avisa e linka o existente (só informa).
 - **Imprimir / salvar em PDF** na tela do plano (coordenador e colaborador): sem menu, formulários e o que está recolhido aberto.
 - **Evidências anexas** (`plano_acao_anexos`): ao atualizar uma ação ou encerrar o plano, o coordenador pode anexar um **link** e/ou um
   **arquivo** (pdf, doc(x), xls(x), ppt(x), png, jpg, txt, csv; até 10 MB). O arquivo vai para o disco **privado** (`storage/app/private/planos/{plano}/`),
@@ -584,24 +587,20 @@ rascunho ──enviar──▶ em_analise ──aprovar──▶ aprovado (em ex
   `http(s)`. Fica ligado ao evento do histórico e à ação; só se acrescenta.
 - **Banco de ações** (`PlanoAcaoBancoDeAcoes`): na etapa "Ações", ideias tiradas de planos **concluídos** sobre o mesmo visual e item,
   só de ações concluídas, **anônimas** (sem curso, responsável ou autor) — "Usar esta ação" copia o texto para o plano.
-- **O que mudou no reenvio** (`PlanoAcaoComparacao`): a cada envio o plano guarda uma foto do conteúdo (no evento do histórico); depois de
-  pedir ajustes, o colaborador vê lado a lado só o que mudou (campos, causas, ações novas/alteradas/removidas).
 - **Selo "já existe plano"** (`PlanoAcaoMarcas`): o ícone de cada visual ganha um ponto verde quando o curso tem plano vivo sobre aquele dado, e o
   item do menu mostra a situação — uma consulta por requisição.
-- **Mais lembretes** (`planos:lembretes`): rascunho parado há 14 dias e plano devolvido há 7 dias sem reenvio (sino do coordenador); plano
-  esperando análise além de 7 dias (`PRAZO_ANALISE_DIAS`) gera um resumo por e-mail aos colaboradores, no máximo uma vez a cada 7 dias.
 - **Exportar .xlsx** (`PlanoAcaoExportService`): abas "Planos" e "Ações", para o coordenador (os planos do curso dele) e para o
-  colaborador/administrador (os filtros da fila). Texto sempre como string (sem injeção de fórmula). Cada exportação vai para a auditoria.
-- **Visão do colaborador**: busca na fila, "quadro por curso" (situações, ações concluídas/atrasadas, dias de análise), "outros planos deste
+  colaborador/administrador (a aba e a busca da tela). Texto sempre como string (sem injeção de fórmula). Cada exportação vai para a auditoria.
+- **Visão do colaborador**: busca na fila, "quadro por curso" (planos em execução, concluídos, ações concluídas/atrasadas), "outros planos deste
   curso" na análise, e o Dashboard das avaliações do plano.
 - **Reitoria** (`/reitoria/planos`): só **números por curso** (`PlanoAcaoQuadroService`) — nunca o texto de um plano.
-- **Cópia**: um plano concluído, recusado, cancelado ou em execução pode virar um **novo rascunho** (indicadores recalculados, sem
+- **Cópia**: um plano concluído, cancelado ou em execução pode virar um **novo rascunho** (indicadores recalculados, sem
   prazos nem situação) para o ciclo seguinte.
 
 **Quem vê o quê.** Dois coordenadores do mesmo curso enxergam os mesmos planos (e qualquer um deles edita); plano de outro curso é
 **404**. O reitor na visão do curso lê a lista e o plano (só leitura, pelo `VisaoDeCursoDoReitor`); fora da visão é redirecionado.
-O colaborador e o administrador analisam planos enviados de qualquer curso. **O plano só guarda dado agregado** — nunca nome, RA ou
-CPF de aluno (há teste para isso): ele circula entre coordenador, colaborador, administrador e reitoria, e o dado de aluno fica no Dashboard.
+O colaborador e o administrador acompanham os planos publicados de qualquer curso (sem aprovar). **O plano só guarda dado agregado** — nunca nome, RA ou
+CPF de aluno (há teste para isso): ele circula entre coordenador, colaborador, administrador, reitoria e os e-mails da lista de Configurações, e o dado de aluno fica no Dashboard.
 
 Tabelas: `planos_acao` (o plano e a foto dos indicadores), `plano_acao_acoes`, `plano_acao_eventos`.
 
@@ -940,13 +939,14 @@ segundo fator confirmado (ou direto, sem 2FA) entra a sessão do boletim
    acerto TOTAL do aluno (verde = no mínimo ou acima, amarela = abaixo) e uma **linha tracejada em pé**
    no **mínimo esperado**, mais a **Leitura rápida** em texto
    (`AnaliseConsolidadaService::metaPorPeriodo()` + `App\Support\LeituraMetaPeriodo`).
-   O mínimo vem da meta `questoes.periodo_minimo`: é a fatia da prova que já cabe no
-   período do aluno (questão sem meta conta para todos; questão de período à frente não
+   O mínimo vem da meta `questoes.periodo_minimo`: é **60% da fatia da prova que já cabe no
+   período do aluno** — numa prova de 100 questões em que só 10 cabem no 1º período, a meta do aluno
+   são 6 questões (6% da prova), não as 10 (`PeriodoCurso::metaDoPeriodo()`; questão sem meta conta para todos; questão de período à frente não
    é cobrada). O período do aluno é o de `respostas.periodo` daquela prova, não o do
    cadastro. **Prova sem meta (nenhuma questão com período mínimo, ou período do aluno
    irreconhecível): mínimo padrão de 60%** (`AnaliseConsolidadaService::MINIMO_PADRAO`).
    O **mapa de domínio por área** segue a mesma regra por célula (área × avaliação): mostra o acerto e o
-   "mín." esperado — a fatia das questões daquela área que o aluno já deveria acertar pelo período dele —,
+   "mín." esperado — 60% da fatia das questões daquela área que o aluno já deveria acertar pelo período dele —,
    verde no mínimo ou acima, **amarelo abaixo**, e 60% quando as questões da célula não trazem a meta.
    Os cards de resumo usam "rendimento" (não "desempenho") e o rótulo do card verde vai
    para o singular quando há uma única avaliação.
@@ -955,7 +955,7 @@ segundo fator confirmado (ou direto, sem 2FA) entra a sessão do boletim
    turma", "Posição relativa" nem "Sua resposta x turma, por questão" (os três visuais continuam existindo no
    catálogo de visualizações, mas o portal não os renderiza). "Desempenho por área" virou barras com uma linha
    tracejada em pé na **meta de cada área** (`RelatorioAlunoService::desempenhoPorAreaComMeta()`, desenhado por
-   `Viz.barrasComMinimo()` em `_viz.blade.php`, o mesmo gráfico do acerto x mínimo da categoria): a meta é a fatia das
+   `Viz.barrasComMinimo()` em `_viz.blade.php`, o mesmo gráfico do acerto x mínimo da categoria): a meta é 60% da fatia das
    questões da área que já cabem no período do aluno (`respostas.periodo` da prova), ou 60% sem essa informação; verde
    atinge, amarelo não. **Trilha de estudo** e **Lacunas / Conhecimentos consolidados** só consideram as questões que o
    aluno precisava acertar pelo período dele (as de `periodo_minimo` à frente ficam de fora, e a tela diz quantas); o

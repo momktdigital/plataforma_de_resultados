@@ -91,8 +91,8 @@
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-sm text-slate-600">
                 <p class="font-semibold text-slate-700 mb-1">Como ler este painel</p>
                 Os resultados são separados por <strong>categoria de avaliação</strong>: provas de categorias diferentes não são comparáveis.
-                Abra a categoria que deseja analisar. O <strong>desempenho esperado</strong> de cada aluno depende do período do curso em que ele está
-                (quando a prova não traz essa informação, usamos 60%). Alunos ausentes (prova inteira em branco) não entram nas médias.
+                Abra a categoria que deseja analisar. O <strong>desempenho esperado</strong> de cada aluno depende do período do curso em que ele está: a meta é
+                <strong>60% das questões que cabem no período dele</strong> (se só 10 de 100 cabem, a meta são 6; quando a prova não traz essa informação, usamos 60% da prova). Alunos ausentes (prova inteira em branco) não entram nas médias.
             </div>
         </div>
 

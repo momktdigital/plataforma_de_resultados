@@ -5,10 +5,7 @@
 @php
     [$icone, $classe] = match ($status) {
         'rascunho' => ['ph-pencil-simple', 'bg-slate-100 text-slate-700'],
-        'em_analise' => ['ph-hourglass-medium', 'bg-sky-100 text-sky-800'],
-        'ajustes' => ['ph-pencil-line', 'bg-amber-100 text-amber-800'],
-        'aprovado' => ['ph-play-circle', 'bg-emerald-100 text-emerald-800'],
-        'recusado' => ['ph-x-circle', 'bg-red-100 text-red-800'],
+        'em_execucao' => ['ph-play-circle', 'bg-emerald-100 text-emerald-800'],
         'concluido' => ['ph-flag-checkered', 'bg-emerald-100 text-emerald-800'],
         default => ['ph-prohibit', 'bg-slate-100 text-slate-700'],
     };

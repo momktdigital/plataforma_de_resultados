@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Sistema;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AtualizarConfiguracoesRequest;
 use App\Models\ConfiguracaoSistema;
+use App\Services\PlanoAcaoEmailService;
 use App\Services\ReitorDashboardService;
 use App\Support\AtividadeLogger;
 use App\Support\RegraDeRisco;
@@ -22,6 +23,9 @@ class ConfiguracaoController extends Controller
             'reitorCorte' => (int) ReitorDashboardService::corte(),
             'reitorMeta' => ReitorDashboardService::meta(),
             'regraDeRisco' => RegraDeRisco::atual(),
+            // Plano de ação: quem recebe o plano completo por e-mail quando um coordenador publica (um por linha).
+            'planoEmails' => implode("\n", PlanoAcaoEmailService::destinatarios()),
+            'planoEmailPronto' => app(PlanoAcaoEmailService::class)->configurado(),
         ]);
     }
 
@@ -38,6 +42,16 @@ class ConfiguracaoController extends Controller
         }
         if (isset($dados['reitor_meta_participacao'])) {
             ConfiguracaoSistema::definir('reitor_meta_participacao', (string) $dados['reitor_meta_participacao']);
+        }
+
+        // Plano de ação: os e-mails que recebem o plano completo quando ele é publicado. Vazio = ninguém (só o colaborador acompanha no sistema).
+        if ($request->boolean('plano_emails_enviado')) {
+            $lista = PlanoAcaoEmailService::separar((string) ($dados['plano_emails'] ?? ''));
+            $antes = PlanoAcaoEmailService::destinatarios();
+            ConfiguracaoSistema::definir(PlanoAcaoEmailService::CHAVE, implode(',', $lista));
+            if ($lista !== $antes) {
+                AtividadeLogger::registrar('configuracao.plano_emails_alterado', 'ConfiguracaoSistema', null, ['antes' => $antes, 'depois' => $lista]);
+            }
         }
 
         // Estudante em risco: vale para a lista do coordenador e para o painel da reitoria (cada avaliação pode sobrepor).

@@ -139,6 +139,14 @@ painel da reitoria (`ReitorRiscoService`, em SQL) usam essa MESMA regra e precis
 O critério de acerto é "média do estudante < média dos limites das provas que ele fez"; a queda de nota do coordenador é um
 sinal à parte. A regra e a de cada avaliação entram na chave do cache dos agregados.
 
+## A meta por período é 60% do que cabe no período
+
+A meta do aluno NÃO é acertar tudo o que cabe no período dele: é **60% disso** (`PeriodoCurso::FRACAO_DA_META`,
+`PeriodoCurso::metaDoPeriodo($esperadas, $total)`). Numa prova de 100 questões em que só 10 cabem no 1º período, a meta são 6
+questões (6% da prova). Sem `periodo_minimo` nas questões tudo cabe em todos e a conta dá os 60% de sempre (`MINIMO_PADRAO`).
+Todo cálculo de "mínimo esperado" / "dentro do esperado" (boletim, mapa de domínio, desempenho por área, painel e comparativo do
+coordenador, plano de ação) passa por essa função — não recalcule `esperadas ÷ total` à mão.
+
 ## Cronograma de atividades e o perfil de colaborador
 
 `collaborator` é o quarto perfil de `admins.role` (e, como o `rector`, **exige migration que acrescente o valor ao ENUM do MySQL
@@ -167,8 +175,7 @@ já é bloqueada para o reitor pelo middleware `VisaoDeCursoDoReitor` (só méto
 
 ## Plano de ação: números do servidor, só agregado
 
-O plano de ação (`planos_acao`, ver README) nasce de um dado do painel do coordenador e é lido pelo **colaborador**, que não
-enxerga resultados nem alunos. Por isso:
+O plano de ação (`planos_acao`, ver README) nasce de um dado do painel do coordenador e é **acompanhado** pelo colaborador (não há aprovação: publicar = em execução). O plano em si leva só agregado. Por isso:
 
 - **Os números nunca vêm do navegador.** O link do ícone (`plano/_botao.blade.php`) só leva *onde* o coordenador estava (curso,
   período, categoria, visual, item); `PlanoAcaoOrigemService::montar()` recalcula tudo, só para os cursos dele, e o `store` o chama de
@@ -178,17 +185,17 @@ enxerga resultados nem alunos. Por isso:
 - **Só dado agregado** em `planos_acao` (incluindo o `contexto` JSON): nunca nome, RA ou CPF de aluno. Há teste (`PlanoAcaoTest`).
 - **Estado muda só em `PlanoAcaoService`** (grava o evento, a auditoria e avisa o coordenador). `plano_acao_eventos` é log só de
   acrescentar, como `acompanhamentos`. **Nenhuma etapa do plano é obrigatória** (decisão do produto): "o que está em branco" é `PlanoAcaoChecagem::lacunas()` e só informa — não volte a barrar
-  salvar ou enviar. A conferência do `plano-acao-form.js` é só um
+  salvar ou publicar. **Não há aprovação**: não recrie decisão/ajustes/recusa do colaborador nem trave a publicação por critérios. A conferência do `plano-acao-form.js` é só um
   adiantamento da tela; mantenha as duas em sintonia.
 - Quem vê: coordenador, planos dos cursos dele (`PlanoAcao::scopeVisivelPara`; plano de outro curso é **404**); colaborador e
-  administrador, só os **enviados** (rascunho é privado: 404). Rota nova que GRAVA no grupo do coordenador já é barrada para o reitor
+  administrador, só os **publicados** (rascunho é privado: 404); plano publicado não se edita (cópia como rascunho). Rota nova que GRAVA no grupo do coordenador já é barrada para o reitor
   pelo `VisaoDeCursoDoReitor`; os controllers conferem `emVisaoDeCurso` mesmo assim (`coordenadorQueEscreve()`).
-- As **avaliações do recorte** ficam em `contexto.avaliacoes` e o link é o Dashboard (`avaliacoes.bi`), que mostra dados de aluno:
-  `PlanoAcaoService::avaliacoesAcessiveis()` decide quem abre (coordenador do curso e administrador; o colaborador não). Não linke o
-  Dashboard para o colaborador.
-- E-mail do plano (`PlanoAcaoEmailService`) é complemento, nunca dependência: respeita `smtp_ativo`, engole falha de envio e não leva
-  dado de aluno (só rótulo do plano, curso e o texto da justificativa/comentário).
-- O número do menu (`comAjustes`/`aguardandoAnalise`) roda em TODA página: mantenha-o barato (sem `NomeCurso::variantes`).
+- As **avaliações do recorte** ficam em `contexto.avaliacoes` e o link é o Dashboard (`avaliacoes.bi`), que mostra dado de aluno:
+  `PlanoAcaoService::avaliacoesAcessiveis()` decide quem abre (coordenador do curso; administrador e colaborador, que já têm as planilhas).
+- E-mail do plano (`PlanoAcaoEmailService`) é complemento, nunca dependência: respeita `smtp_ativo` e engole falha de envio. O e-mail do plano
+  **publicado** vai para a lista `plano_emails` (Configurações, `ConfiguracaoSistema`) e leva o plano completo — sempre **escape o texto livre** e
+  não ponha dado de aluno (o plano só tem agregado).
+- O número do menu (`PlanoAcaoService::comAcaoAtrasada`) roda em TODA página: mantenha-o barato (sem `NomeCurso::variantes`).
 
 ## Perfil (`admins.role`) falha fechado
 
@@ -342,8 +349,9 @@ via `CursoDoResultadoService`; `PeriodoCurso::ordinal()` normaliza "3º", "P3", 
 `alunos`. Não confundir com `questao_matrizes.periodo` (período da disciplina na matriz curricular, texto livre) — o
 import distingue pelo cabeçalho ("Matriz (período)" nunca vira período mínimo).
 
-O boletim do aluno usa essa meta em `AnaliseConsolidadaService::metaPorPeriodo()`: o mínimo esperado de cada avaliação é a
-fatia da prova que já cabe no período do aluno em `respostas.periodo` (agregado em SQL por avaliação × período × área × meta),
+O boletim do aluno usa essa meta em `AnaliseConsolidadaService::metaPorPeriodo()`: o mínimo esperado de cada avaliação é **60% da**
+fatia da prova que já cabe no período do aluno em `respostas.periodo` (`PeriodoCurso::metaDoPeriodo()`: 10 questões de 100 ao alcance →
+meta de 6, não de 10; tudo ao alcance → os 60% de sempre) (agregado em SQL por avaliação × período × área × meta),
 e **60%** quando a prova não traz a meta (`MINIMO_PADRAO`). Na tela da avaliação (`resultadoAvaliacao`), a trilha de estudo e as lacunas/consolidados pulam as questões "à frente"
 (`PeriodoCurso::aFrente()`) e o desempenho por área usa a meta de cada área. O mapa de domínio por área usa a mesma regra por célula
 (`mapaDominio()['areas'][]['esperados']`): abaixo do mínimo = amarelo. O texto "Como você foi nesta prova" (`LeituraDaProva`) é para o estudante: sem jargão (nada de "Bloom", "TRI",
@@ -360,7 +368,7 @@ confira o HTML renderizado (`PortalTourTest`). Texto do tour segue o registro do
 gíria nem jargão). A tela de login do aluno (`portal/consulta`) não tem tour. O atalho para a área administrativa é só dela (`@section('acesso-administrativo')`): não o recoloque no layout para todas as telas.
 
 Na visão geral do coordenador, "Dentro do esperado" (`CoordenadorDashboardService::alunosDentroDoEsperado()`) conta, entre os presentes
-com nota, quem alcançou o mínimo do PRÓPRIO período (fatia da prova que cabe nele, meta `periodo_minimo`; período irreconhecível =
+com nota, quem alcançou a meta do PRÓPRIO período (60% da fatia da prova que cabe nele, meta `periodo_minimo`; período irreconhecível =
 60%). Prova sem meta em nenhuma questão não tem esperado: a coluna mostra só a média. A lista nominal de alunos em atenção não
 fica na visão geral (fica na aba Alunos).
 

@@ -26,6 +26,9 @@ class AtualizarConfiguracoesRequest extends FormRequest
             'risco_faltas_ativo' => ['nullable', 'boolean'],
             'risco_faltas' => ['nullable', 'required_if_accepted:risco_faltas_ativo', 'integer', 'between:1,50'],
             'risco_operador' => ['nullable', 'in:ou,e'],
+            // Plano de ação: e-mails que recebem o plano publicado (um por linha, ou separados por vírgula ou ponto e vírgula).
+            'plano_emails_enviado' => ['nullable', 'boolean'],
+            'plano_emails' => ['nullable', 'string', 'max:2000'],
         ];
     }
 
@@ -40,6 +43,17 @@ class AtualizarConfiguracoesRequest extends FormRequest
     public function withValidator($validador): void
     {
         $validador->after(function ($validador) {
+            // Plano de ação: cada endereço precisa ser válido (um digitado errado não pode sumir em silêncio) e são no máximo 20.
+            if ($this->boolean('plano_emails_enviado')) {
+                $partes = preg_split('/[\s,;]+/u', (string) $this->input('plano_emails', ''), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+                $invalidos = array_values(array_filter($partes, fn ($e) => filter_var($e, FILTER_VALIDATE_EMAIL) === false));
+                if ($invalidos !== []) {
+                    $validador->errors()->add('plano_emails', 'E-mail inválido: '.implode(', ', array_slice($invalidos, 0, 3)).(count($invalidos) > 3 ? '…' : '').'.');
+                } elseif (count(array_unique(array_map('mb_strtolower', $partes))) > 20) {
+                    $validador->errors()->add('plano_emails', 'Informe no máximo 20 e-mails.');
+                }
+            }
+
             if ($this->boolean('risco_enviado') && ! $this->boolean('risco_acerto_ativo') && ! $this->boolean('risco_faltas_ativo')) {
                 $validador->errors()->add('risco_acerto_ativo', 'Marque ao menos um critério para definir o estudante em risco (percentual de acerto e/ou faltas).');
             }

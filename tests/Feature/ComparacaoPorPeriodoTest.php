@@ -58,14 +58,14 @@ class ComparacaoPorPeriodoTest extends TestCase
         return $avaliacao;
     }
 
-    /** Dois semestres da categoria: no 2º período o mínimo é 50% (5 de 10) e no 4º é 100%. */
+    /** Dois semestres da categoria: a meta é 60% do que cabe no período — no 2º (5 de 10 cabem) é 30% da prova e no 4º (as 10 cabem) é 60%. */
     private function cenario(): Categoria
     {
         $categoria = Categoria::create(['nome' => 'Diagnósticos']);
-        // 2026/1: 2º → 5, 5, 2, 0 (2 de 4 dentro: 50%); 4º → 10, 10, 7, 4 (2 de 4: 50%).
+        // 2026/1: 2º → 5, 5, 2, 0 (2 de 4 dentro: 50%); 4º → 10, 10, 7, 4 (3 de 4: 75%).
         $this->avaliacao('D1', '2026-03-10', $categoria->id, [1, 3], [['2º', 5], ['2º', 5], ['2º', 2], ['2º', 0], ['4º', 10], ['4º', 10], ['4º', 7], ['4º', 4]]);
-        // 2026/2: 2º → 5, 5, 5, 2 (3 de 4: 75%); 4º → 10, 8, 7, 4 (1 de 4: 25%).
-        $this->avaliacao('D2', '2026-09-10', $categoria->id, [1, 3], [['2º', 5], ['2º', 5], ['2º', 5], ['2º', 2], ['4º', 10], ['4º', 8], ['4º', 7], ['4º', 4]]);
+        // 2026/2: 2º → 5, 5, 5, 2 (3 de 4: 75%); 4º → 10, 5, 5, 4 (1 de 4: 25%).
+        $this->avaliacao('D2', '2026-09-10', $categoria->id, [1, 3], [['2º', 5], ['2º', 5], ['2º', 5], ['2º', 2], ['4º', 10], ['4º', 5], ['4º', 5], ['4º', 4]]);
 
         return $categoria;
     }
@@ -86,9 +86,10 @@ class ComparacaoPorPeriodoTest extends TestCase
         $this->assertSame(1, $segundo['deltaAlunos']);
         $this->assertSame('subiu', $segundo['sentido']);
 
+        $this->assertSame(['presentes' => 4, 'dentro' => 3, 'pct' => 75.0], $quarto['referencia']);
         $this->assertSame(['presentes' => 4, 'dentro' => 1, 'pct' => 25.0], $quarto['atual']);
-        $this->assertSame(-25.0, $quarto['deltaPct']);
-        $this->assertSame(-1, $quarto['deltaAlunos']);
+        $this->assertSame(-50.0, $quarto['deltaPct']);
+        $this->assertSame(-2, $quarto['deltaAlunos']);
         $this->assertSame('caiu', $quarto['sentido']);
 
         $this->assertSame(['subiram' => 1, 'estaveis' => 0, 'cairam' => 1], ['subiram' => $ap['subiram'], 'estaveis' => $ap['estaveis'], 'cairam' => $ap['cairam']]);
@@ -119,8 +120,8 @@ class ComparacaoPorPeriodoTest extends TestCase
         $porNome = collect($comparacao['categorias'])->keyBy('nome');
 
         $this->assertTrue($porNome['Diagnósticos']['comMeta']);
-        // 2026/1: 4 de 8 abaixo (50%); 2026/2: 4 de 8 abaixo do esperado (50%) — 2º: 1 abaixo; 4º: 3 abaixo.
-        $this->assertSame(50.0, $porNome['Diagnósticos']['abaixoEsperado']['referencia']);
+        // 2026/1: 3 de 8 abaixo (37,5%: 2º → 2 e 0 ficam abaixo de 30%; 4º → 40% fica abaixo de 60%); 2026/2: 4 de 8 (50%) — 2º: 1 abaixo; 4º: 3 abaixo.
+        $this->assertSame(37.5, $porNome['Diagnósticos']['abaixoEsperado']['referencia']);
         $this->assertSame(50.0, $porNome['Diagnósticos']['abaixoEsperado']['atual']);
         $this->assertFalse($porNome['Simulados']['comMeta']);
 
@@ -159,8 +160,8 @@ class ComparacaoPorPeriodoTest extends TestCase
         $this->assertSame([2, 4], $c['periodosCursoDisponiveis']);
         $this->assertSame([4], array_column($cat['alunosPorPeriodo']['periodos'], 'ordem'));
         $this->assertSame(4, $c['geral']['alunos']['atual']); // só os alunos do 4º período
-        // 4º período: 2 de 4 abaixo em 2026/1 (50%); 3 de 4 em 2026/2 (75%).
-        $this->assertSame(50.0, $cat['abaixoEsperado']['referencia']);
+        // 4º período: 1 de 4 abaixo em 2026/1 (25%); 3 de 4 em 2026/2 (75%).
+        $this->assertSame(25.0, $cat['abaixoEsperado']['referencia']);
         $this->assertSame(75.0, $cat['abaixoEsperado']['atual']);
 
         $this->actingAs($coordenador, 'admin')->get('/painel/comparativo?periodo_letivo=2026/2&comparar=2026/1&periodo_curso=4')

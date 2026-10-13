@@ -305,8 +305,8 @@
         enviar.addEventListener('click', function (e) {
             var faltas = conferirFaltas();
             var aviso = faltas.length
-                ? 'Há ' + faltas.length + ' ponto(s) em branco. Nenhuma etapa é obrigatória, mas o colaborador verá o que faltou.\n\nEnviar o plano para análise mesmo assim?'
-                : 'Enviar o plano para análise do colaborador?';
+                ? 'Há ' + faltas.length + ' ponto(s) em branco. Nenhuma etapa é obrigatória, mas quem acompanha verá o que faltou.\n\nPublicar o plano mesmo assim? Depois de publicado ele entra em execução e não pode mais ser editado.'
+                : 'Publicar o plano? Ele entra em execução e não poderá mais ser editado.';
             if (!window.confirm(aviso)) e.preventDefault();
         });
     }

@@ -6,13 +6,13 @@ use App\Http\Requests\SalvarPlanoAcaoRequest;
 use App\Models\Admin;
 use App\Models\PlanoAcao;
 use App\Services\PlanoAcaoBancoDeAcoes;
+use App\Services\PlanoAcaoEmailService;
 use App\Services\PlanoAcaoExportService;
 use App\Services\PlanoAcaoOrigemService;
 use App\Services\PlanoAcaoResultadoService;
 use App\Services\PlanoAcaoService;
 use App\Support\AtividadeLogger;
 use App\Support\PlanoAcaoChecagem;
-use App\Support\PlanoAcaoComparacao;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -21,8 +21,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Os planos de ação do curso do coordenador: iniciar a partir de um dado do painel (o ícone nos visuais), preencher o
- * roteiro, enviar ao colaborador e acompanhar. A decisão e a análise ficam em ColaboradorPlanoAcaoController; o
- * acompanhamento das ações, em CoordenadorPlanoExecucaoController.
+ * roteiro e PUBLICAR (sem aprovação: os e-mails definidos em Configurações recebem o plano). O acompanhamento pelo colaborador
+ * fica em ColaboradorPlanoAcaoController; o das ações, em CoordenadorPlanoExecucaoController.
  *
  * Plano de outro curso responde 404 (como a ficha do aluno): não revela que existe. O reitor olhando um curso
  * (VisaoDeCursoDoReitor) abre a lista e o plano, só para ler — qualquer gravação é recusada pelo middleware e, por garantia,
@@ -49,7 +49,7 @@ class CoordenadorPlanoAcaoController extends PlanoAcaoPainelController
         $planos = (clone $doCurso)
             ->when($filtro !== 'todos', fn ($q) => $q->where('status', $filtro))
             ->with('acoes')
-            ->orderByRaw("CASE status WHEN 'ajustes' THEN 0 WHEN 'rascunho' THEN 1 WHEN 'em_analise' THEN 2 WHEN 'aprovado' THEN 3 ELSE 4 END")
+            ->orderByRaw("CASE status WHEN 'rascunho' THEN 0 WHEN 'em_execucao' THEN 1 ELSE 2 END")
             ->orderByDesc('updated_at')->orderByDesc('id')
             ->paginate(self::POR_PAGINA)
             ->withQueryString();
@@ -129,8 +129,7 @@ class CoordenadorPlanoAcaoController extends PlanoAcaoPainelController
             'plano' => $plano,
             'lacunas' => $plano->editavel() ? PlanoAcaoChecagem::lacunas($plano) : [],
             'alertas' => PlanoAcaoChecagem::alertas($plano),
-            'mudancasDoEnvio' => PlanoAcaoComparacao::doUltimoEnvio($plano),
-            'resultado' => in_array($plano->status, [PlanoAcao::APROVADO, PlanoAcao::CONCLUIDO], true) ? $resultados->calcular($plano) : null,
+            'resultado' => in_array($plano->status, [PlanoAcao::EM_EXECUCAO, PlanoAcao::CONCLUIDO], true) ? $resultados->calcular($plano) : null,
             'podeEscrever' => ! $usuario->emVisaoDeCurso,
             'avaliacoesAcessiveis' => $this->avaliacoesAcessiveis($usuario, array_column($plano->avaliacoesDoRecorte(), 'codigo')),
             'urlDoPainel' => route('coordenador.desempenho', [
@@ -190,20 +189,6 @@ class CoordenadorPlanoAcaoController extends PlanoAcaoPainelController
         return redirect()->route('coordenador.planos.index')->with('status', 'Rascunho excluído.');
     }
 
-    public function retirar(PlanoAcao $plano): RedirectResponse
-    {
-        $usuario = $this->coordenadorQueEscreve();
-        $this->doCoordenador($plano);
-
-        try {
-            $this->servico->retirar($plano, $usuario);
-        } catch (\DomainException $e) {
-            return redirect()->route('coordenador.planos.show', $plano)->with('erro', $e->getMessage());
-        }
-
-        return redirect()->route('coordenador.planos.edit', $plano)->with('status', 'O plano saiu da análise e voltou a ser rascunho.');
-    }
-
     /** Cria um rascunho novo a partir deste plano (para o ciclo seguinte, ou para refazer um plano recusado). */
     public function duplicar(PlanoAcao $plano, PlanoAcaoOrigemService $origemServico): RedirectResponse
     {
@@ -223,22 +208,24 @@ class CoordenadorPlanoAcaoController extends PlanoAcaoPainelController
 
     // ---------------------------------------------------------------------------------------------------------------
 
-    /** Salvar rascunho (volta ao formulário, na etapa em que estava) ou enviar (vai à página do plano). */
+    /** Salvar rascunho (volta ao formulário, na etapa em que estava) ou publicar (vai à página do plano). */
     private function depoisDeSalvar(SalvarPlanoAcaoRequest $request, PlanoAcao $plano, Admin $usuario): RedirectResponse
     {
         $etapa = max(1, min(5, (int) $request->input('etapa_atual', 1)));
 
-        if ($request->input('acao') !== 'enviar') {
+        if ($request->input('acao') !== 'publicar') {
             return redirect()->route('coordenador.planos.edit', [$plano, 'etapa' => $etapa])->with('status', 'Rascunho salvo.');
         }
 
         try {
-            $this->servico->enviar($plano->fresh(), $usuario);
+            $this->servico->publicar($plano->fresh(), $usuario);
         } catch (\DomainException $e) {
             return redirect()->route('coordenador.planos.show', $plano)->with('erro', $e->getMessage());
         }
 
-        return redirect()->route('coordenador.planos.show', $plano)->with('status', 'Plano enviado para análise. Você será avisado quando houver uma decisão.');
+        return redirect()->route('coordenador.planos.show', $plano)->with('status', count(PlanoAcaoEmailService::destinatarios()) > 0
+            ? 'Plano publicado. Os e-mails definidos em Configurações receberão o plano completo e o colaborador vai acompanhá-lo.'
+            : 'Plano publicado. O colaborador vai acompanhá-lo.');
     }
 
     /** Recalcula o ponto de partida de um plano existente (curso, período, categoria, visual e item do plano). */

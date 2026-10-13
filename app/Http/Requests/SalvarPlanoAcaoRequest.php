@@ -31,7 +31,7 @@ class SalvarPlanoAcaoRequest extends FormRequest
         $data = ['nullable', 'date_format:Y-m-d', 'after:2000-01-01', 'before:2100-01-01'];
 
         return [
-            'acao' => ['nullable', Rule::in(['salvar', 'enviar'])],
+            'acao' => ['nullable', Rule::in(['salvar', 'publicar'])],
             'etapa_atual' => ['nullable', 'integer', 'between:1,5'],
 
             'meta_proficiencia' => ['nullable', 'numeric', 'between:0,100'],

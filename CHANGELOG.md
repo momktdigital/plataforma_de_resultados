@@ -120,6 +120,13 @@ linha, veja `git log`.
 - **Pendências** vinculadas à atividade e ao curso (pendência, encaminhamento, prazo, situação, responsável): o colaborador registra,
   o coordenador só visualiza; ficam como histórico e tudo vai para a auditoria.
 
+## Meta por período: 60% do que cabe no período
+
+- A meta do aluno passa a ser **60% da fatia da prova que cabe no período dele**, e não 100%: numa prova de 100 questões em que só 10
+  cabem no 1º período, a meta são 6 questões. Vale para o boletim do aluno (mínimo esperado, mapa de domínio, desempenho por área), para
+  "alunos dentro do esperado" do painel e do comparativo do coordenador e para o plano de ação (`PeriodoCurso::metaDoPeriodo`). Prova sem
+  meta por período continua com os 60% de sempre.
+
 ## Plano de ação do coordenador
 
 - **Ícone "iniciar plano de ação"** em cada visual e dado do painel do coordenador (cartões, gráficos de evolução, área, Bloom e
@@ -129,20 +136,20 @@ linha, veja `git log`.
   coordenador e ao colaborador.
 - **Link para a avaliação**: o plano guarda as avaliações do recorte e linka o Dashboard de cada uma (coordenador do curso e
   administrador), mais "Ver este dado no painel". O colaborador vê o nome, a data e o código.
-- **Melhorias do processo**: e-mail ao colaborador (plano enviado, comentário) e ao coordenador (decisão, comentário) quando o SMTP
-  está ativo; aviso de plano repetido no mesmo recorte; imprimir / salvar em PDF.
+- **Melhorias do processo**: e-mail ao coordenador quando o colaborador comenta, quando o SMTP está ativo; aviso de plano repetido no mesmo recorte; imprimir / salvar em PDF.
 - **Colaborador enxerga as avaliações**: lista de avaliações e Dashboard de cada uma, só leitura (já tem acesso às planilhas importadas), com o
   link no plano; busca, quadro por curso e "outros planos deste curso" na análise.
 - **Evidências anexas** (link ou arquivo, em disco privado) nas atualizações de ação e no encerramento; **banco de ações** de planos
-  concluídos (anônimo) na etapa de ações; **o que mudou no reenvio** para o colaborador; **selo "já existe plano"** nos ícones dos visuais.
-- **Lembretes** de rascunho parado, plano devolvido sem reenvio e análise atrasada (e-mail aos colaboradores); **exportação .xlsx** dos planos
+  concluídos (anônimo) na etapa de ações; **selo "já existe plano"** nos ícones dos visuais.
+- **Lembretes** de rascunho parado, prazo próximo/vencido e plano parado; **exportação .xlsx** dos planos
   e **visão da reitoria** (`/reitoria/planos`, só números por curso).
-- **Roteiro em cinco etapas** (ponto de partida, leitura do dado, causas com Ishikawa e 5 Porquês, ações, síntese e envio) já
+- **Roteiro em cinco etapas** (ponto de partida, leitura do dado, causas com Ishikawa e 5 Porquês, ações, síntese e publicação) já
   preenchido com o curso, a participação atual, a meta de participação e a proficiência atual, mais o dado do visual e sugestões de
   texto. Os números são recalculados no servidor, nunca vêm do navegador.
-- **Aprovação pelo colaborador** (e administrador): fila, critérios, e decisão de aprovar, pedir ajustes ou recusar, com
-  justificativa obrigatória nas duas últimas. Plano devolvido volta ao coordenador, que edita e reenvia.
-- **Acompanhamento** do plano aprovado: situação das ações, notas de andamento, prazo reprogramável com justificativa, encerramento
+- **Sem aprovação**: o coordenador **publica** o plano e ele entra direto em execução (o conteúdo fica travado; para mudar, copia-se
+  como rascunho). O colaborador (e o administrador) **só acompanha** — abas em execução/finalizados, ações atrasadas, quadro por curso —
+  e pode comentar com o coordenador. **Configurações → Plano de ação**: os e-mails que recebem, ao publicar, todas as informações do plano.
+- **Acompanhamento** do plano em execução: situação das ações, notas de andamento, prazo reprogramável com justificativa, encerramento
   com síntese, cancelamento com motivo e comparação com a avaliação seguinte (linha de base x meta). Lembretes diários
   (`planos:lembretes`) de prazo próximo, prazo vencido e plano parado. Histórico só de acrescentar e auditoria.
 

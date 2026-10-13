@@ -7,7 +7,7 @@
     $ajuda = [
         1 => [
             ['O que é participação?', 'É a proporção de estudantes previstos (pela matrícula) que realizaram a avaliação. O número já vem calculado pelo painel; compare com a meta institucional.'],
-            ['O que significa proficiência?', 'Nesta leitura institucional, é proficiente o estudante com pelo menos 60% de acerto (o corte pode ser alterado nas Configurações). O indicador é o percentual de estudantes proficientes. Não é a escala oficial do ENADE/ENAMED.'],
+            ['O que significa proficiência?', 'Quando a prova define o período de cada questão, é proficiente o estudante que acertou 60% do que cabe no período dele (se só 10 de 100 questões cabem no 1º período, a meta são 6, não 10). Sem essa informação, nesta leitura institucional é proficiente o estudante com pelo menos 60% de acerto (o corte pode ser alterado nas Configurações). O indicador é o percentual de estudantes proficientes. Não é a escala oficial do ENADE/ENAMED.'],
             ['Como definir a meta de proficiência?', 'Pactue com o NDE um avanço factível para a próxima avaliação, olhando a distribuição dos resultados e a capacidade real de intervenção. Evite metas que dependam de mudanças estruturais fora do ciclo.'],
             ['Preciso de um plano se a participação está adequada?', 'Não. Se a participação está na meta, concentre o plano na proficiência. Investigue causas de participação somente quando houver necessidade real de intervenção.'],
         ],
@@ -30,9 +30,9 @@
             ['E se não houver tempo para executar?', 'Redimensione a ação para algo viável antes da próxima aplicação. Uma proposta só de longo prazo não atende ao objetivo deste ciclo.'],
         ],
         5 => [
-            ['Preciso preencher tudo?', 'Não. Nenhuma etapa é obrigatória: você pode salvar e enviar o plano com o que tiver. O que ficar em branco aparece como lacuna para o colaborador, que pode pedir ajustes.'],
-            ['O que acontece depois que eu enviar?', 'O colaborador analisa o plano e decide: aprovar, pedir ajustes (o plano volta para você editar e reenviar) ou recusar — sempre com justificativa. Você é avisado pelas notificações.'],
-            ['Posso mudar o plano depois de aprovado?', 'O conteúdo aprovado não muda. Você acompanha a execução: atualiza a situação das ações, reprograma prazos (com justificativa) e registra o andamento. Se o plano precisar mudar de rumo, cancele e crie outro a partir dele.'],
+            ['Preciso preencher tudo?', 'Não. Nenhuma etapa é obrigatória: você pode salvar e publicar o plano com o que tiver. O que ficar em branco aparece como lacuna para quem acompanha.'],
+            ['O que acontece quando eu publico?', 'O plano entra em execução e não é aprovado por ninguém: o colaborador apenas o acompanha. Os e-mails definidos em Configurações recebem o plano completo, e você passa a atualizar a situação das ações, os prazos e as evidências.'],
+            ['Posso mudar o plano depois de publicado?', 'O conteúdo publicado não muda. Você acompanha a execução: atualiza a situação das ações, reprograma prazos (com justificativa) e registra o andamento. Se o plano precisar mudar de rumo, cancele e crie outro a partir dele ("Criar cópia").'],
             ['A meta atingida prova que a ação funcionou?', 'O resultado da próxima avaliação permite ver o avanço frente à meta, mas atribuir causalidade à ação exige cautela e análise das evidências. O plano mostrará a comparação quando houver a avaliação seguinte.'],
         ],
     ];

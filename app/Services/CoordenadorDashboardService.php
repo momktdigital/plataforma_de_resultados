@@ -530,7 +530,7 @@ class CoordenadorDashboardService
 
     /**
      * Quantos alunos ficaram DENTRO DO ESPERADO em cada avaliação — o aluno cujo acerto na prova alcançou o mínimo esperado
-     * para o período em que ele estava (meta `questoes.periodo_minimo`: a fatia da prova que já cabe no período dele).
+     * para o período em que ele estava (meta `questoes.periodo_minimo`: 60% da fatia da prova que já cabe no período dele).
      * Só entram os presentes com nota, e só os alunos do(s) curso(s) em foco.
      *
      * `comMeta = false` quando a prova não especifica a meta em nenhuma questão: não há "esperado" para mostrar (`pct`
@@ -619,8 +619,9 @@ class CoordenadorDashboardService
             foreach ($notas->get($codigo, collect()) as $linha) {
                 $n = (int) $linha->n;
                 $ordinal = PeriodoCurso::ordinal((string) $linha->periodo);
+                // A meta é 60% do que cabe no período do aluno (PeriodoCurso::metaDoPeriodo), não 100% dele.
                 $minimo = $comMeta && $ordinal !== null
-                    ? ($totalQuestoes - (int) $daProva->filter(fn ($l) => PeriodoCurso::aFrente($ordinal, $l->minimo !== null ? (int) $l->minimo : null))->sum('n')) / $totalQuestoes * 100
+                    ? PeriodoCurso::metaDoPeriodo($totalQuestoes - (int) $daProva->filter(fn ($l) => PeriodoCurso::aFrente($ordinal, $l->minimo !== null ? (int) $l->minimo : null))->sum('n'), $totalQuestoes)
                     : self::MINIMO_PADRAO;
 
                 $p = &$periodos[$ordinal ?? 0];

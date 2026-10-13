@@ -155,7 +155,7 @@ class AnaliseConsolidadaService
     /**
      * Acerto TOTAL do aluno em cada avaliação x o MÍNIMO ESPERADO para o período dele (a meta `questoes.periodo_minimo`):
      * uma questão marcada "a partir do 3º período" é esperada de quem está no 3º em diante; para quem está antes, acertar
-     * é bônus. O mínimo esperado é a fatia da prova que já cabe no período do aluno — esperadas / total. Se a prova não
+     * é bônus. O mínimo esperado é 60% da fatia da prova que já cabe no período do aluno — 60% × esperadas / total (PeriodoCurso::metaDoPeriodo). Se a prova não
      * traz essa informação (nenhuma questão com meta, ou período do aluno irreconhecível), o mínimo é MINIMO_PADRAO (60%).
      *
      * O período do aluno é o de `respostas.periodo` DAQUELA prova (o mesmo valor da turma), nunca o do cadastro atual.
@@ -247,7 +247,7 @@ class AnaliseConsolidadaService
         $comMeta = $geral['haMeta'] && $geral['periodoConhecido'];
         $montar = fn (array $a) => [
             'percentual' => round($a['acertos'] / $a['total'] * 100, 1),
-            'esperado' => $comMeta ? round($a['esperadas'] / $a['total'] * 100, 1) : null,
+            'esperado' => $comMeta ? PeriodoCurso::metaDoPeriodo($a['esperadas'], $a['total']) : null,
             'total' => $a['total'],
         ];
 
@@ -275,7 +275,7 @@ class AnaliseConsolidadaService
                     'nome' => $av->nome ?: 'Avaliação #'.$av->codigo,
                     'data' => $av->data_avaliacao,
                     'percentual' => round($a['acertos'] / $a['total'] * 100, 1),
-                    'minimo' => $comMetaDaProva ? round($a['esperadas'] / $a['total'] * 100, 1) : self::MINIMO_PADRAO,
+                    'minimo' => $comMetaDaProva ? PeriodoCurso::metaDoPeriodo($a['esperadas'], $a['total']) : self::MINIMO_PADRAO,
                     'comMeta' => $comMetaDaProva,
                     'periodoAluno' => $a['periodo'],
                     'total' => $a['total'],
@@ -512,7 +512,7 @@ class AnaliseConsolidadaService
                 $temDado = $c !== null && $c['total'] > 0;
                 $valores[$avaliacao['codigo']] = $temDado ? round($c['acertos'] / $c['total'] * 100, 1) : null;
                 $esperados[$avaliacao['codigo']] = ! $temDado ? null
-                    : ($c['comMeta'] ? round($c['esperadas'] / $c['total'] * 100, 1) : self::MINIMO_PADRAO);
+                    : ($c['comMeta'] ? PeriodoCurso::metaDoPeriodo($c['esperadas'], $c['total']) : self::MINIMO_PADRAO);
             }
             $areas[] = ['area' => (string) $area, 'valores' => $valores, 'esperados' => $esperados];
         }

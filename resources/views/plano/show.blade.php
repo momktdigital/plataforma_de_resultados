@@ -8,7 +8,6 @@
 
     $campo = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary';
     $botaoNeutro = 'inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary';
-    $decisao = $plano->eventos->first(fn ($e) => in_array($e->tipo, [PlanoAcaoEvento::APROVADO, PlanoAcaoEvento::AJUSTES, PlanoAcaoEvento::RECUSADO], true));
     $progresso = $plano->progresso();
 @endphp
 
@@ -23,7 +22,7 @@
                     @include('plano._status', ['status' => $plano->status])
                     <span>{{ $plano->curso }}</span>
                     <span>{{ $plano->periodo_letivo ?: 'todos os períodos' }}</span>
-                    @if ($plano->enviado_em)<span>enviado em {{ $plano->enviado_em->format('d/m/Y') }}@if ($plano->envios > 1) ({{ $plano->envios }}º envio)@endif</span>@endif
+                    @if ($plano->enviado_em)<span>publicado em {{ $plano->enviado_em->format('d/m/Y') }}</span>@endif
                 </p>
             </div>
 
@@ -31,13 +30,7 @@
                 <button type="button" onclick="window.print()" class="print:hidden inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"><i class="ph-bold ph-printer" aria-hidden="true"></i> Imprimir / salvar em PDF</button>
             @if ($podeEscrever)
                     @if ($plano->editavel())
-                        <a href="{{ route('coordenador.planos.edit', $plano) }}" class="inline-flex items-center gap-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 px-4 py-2 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"><i class="ph-bold ph-pencil-simple" aria-hidden="true"></i> {{ $plano->status === PlanoAcao::AJUSTES ? 'Fazer os ajustes' : 'Continuar editando' }}</a>
-                    @endif
-                    @if ($plano->aguardandoAnalise())
-                        <form method="POST" action="{{ route('coordenador.planos.retirar', $plano) }}" onsubmit="return confirm('Retirar o plano da análise? Ele volta a ser rascunho.')">
-                            @csrf
-                            <button type="submit" class="{{ $botaoNeutro }}"><i class="ph-bold ph-arrow-u-up-left" aria-hidden="true"></i> Retirar da análise</button>
-                        </form>
+                        <a href="{{ route('coordenador.planos.edit', $plano) }}" class="inline-flex items-center gap-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 px-4 py-2 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"><i class="ph-bold ph-pencil-simple" aria-hidden="true"></i> Continuar editando</a>
                     @endif
                     @if ($plano->finalizado() || $plano->emExecucao())
                         <form method="POST" action="{{ route('coordenador.planos.duplicar', $plano) }}">
@@ -57,30 +50,15 @@
         </div>
     </div>
 
-    {{-- A decisão do colaborador --}}
-    @if ($decisao && in_array($plano->status, [PlanoAcao::APROVADO, PlanoAcao::AJUSTES, PlanoAcao::RECUSADO], true))
-        @php
-            [$icone, $faixa] = match ($plano->status) {
-                PlanoAcao::APROVADO => ['ph-check-circle', 'border-emerald-200 bg-emerald-50 text-emerald-900'],
-                PlanoAcao::AJUSTES => ['ph-pencil-line', 'border-amber-200 bg-amber-50 text-amber-900'],
-                default => ['ph-x-circle', 'border-red-200 bg-red-50 text-red-900'],
-            };
-        @endphp
-        <div class="rounded-xl border p-4 text-sm {{ $faixa }}" role="note">
-            <p class="font-bold flex items-center gap-2"><i class="ph-bold {{ $icone }}" aria-hidden="true"></i> {{ $decisao->rotulo() }} por {{ $decisao->admin?->username ?? 'colaborador' }} em {{ $decisao->created_at?->format('d/m/Y') }}</p>
-            @if ($decisao->texto)<p class="mt-1 whitespace-pre-line">{{ $decisao->texto }}</p>@endif
-        </div>
-    @endif
-
-    @if ($plano->aguardandoAnalise())
-        <div class="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900 flex items-center gap-2" role="status">
-            <i class="ph-bold ph-hourglass-medium text-lg" aria-hidden="true"></i> O plano está com o colaborador para análise. Você será avisado da decisão.
+    @if ($plano->emExecucao())
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 flex items-center gap-2" role="note">
+            <i class="ph-bold ph-play-circle text-lg" aria-hidden="true"></i> Plano em execução. O colaborador acompanha; você atualiza as ações abaixo.
         </div>
     @endif
 
     @if ($plano->editavel() && $lacunas !== [])
         <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status">
-            <p class="font-bold flex items-center gap-2"><i class="ph-bold ph-list-checks" aria-hidden="true"></i> Ainda em branco <span class="font-normal">(nada é obrigatório: você pode enviar assim mesmo)</span></p>
+            <p class="font-bold flex items-center gap-2"><i class="ph-bold ph-list-checks" aria-hidden="true"></i> Ainda em branco <span class="font-normal">(nada é obrigatório: você pode publicar assim mesmo)</span></p>
             <ul class="list-disc pl-5 mt-1 space-y-0.5">
                 @foreach ($lacunas as $falta)
                     <li>{{ $falta['mensagem'] }} @if ($podeEscrever)<a href="{{ route('coordenador.planos.edit', [$plano, 'etapa' => $falta['etapa']]) }}" class="underline font-semibold">Ir para a etapa {{ $falta['etapa'] }}</a>@endif</li>
@@ -89,15 +67,11 @@
         </div>
     @endif
 
-    @if ($plano->aguardandoAnalise() || $plano->status === PlanoAcao::AJUSTES)
-        @include('plano._mudancas', ['mudancasDoEnvio' => $mudancasDoEnvio])
-    @endif
-
     @if ($resultado)
         @include('plano._resultado', ['resultado' => $resultado])
     @endif
 
-    @if (in_array($plano->status, [PlanoAcao::APROVADO, PlanoAcao::CONCLUIDO, PlanoAcao::CANCELADO], true) && $plano->acoes->isNotEmpty())
+    @if (in_array($plano->status, [PlanoAcao::EM_EXECUCAO, PlanoAcao::CONCLUIDO, PlanoAcao::CANCELADO], true) && $plano->acoes->isNotEmpty())
         @include('plano._acompanhamento', ['plano' => $plano, 'podeAtualizar' => $podeEscrever && $plano->emExecucao()])
     @endif
 
@@ -128,16 +102,6 @@
                 </form>
             </details>
         </section>
-    @elseif ($podeEscrever && $plano->status === PlanoAcao::AJUSTES)
-        <details class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-            <summary class="cursor-pointer text-sm font-semibold text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded">Desistir deste plano (cancelar)</summary>
-            <form method="POST" action="{{ route('coordenador.planos.cancelar', $plano) }}" class="mt-2 space-y-2" onsubmit="return confirm('Cancelar este plano?')">
-                @csrf
-                <label for="motivo" class="block text-sm font-semibold">Motivo do cancelamento</label>
-                <textarea id="motivo" name="motivo" rows="3" maxlength="3000" required class="{{ $campo }}"></textarea>
-                <button type="submit" class="rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">Cancelar plano</button>
-            </form>
-        </details>
     @endif
 
     @if ($plano->conclusao)
