@@ -156,6 +156,8 @@ linha, veja `git log`.
 ## Perfil de reitor e painel da reitoria
 
 - Novo perfil **reitor** (`admins.role = rector`): só leitura, todos os cursos,
+- **Administrador pode reverter o plano para rascunho ou excluí-lo de vez** (com motivo obrigatório e auditoria): reverter devolve o plano ao
+  coordenador, que corrige e publica de novo; excluir apaga ações, histórico e arquivos de evidência.
   sem dado nominal de aluno. Entra por código no e-mail (como o coordenador) ou
   por senha. Cadastro na aba **Reitoria** de Usuários (a migration
   `allow_rector_role_on_admins_table` acrescenta `rector` ao ENUM legado de

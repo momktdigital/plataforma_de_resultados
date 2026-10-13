@@ -214,6 +214,9 @@ Route::middleware('instalado')->group(function () {
             Route::get('/planos/{plano}', [ColaboradorPlanoAcaoController::class, 'show'])->whereNumber('plano')->name('planos.show');
             Route::get('/planos/{plano}/anexos/{anexo}', [ColaboradorPlanoAcaoController::class, 'anexo'])->whereNumber(['plano', 'anexo'])->name('planos.anexos.show');
             Route::post('/planos/{plano}/comentarios', [ColaboradorPlanoAcaoController::class, 'comentar'])->whereNumber('plano')->name('planos.comentar');
+            // Só o administrador: devolver o plano ao rascunho do coordenador ou apagá-lo de vez (lista positiva, como as demais).
+            Route::post('/planos/{plano}/reverter', [ColaboradorPlanoAcaoController::class, 'reverter'])->whereNumber('plano')->middleware('perfil:administrador')->name('planos.reverter');
+            Route::delete('/planos/{plano}', [ColaboradorPlanoAcaoController::class, 'excluir'])->whereNumber('plano')->middleware('perfil:administrador')->name('planos.excluir');
             Route::get('/pendencias', [ColaboradorPendenciaController::class, 'index'])->name('pendencias.index');
             Route::post('/atividades/{item}/pendencias', [ColaboradorPendenciaController::class, 'store'])->whereNumber('item')->name('pendencias.store');
             Route::put('/pendencias/{pendencia}', [ColaboradorPendenciaController::class, 'update'])->whereNumber('pendencia')->name('pendencias.update');

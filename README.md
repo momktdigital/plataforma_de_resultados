@@ -564,6 +564,12 @@ rascunho ──publicar──▶ em_execucao ──encerrar──▶ concluido
   com o texto livre escapado. A lista fica em `configuracoes_sistema.plano_emails`; a mudança vai para a auditoria (`configuracao.plano_emails_alterado`).
   É complemento: sem lista, com o SMTP desligado (Portal público → E-mail) ou com falha de envio, o plano é publicado do mesmo jeito (falha só no log).
 - **Acompanhamento pelo colaborador** (`/colaboracao/planos`, colaborador e administrador; **sem decisão**): abas "Em execução" / "Finalizados" /
+- **Administrador: reverter ou excluir** (só ele; na tela do plano em `/colaboracao/planos/{id}`, com **motivo obrigatório** de 10+ caracteres):
+  *Reverter para rascunho* (`PlanoAcaoService::reverterParaRascunho`) devolve um plano em execução, concluído ou cancelado ao coordenador — limpa
+  `enviado_em`/`encerrado_em`/síntese, grava o evento `revertido`, avisa o coordenador pelo sino e o plano some da fila de acompanhamento até
+  ser publicado de novo (aí sai um novo e-mail). *Excluir definitivamente* (`excluirDefinitivamente`) apaga o plano, as ações, o histórico, os avisos e
+  as evidências (inclusive os arquivos de `storage/app/private/planos/{id}`); a auditoria (`plano_acao.excluido_pelo_administrador`) guarda só
+  rótulos, contagens e o motivo, nunca o texto do plano. O coordenador continua só excluindo os próprios **rascunhos**.
   "Todos", ações com prazo vencido, planos parados, busca e quadro por curso. Na tela do plano ele lê tudo e **comenta com o coordenador**
   (sino + e-mail ao coordenador do curso).
 - **Acompanhamento** (coordenador, plano em execução): situação de cada ação (não iniciada, em andamento, concluída, cancelada), notas
