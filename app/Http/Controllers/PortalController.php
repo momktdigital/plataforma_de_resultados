@@ -18,6 +18,7 @@ use App\Services\Portal\ResultadoConsultaService;
 use App\Services\Portal\SmtpEmailSender;
 use App\Services\Visualizacoes\VisualizacaoConfigService;
 use App\Support\Anulacao;
+use App\Support\EstrelasDeParticipacao;
 use App\Support\LeituraDaProva;
 use App\Support\LeituraMetaPeriodo;
 use App\Support\PeriodoCurso;
@@ -488,6 +489,7 @@ class PortalController extends Controller
         return view('portal.resultados', [
             'aluno' => $aluno,
             'totalAvaliacoes' => count($resultados),
+            'estrelas' => EstrelasDeParticipacao::dosResultados($resultados),
             'periodosDisponiveis' => $periodosDisponiveis,
             'periodoSelecionado' => $periodoSelecionado,
             'insights' => $insightService->gerar($aluno, $resultados, $evolucaoPorCategoria, $coberturaHabilidade, $bloom),

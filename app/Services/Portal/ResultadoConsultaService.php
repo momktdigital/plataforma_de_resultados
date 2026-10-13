@@ -25,7 +25,7 @@ class ResultadoConsultaService
      * avaliação, então lê de `resultado_resumos` (App\Services\ResumoResultadoService)
      * em vez de escanear `respostas`, que cresce um por aluno×avaliação×questão.
      *
-     * @return array<int, array{avaliação: Avaliação, periodo: string, periodo_letivo: string, acertos: int, total: int, percentual: ?float}>
+     * @return array<int, array{avaliação: Avaliação, periodo: string, periodo_letivo: string, acertos: int, total: int, percentual: ?float, ausente: bool}>
      */
     public function buscarPorAluno(Aluno $aluno): array
     {
@@ -41,6 +41,7 @@ class ResultadoConsultaService
                 'acertos' => $resumo->acertos,
                 'total' => $resumo->total,
                 'percentual' => $resumo->percentual !== null ? (float) $resumo->percentual : null,
+                'ausente' => (bool) $resumo->ausente,
             ])
             ->values()
             ->all();

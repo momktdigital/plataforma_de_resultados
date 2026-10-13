@@ -7,6 +7,7 @@
     @include('portal._tour', ['chave' => 'resultados', 'passos' => [
         ['titulo' => 'Seus resultados', 'texto' => 'Esta é a página principal do portal. Vamos mostrar, em poucos passos, o que cada parte da tela significa.'],
         ['alvo' => '[data-tour="cabecalho"]', 'titulo' => 'Seu perfil', 'texto' => 'Aqui aparecem o seu nome, o RA, o curso e o período, além da quantidade de avaliações com resultado.'],
+        ['alvo' => '[data-tour="estrelas"]', 'titulo' => 'Sua participação', 'texto' => 'As estrelas mostram quantas das provas previstas você fez. Cinco estrelas significam que você participou de todas; cada meia estrela equivale a 10% de participação.'],
         ['alvo' => '[data-tour="resumo"]', 'titulo' => 'Resumo do seu rendimento', 'texto' => 'Frases curtas apontam o que mudou entre as suas últimas avaliações e que tipo de pergunta foi mais difícil para você. Cartões amarelos indicam pontos de atenção; os verdes, bons resultados.'],
         ['alvo' => '[data-tour="filtros"]', 'titulo' => 'Filtros', 'texto' => 'Escolha o período letivo ou um intervalo de datas para ver apenas as avaliações que lhe interessam.'],
         ['alvo' => '#resultados-lista', 'titulo' => 'Suas avaliações', 'texto' => 'As avaliações ficam organizadas em categorias. Clique no nome de uma categoria para abri-la: dentro dela estão a evolução do seu acerto, o gráfico de rendimento x mínimo esperado (barra verde: você atingiu o mínimo; barra amarela: ficou abaixo; linha tracejada: mínimo esperado para o seu período), o mapa de domínio por área e o cartão de cada avaliação. Clique no cartão da avaliação para ver os detalhes.'],
@@ -43,6 +44,9 @@
             <div class="min-w-0 flex-1">
                 <p id="saudacao-portal" class="text-white/80 text-sm font-medium uppercase tracking-wide">Olá</p>
                 <h1 class="text-2xl sm:text-3xl font-black text-white truncate">{{ $nomeCompleto }}</h1>
+                @if (! empty($estrelas))
+                    @include('portal._estrelas', ['estrelas' => $estrelas])
+                @endif
                 <p class="text-white/85 text-sm mt-1">
                     RA {{ $aluno->ra }}
                     @if ($aluno->curso) &middot; {{ $aluno->curso }} @endif
