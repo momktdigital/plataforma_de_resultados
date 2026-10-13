@@ -62,6 +62,7 @@
                 <input type="hidden" name="visual" value="{{ $origem['visual'] }}">
                 @if (! empty($origem['item']))<input type="hidden" name="item" value="{{ $origem['item'] }}">@endif
                 @if (! empty($origem['avaliacao_codigo']))<input type="hidden" name="avaliacao" value="{{ $origem['avaliacao_codigo'] }}">@endif
+                @if (! empty($origem['comparar']))<input type="hidden" name="comparar" value="{{ $origem['comparar'] }}">@endif
                 @if (count($origem['cursos'] ?? []) > 1)
                     <div>
                         <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1" for="recorte-curso">Curso</label>
@@ -125,6 +126,7 @@
                     <input type="hidden" name="origem[periodo_letivo]" value="{{ $origem['periodo_letivo'] ?? '' }}">
                     @if (! empty($origem['categoria_id']))<input type="hidden" name="origem[categoria]" value="{{ $origem['categoria_id'] }}">@endif
                     @if (! empty($origem['avaliacao_codigo']))<input type="hidden" name="origem[avaliacao]" value="{{ $origem['avaliacao_codigo'] }}">@endif
+                    @if (! empty($origem['comparar']))<input type="hidden" name="origem[comparar]" value="{{ $origem['comparar'] }}">@endif
                     <input type="hidden" name="origem[visual]" value="{{ $origem['visual'] }}">
                     @if (! empty($origem['item']))<input type="hidden" name="origem[item]" value="{{ $origem['item'] }}">@endif
                 @endunless

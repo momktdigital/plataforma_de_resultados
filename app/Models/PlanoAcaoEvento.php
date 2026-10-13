@@ -47,6 +47,8 @@ class PlanoAcaoEvento extends Model
 
     public const LEMBRETE = 'lembrete';
 
+    public const REVERTIDO = 'revertido';
+
     /** @var array<string, array{rotulo: string, icone: string}> */
     public const TIPOS = [
         self::CRIADO => ['rotulo' => 'Plano criado', 'icone' => 'ph-file-plus'],
@@ -64,6 +66,7 @@ class PlanoAcaoEvento extends Model
         self::ENCERRADO => ['rotulo' => 'Plano encerrado', 'icone' => 'ph-flag-checkered'],
         self::CANCELADO => ['rotulo' => 'Plano cancelado', 'icone' => 'ph-prohibit'],
         self::LEMBRETE => ['rotulo' => 'Lembrete enviado', 'icone' => 'ph-bell-ringing'],
+        self::REVERTIDO => ['rotulo' => 'Devolvido para rascunho', 'icone' => 'ph-arrow-u-up-left'],
     ];
 
     /** Os critérios que o colaborador marcava quando o plano passava por aprovação — só para mostrar o histórico antigo. */

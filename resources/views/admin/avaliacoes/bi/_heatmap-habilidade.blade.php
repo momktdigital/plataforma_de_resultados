@@ -3,6 +3,7 @@
         <div class="flex items-center gap-2 mb-4">
             <h2 class="font-semibold">Mapa de calor: habilidade x turma (% de acerto)</h2>
             @include('_explicacao', ['explicacao' => $explicacoes['heatmap_habilidade_turma'] ?? null])
+            <span class="ml-auto">@include('plano._botao', ['visual' => 'dashboard', 'titulo' => 'Mapa de calor: habilidade x turma', 'ctx' => ['curso' => '', 'avaliacao' => $avaliacao->codigo], 'planoItem' => 'Mapa de calor: habilidade x turma'])</span>
         </div>
         @if (empty($heatmapHabilidadeTurma))
             <p class="text-sm text-slate-500">Sem dados suficientes.</p>

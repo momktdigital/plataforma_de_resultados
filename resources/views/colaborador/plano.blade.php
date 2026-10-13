@@ -4,6 +4,7 @@
 
 @php
     use App\Models\PlanoAcao;
+    use Illuminate\Support\Facades\Auth;
 
     $campo = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary';
     $botaoNeutro = 'inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary';
@@ -75,6 +76,32 @@
                     </li>
                 @endforeach
             </ul>
+        </section>
+    @endif
+
+
+    @if (Auth::guard('admin')->user()?->ehAdministrador())
+        <section class="print:hidden bg-white border border-red-200 rounded-xl shadow-sm p-6" aria-labelledby="titulo-admin">
+            <h2 id="titulo-admin" class="text-lg font-bold mb-1 flex items-center gap-2"><i class="ph-bold ph-shield-warning text-red-700" aria-hidden="true"></i> Ações do administrador</h2>
+            <p class="text-sm text-slate-600 mb-4">Ficam na auditoria com o motivo. Escreva o motivo (mínimo de 10 caracteres) antes de usar um dos botões.</p>
+            @error('motivo')<p class="text-sm text-red-700 mb-2" role="alert">{{ $message }}</p>@enderror
+            <div class="grid gap-4 md:grid-cols-2">
+                <form method="POST" action="{{ route('colaborador.planos.reverter', $plano) }}" class="space-y-2" onsubmit="return confirm('Devolver este plano ao coordenador como rascunho? Ele deixa de aparecer na fila de acompanhamento até ser publicado de novo.')">
+                    @csrf
+                    <label for="motivo-reverter" class="block text-sm font-semibold">Reverter para rascunho</label>
+                    <p class="text-xs text-slate-600">O coordenador pode corrigir e publicar de novo. O histórico e as evidências ficam.</p>
+                    <textarea id="motivo-reverter" name="motivo" rows="2" maxlength="1000" required class="{{ $campo }}" placeholder="Motivo da reversão"></textarea>
+                    <button type="submit" class="{{ $botaoNeutro }}"><i class="ph-bold ph-arrow-u-up-left" aria-hidden="true"></i> Reverter para rascunho</button>
+                </form>
+                <form method="POST" action="{{ route('colaborador.planos.excluir', $plano) }}" class="space-y-2" onsubmit="return confirm('Excluir este plano DEFINITIVAMENTE? Ações, histórico e evidências são apagados e não há como desfazer.')">
+                    @csrf
+                    @method('DELETE')
+                    <label for="motivo-excluir" class="block text-sm font-semibold text-red-700">Excluir definitivamente</label>
+                    <p class="text-xs text-slate-600">Apaga o plano, as ações, o histórico e as evidências anexas. Não tem volta.</p>
+                    <textarea id="motivo-excluir" name="motivo" rows="2" maxlength="1000" required class="{{ $campo }}" placeholder="Motivo da exclusão"></textarea>
+                    <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-700"><i class="ph-bold ph-trash" aria-hidden="true"></i> Excluir definitivamente</button>
+                </form>
+            </div>
         </section>
     @endif
 

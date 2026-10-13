@@ -31,10 +31,12 @@ class PlanoAcaoOrigemService
     public function __construct(
         private readonly CoordenadorDashboardService $dashboard,
         private readonly PlanoAcaoIndicadoresService $indicadores,
+        private readonly ComparacaoSemestresService $comparacao,
     ) {}
 
     /**
-     * @param  array<string, mixed>  $params  curso, periodo_letivo, categoria, avaliacao, visual, item (todos opcionais)
+     * @param  array<string, mixed>  $params  curso, periodo_letivo, categoria, avaliacao, visual, item, comparar (todos opcionais; `comparar` é o
+     *                                        período letivo de referência do visual "dentro do esperado por período do curso")
      * @return array<string, mixed>
      */
     public function montar(Admin $coordenador, array $params): array
@@ -117,13 +119,19 @@ class PlanoAcaoOrigemService
             ->values()
             ->all();
 
+        // O semestre de referência de "dentro do esperado por período do curso": só vale se for outro período com resultados do curso.
+        $comparar = trim((string) ($params['comparar'] ?? ''));
+        $comparar = $visual === 'esperado_periodo' && $comparar !== $periodo && in_array($comparar, $escopo['periodosDisponiveis'], true) ? $comparar : null;
+
         $leitura = match ($visual) {
             'area', 'bloom', 'tema' => $this->campo($visual, $item, $bloco, $periodo),
             'evolucao' => $this->evolucao($bloco),
             'periodo_curso' => $this->periodoDoCurso($item, $bloco),
+            'esperado_periodo' => $this->esperadoPorPeriodo($coordenador, $curso, $periodo, $comparar, $categoriaId, $item, $bloco),
             'curso' => $this->cursoComparado($coordenador, $curso, $periodo, $categoriaId),
             'avaliacao' => $this->avaliacao($avaliacao ?? (int) $item, $categorias),
             'destaque' => $this->destaque($item),
+            'dashboard' => $this->dashboardDaAvaliacao($avaliacao ?? 0, $item, $categorias),
             default => $this->geral($visual, $indicadores, $bloco, $painel),
         };
 
@@ -140,6 +148,7 @@ class PlanoAcaoOrigemService
             'categoria_automatica' => $automatica,
             'categorias' => $disponiveis,
             'avaliacao_codigo' => $avaliacao,
+            'comparar' => $comparar,
             'avaliacoes' => $avaliacoesDoRecorte,
             'indicadores' => $indicadores,
             'linhas' => $leitura['linhas'],
@@ -420,6 +429,78 @@ class PlanoAcaoOrigemService
         $resultado = $a['media'] !== null ? "{$a['nome']}: média de ".$this->pct($a['media']).' e presença de '.$this->pct($a['presenca']).'.' : '';
 
         return $this->leitura($linhas, "Avaliação {$a['nome']}", $resultado, '', $this->listar($linhas));
+    }
+
+    /**
+     * "Alunos dentro do esperado, por período do curso": em cada período do curso, quantos alunos presentes alcançaram o esperado
+     * (a meta do PRÓPRIO período: 60% das questões que cabem nele). Com `$comparar` (o semestre de referência da tela de comparação),
+     * cada linha traz também o semestre anterior e a variação — os mesmos números de ComparacaoSemestresService.
+     *
+     * @param  ?array<string, mixed>  $bloco
+     */
+    private function esperadoPorPeriodo(Admin $coordenador, string $curso, string $periodo, ?string $comparar, ?int $categoriaId, ?string $item, ?array $bloco): array
+    {
+        $atual = $bloco['detalhe']['porPeriodoCurso'] ?? [];
+        if ($atual === []) {
+            return $this->leitura([], null, '', '', '');
+        }
+
+        $referencia = [];
+        if ($comparar !== null) {
+            $escopoReferencia = $this->dashboard->escopo($coordenador, $curso, $comparar);
+            $painelReferencia = $this->dashboard->gerar($coordenador, $curso, $comparar, $escopoReferencia, [
+                'detalhado' => true, 'campos' => false, 'estrito' => true, 'categoria' => $categoriaId !== null ? (string) $categoriaId : '',
+            ]);
+            $blocoReferencia = collect($painelReferencia['categorias'] ?? [])->firstWhere('id', $categoriaId);
+            $referencia = $blocoReferencia['detalhe']['porPeriodoCurso'] ?? [];
+        }
+
+        $periodos = collect($this->comparacao->alunosPorPeriodo($atual, $referencia)['periodos'])->filter(fn ($p) => $p['atual'] !== null)->values();
+        if ($periodos->isEmpty()) {
+            return $this->leitura([], null, '', '', '');
+        }
+
+        $linhas = $periodos->map(function ($p) use ($comparar, $item) {
+            $detalhe = "{$p['atual']['dentro']} de {$p['atual']['presentes']} alunos";
+            if ($comparar !== null && $p['referencia'] !== null) {
+                $detalhe .= "; em {$comparar}: ".$this->pct($p['referencia']['pct']).($p['deltaPct'] !== null ? ' ('.($p['deltaPct'] > 0 ? '+' : '').CoordenadorDashboardService::pct($p['deltaPct']).' pp)' : '');
+            }
+
+            return $this->linha($p['rotulo'], $this->pct($p['atual']['pct']), $detalhe, $item !== null && $p['rotulo'] === $item);
+        })->all();
+
+        $fracos = $periodos->filter(fn ($p) => $p['atual']['pct'] < self::LIMIAR || $p['sentido'] === 'caiu');
+        $texto = fn ($p) => "{$p['rotulo']} (".$this->pct($p['atual']['pct']).($p['sentido'] === 'caiu' ? ', caiu '.CoordenadorDashboardService::pct(abs($p['deltaPct'])).' pp' : '').')';
+        $escolhido = $item !== null ? $periodos->first(fn ($p) => $p['rotulo'] === $item) : null;
+
+        if ($escolhido !== null) {
+            $resultado = "{$escolhido['rotulo']}: ".$this->pct($escolhido['atual']['pct'])." dos alunos dentro do esperado em {$periodo} ({$escolhido['atual']['dentro']} de {$escolhido['atual']['presentes']})"
+                .($comparar !== null && $escolhido['referencia'] !== null ? ", contra ".$this->pct($escolhido['referencia']['pct'])." em {$comparar}" : '').'.';
+
+            return $this->leitura($linhas, "Dentro do esperado: {$escolhido['rotulo']}", $resultado, $texto($escolhido), $this->listar($linhas));
+        }
+
+        $resultado = $fracos->isNotEmpty()
+            ? "Períodos do curso com menos alunos dentro do esperado em {$periodo}: ".$fracos->map($texto)->implode(', ').'.'
+            : "Em {$periodo}, todos os períodos do curso têm ao menos ".(int) self::LIMIAR.'% dos alunos dentro do esperado.';
+
+        return $this->leitura($linhas, 'Alunos dentro do esperado, por período do curso', $resultado, $fracos->map($texto)->implode('; '), $this->listar($linhas));
+    }
+
+    /**
+     * Um visual do Dashboard da avaliação (BI) que não tem equivalente no painel do coordenador (mapa de itens, TRI, equidade...):
+     * os números do plano são os da PRÓPRIA avaliação, recalculados aqui; o nome do visual só diz onde o coordenador estava.
+     *
+     * @param  Collection<int, array<string, mixed>>  $categorias
+     */
+    private function dashboardDaAvaliacao(int $codigo, ?string $visual, Collection $categorias): array
+    {
+        $leitura = $this->avaliacao($codigo, $categorias);
+        if ($visual !== null) {
+            $leitura['recorte'] = $visual.($leitura['recorte'] !== null ? ' · '.$leitura['recorte'] : '');
+        }
+
+        return $leitura;
     }
 
     private function destaque(?string $texto): array

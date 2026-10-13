@@ -195,6 +195,9 @@ O plano de ação (`planos_acao`, ver README) nasce de um dado do painel do coor
 - E-mail do plano (`PlanoAcaoEmailService`) é complemento, nunca dependência: respeita `smtp_ativo` e engole falha de envio. O e-mail do plano
   **publicado** vai para a lista `plano_emails` (Configurações, `ConfiguracaoSistema`) e leva o plano completo — sempre **escape o texto livre** e
   não ponha dado de aluno (o plano só tem agregado).
+- **Reverter para rascunho / excluir de vez é só do administrador** (`reverterParaRascunho`/`excluirDefinitivamente`, que conferem `ehAdministrador()`
+  além do middleware `perfil:administrador` nas rotas): motivo obrigatório, auditoria sem o texto do plano, e `excluirDefinitivamente` apaga
+  também os arquivos do disco privado. O coordenador só exclui rascunho próprio (`excluir`); não amplie isso.
 - O número do menu (`PlanoAcaoService::comAcaoAtrasada`) roda em TODA página: mantenha-o barato (sem `NomeCurso::variantes`).
 
 ## Perfil (`admins.role`) falha fechado

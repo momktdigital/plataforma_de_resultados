@@ -268,22 +268,16 @@ A tela tem quatro abas, distinguidas pela coluna legada `admins.role`:
   pendências (ver "Cronograma de atividades"). Não veem avaliações, resultados nem alunos. Cadastro como o da
   reitoria: e-mail obrigatório, senha opcional, nenhum curso.
 
-**Login.** A tela de login tem duas abas. **Administrador**: usuário e senha
-(a senha é obrigatória só para ele). **Coordenação / Reitoria** (coordenador, reitor e colaborador): informa usuário ou e-mail
-e recebe um **código de 6 dígitos** no e-mail cadastrado (`/login/codigo`,
-`LoginPorCodigoService`) — sem senha. O código vale 10 minutos e uma única vez,
-3 erros o invalidam, o reenvio tem espera crescente (1, 2, 5, 10 min) e só o
-**hash** (HMAC) do código fica no banco (`login_codigos`). A resposta nunca
-revela se o usuário existe. Para isso o coordenador precisa ter **e-mail**
-(obrigatório no cadastro; a senha é opcional — sem ela o `password_hash` recebe
-um valor aleatório que ninguém conhece) e o SMTP do portal precisa estar
-**ativado** (Configurações → Portal público → E-mail). Administrador não entra
-por código. Um coordenador que tenha senha cadastrada também pode entrar por ela: na
-aba **Coordenador** há o botão **Entrar com senha** (`/login?modo=coordenador`,
-usuário + senha — a mesma rota `login` do administrador) e, na tela de senha, o
-botão **Receber código por e-mail** para voltar. Entrando por senha ou por código,
-o coordenador cai direto no seu **painel** (`/painel`) e o reitor no **painel da reitoria**
-(`Admin::rotaInicial()`). Quem não tem senha
+**Login.** Uma tela só, sem abas. O padrão é o **código por e-mail**: o usuário informa usuário ou e-mail e recebe
+um **código de 6 dígitos** no e-mail cadastrado (`/login/codigo`, `LoginPorCodigoService`) — sem senha; vale para coordenador,
+reitor e colaborador. O código vale 10 minutos e uma única vez, 3 erros o invalidam, o reenvio tem espera crescente (1, 2, 5, 10 min)
+e só o **hash** (HMAC) do código fica no banco (`login_codigos`). A resposta nunca revela se o usuário existe. Para isso o usuário
+precisa ter **e-mail** (obrigatório no cadastro; a senha é opcional — sem ela o `password_hash` recebe um valor aleatório que
+ninguém conhece) e o SMTP do portal precisa estar **ativado** (Configurações → Portal público → E-mail). Logo abaixo do botão
+**Enviar código** fica o botão **Entrar com senha** (`/login?modo=senha`, usuário + senha, a rota `login`; `?modo=coordenador` é o nome
+antigo e continua valendo), e na tela de senha o botão **Receber código por e-mail** para voltar. **O administrador não entra por
+código**: para ele a senha é obrigatória (o botão "Entrar com senha" é o caminho dele). Entrando por senha ou por código, o
+coordenador cai direto no seu **painel** (`/painel`) e o reitor no **painel da reitoria** (`Admin::rotaInicial()`). Quem não tem senha
 cadastrada vê a mesma mensagem genérica de "usuário ou senha inválidos".
 
 **Perfil desconhecido não acessa nada.** `Admin::papel()` normaliza `admins.role`
@@ -413,7 +407,8 @@ maioria dos alunos dela estava matriculada):
   valendo para os dois semestres); e, **dentro de cada categoria** (que só se
   compara com ela mesma), média, **alunos abaixo do esperado** (abaixo de 60% quando
   a categoria não traz o mínimo por período), presença, desempenho por área e por
-  período do curso, com a variação. Em vez de parear a pessoa, o quadro **"Alunos
+  período do curso, com a variação. **Cada categoria é um dropdown** (como no Desempenho): fechados quando há mais de uma, com nome e média no resumo;
+  abre sozinho o escolhido no filtro de categoria. Em vez de parear a pessoa, o quadro **"Alunos
   dentro do esperado, por período do curso"** olha para o período: em cada período do
   curso (1º, 2º...), quantos alunos atingiram o esperado (ou 60%) em cada semestre e se o
   período subiu, ficou estável ou caiu (menos de 5 pontos é estável). Categoria que só
@@ -516,7 +511,10 @@ e acompanha a execução até o encerramento. O roteiro é o do "Assistente inte
 **Onde começa.** Cada visual e cada dado do painel tem o ícone de prancheta (`resources/views/plano/_botao.blade.php`, só para o
 coordenador que pode gravar): os cartões de presença/média/abaixo do esperado, os gráficos de evolução, área, Bloom e tema, as
 barras por período do curso e por curso, as linhas das tabelas de avaliações, os "destaques", os cartões e quadros de **Comparar
-semestres** e os gráficos de área e Bloom do **Dashboard da avaliação**. Num visual com itens o ícone abre um menu — "plano sobre
+semestres** e os visuais do **Dashboard da avaliação** (BI: área, Bloom, tema, distribuição de acertos, comparação entre avaliações e os demais — mapa de itens,
+TRI, equidade... —, que usam o visual genérico `dashboard` com o nome dele como item e os números da própria avaliação), além do quadro **"Alunos dentro do
+esperado, por período do curso"** da comparação (visual `esperado_periodo`: por período do curso, com o semestre de referência da tela em `comparar`, guardado em
+`contexto.comparar`). Num visual com itens o ícone abre um menu — "plano sobre
 o visual inteiro" ou sobre **um item** (uma área, um nível de Bloom, um período do curso, uma avaliação...); é uma lista de links
 (teclado e leitor de tela), não depende de clicar no gráfico. O reitor na visão do curso e o administrador não veem o ícone.
 
@@ -566,6 +564,12 @@ rascunho ──publicar──▶ em_execucao ──encerrar──▶ concluido
 - **Acompanhamento pelo colaborador** (`/colaboracao/planos`, colaborador e administrador; **sem decisão**): abas "Em execução" / "Finalizados" /
   "Todos", ações com prazo vencido, planos parados, busca e quadro por curso. Na tela do plano ele lê tudo e **comenta com o coordenador**
   (sino + e-mail ao coordenador do curso).
+- **Administrador: reverter ou excluir** (só ele; na tela do plano em `/colaboracao/planos/{id}`, com **motivo obrigatório** de 10+ caracteres):
+  *Reverter para rascunho* (`PlanoAcaoService::reverterParaRascunho`) devolve um plano em execução, concluído ou cancelado ao coordenador — limpa
+  `enviado_em`/`encerrado_em`/síntese, grava o evento `revertido`, avisa o coordenador pelo sino e o plano some da fila de acompanhamento até
+  ser publicado de novo (aí sai um novo e-mail). *Excluir definitivamente* (`excluirDefinitivamente`) apaga o plano, as ações, o histórico, os avisos e
+  as evidências (inclusive os arquivos de `storage/app/private/planos/{id}`); a auditoria (`plano_acao.excluido_pelo_administrador`) guarda só
+  rótulos, contagens e o motivo, nunca o texto do plano. O coordenador continua só excluindo os próprios **rascunhos**.
 - **Acompanhamento** (coordenador, plano em execução): situação de cada ação (não iniciada, em andamento, concluída, cancelada), notas
   de andamento, prazo reprogramável. **Concluir uma ação e mudar um prazo exigem a nota** (evidência / justificativa); o novo prazo não
   pode ir para o passado. O plano é encerrado com uma síntese do que foi feito e aprendido, quando não há ação aberta; ou cancelado, com o motivo.

@@ -4,6 +4,7 @@
             <div class="flex items-center gap-2 mb-4">
             <h2 class="font-semibold">Desempenho médio por disciplina</h2>
             @include('_explicacao', ['explicacao' => $explicacoes['radar_disciplina'] ?? null])
+            <span class="ml-auto">@include('plano._botao', ['visual' => 'dashboard', 'titulo' => 'Desempenho por disciplina', 'ctx' => ['curso' => '', 'avaliacao' => $avaliacao->codigo], 'planoItem' => 'Desempenho por disciplina'])</span>
         </div>
             @if (empty($dados['radar']))
                 <p class="text-sm text-slate-500">Nenhuma questão desta avaliação tem disciplina cadastrada na matriz.</p>

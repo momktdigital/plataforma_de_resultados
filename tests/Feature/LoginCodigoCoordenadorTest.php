@@ -213,10 +213,18 @@ class LoginCodigoCoordenadorTest extends TestCase
         $this->assertStringContainsString('[Reenvio]', $this->enviados[1][1]);
     }
 
-    public function test_pagina_de_login_tem_as_duas_abas(): void
+    public function test_pagina_de_login_e_unica_com_o_codigo_por_e_mail_como_padrao(): void
     {
-        $this->get('/login')->assertOk()->assertSee('Administrador')->assertSee('Coordenação / Reitoria')->assertSee('name="password"', false);
-        $this->get('/login?modo=codigo')->assertOk()->assertSee('Enviar código')->assertDontSee('name="password"', false);
+        // Sem abas: a tela abre direto no código por e-mail, com o botão da senha logo abaixo.
+        foreach (['/login', '/login?modo=codigo', '/login?modo=qualquer'] as $url) {
+            $this->get($url)->assertOk()
+                ->assertSee('Enviar código')
+                ->assertSee('Entrar com senha')
+                ->assertSee(route('login', ['modo' => 'senha']), false)
+                ->assertDontSee('name="password"', false)
+                ->assertDontSee('role="tablist"', false)
+                ->assertDontSee('Coordenação / Reitoria');
+        }
     }
 
     public function test_cria_coordenador_sem_senha_mas_com_email(): void
@@ -259,37 +267,19 @@ class LoginCodigoCoordenadorTest extends TestCase
             ->assertRedirect(route('coordenador.painel'));
     }
 
-    public function test_aba_do_coordenador_oferece_o_botao_entrar_com_senha(): void
+    public function test_modo_senha_tem_usuario_senha_e_volta_para_o_codigo(): void
     {
-        $this->get('/login?modo=codigo')
-            ->assertOk()
-            ->assertSee('Entrar com senha')
-            ->assertSee(route('login', ['modo' => 'coordenador']), false);
-    }
-
-    public function test_aba_do_coordenador_no_modo_senha_tem_usuario_senha_e_volta_para_o_codigo(): void
-    {
-        $this->get('/login?modo=coordenador')
-            ->assertOk()
-            ->assertSee('name="password"', false)
-            ->assertSee('Entrar no meu painel')
-            ->assertSee('Receber código por e-mail')
-            ->assertSee(route('login', ['modo' => 'codigo']), false)
-            ->assertDontSee('Enviar código');
-    }
-
-    public function test_modo_senha_do_coordenador_mantem_a_aba_coordenador_ativa(): void
-    {
-        $html = $this->get('/login?modo=coordenador')->getContent();
-
-        // A aba "Coordenador" é a selecionada (aria-selected="true") e a de administrador não.
-        $this->assertMatchesRegularExpression('/aria-selected="false"[^>]*>\s*Administrador/s', $html);
-        $this->assertMatchesRegularExpression('/aria-selected="true"[^>]*>\s*Coordenação \/ Reitoria/s', $html);
-    }
-
-    public function test_aba_do_administrador_nao_mostra_o_botao_do_coordenador(): void
-    {
-        $this->get('/login')->assertOk()->assertDontSee('Entrar com senha')->assertDontSee('Receber código por e-mail');
+        // `coordenador` é o nome antigo do modo com senha: links salvos continuam valendo.
+        foreach (['/login?modo=senha', '/login?modo=coordenador'] as $url) {
+            $this->get($url)
+                ->assertOk()
+                ->assertSee('name="password"', false)
+                ->assertSee('Entrar com senha')
+                ->assertSee('Esqueci minha senha')
+                ->assertSee('Receber código por e-mail')
+                ->assertSee(route('login', ['modo' => 'codigo']), false)
+                ->assertDontSee('Enviar código');
+        }
     }
 
     public function test_coordenador_que_entra_por_senha_vai_para_o_painel_e_nao_para_a_lista_do_admin(): void
@@ -303,13 +293,13 @@ class LoginCodigoCoordenadorTest extends TestCase
         $this->get(route('coordenador.painel'))->assertOk();
     }
 
-    public function test_senha_errada_do_coordenador_volta_para_a_aba_do_coordenador(): void
+    public function test_senha_errada_volta_para_o_modo_senha(): void
     {
         $this->coordenador('comsenha', 'comsenha@faa.edu.br', 'minha-senha-bem-longa-1');
 
-        $this->from('/login?modo=coordenador')
+        $this->from('/login?modo=senha')
             ->post('/login', ['username' => 'comsenha', 'password' => 'errada'])
-            ->assertRedirect('/login?modo=coordenador')
+            ->assertRedirect('/login?modo=senha')
             ->assertSessionHasErrors('username');
 
         $this->assertGuest('admin');

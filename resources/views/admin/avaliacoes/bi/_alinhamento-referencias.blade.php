@@ -12,6 +12,7 @@
         <div class="flex items-center gap-2 mb-1">
             <h2 class="font-semibold">Alinhamento curricular e regulatório</h2>
             @include('_explicacao', ['explicacao' => $explicacoes['alinhamento_referencias'] ?? null])
+            <span class="ml-auto">@include('plano._botao', ['visual' => 'dashboard', 'titulo' => 'Alinhamento curricular e regulatório', 'ctx' => ['curso' => '', 'avaliacao' => $avaliacao->codigo], 'planoItem' => 'Alinhamento curricular e regulatório'])</span>
         </div>
         <p class="text-sm text-slate-500 mb-5">
             O que a prova cobriu e como foi o desempenho em cada eixo. A contagem de questões é a cobertura:

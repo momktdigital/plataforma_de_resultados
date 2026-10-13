@@ -4,6 +4,7 @@
             <span class="flex items-center gap-2 mr-auto">
                 <h2 class="font-semibold">Mapa de qualidade dos itens</h2>
                 @include('_explicacao', ['explicacao' => $explicacoes['mapa_itens'] ?? null, 'id' => 'expl-mapa'])
+                <span class="ml-auto">@include('plano._botao', ['visual' => 'dashboard', 'titulo' => 'Mapa de qualidade dos itens', 'ctx' => ['curso' => '', 'avaliacao' => $avaliacao->codigo], 'planoItem' => 'Mapa de qualidade dos itens'])</span>
             </span>
             <button type="button" data-tabela="tabela-mapa-itens" aria-expanded="false"
                     class="text-xs text-slate-500 hover:text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1">

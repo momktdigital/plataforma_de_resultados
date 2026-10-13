@@ -3,6 +3,7 @@
         <div class="flex items-center gap-2 mb-1">
             <h2 class="font-semibold">Correlação entre nota total e métricas nomeadas</h2>
             @include('_explicacao', ['explicacao' => $explicacoes['correlacao_metricas'] ?? null])
+            <span class="ml-auto">@include('plano._botao', ['visual' => 'dashboard', 'titulo' => 'Correlação entre nota total e métricas', 'ctx' => ['curso' => '', 'avaliacao' => $avaliacao->codigo], 'planoItem' => 'Correlação entre nota total e métricas'])</span>
         </div>
         <p class="text-sm text-slate-500 mb-4">Coeficiente de Pearson entre o percentual de acerto e cada métrica (ex.: nota de redação). Próximo de 1 ou -1 = correlação forte.</p>
         @if (empty($correlacaoMetricas))

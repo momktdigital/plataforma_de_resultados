@@ -15,6 +15,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -68,6 +69,7 @@ class PlanoAcaoService
                     'previstos' => $ind['previstos'] ?? null,
                     'fizeram' => $ind['fizeram'] ?? null,
                     'mistura' => (bool) ($ind['mistura'] ?? false),
+                    'comparar' => $origem['comparar'] ?? null,
                 ],
                 // A foto dos indicadores: a linha de base do plano. Não muda depois (o painel muda; o plano lembra
                 // de onde partiu).
@@ -282,6 +284,74 @@ class PlanoAcaoService
         AtividadeLogger::registrar('plano_acao.cancelado', 'PlanoAcao', $plano->id, ['curso' => $plano->curso]);
 
         return $plano;
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------
+    // Só o administrador: reverter para rascunho ou excluir de vez
+    // ---------------------------------------------------------------------------------------------------------------
+
+    /**
+     * Devolve um plano publicado (em execução, concluído ou cancelado) ao estado de rascunho, para o coordenador corrigir e
+     * publicar de novo. O histórico (log) e as evidências ficam; o coordenador é avisado. O motivo é obrigatório.
+     */
+    public function reverterParaRascunho(PlanoAcao $plano, Admin $admin, string $motivo): PlanoAcao
+    {
+        $this->exigirAdministrador($admin);
+        $this->exigirEstado($plano, [PlanoAcao::EM_EXECUCAO, PlanoAcao::CONCLUIDO, PlanoAcao::CANCELADO], 'Este plano já é um rascunho.');
+        $motivo = $this->motivoDoAdministrador($motivo, 'da reversão');
+        $anterior = $plano->status;
+
+        DB::transaction(function () use ($plano, $admin, $motivo, $anterior) {
+            $plano->forceFill(['status' => PlanoAcao::RASCUNHO, 'enviado_em' => null, 'encerrado_em' => null, 'conclusao' => null])->save();
+            $this->registrar($plano, $admin, PlanoAcaoEvento::REVERTIDO, $motivo, ['de' => $anterior]);
+        });
+
+        AtividadeLogger::registrar('plano_acao.revertido', 'PlanoAcao', $plano->id, ['curso' => $plano->curso, 'de' => $anterior, 'motivo' => $motivo]);
+        $this->avisar($plano, 'plano', "Plano devolvido para rascunho: {$plano->origem_rotulo}", Str::limit($motivo, 280), "plano:{$plano->id}:revertido:".now()->timestamp);
+
+        return $plano;
+    }
+
+    /**
+     * Apaga o plano de vez: ações, histórico, evidências (inclusive os arquivos do disco) e avisos. Não tem volta; por isso o motivo
+     * é obrigatório e a auditoria guarda uma foto do que existia (só rótulos e contagens, nunca o texto do plano).
+     */
+    public function excluirDefinitivamente(PlanoAcao $plano, Admin $admin, string $motivo): void
+    {
+        $this->exigirAdministrador($admin);
+        $motivo = $this->motivoDoAdministrador($motivo, 'da exclusão');
+
+        $foto = [
+            'curso' => $plano->curso, 'origem' => $plano->origem_rotulo, 'periodo_letivo' => $plano->periodo_letivo, 'status' => $plano->status,
+            'autor' => $plano->autor?->username, 'acoes' => $plano->acoes()->count(), 'eventos' => $plano->eventos()->count(), 'motivo' => $motivo,
+        ];
+
+        DB::transaction(function () use ($plano) {
+            Notificacao::where('chave', 'like', "plano:{$plano->id}:%")->delete();
+            PlanoAcaoAnexo::where('plano_id', $plano->id)->delete();
+            $plano->delete();
+        });
+
+        // O disco só depois do banco: se a transação falhar, os arquivos continuam onde estão.
+        Storage::disk(PlanoAcaoAnexo::DISCO)->deleteDirectory(PlanoAcaoAnexo::PASTA.'/'.$plano->id);
+        AtividadeLogger::registrar('plano_acao.excluido_pelo_administrador', 'PlanoAcao', $plano->id, $foto);
+    }
+
+    private function exigirAdministrador(Admin $admin): void
+    {
+        if (! $admin->ehAdministrador()) {
+            throw new \DomainException('Só o administrador pode fazer isso.');
+        }
+    }
+
+    private function motivoDoAdministrador(string $motivo, string $de): string
+    {
+        $motivo = trim($motivo);
+        if (mb_strlen($motivo) < 10) {
+            throw ValidationException::withMessages(['motivo' => ["Explique o motivo {$de} (mínimo de 10 caracteres)."]]);
+        }
+
+        return $motivo;
     }
 
     /**

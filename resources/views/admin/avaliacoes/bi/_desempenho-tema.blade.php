@@ -3,6 +3,7 @@
         <div class="flex items-center gap-2 mb-4">
             <h2 class="font-semibold">Desempenho por tema</h2>
             @include('_explicacao', ['explicacao' => $explicacoes['desempenho_tema'] ?? null])
+            <span class="ml-auto">@include('plano._botao', ['visual' => 'tema', 'titulo' => 'Desempenho por tema', 'ctx' => ['curso' => '', 'avaliacao' => $avaliacao->codigo], 'planoItens' => collect($desempenhoPorTema)->sortBy('percentual')->take(15)->map(fn ($t) => ['rotulo' => $t['tema'], 'valor' => $t['percentual'].'%'])->values()->all()])</span>
         </div>
         @if (empty($desempenhoPorTema))
             <p class="text-sm text-slate-500">Sem dados suficientes.</p>

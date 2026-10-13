@@ -18,6 +18,7 @@ use App\Services\PlanoAcaoEmailService;
 use App\Services\PlanoAcaoLembreteService;
 use App\Services\Portal\SmtpEmailSender;
 use App\Services\PlanoAcaoResultadoService;
+use App\Services\PlanoAcaoService;
 use App\Services\ResumoResultadoService;
 use App\Support\PlanoAcaoChecagem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -185,6 +186,43 @@ class PlanoAcaoTest extends TestCase
         $this->assertStringContainsString('visual=area', $bi);
         $this->assertStringContainsString('visual=bloom', $bi);
         $this->assertStringContainsString('avaliacao='.$d1->codigo, $bi);
+    }
+
+    public function test_dashboard_da_avaliacao_tem_o_icone_nos_demais_visuais(): void
+    {
+        $d1 = $this->avaliacao('D1', '2026-03-10');
+        $this->avaliacao('D2', '2026-09-10', [9, 9, 8, 8, 7, 6]);
+
+        $bi = $this->actingAs($this->coordenador(), 'admin')->get("/avaliacoes/{$d1->codigo}/bi")->assertOk()->getContent();
+        preg_match_all('/visual=([a-z_]+)/', html_entity_decode($bi), $m);
+        $visuais = array_values(array_unique($m[1]));
+
+        // além de área e Bloom, os visuais "sem equivalente" no painel usam o visual genérico do dashboard, com o nome dele como item
+        foreach (['area', 'bloom', 'tema', 'evolucao', 'proficiencia', 'dashboard'] as $esperado) {
+            $this->assertContains($esperado, $visuais, "visual {$esperado} no Dashboard da avaliação: ".implode(',', $visuais));
+        }
+        $this->assertMatchesRegularExpression('/visual=dashboard[^"]*item=/', html_entity_decode($bi));
+        $this->assertStringContainsString('avaliacao='.$d1->codigo, $bi);
+        // só o coordenador vê o ícone: o administrador não
+        $this->actingAs($this->admin(), 'admin')->get("/avaliacoes/{$d1->codigo}/bi")->assertOk()->assertDontSee('visual=dashboard', false);
+    }
+
+    public function test_plano_sobre_visual_do_dashboard_usa_os_numeros_da_propria_avaliacao(): void
+    {
+        $d1 = $this->avaliacao('D1', '2026-03-10');
+        $coordenador = $this->coordenador();
+
+        $origem = app(\App\Services\PlanoAcaoOrigemService::class)->montar($coordenador, ['visual' => 'dashboard', 'item' => 'Mapa de qualidade dos itens', 'avaliacao' => $d1->codigo]);
+
+        $this->assertSame('dashboard', $origem['visual']);
+        $this->assertSame('Visual do Dashboard da avaliação · Mapa de qualidade dos itens', $origem['rotulo']);
+        $this->assertSame($d1->codigo, $origem['avaliacao_codigo']);
+        $this->assertStringContainsString('Mapa de qualidade dos itens · Avaliação D1', $origem['sugestoes']['recorte']);
+        $this->assertContains('Média de acerto', array_column($origem['linhas'], 'rotulo')); // os números são os da avaliação, recalculados
+        $this->assertSame([$d1->codigo], array_column($origem['avaliacoes'], 'codigo'));
+
+        $this->actingAs($coordenador, 'admin')->get('/painel/planos/novo?visual=dashboard&item='.urlencode('Mapa de qualidade dos itens')."&avaliacao={$d1->codigo}")
+            ->assertOk()->assertSee('Mapa de qualidade dos itens');
     }
 
     public function test_plano_iniciado_no_dashboard_da_avaliacao_assume_o_periodo_e_a_categoria_dela(): void
@@ -1188,6 +1226,117 @@ class PlanoAcaoTest extends TestCase
         $this->assertCount(1, $falso->enviados);
         $this->assertSame('coord@example.test', $falso->enviados[0][0]);
         $this->assertStringContainsString('Qual a turma-alvo da primeira ação?', $falso->enviados[0][2]);
+    }
+
+    // ---- só o administrador: reverter para rascunho e excluir de vez ----
+
+    public function test_administrador_reverte_o_plano_para_rascunho_e_o_coordenador_e_avisado(): void
+    {
+        $coordenador = $this->coordenador();
+        $plano = $this->enviado($coordenador);
+        Notificacao::query()->delete();
+
+        $this->actingAs($this->admin(), 'admin')->get("/colaboracao/planos/{$plano->id}")->assertOk()->assertSee('Reverter para rascunho')->assertSee('Excluir definitivamente');
+
+        // motivo obrigatório
+        $this->post("/colaboracao/planos/{$plano->id}/reverter", ['motivo' => 'curto'])->assertSessionHasErrors('motivo');
+        $this->assertSame(PlanoAcao::EM_EXECUCAO, $plano->fresh()->status);
+
+        $this->post("/colaboracao/planos/{$plano->id}/reverter", ['motivo' => 'Faltou a meta de proficiência do curso.'])->assertSessionHasNoErrors()->assertRedirect(route('colaborador.planos.index'));
+
+        $plano->refresh();
+        $this->assertSame(PlanoAcao::RASCUNHO, $plano->status);
+        $this->assertNull($plano->enviado_em);
+        $evento = $plano->eventos()->latest('id')->first();
+        $this->assertSame(PlanoAcaoEvento::REVERTIDO, $evento->tipo);
+        $this->assertSame('Faltou a meta de proficiência do curso.', $evento->texto);
+        $this->assertDatabaseHas('atividades', ['acao' => 'plano_acao.revertido']);
+        $this->assertSame('Plano devolvido para rascunho: '.$plano->origem_rotulo, Notificacao::where('admin_id', $coordenador->id)->first()->titulo);
+
+        // volta a ser privado do coordenador (some para quem acompanha) e ele pode editar e publicar de novo
+        $this->get("/colaboracao/planos/{$plano->id}")->assertNotFound();
+        $this->actingAs($coordenador, 'admin')->get("/painel/planos/{$plano->id}/editar")->assertOk();
+        $this->put("/painel/planos/{$plano->id}", [...$this->dados(), 'acao' => 'publicar'])->assertSessionHasNoErrors();
+        $this->assertSame(PlanoAcao::EM_EXECUCAO, $plano->fresh()->status);
+        // e não há o que reverter num rascunho
+        $this->assertSame(2, $plano->eventos()->where('tipo', PlanoAcaoEvento::PUBLICADO)->count());
+    }
+
+    public function test_administrador_reverte_plano_concluido_e_cancelado(): void
+    {
+        $this->avaliacao('D1', '2026-03-10');
+        $coordenador = $this->coordenador();
+        $cancelado = $this->criar($coordenador, [], 'publicar');
+        $this->post("/painel/planos/{$cancelado->id}/cancelar", ['motivo' => 'Mudança de foco do curso.']);
+        $this->assertSame(PlanoAcao::CANCELADO, $cancelado->fresh()->status);
+
+        $this->actingAs($this->admin(), 'admin')->post("/colaboracao/planos/{$cancelado->id}/reverter", ['motivo' => 'Cancelado por engano pelo coordenador.'])->assertSessionHasNoErrors();
+
+        $this->assertSame(PlanoAcao::RASCUNHO, $cancelado->fresh()->status);
+        $this->assertNull($cancelado->fresh()->encerrado_em);
+    }
+
+    public function test_administrador_exclui_o_plano_de_vez_com_acoes_historico_e_arquivos(): void
+    {
+        $coordenador = $this->coordenador();
+        [$plano] = [$this->enviado($coordenador)];
+        $acao = $plano->acoes->first();
+        $this->put("/painel/planos/{$plano->id}/acoes/{$acao->id}", [
+            'status' => 'concluida', 'nota' => 'Oficina realizada com as quatro turmas.',
+            'arquivo' => UploadedFile::fake()->create('lista.pdf', 50, 'application/pdf'),
+        ])->assertSessionHasNoErrors();
+        $arquivo = $plano->anexos()->firstOrFail();
+        Storage::disk('local')->assertExists($arquivo->caminho);
+        $this->assertGreaterThan(0, Notificacao::where('chave', 'like', "plano:{$plano->id}:%")->count() + 1);
+        $outro = $this->enviado($coordenador);
+
+        $this->actingAs($this->admin(), 'admin');
+        $this->delete("/colaboracao/planos/{$plano->id}", ['motivo' => 'x'])->assertSessionHasErrors('motivo');
+        $this->assertNotNull(PlanoAcao::find($plano->id));
+
+        $this->delete("/colaboracao/planos/{$plano->id}", ['motivo' => 'Plano de teste criado por engano.'])->assertSessionHasNoErrors()->assertRedirect(route('colaborador.planos.index'));
+
+        $this->assertNull(PlanoAcao::find($plano->id));
+        $this->assertSame(0, PlanoAcaoAcao::where('plano_id', $plano->id)->count());
+        $this->assertSame(0, PlanoAcaoEvento::where('plano_id', $plano->id)->count());
+        $this->assertSame(0, \App\Models\PlanoAcaoAnexo::where('plano_id', $plano->id)->count());
+        Storage::disk('local')->assertMissing($arquivo->caminho);
+        // o outro plano não é tocado
+        $this->assertNotNull(PlanoAcao::find($outro->id));
+        // auditoria: motivo e contagens, nunca o texto do plano
+        $log = \App\Models\Atividade::where('acao', 'plano_acao.excluido_pelo_administrador')->firstOrFail();
+        $this->assertStringContainsString('Plano de teste criado por engano.', json_encode($log->detalhes ?? $log->getAttributes()));
+        $this->assertStringNotContainsString('Poucos casos clínicos', json_encode($log->getAttributes()));
+    }
+
+    public function test_so_o_administrador_reverte_ou_exclui_plano(): void
+    {
+        $coordenador = $this->coordenador();
+        $plano = $this->enviado($coordenador);
+
+        // colaborador: 403
+        $this->actingAs($this->colaborador(), 'admin');
+        $this->post("/colaboracao/planos/{$plano->id}/reverter", ['motivo' => 'Quero devolver este plano.'])->assertForbidden();
+        $this->delete("/colaboracao/planos/{$plano->id}", ['motivo' => 'Quero apagar este plano.'])->assertForbidden();
+        $this->get("/colaboracao/planos/{$plano->id}")->assertOk()->assertDontSee('Ações do administrador');
+
+        // coordenador: fora da área (nem a rota nem o serviço)
+        $this->actingAs($coordenador, 'admin');
+        $this->delete("/colaboracao/planos/{$plano->id}", ['motivo' => 'Quero apagar este plano.'])->assertForbidden();
+        $this->post("/painel/planos/{$plano->id}/reverter", ['motivo' => 'Quero devolver este plano.'])->assertNotFound();
+        $this->expectException(\DomainException::class);
+        app(PlanoAcaoService::class)->excluirDefinitivamente($plano, $coordenador, 'Quero apagar este plano.');
+    }
+
+    public function test_nao_se_reverte_nem_se_exclui_rascunho_pela_tela_do_colaborador(): void
+    {
+        $this->avaliacao('D1', '2026-03-10');
+        $rascunho = $this->criar($this->coordenador());
+
+        $this->actingAs($this->admin(), 'admin');
+        $this->post("/colaboracao/planos/{$rascunho->id}/reverter", ['motivo' => 'Quero devolver este plano.'])->assertNotFound();
+        $this->delete("/colaboracao/planos/{$rascunho->id}", ['motivo' => 'Quero apagar este plano.'])->assertNotFound();
+        $this->assertNotNull(PlanoAcao::find($rascunho->id));
     }
 
     // ---- resultado, lembretes, menu ----

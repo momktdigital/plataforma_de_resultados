@@ -3,6 +3,7 @@
         <div class="flex items-center gap-2 mb-1">
             <h2 class="font-semibold">Dispersão TRI x taxa de acerto observada</h2>
             @include('_explicacao', ['explicacao' => $explicacoes['dispersao_tri'] ?? null])
+            <span class="ml-auto">@include('plano._botao', ['visual' => 'dashboard', 'titulo' => 'Dispersão TRI x taxa de acerto', 'ctx' => ['curso' => '', 'avaliacao' => $avaliacao->codigo], 'planoItem' => 'Dispersão TRI x taxa de acerto'])</span>
         </div>
         <p class="text-sm text-slate-500 mb-4">Cada ponto é uma questão — eixo X: dificuldade TRI cadastrada, eixo Y: % de acerto observado.</p>
         @if (empty($dispersaoTri))

@@ -5,7 +5,10 @@
 
 @if ($temPerfil || $temEquidade)
         <div class="mb-6">
-        <h2 class="text-lg font-bold mb-1">Análise demográfica</h2>
+        <div class="flex items-center gap-2 mb-1">
+            <h2 class="text-lg font-bold">Análise demográfica</h2>
+            <span class="ml-auto">@include('plano._botao', ['visual' => 'dashboard', 'titulo' => 'Análise demográfica', 'ctx' => ['curso' => '', 'avaliacao' => $avaliacao->codigo], 'planoItem' => 'Análise demográfica'])</span>
+        </div>
         <p class="text-sm text-slate-500 mb-4">
             Quem fez esta avaliação e como cada recorte se saiu. O perfil descreve a composição do grupo;
             a equidade logo abaixo mostra o desempenho de cada um desses mesmos recortes — inclusive a

@@ -3,6 +3,7 @@
         <div class="flex items-center gap-2 mb-1">
             <h2 class="font-semibold">Análise de alternativas por questão <span id="alternativas-ordenacao-label" class="font-normal text-slate-500 text-sm">(ordenado por % de acerto)</span></h2>
             @include('_explicacao', ['explicacao' => $explicacoes['analise_alternativas'] ?? null])
+            <span class="ml-auto">@include('plano._botao', ['visual' => 'dashboard', 'titulo' => 'Análise de alternativas por questão', 'ctx' => ['curso' => '', 'avaliacao' => $avaliacao->codigo], 'planoItem' => 'Análise de alternativas por questão'])</span>
         </div>
         @if (empty($analiseAlternativas))
             <p class="text-sm text-slate-500">Sem dados suficientes.</p>

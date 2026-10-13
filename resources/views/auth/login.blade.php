@@ -31,19 +31,7 @@
             </div>
         @endif
 
-        {{-- Administrador entra com usuário e senha; coordenador, reitor e colaborador, com um código enviado ao e-mail — ou, se tiverem senha, também com ela. --}}
-        @php $abaCoordenador = in_array($modo, ['codigo', 'coordenador'], true); @endphp
-        <div class="grid grid-cols-2 gap-1 p-1 mb-6 bg-slate-900 rounded-xl border border-slate-700" role="tablist" aria-label="Tipo de acesso">
-            <a href="{{ route('login') }}" role="tab" aria-selected="{{ $modo === 'senha' ? 'true' : 'false' }}"
-               class="text-center text-sm font-semibold py-2 rounded-lg transition-colors {{ $modo === 'senha' ? 'bg-primary text-white' : 'text-slate-400 hover:text-slate-200' }}">
-                Administrador
-            </a>
-            <a href="{{ route('login', ['modo' => 'codigo']) }}" role="tab" aria-selected="{{ $abaCoordenador ? 'true' : 'false' }}"
-               class="text-center text-sm font-semibold py-2 rounded-lg transition-colors {{ $abaCoordenador ? 'bg-primary text-white' : 'text-slate-400 hover:text-slate-200' }}">
-                Coordenação / Reitoria
-            </a>
-        </div>
-
+        {{-- Uma tela só: o padrão é o código enviado ao e-mail (coordenação, reitoria, colaboração); quem entra com senha (o administrador, por exemplo) usa o botão logo abaixo. --}}
         @if ($modo === 'codigo')
             <form method="POST" action="{{ route('login.codigo.solicitar') }}" class="space-y-6">
                 @csrf
@@ -72,11 +60,11 @@
                 <span class="flex-1 h-px bg-slate-700"></span>
             </div>
 
-            <a href="{{ route('login', ['modo' => 'coordenador']) }}"
+            <a href="{{ route('login', ['modo' => 'senha']) }}"
                class="w-full flex justify-center items-center py-3 px-4 border border-slate-600 rounded-xl text-sm font-semibold text-slate-200 bg-slate-900 hover:bg-slate-700 hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-primary transition-all">
                 <i class="ph-bold ph-key mr-2 text-lg"></i> Entrar com senha
             </a>
-            <p class="text-xs text-slate-400 mt-2 text-center">Para quem tem senha cadastrada. Você vai direto para o seu painel.</p>
+            <p class="text-xs text-slate-400 mt-2 text-center">Para quem tem senha cadastrada (o administrador entra sempre com senha).</p>
         @else
         <form method="POST" action="{{ route('login') }}" class="space-y-6">
             @csrf
@@ -88,7 +76,7 @@
                     </div>
                     <input type="text" id="username" name="username" required autofocus value="{{ old('username') }}" autocomplete="username"
                            class="block w-full pl-10 pr-3 py-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                           placeholder="{{ $modo === 'coordenador' ? 'seu usuário' : 'admin' }}">
+                           placeholder="seu usuário">
                 </div>
             </div>
 
@@ -106,23 +94,21 @@
 
             <button type="submit"
                     class="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-md text-sm font-bold text-white bg-primary hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-primary transition-all">
-                <i class="ph-bold ph-sign-in mr-2 text-lg"></i> {{ $modo === 'coordenador' ? 'Entrar no meu painel' : 'Entrar no Sistema' }}
+                <i class="ph-bold ph-sign-in mr-2 text-lg"></i> Entrar com senha
             </button>
         </form>
 
-        @if ($modo === 'coordenador')
-            <div class="flex items-center gap-3 my-5" aria-hidden="true">
-                <span class="flex-1 h-px bg-slate-700"></span>
-                <span class="text-xs uppercase tracking-wider text-slate-400">ou</span>
-                <span class="flex-1 h-px bg-slate-700"></span>
-            </div>
+        <div class="flex items-center gap-3 my-5" aria-hidden="true">
+            <span class="flex-1 h-px bg-slate-700"></span>
+            <span class="text-xs uppercase tracking-wider text-slate-400">ou</span>
+            <span class="flex-1 h-px bg-slate-700"></span>
+        </div>
 
-            <a href="{{ route('login', ['modo' => 'codigo']) }}"
-               class="w-full flex justify-center items-center py-3 px-4 border border-slate-600 rounded-xl text-sm font-semibold text-slate-200 bg-slate-900 hover:bg-slate-700 hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-primary transition-all">
-                <i class="ph-bold ph-envelope-simple mr-2 text-lg"></i> Receber código por e-mail
-            </a>
-            <p class="text-xs text-slate-400 mt-2 text-center">Não tem senha? Entre com um código enviado ao seu e-mail.</p>
-        @endif
+        <a href="{{ route('login', ['modo' => 'codigo']) }}"
+           class="w-full flex justify-center items-center py-3 px-4 border border-slate-600 rounded-xl text-sm font-semibold text-slate-200 bg-slate-900 hover:bg-slate-700 hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-primary transition-all">
+            <i class="ph-bold ph-envelope-simple mr-2 text-lg"></i> Receber código por e-mail
+        </a>
+        <p class="text-xs text-slate-400 mt-2 text-center">Não tem senha? Entre com um código enviado ao seu e-mail.</p>
 
         <div class="text-center mt-4">
             <a href="{{ route('senha.esqueci') }}" class="text-sm text-slate-400 hover:text-slate-300 transition-colors">

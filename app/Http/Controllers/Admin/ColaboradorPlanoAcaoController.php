@@ -145,6 +145,38 @@ class ColaboradorPlanoAcaoController extends Controller
         return redirect()->route('colaborador.planos.show', $plano)->with('status', 'Comentário registrado. O coordenador foi avisado.');
     }
 
+    /** Administrador: devolve o plano publicado ao rascunho do coordenador. */
+    public function reverter(Request $request, PlanoAcao $plano): RedirectResponse
+    {
+        $this->doRevisor($plano);
+        $dados = $request->validate(['motivo' => ['required', 'string', 'min:10', 'max:1000']], $this->mensagensDoMotivo('da reversão'));
+
+        $this->servico->reverterParaRascunho($plano, Auth::guard('admin')->user(), $dados['motivo']);
+
+        return redirect()->route('colaborador.planos.index')->with('status', 'Plano devolvido ao coordenador como rascunho (ele foi avisado).');
+    }
+
+    /** Administrador: exclui o plano de vez (com o motivo, na auditoria). */
+    public function excluir(Request $request, PlanoAcao $plano): RedirectResponse
+    {
+        $this->doRevisor($plano);
+        $dados = $request->validate(['motivo' => ['required', 'string', 'min:10', 'max:1000']], $this->mensagensDoMotivo('da exclusão'));
+
+        $this->servico->excluirDefinitivamente($plano, Auth::guard('admin')->user(), $dados['motivo']);
+
+        return redirect()->route('colaborador.planos.index')->with('status', 'Plano excluído definitivamente.');
+    }
+
+    /** @return array<string, string> */
+    private function mensagensDoMotivo(string $de): array
+    {
+        return [
+            'motivo.required' => "Explique o motivo {$de} (mínimo de 10 caracteres).",
+            'motivo.min' => "Explique o motivo {$de} (mínimo de 10 caracteres).",
+            'motivo.max' => 'O motivo pode ter no máximo 1000 caracteres.',
+        ];
+    }
+
     public function anexo(PlanoAcao $plano, PlanoAcaoAnexo $anexo): StreamedResponse|RedirectResponse
     {
         $this->doRevisor($plano);

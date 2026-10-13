@@ -3,6 +3,7 @@
         <div class="flex items-center gap-2 mb-1">
             <h2 class="font-semibold">Dificuldade pedagógica: esperado x observado</h2>
             @include('_explicacao', ['explicacao' => $explicacoes['curva_dificuldade'] ?? null])
+            <span class="ml-auto">@include('plano._botao', ['visual' => 'dashboard', 'titulo' => 'Dificuldade pedagógica: esperado x observado', 'ctx' => ['curso' => '', 'avaliacao' => $avaliacao->codigo], 'planoItem' => 'Dificuldade pedagógica: esperado x observado'])</span>
         </div>
         <p class="text-sm text-slate-500 mb-4">% de acerto observado por nível de dificuldade cadastrado nas questões, comparado à meta definida na configuração da avaliação.</p>
         @if (empty($curvaDificuldade))
