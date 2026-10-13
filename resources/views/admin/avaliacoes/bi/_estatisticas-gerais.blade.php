@@ -4,7 +4,10 @@
         $kr20Bom = $kr20 !== null && $kr20 >= 0.80;
         $kr20Aceitavel = $kr20 !== null && $kr20 >= 0.70;
     @endphp
-    <h2 class="text-lg font-bold mb-3">Números da prova</h2>
+    <div class="flex items-center gap-2 mb-3">
+        <h2 class="text-lg font-bold">Números da prova</h2>
+        <span class="ml-auto">@include('plano._botao', ['visual' => 'avaliacao', 'titulo' => 'Números da prova', 'ctx' => ['curso' => '', 'avaliacao' => $avaliacao->codigo], 'planoItem' => (string) $avaliacao->codigo])</span>
+    </div>
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5 mb-6">
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Alunos presentes</p>

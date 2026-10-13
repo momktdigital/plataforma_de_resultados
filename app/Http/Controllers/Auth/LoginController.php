@@ -23,13 +23,9 @@ class LoginController extends Controller
 
     public function create(Request $request): View
     {
-        // Abas da tela: administrador (usuário e senha) e coordenador, que entra por código enviado ao
-        // e-mail (?modo=codigo, o padrão da aba) ou, se tiver senha, por usuário e senha (?modo=coordenador).
-        $modo = match ($request->query('modo')) {
-            'codigo' => 'codigo',
-            'coordenador' => 'coordenador',
-            default => 'senha',
-        };
+        // Uma tela só: o padrão é o código enviado ao e-mail (?modo=codigo); quem entra com usuário e senha (o administrador,
+        // por exemplo) usa o botão "Entrar com senha" (?modo=senha). `coordenador` é o nome antigo do modo com senha.
+        $modo = in_array($request->query('modo'), ['senha', 'coordenador'], true) ? 'senha' : 'codigo';
 
         return view('auth.login', ['modo' => $modo]);
     }

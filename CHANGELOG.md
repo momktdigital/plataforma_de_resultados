@@ -127,6 +127,13 @@ linha, veja `git log`.
   "alunos dentro do esperado" do painel e do comparativo do coordenador e para o plano de ação (`PeriodoCurso::metaDoPeriodo`). Prova sem
   meta por período continua com os 60% de sempre.
 
+## Login, comparação de semestres e plano de ação em mais visuais
+
+- **Login numa tela só**: sem abas; o padrão é o código por e-mail e, logo abaixo, o botão "Entrar com senha" (o administrador entra sempre com senha).
+- **Comparar semestres com as categorias em dropdown** (como no Desempenho): uma categoria por vez, nome e média no resumo.
+- **Plano de ação** também em "Alunos dentro do esperado, por período do curso" (comparação; traz os dois semestres) e nos demais visuais do
+  **Dashboard da avaliação** (tema, distribuição de acertos, comparação entre avaliações, mapa de itens, TRI, equidade...).
+
 ## Plano de ação do coordenador
 
 - **Ícone "iniciar plano de ação"** em cada visual e dado do painel do coordenador (cartões, gráficos de evolução, área, Bloom e
@@ -149,6 +156,8 @@ linha, veja `git log`.
 - **Sem aprovação**: o coordenador **publica** o plano e ele entra direto em execução (o conteúdo fica travado; para mudar, copia-se
   como rascunho). O colaborador (e o administrador) **só acompanha** — abas em execução/finalizados, ações atrasadas, quadro por curso —
   e pode comentar com o coordenador. **Configurações → Plano de ação**: os e-mails que recebem, ao publicar, todas as informações do plano.
+- **Administrador pode reverter o plano para rascunho ou excluí-lo de vez** (com motivo obrigatório e auditoria): reverter devolve o plano ao
+  coordenador, que corrige e publica de novo; excluir apaga ações, histórico e arquivos de evidência.
 - **Acompanhamento** do plano em execução: situação das ações, notas de andamento, prazo reprogramável com justificativa, encerramento
   com síntese, cancelamento com motivo e comparação com a avaliação seguinte (linha de base x meta). Lembretes diários
   (`planos:lembretes`) de prazo próximo, prazo vencido e plano parado. Histórico só de acrescentar e auditoria.
@@ -156,8 +165,6 @@ linha, veja `git log`.
 ## Perfil de reitor e painel da reitoria
 
 - Novo perfil **reitor** (`admins.role = rector`): só leitura, todos os cursos,
-- **Administrador pode reverter o plano para rascunho ou excluí-lo de vez** (com motivo obrigatório e auditoria): reverter devolve o plano ao
-  coordenador, que corrige e publica de novo; excluir apaga ações, histórico e arquivos de evidência.
   sem dado nominal de aluno. Entra por código no e-mail (como o coordenador) ou
   por senha. Cadastro na aba **Reitoria** de Usuários (a migration
   `allow_rector_role_on_admins_table` acrescenta `rector` ao ENUM legado de

@@ -69,6 +69,7 @@ class PlanoAcaoService
                     'previstos' => $ind['previstos'] ?? null,
                     'fizeram' => $ind['fizeram'] ?? null,
                     'mistura' => (bool) ($ind['mistura'] ?? false),
+                    'comparar' => $origem['comparar'] ?? null,
                 ],
                 // A foto dos indicadores: a linha de base do plano. Não muda depois (o painel muda; o plano lembra
                 // de onde partiu).
@@ -285,7 +286,6 @@ class PlanoAcaoService
         return $plano;
     }
 
-    /**
     // ---------------------------------------------------------------------------------------------------------------
     // Só o administrador: reverter para rascunho ou excluir de vez
     // ---------------------------------------------------------------------------------------------------------------
@@ -354,6 +354,7 @@ class PlanoAcaoService
         return $motivo;
     }
 
+    /**
      * Dessas avaliações, as que o usuário pode abrir no Dashboard (que mostra dados de alunos): o coordenador, as dos cursos
      * dele; o administrador e o colaborador, todas.
      *

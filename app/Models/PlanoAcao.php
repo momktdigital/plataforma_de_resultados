@@ -51,9 +51,11 @@ class PlanoAcao extends Model
         'bloom' => ['rotulo' => 'Desempenho por nível de Bloom', 'icone' => 'ph-brain'],
         'tema' => ['rotulo' => 'Desempenho por tema', 'icone' => 'ph-bookmarks'],
         'periodo_curso' => ['rotulo' => 'Desempenho por período do curso', 'icone' => 'ph-graduation-cap'],
+        'esperado_periodo' => ['rotulo' => 'Alunos dentro do esperado, por período do curso', 'icone' => 'ph-student'],
         'curso' => ['rotulo' => 'Comparativo entre cursos', 'icone' => 'ph-books'],
         'avaliacao' => ['rotulo' => 'Avaliação', 'icone' => 'ph-exam'],
         'destaque' => ['rotulo' => 'Destaque do painel', 'icone' => 'ph-lightbulb'],
+        'dashboard' => ['rotulo' => 'Visual do Dashboard da avaliação', 'icone' => 'ph-chart-bar'],
     ];
 
     /**

@@ -124,12 +124,28 @@
         </section>
     @endif
 
-    {{-- Uma seção por categoria --}}
+    {{-- Uma categoria por vez: cada uma é um dropdown (como na tela de desempenho). Abre sozinha quando só há uma ou quando o filtro de categoria está ligado. --}}
+    <div class="space-y-4 mb-10">
     @forelse ($comparacao['categorias'] as $i => $cat)
-        <section class="mb-10" aria-labelledby="cat-{{ $i }}">
-            <h2 id="cat-{{ $i }}" class="text-lg font-bold mb-3 flex items-center gap-2">
-                <i class="ph-bold ph-folder-open text-primary" aria-hidden="true"></i> {{ $cat['nome'] }}
-            </h2>
+        @php $abrir = $filtros['categoria'] !== '' || count($comparacao['categorias']) === 1; @endphp
+        <details class="categoria-comparacao group bg-white border border-slate-200 rounded-xl shadow-sm" {{ $abrir ? 'open' : '' }}>
+            <summary class="cursor-pointer list-none [&::-webkit-details-marker]:hidden px-5 py-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-xl">
+                <span class="text-lg font-bold flex items-center gap-2 min-w-0">
+                    <i class="ph-bold ph-folder-open text-primary shrink-0" aria-hidden="true"></i>
+                    <span class="truncate">{{ $cat['nome'] }}</span>
+                </span>
+                <span class="flex items-center gap-4 text-sm text-slate-600">
+                    @if ($cat['emAmbos'])
+                        <span>Média <strong class="{{ CorDesempenho::classeTextoLegivel($cat['media']['atual']) }}">{{ $fmt($cat['media']['atual']) }}{{ $cat['media']['atual'] !== null ? '%' : '' }}</strong></span>
+                        <span class="hidden sm:inline">@include('coordenador._variacao', ['delta' => $cat['media']['delta']])</span>
+                    @else
+                        <span class="text-slate-500">só em {{ $cat['so'] }}</span>
+                    @endif
+                    <i class="ph-bold ph-caret-down text-slate-500 transition-transform group-open:rotate-180" aria-hidden="true"></i>
+                </span>
+            </summary>
+
+            <div class="px-5 pb-5 border-t border-slate-100 pt-4">
 
             @if (! $cat['emAmbos'])
                 <div class="bg-slate-50 border border-slate-200 text-slate-600 rounded-xl p-4 text-sm">
@@ -213,7 +229,16 @@
                 {{-- Alunos dentro do esperado, por período do curso (olha para o período, não para o aluno) --}}
                 @php $ap = $cat['alunosPorPeriodo']; @endphp
                 <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-                    <h3 class="font-semibold mb-1">Alunos dentro do esperado, por período do curso</h3>
+                    <div class="flex items-start justify-between gap-3">
+                        <h3 class="font-semibold mb-1">Alunos dentro do esperado, por período do curso</h3>
+                        @if ($ap !== null && ! empty($ap['periodos']))
+                            @include('plano._botao', [
+                                'visual' => 'esperado_periodo', 'titulo' => 'Alunos dentro do esperado, por período do curso ('.$atual.' contra '.$referencia.')',
+                                'ctx' => [...$ctxPlano, 'comparar' => $referencia],
+                                'planoItens' => collect($ap['periodos'])->filter(fn ($p) => $p['atual'] !== null)->map(fn ($p) => ['rotulo' => $p['rotulo'], 'valor' => $fmt($p['atual']['pct'], 0).'%'])->values()->all(),
+                            ])
+                        @endif
+                    </div>
                     @if ($ap === null || empty($ap['periodos']))
                         <p class="text-sm text-slate-500">Nenhum aluno com nota nesta categoria para comparar por período do curso.</p>
                     @else
@@ -290,11 +315,13 @@
                     @endif
                 </div>
             @endif
-        </section>
+            </div>
+        </details>
     @empty
         <div class="bg-slate-50 border border-slate-200 text-slate-600 rounded-xl p-6 text-sm">
             Nenhuma categoria com avaliações nestes períodos.
         </div>
     @endforelse
+    </div>
 @endif
 @endsection

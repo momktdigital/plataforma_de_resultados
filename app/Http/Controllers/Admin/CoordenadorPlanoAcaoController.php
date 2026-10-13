@@ -236,6 +236,7 @@ class CoordenadorPlanoAcaoController extends PlanoAcaoPainelController
             'periodo_letivo' => $plano->periodo_letivo,
             'categoria' => $plano->categoria_id,
             'avaliacao' => $plano->avaliacao_codigo,
+            'comparar' => $plano->contexto['comparar'] ?? null,
             'visual' => $plano->origem_visual,
             'item' => $plano->origem_item,
         ], fn ($v) => $v !== null));

@@ -188,6 +188,43 @@ class PlanoAcaoTest extends TestCase
         $this->assertStringContainsString('avaliacao='.$d1->codigo, $bi);
     }
 
+    public function test_dashboard_da_avaliacao_tem_o_icone_nos_demais_visuais(): void
+    {
+        $d1 = $this->avaliacao('D1', '2026-03-10');
+        $this->avaliacao('D2', '2026-09-10', [9, 9, 8, 8, 7, 6]);
+
+        $bi = $this->actingAs($this->coordenador(), 'admin')->get("/avaliacoes/{$d1->codigo}/bi")->assertOk()->getContent();
+        preg_match_all('/visual=([a-z_]+)/', html_entity_decode($bi), $m);
+        $visuais = array_values(array_unique($m[1]));
+
+        // além de área e Bloom, os visuais "sem equivalente" no painel usam o visual genérico do dashboard, com o nome dele como item
+        foreach (['area', 'bloom', 'tema', 'evolucao', 'proficiencia', 'dashboard'] as $esperado) {
+            $this->assertContains($esperado, $visuais, "visual {$esperado} no Dashboard da avaliação: ".implode(',', $visuais));
+        }
+        $this->assertMatchesRegularExpression('/visual=dashboard[^"]*item=/', html_entity_decode($bi));
+        $this->assertStringContainsString('avaliacao='.$d1->codigo, $bi);
+        // só o coordenador vê o ícone: o administrador não
+        $this->actingAs($this->admin(), 'admin')->get("/avaliacoes/{$d1->codigo}/bi")->assertOk()->assertDontSee('visual=dashboard', false);
+    }
+
+    public function test_plano_sobre_visual_do_dashboard_usa_os_numeros_da_propria_avaliacao(): void
+    {
+        $d1 = $this->avaliacao('D1', '2026-03-10');
+        $coordenador = $this->coordenador();
+
+        $origem = app(\App\Services\PlanoAcaoOrigemService::class)->montar($coordenador, ['visual' => 'dashboard', 'item' => 'Mapa de qualidade dos itens', 'avaliacao' => $d1->codigo]);
+
+        $this->assertSame('dashboard', $origem['visual']);
+        $this->assertSame('Visual do Dashboard da avaliação · Mapa de qualidade dos itens', $origem['rotulo']);
+        $this->assertSame($d1->codigo, $origem['avaliacao_codigo']);
+        $this->assertStringContainsString('Mapa de qualidade dos itens · Avaliação D1', $origem['sugestoes']['recorte']);
+        $this->assertContains('Média de acerto', array_column($origem['linhas'], 'rotulo')); // os números são os da avaliação, recalculados
+        $this->assertSame([$d1->codigo], array_column($origem['avaliacoes'], 'codigo'));
+
+        $this->actingAs($coordenador, 'admin')->get('/painel/planos/novo?visual=dashboard&item='.urlencode('Mapa de qualidade dos itens')."&avaliacao={$d1->codigo}")
+            ->assertOk()->assertSee('Mapa de qualidade dos itens');
+    }
+
     public function test_plano_iniciado_no_dashboard_da_avaliacao_assume_o_periodo_e_a_categoria_dela(): void
     {
         $this->avaliacao('D1', '2026-03-10');
@@ -1191,43 +1228,6 @@ class PlanoAcaoTest extends TestCase
         $this->assertStringContainsString('Qual a turma-alvo da primeira ação?', $falso->enviados[0][2]);
     }
 
-    // ---- resultado, lembretes, menu ----
-
-    public function test_resultado_compara_a_linha_de_base_com_o_di_seguinte(): void
-    {
-        $this->avaliacao('D1', '2026-03-10'); // 2026/1 → proficiência 50%
-        $plano = $this->criar($this->coordenador());
-
-        $semProximo = app(PlanoAcaoResultadoService::class)->calcular($plano);
-        $this->assertNull($semProximo['proximo']);
-        $this->assertSame(50.0, $semProximo['base']['proficiencia']);
-
-        $this->avaliacao('D2', '2026-09-10', [9, 9, 8, 8, 7, 6]); // 2026/2, mesma categoria → proficiência 100%
-        $resultado = app(PlanoAcaoResultadoService::class)->calcular($plano);
-
-        $this->assertSame('2026/2', $resultado['proximo']['periodo_letivo']);
-        $this->assertSame(100.0, $resultado['proximo']['proficiencia']);
-        $this->assertSame(50.0, $resultado['proximo']['dProficiencia']);
-        $this->assertTrue($resultado['proximo']['metaProficiencia']); // meta de 70%
-    }
-
-    public function test_lembretes_avisam_prazo_proximo_vencido_e_nao_se_repetem(): void
-    {
-        [$plano, $coordenador] = $this->aprovado();
-        $acao = $plano->acoes->first();
-
-        $this->travel(29)->days(); // o prazo era hoje + 30
-        $this->assertSame(1, app(PlanoAcaoLembreteService::class)->gerar());
-        $this->assertSame('Ação com prazo próximo', Notificacao::where('admin_id', $coordenador->id)->where('tipo', 'plano_prazo')->first()->titulo);
-
-        // rodar de novo não cria outro, nem volta a "não lido" o que já foi lido
-        Notificacao::where('admin_id', $coordenador->id)->update(['lida_em' => now()]);
-        $this->assertSame(0, app(PlanoAcaoLembreteService::class)->gerar());
-        $this->assertNotNull(Notificacao::where('admin_id', $coordenador->id)->where('tipo', 'plano_prazo')->first()->lida_em);
-
-        $this->travel(5)->days();
-        Artisan::call('planos:lembretes');
-        $this->assertSame(1, Notificacao::where('admin_id', $coordenador->id)->where('titulo', 'Ação com prazo vencido')->count());
     // ---- só o administrador: reverter para rascunho e excluir de vez ----
 
     public function test_administrador_reverte_o_plano_para_rascunho_e_o_coordenador_e_avisado(): void
@@ -1339,6 +1339,43 @@ class PlanoAcaoTest extends TestCase
         $this->assertNotNull(PlanoAcao::find($rascunho->id));
     }
 
+    // ---- resultado, lembretes, menu ----
+
+    public function test_resultado_compara_a_linha_de_base_com_o_di_seguinte(): void
+    {
+        $this->avaliacao('D1', '2026-03-10'); // 2026/1 → proficiência 50%
+        $plano = $this->criar($this->coordenador());
+
+        $semProximo = app(PlanoAcaoResultadoService::class)->calcular($plano);
+        $this->assertNull($semProximo['proximo']);
+        $this->assertSame(50.0, $semProximo['base']['proficiencia']);
+
+        $this->avaliacao('D2', '2026-09-10', [9, 9, 8, 8, 7, 6]); // 2026/2, mesma categoria → proficiência 100%
+        $resultado = app(PlanoAcaoResultadoService::class)->calcular($plano);
+
+        $this->assertSame('2026/2', $resultado['proximo']['periodo_letivo']);
+        $this->assertSame(100.0, $resultado['proximo']['proficiencia']);
+        $this->assertSame(50.0, $resultado['proximo']['dProficiencia']);
+        $this->assertTrue($resultado['proximo']['metaProficiencia']); // meta de 70%
+    }
+
+    public function test_lembretes_avisam_prazo_proximo_vencido_e_nao_se_repetem(): void
+    {
+        [$plano, $coordenador] = $this->aprovado();
+        $acao = $plano->acoes->first();
+
+        $this->travel(29)->days(); // o prazo era hoje + 30
+        $this->assertSame(1, app(PlanoAcaoLembreteService::class)->gerar());
+        $this->assertSame('Ação com prazo próximo', Notificacao::where('admin_id', $coordenador->id)->where('tipo', 'plano_prazo')->first()->titulo);
+
+        // rodar de novo não cria outro, nem volta a "não lido" o que já foi lido
+        Notificacao::where('admin_id', $coordenador->id)->update(['lida_em' => now()]);
+        $this->assertSame(0, app(PlanoAcaoLembreteService::class)->gerar());
+        $this->assertNotNull(Notificacao::where('admin_id', $coordenador->id)->where('tipo', 'plano_prazo')->first()->lida_em);
+
+        $this->travel(5)->days();
+        Artisan::call('planos:lembretes');
+        $this->assertSame(1, Notificacao::where('admin_id', $coordenador->id)->where('titulo', 'Ação com prazo vencido')->count());
 
         // ação concluída não gera lembrete
         $acao->update(['status' => PlanoAcaoAcao::CONCLUIDA]);

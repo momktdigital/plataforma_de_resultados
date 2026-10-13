@@ -140,7 +140,7 @@ class ComparacaoSemestresService
      * @param  array<int, array{presentes: int, dentro: int}>  $referencia
      * @return array{periodos: array<int, array<string, mixed>>, subiram: int, estaveis: int, cairam: int}
      */
-    private function alunosPorPeriodo(array $atual, array $referencia): array
+    public function alunosPorPeriodo(array $atual, array $referencia): array
     {
         $resumo = fn (?array $p) => $p === null || $p['presentes'] === 0 ? null : [
             'presentes' => $p['presentes'],

@@ -4,6 +4,7 @@
             <div class="flex items-center gap-2 mb-4">
             <h2 class="font-semibold">Distribuição de acertos ({{ $dados['totalRespondentes'] }} respondente(s))</h2>
             @include('_explicacao', ['explicacao' => $explicacoes['histograma'] ?? null])
+            <span class="ml-auto">@include('plano._botao', ['visual' => 'proficiencia', 'titulo' => 'Distribuição de acertos', 'ctx' => ['curso' => '', 'avaliacao' => $avaliacao->codigo]])</span>
         </div>
             <canvas id="grafico-histograma" height="100"></canvas>
         </div>

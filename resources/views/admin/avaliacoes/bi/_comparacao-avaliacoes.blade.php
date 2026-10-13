@@ -9,6 +9,7 @@
         <div class="flex items-center gap-2 mb-4">
             <h2 class="font-semibold">Comparação entre avaliações</h2>
             @include('_explicacao', ['explicacao' => $explicacoes['comparacao_avaliacoes'] ?? null])
+            <span class="ml-auto">@include('plano._botao', ['visual' => 'evolucao', 'titulo' => 'Comparação entre avaliações', 'ctx' => ['curso' => '', 'avaliacao' => $avaliacao->codigo]])</span>
         </div>
 
         <form method="GET" action="{{ route('avaliacoes.bi', $avaliacao) }}" class="flex flex-wrap items-end gap-3 mb-5">

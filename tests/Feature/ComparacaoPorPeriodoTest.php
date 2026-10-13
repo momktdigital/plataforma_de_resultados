@@ -170,6 +170,74 @@ class ComparacaoPorPeriodoTest extends TestCase
             ->assertSee('<option value="4" selected', false);
     }
 
+    public function test_categorias_ficam_em_dropdowns_um_por_categoria(): void
+    {
+        $diagnosticos = $this->cenario();
+        $simulados = Categoria::create(['nome' => 'Simulados']);
+        $this->avaliacao('S1', '2026-03-11', $simulados->id, [null, null], [['2º', 5]]);
+        $this->avaliacao('S2', '2026-09-11', $simulados->id, [null, null], [['2º', 5]]);
+        $coordenador = $this->coordenador();
+
+        // Duas categorias, sem filtro: cada uma é um <details> FECHADO, com o nome e a média no resumo.
+        $html = $this->actingAs($coordenador, 'admin')->get('/painel/comparativo?periodo_letivo=2026/2&comparar=2026/1')->assertOk()->getContent();
+        $this->assertSame(2, substr_count($html, '<details class="categoria-comparacao'));
+        $this->assertStringNotContainsString('categoria-comparacao group bg-white border border-slate-200 rounded-xl shadow-sm" open', $html);
+        $this->assertMatchesRegularExpression('/<summary[^>]*>.*?Diagnósticos.*?Média.*?<\/summary>/s', $html);
+        $this->assertMatchesRegularExpression('/<summary[^>]*>.*?Simulados.*?<\/summary>/s', $html);
+        // o conteúdo da categoria continua na página (dentro do dropdown)
+        $this->assertStringContainsString('Alunos dentro do esperado, por período do curso', $html);
+
+        // Com o filtro de categoria ligado, a escolhida já vem aberta.
+        $html = $this->get('/painel/comparativo?periodo_letivo=2026/2&comparar=2026/1&categoria='.$diagnosticos->id)->assertOk()->getContent();
+        $this->assertSame(1, substr_count($html, '<details class="categoria-comparacao'));
+        $this->assertMatchesRegularExpression('/<details class="categoria-comparacao[^>]*\bopen\b/', $html);
+    }
+
+    public function test_quadro_dentro_do_esperado_por_periodo_tem_o_icone_do_plano_de_acao(): void
+    {
+        $this->cenario();
+        $html = $this->actingAs($this->coordenador(), 'admin')->get('/painel/comparativo?periodo_letivo=2026/2&comparar=2026/1')->assertOk()->getContent();
+
+        $this->assertStringContainsString('visual=esperado_periodo', $html);
+        $this->assertStringContainsString('comparar=2026%2F1', $html);
+        $this->assertStringContainsString('periodo_letivo=2026%2F2', $html);
+        // o menu oferece o visual inteiro e cada período do curso
+        $this->assertMatchesRegularExpression('/item=2%C2%BA(\+|%20)per%C3%ADodo/', $html);
+        $this->assertMatchesRegularExpression('/item=4%C2%BA(\+|%20)per%C3%ADodo/', $html);
+    }
+
+    public function test_plano_sobre_dentro_do_esperado_por_periodo_traz_os_dois_semestres_calculados_no_servidor(): void
+    {
+        $categoria = $this->cenario();
+        $coordenador = $this->coordenador();
+        $this->actingAs($coordenador, 'admin');
+        $params = ['visual' => 'esperado_periodo', 'periodo_letivo' => '2026/2', 'categoria' => $categoria->id, 'comparar' => '2026/1'];
+
+        $html = $this->get('/painel/planos/novo?'.http_build_query($params))->assertOk()->getContent();
+        $this->assertStringContainsString('Alunos dentro do esperado, por período do curso', $html);
+        // 2º período: 75% em 2026/2 contra 50% em 2026/1; 4º: 25% contra 75%
+        $this->assertStringContainsString('3 de 4 alunos; em 2026/1: 50%', $html);
+        $this->assertStringContainsString('1 de 4 alunos; em 2026/1: 75%', $html);
+        $this->assertStringContainsString('name="origem[comparar]" value="2026/1"', $html);
+
+        // o semestre de referência vem da URL, mas só vale se for OUTRO período com resultados do curso
+        $html = $this->get('/painel/planos/novo?'.http_build_query([...$params, 'comparar' => '2031/9']))->assertOk()->getContent();
+        $this->assertStringNotContainsString('origem[comparar]', $html);
+        $this->assertStringNotContainsString('em 2026/1', $html);
+
+        // item = um período do curso: o resultado fala só dele
+        $origem = app(\App\Services\PlanoAcaoOrigemService::class)->montar($coordenador, [...$params, 'item' => '4º período']);
+        $this->assertSame('4º período', $origem['item']);
+        $this->assertStringContainsString('4º período: 25%', $origem['sugestoes']['resultado']);
+        $this->assertTrue(collect($origem['linhas'])->firstWhere('rotulo', '4º período')['destaque']);
+
+        // grava o plano guardando o semestre de referência; e rebuscar a origem (edição) mantém a comparação
+        $plano = app(\App\Services\PlanoAcaoService::class)->criar($coordenador, $origem, []);
+        $this->assertSame('2026/1', $plano->contexto['comparar']);
+        $this->assertSame('esperado_periodo', $plano->origem_visual);
+        $this->get("/painel/planos/{$plano->id}/editar")->assertOk()->assertSee('em 2026/1', false);
+    }
+
     public function test_menu_do_coordenador_na_ordem_visao_geral_desempenho_avaliacoes_comparar_alunos(): void
     {
         $this->cenario();
