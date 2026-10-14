@@ -103,7 +103,7 @@ class PlanoAcaoTest extends TestCase
     private function dados(array $extra = []): array
     {
         return [
-            'meta_proficiencia' => '70',
+            'meta_esperado' => '70',
             'data_proxima_avaliacao' => now()->addDays(90)->toDateString(),
             'recorte' => '3º período, alunos abaixo de 60%',
             'resultado' => 'Baixo acerto em Clínica',
@@ -160,7 +160,7 @@ class PlanoAcaoTest extends TestCase
         $this->assertStringContainsString('visual=area', $html);
         $this->assertStringContainsString('visual=bloom', $html);
         $this->assertStringContainsString('visual=participacao', $html);
-        $this->assertStringContainsString('visual=proficiencia', $html);
+        $this->assertStringContainsString('visual=esperado', $html);
         $this->assertStringContainsString('visual=avaliacao', $html);
         $this->assertMatchesRegularExpression('/aria-label="Iniciar plano de ação: Desempenho por área/', $html);
 
@@ -180,7 +180,7 @@ class PlanoAcaoTest extends TestCase
         $comparativo = $this->actingAs($coordenador, 'admin')->get('/painel/comparativo?periodo_letivo=2026/2&comparar=2026/1')->assertOk()->getContent();
         $this->assertStringContainsString('visual=area', $comparativo);
         $this->assertStringContainsString('visual=periodo_curso', $comparativo);
-        $this->assertStringContainsString('visual=proficiencia', $comparativo);
+        $this->assertStringContainsString('visual=esperado', $comparativo);
 
         $bi = $this->get("/avaliacoes/{$d1->codigo}/bi")->assertOk()->getContent();
         $this->assertStringContainsString('visual=area', $bi);
@@ -198,7 +198,7 @@ class PlanoAcaoTest extends TestCase
         $visuais = array_values(array_unique($m[1]));
 
         // além de área e Bloom, os visuais "sem equivalente" no painel usam o visual genérico do dashboard, com o nome dele como item
-        foreach (['area', 'bloom', 'tema', 'evolucao', 'proficiencia', 'dashboard'] as $esperado) {
+        foreach (['area', 'bloom', 'tema', 'evolucao', 'esperado', 'dashboard'] as $esperado) {
             $this->assertContains($esperado, $visuais, "visual {$esperado} no Dashboard da avaliação: ".implode(',', $visuais));
         }
         $this->assertMatchesRegularExpression('/visual=dashboard[^"]*item=/', html_entity_decode($bi));
@@ -235,7 +235,7 @@ class PlanoAcaoTest extends TestCase
         $this->assertSame('2026/2', $origem['periodo_letivo']);
         $this->assertSame($this->categoria->id, $origem['categoria_id']);
         $this->assertSame($d2->codigo, $origem['avaliacao_codigo']);
-        $this->assertSame(100.0, $origem['indicadores']['proficiencia']);
+        $this->assertSame(100.0, $origem['indicadores']['esperado']);
     }
 
     public function test_reitor_olhando_o_curso_nao_ve_o_icone_nem_cria_plano(): void
@@ -264,14 +264,14 @@ class PlanoAcaoTest extends TestCase
         $this->assertSame('2026/1', $origem['periodo_letivo']);
         $this->assertSame($this->categoria->id, $origem['categoria_id']);
         $this->assertSame(100.0, $origem['indicadores']['participacao']);
-        $this->assertSame(50.0, $origem['indicadores']['proficiencia']);
+        $this->assertSame(50.0, $origem['indicadores']['esperado']);
         $this->assertSame(98.0, $origem['indicadores']['meta_participacao']);
         $this->assertSame('Desempenho por área · Clínica', $origem['rotulo']);
         // o dado do visual e as sugestões de texto
         $this->assertTrue(collect($origem['linhas'])->contains(fn ($l) => $l['rotulo'] === 'Clínica' && $l['destaque']));
         $this->assertStringContainsString('Clínica', $origem['sugestoes']['resultado']);
 
-        $resposta->assertSee('Participação atual')->assertSee('Meta de participação')->assertSee('Proficiência atual')->assertSee('Meta de proficiência', false);
+        $resposta->assertSee('Participação atual')->assertSee('Meta de participação')->assertSee('Alunos com desempenho esperado')->assertSee('Meta de alunos com desempenho esperado', false);
         $resposta->assertSee('MEDICINA');
         $this->assertNotNull($avaliacao);
     }
@@ -286,7 +286,7 @@ class PlanoAcaoTest extends TestCase
 
         // pediu o curso de outro coordenador: continua no dele
         $this->assertSame('MEDICINA', $origem['curso']);
-        $this->assertSame(50.0, $origem['indicadores']['proficiencia']);
+        $this->assertSame(50.0, $origem['indicadores']['esperado']);
     }
 
     public function test_os_numeros_vem_do_servidor_e_nao_do_navegador(): void
@@ -296,14 +296,14 @@ class PlanoAcaoTest extends TestCase
         $this->actingAs($this->coordenador(), 'admin')->post('/painel/planos', [
             ...$this->dados(),
             'acao' => 'salvar',
-            'participacao_atual' => '1', 'proficiencia_atual' => '99', 'meta_participacao' => '5', 'curso' => 'DIREITO', 'status' => 'aprovado',
+            'participacao_atual' => '1', 'esperado_atual' => '99', 'meta_participacao' => '5', 'curso' => 'DIREITO', 'status' => 'aprovado',
             'origem' => ['curso' => 'MEDICINA', 'periodo_letivo' => '2026/1', 'categoria' => $this->categoria->id, 'visual' => 'geral'],
         ]);
 
         $plano = PlanoAcao::firstOrFail();
         $this->assertSame('MEDICINA', $plano->curso);
         $this->assertSame(100.0, $plano->participacao_atual);
-        $this->assertSame(50.0, $plano->proficiencia_atual);
+        $this->assertSame(50.0, $plano->esperado_atual);
         $this->assertSame(98.0, $plano->meta_participacao);
         $this->assertSame(PlanoAcao::RASCUNHO, $plano->status);
     }
@@ -325,7 +325,7 @@ class PlanoAcaoTest extends TestCase
         $this->avaliacao('D1', '2026-03-10');
         $coordenador = $this->coordenador();
 
-        $plano = $this->criar($coordenador, ['recorte' => 'Só isto', 'causas' => [], 'acoes' => [], 'causa_raiz' => '', 'meta_proficiencia' => '']);
+        $plano = $this->criar($coordenador, ['recorte' => 'Só isto', 'causas' => [], 'acoes' => [], 'causa_raiz' => '', 'meta_esperado' => '']);
         $this->assertSame(PlanoAcao::RASCUNHO, $plano->status);
         $this->assertSame('Só isto', $plano->recorte);
         $this->assertSame(0, $plano->acoes()->count());
@@ -335,12 +335,12 @@ class PlanoAcaoTest extends TestCase
 
         $plano->refresh();
         $this->assertSame('Agora completo', $plano->recorte);
-        $this->assertSame(70.0, $plano->meta_proficiencia);
+        $this->assertSame(70.0, $plano->meta_esperado);
         $this->assertSame(['ensino' => 'Poucos casos clínicos nas aulas'], $plano->causas);
         $this->assertSame(18, $plano->pontuacao());
         $this->assertSame(1, $plano->acoes()->count());
         // a linha de base não muda ao editar
-        $this->assertSame(50.0, $plano->proficiencia_atual);
+        $this->assertSame(50.0, $plano->esperado_atual);
     }
 
     public function test_nenhuma_etapa_e_obrigatoria_enviar_incompleto_funciona_e_as_lacunas_so_informam(): void
@@ -598,7 +598,7 @@ class PlanoAcaoTest extends TestCase
         $this->assertNotSame($plano->id, $copia->id);
         $this->assertSame(PlanoAcao::RASCUNHO, $copia->status);
         $this->assertSame($plano->causa_raiz, $copia->causa_raiz);
-        $this->assertSame(50.0, $copia->proficiencia_atual); // recalculada, não herdada
+        $this->assertSame(50.0, $copia->esperado_atual); // recalculada, não herdada
         $nova = $copia->acoes()->first();
         $this->assertSame($acao->descricao, $nova->descricao);
         $this->assertNull($nova->prazo);
@@ -985,9 +985,9 @@ class PlanoAcaoTest extends TestCase
         $this->get("/colaboracao/planos/{$a->id}")->assertOk()->assertSee('Outros planos deste curso')->assertSee('Calendário de provas apertado');
     }
 
-    // ---- proficiência pela meta do período ----
+    // ---- alunos com desempenho esperado (meta do período) ----
 
-    public function test_proficiencia_do_plano_usa_60_por_cento_do_que_cabe_no_periodo_quando_a_prova_define_o_periodo_das_questoes(): void
+    public function test_alunos_com_desempenho_esperado_usa_60_por_cento_do_que_cabe_no_periodo_quando_a_prova_define_o_periodo_das_questoes(): void
     {
         $avaliacao = $this->avaliacao('D1', '2026-03-10'); // acertos 8, 8, 6, 5, 4, 2; alunos do 3º período
         // As 5 últimas questões são do 5º período: ao alcance de quem está no 3º só cabem 5 de 10 → a meta são 60% disso, 30% da prova
@@ -997,20 +997,18 @@ class PlanoAcaoTest extends TestCase
 
         $origem = $this->actingAs($this->coordenador(), 'admin')->get('/painel/planos/novo?visual=geral&periodo_letivo=2026/1&categoria='.$this->categoria->id)->assertOk()->viewData('origem');
 
-        // 80, 80, 60, 50, 40 passam dos 30%; só o 20 não → 5 de 6 (83,3%). Pelo corte de 60% da prova seriam 3 de 6 (50%).
-        $this->assertSame('periodo', $origem['indicadores']['criterio']);
-        $this->assertSame(83.3, $origem['indicadores']['proficiencia']);
-        $this->assertStringContainsString('alcançaram a meta do período deles', $origem['sugestoes']['evidencias']);
+        // 80, 80, 60, 50, 40 passam dos 30%; só o 20 não → 5 de 6 (83,3%). Pelo mínimo de 60% da prova inteira seriam 3 de 6 (50%).
+        $this->assertSame(83.3, $origem['indicadores']['esperado']);
+        $this->assertStringContainsString('alcançaram o mínimo esperado para o período em que estão', $origem['sugestoes']['evidencias']);
     }
 
-    public function test_sem_periodo_nas_questoes_a_proficiencia_segue_o_corte_da_prova(): void
+    public function test_sem_periodo_nas_questoes_o_minimo_esperado_e_60_por_cento_da_prova(): void
     {
         $this->avaliacao('D1', '2026-03-10');
 
         $origem = $this->actingAs($this->coordenador(), 'admin')->get('/painel/planos/novo?visual=geral&periodo_letivo=2026/1&categoria='.$this->categoria->id)->assertOk()->viewData('origem');
 
-        $this->assertSame('corte', $origem['indicadores']['criterio']);
-        $this->assertSame(50.0, $origem['indicadores']['proficiencia']);
+        $this->assertSame(50.0, $origem['indicadores']['esperado']);
     }
 
 
@@ -1174,7 +1172,7 @@ class PlanoAcaoTest extends TestCase
         // TODAS as informações do plano
         foreach ([
             'MEDICINA', '2026/1', 'Diagnósticos', 'coord',                                  // identificação
-            'Participação atual', '100%', 'Meta de participação', '98%', 'Proficiência atual', 'Meta de proficiência', '70%', // indicadores
+            'Participação atual', '100%', 'Meta de participação', '98%', 'Alunos com desempenho esperado', 'Meta de alunos com desempenho esperado', '70%', // indicadores
             'D1', route('avaliacoes.bi', $avaliacao->codigo),                              // avaliação e link
             'O dado que originou o plano', 'Clínica',                                       // dado do visual
             '3º período, alunos abaixo de 60%', 'Baixo acerto em Clínica', 'Clínica (58%)', 'Média de 55% na categoria', // leitura
@@ -1242,14 +1240,14 @@ class PlanoAcaoTest extends TestCase
         $this->post("/colaboracao/planos/{$plano->id}/reverter", ['motivo' => 'curto'])->assertSessionHasErrors('motivo');
         $this->assertSame(PlanoAcao::EM_EXECUCAO, $plano->fresh()->status);
 
-        $this->post("/colaboracao/planos/{$plano->id}/reverter", ['motivo' => 'Faltou a meta de proficiência do curso.'])->assertSessionHasNoErrors()->assertRedirect(route('colaborador.planos.index'));
+        $this->post("/colaboracao/planos/{$plano->id}/reverter", ['motivo' => 'Faltou a meta de alunos com desempenho esperado do curso.'])->assertSessionHasNoErrors()->assertRedirect(route('colaborador.planos.index'));
 
         $plano->refresh();
         $this->assertSame(PlanoAcao::RASCUNHO, $plano->status);
         $this->assertNull($plano->enviado_em);
         $evento = $plano->eventos()->latest('id')->first();
         $this->assertSame(PlanoAcaoEvento::REVERTIDO, $evento->tipo);
-        $this->assertSame('Faltou a meta de proficiência do curso.', $evento->texto);
+        $this->assertSame('Faltou a meta de alunos com desempenho esperado do curso.', $evento->texto);
         $this->assertDatabaseHas('atividades', ['acao' => 'plano_acao.revertido']);
         $this->assertSame('Plano devolvido para rascunho: '.$plano->origem_rotulo, Notificacao::where('admin_id', $coordenador->id)->first()->titulo);
 
@@ -1343,20 +1341,20 @@ class PlanoAcaoTest extends TestCase
 
     public function test_resultado_compara_a_linha_de_base_com_o_di_seguinte(): void
     {
-        $this->avaliacao('D1', '2026-03-10'); // 2026/1 → proficiência 50%
+        $this->avaliacao('D1', '2026-03-10'); // 2026/1 → desempenho esperado 50%
         $plano = $this->criar($this->coordenador());
 
         $semProximo = app(PlanoAcaoResultadoService::class)->calcular($plano);
         $this->assertNull($semProximo['proximo']);
-        $this->assertSame(50.0, $semProximo['base']['proficiencia']);
+        $this->assertSame(50.0, $semProximo['base']['esperado']);
 
-        $this->avaliacao('D2', '2026-09-10', [9, 9, 8, 8, 7, 6]); // 2026/2, mesma categoria → proficiência 100%
+        $this->avaliacao('D2', '2026-09-10', [9, 9, 8, 8, 7, 6]); // 2026/2, mesma categoria → desempenho esperado 100%
         $resultado = app(PlanoAcaoResultadoService::class)->calcular($plano);
 
         $this->assertSame('2026/2', $resultado['proximo']['periodo_letivo']);
-        $this->assertSame(100.0, $resultado['proximo']['proficiencia']);
-        $this->assertSame(50.0, $resultado['proximo']['dProficiencia']);
-        $this->assertTrue($resultado['proximo']['metaProficiencia']); // meta de 70%
+        $this->assertSame(100.0, $resultado['proximo']['esperado']);
+        $this->assertSame(50.0, $resultado['proximo']['dEsperado']);
+        $this->assertTrue($resultado['proximo']['metaEsperado']); // meta de 70%
     }
 
     public function test_lembretes_avisam_prazo_proximo_vencido_e_nao_se_repetem(): void

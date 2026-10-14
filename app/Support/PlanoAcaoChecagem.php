@@ -29,8 +29,8 @@ final class PlanoAcaoChecagem
         };
         $vazio = fn (?string $texto) => mb_strlen(trim((string) $texto)) < self::MINIMO;
 
-        if ($plano->meta_proficiencia === null) {
-            $falta(1, 'Defina a meta de proficiência para a próxima avaliação.');
+        if ($plano->meta_esperado === null) {
+            $falta(1, 'Defina a meta de alunos com desempenho esperado para a próxima avaliação.');
         }
 
         foreach ([

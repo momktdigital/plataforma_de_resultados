@@ -16,7 +16,6 @@ class AtualizarConfiguracoesRequest extends FormRequest
         return [
             'backup_manter_ultimos' => ['required', 'integer', 'between:1,50'],
             // Painel da reitoria (opcionais: o formulário antigo, sem esses campos, continua válido).
-            'reitor_corte_proficiencia' => ['nullable', 'integer', 'between:30,90'],
             'reitor_meta_participacao' => ['nullable', 'numeric', 'between:50,100'],
             // Estudante em risco (RegraDeRisco). `risco_enviado` marca que o formulário trouxe esses campos: uma caixa
             // desmarcada simplesmente não vem na requisição.
@@ -27,6 +26,11 @@ class AtualizarConfiguracoesRequest extends FormRequest
             'risco_faltas' => ['nullable', 'required_if_accepted:risco_faltas_ativo', 'integer', 'between:1,50'],
             'risco_operador' => ['nullable', 'in:ou,e'],
             // Plano de ação: e-mails que recebem o plano publicado (um por linha, ou separados por vírgula ou ponto e vírgula).
+            // Plano de ação: o módulo liga/desliga/teste e, no teste, os usuários liberados (`plano_modulo_enviado` marca que o formulário trouxe os campos).
+            'plano_modulo_enviado' => ['nullable', 'boolean'],
+            'plano_modo' => ['nullable', 'required_with:plano_modulo_enviado', 'in:ativo,teste,desativado'],
+            'plano_usuarios' => ['nullable', 'array', 'max:500'],
+            'plano_usuarios.*' => ['integer', 'exists:admins,id'],
             'plano_emails_enviado' => ['nullable', 'boolean'],
             'plano_emails' => ['nullable', 'string', 'max:2000'],
         ];
@@ -64,8 +68,9 @@ class AtualizarConfiguracoesRequest extends FormRequest
     {
         return [
             'backup_manter_ultimos.between' => 'Escolha um número entre 1 e 50.',
-            'reitor_corte_proficiencia.between' => 'O critério de proficiência deve ficar entre 30% e 90%.',
-            'reitor_corte_proficiencia.integer' => 'Informe o critério de proficiência como número inteiro (ex.: 60).',
+            'plano_modo.in' => 'Escolha se o plano de ação fica ativo, em teste ou desativado.',
+            'plano_modo.required_with' => 'Escolha se o plano de ação fica ativo, em teste ou desativado.',
+            'plano_usuarios.*.exists' => 'Um dos usuários escolhidos para o teste do plano de ação não existe mais.',
             'reitor_meta_participacao.between' => 'A meta de participação deve ficar entre 50% e 100%.',
             'reitor_meta_participacao.numeric' => 'Informe a meta de participação como número (ex.: 98).',
             'risco_acerto.required_if_accepted' => 'Informe o percentual de acerto abaixo do qual o estudante está em risco (ex.: 60).',

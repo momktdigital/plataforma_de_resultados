@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 /**
  * O ponto de partida de um plano de ação: dado "de onde o coordenador clicou" (curso, período letivo, categoria ou
  * avaliação, o visual e, se for o caso, o item — uma área, um nível de Bloom, um período do curso...), monta TUDO que o
- * plano já traz preenchido: identificação do curso, os indicadores (participação, meta, proficiência), as linhas de dados
+ * plano já traz preenchido: identificação do curso, os indicadores (participação, meta, alunos com desempenho esperado), as linhas de dados
  * do visual e as sugestões de texto para a leitura do dado.
  *
  * Nada vem pronto do navegador: a URL só diz ONDE o coordenador estava; os números são recalculados aqui, a partir dos
@@ -95,13 +95,13 @@ class PlanoAcaoOrigemService
 
         // Sem categoria pedida e mais de uma no período: os visuais que dependem da prova (área, Bloom, evolução...)
         // usam a categoria com mais participações — e a tela diz isso, para o coordenador trocar se quiser. Os números
-        // gerais (participação, proficiência, visão geral) seguem sobre o período inteiro.
+        // gerais (participação, alunos com desempenho esperado, visão geral) seguem sobre o período inteiro.
         $automatica = false;
         $bloco = $categoriaId !== null ? $categorias->firstWhere('id', $categoriaId) : null;
         if ($bloco === null && $categorias->count() === 1) {
             $bloco = $categorias->first();
             $categoriaId = $bloco['id'];
-        } elseif ($bloco === null && $categorias->count() > 1 && ! in_array($visual, ['geral', 'participacao', 'proficiencia', 'destaque', 'curso'], true)) {
+        } elseif ($bloco === null && $categorias->count() > 1 && ! in_array($visual, ['geral', 'participacao', 'esperado', 'destaque', 'curso'], true)) {
             $bloco = $categorias->sortByDesc(fn ($c) => $c['totais']['inscritos'])->first();
             $categoriaId = $bloco['id'];
             $automatica = $categoriaId !== null;
@@ -227,7 +227,7 @@ class PlanoAcaoOrigemService
     // ---------------------------------------------------------------------------------------------------------------
 
     /**
-     * Visão geral, participação ou proficiência: os indicadores do recorte e, se houver, onde está o ponto mais fraco.
+     * Visão geral, participação ou alunos com desempenho esperado: os indicadores do recorte e, se houver, onde está o ponto mais fraco.
      *
      * @param  ?array<string, mixed>  $ind
      * @param  ?array<string, mixed>  $bloco
@@ -242,33 +242,33 @@ class PlanoAcaoOrigemService
         if ($ind !== null) {
             $dist = $ind['participacao'] !== null ? round($ind['participacao'] - $ind['meta_participacao'], 1) : null;
             $linhas[] = $this->linha('Participação', $this->pct($ind['participacao']), "{$ind['fizeram']} de {$ind['previstos']} previstos; meta ".$this->pct($ind['meta_participacao']), $visual === 'participacao');
-            $linhas[] = $this->linha('Proficiência', $this->pct($ind['proficiencia']), ($ind['criterio'] === 'periodo' ? 'proficiente = alcançou 60% do que cabe no período dele; ' : 'proficiente = '.(int) $ind['corte'].'% ou mais de acerto; ').$ind['com_nota'].' presentes com nota', $visual === 'proficiencia');
+            $linhas[] = $this->linha('Alunos com desempenho esperado', $this->pct($ind['esperado']), 'alcançaram o mínimo esperado para o período em que estão; '.$ind['com_nota'].' presentes com nota', $visual === 'esperado');
             if ($ind['media'] !== null) {
                 $linhas[] = $this->linha('Média de acerto', $this->pct($ind['media']), 'só presentes');
             }
             foreach ($ind['periodos'] as $p) {
-                $linhas[] = $this->linha("{$p['ordinal']}º período", $this->pct($visual === 'participacao' ? $p['participacao'] : $p['proficiencia']), $visual === 'participacao' ? "{$p['fizeram']} de {$p['previstos']} previstos" : null);
+                $linhas[] = $this->linha("{$p['ordinal']}º período", $this->pct($visual === 'participacao' ? $p['participacao'] : $p['esperado']), $visual === 'participacao' ? "{$p['fizeram']} de {$p['previstos']} previstos" : null);
             }
 
-            if ($visual !== 'proficiencia' && $ind['participacao'] !== null) {
+            if ($visual !== 'esperado' && $ind['participacao'] !== null) {
                 $evidencias[] = 'Participação de '.$this->pct($ind['participacao'])." ({$ind['fizeram']} de {$ind['previstos']} previstos), "
                     .($dist >= 0 ? $this->pct(abs($dist)).' acima' : $this->pct(abs($dist)).' abaixo').' da meta de '.$this->pct($ind['meta_participacao']).'.';
             }
-            if ($visual !== 'participacao' && $ind['proficiencia'] !== null) {
-                $evidencias[] = $this->pct($ind['proficiencia']).' dos presentes com nota '.($ind['criterio'] === 'periodo' ? 'alcançaram a meta do período deles (60% do que cabe nele)' : 'atingiram '.(int) $ind['corte'].'% de acerto').' ('.$ind['com_nota'].' estudantes avaliados).';
+            if ($visual !== 'participacao' && $ind['esperado'] !== null) {
+                $evidencias[] = $this->pct($ind['esperado']).' dos presentes com nota alcançaram o mínimo esperado para o período em que estão ('.$ind['com_nota'].' estudantes avaliados).';
             }
 
             $resultado = match ($visual) {
                 'participacao' => $ind['participacao'] !== null ? 'Participação de '.$this->pct($ind['participacao']).', '.($dist >= 0 ? 'dentro da' : 'abaixo da').' meta de '.$this->pct($ind['meta_participacao']).'.' : '',
-                'proficiencia' => $ind['proficiencia'] !== null ? 'Apenas '.$this->pct($ind['proficiencia']).' dos estudantes presentes '.($ind['criterio'] === 'periodo' ? 'alcançaram a meta do período deles (60% do que cabe nele).' : 'atingiram o corte de proficiência ('.(int) $ind['corte'].'% de acerto).') : '',
-                default => 'Participação de '.$this->pct($ind['participacao']).' e proficiência de '.$this->pct($ind['proficiencia']).'.',
+                'esperado' => $ind['esperado'] !== null ? 'Apenas '.$this->pct($ind['esperado']).' dos estudantes presentes alcançaram o mínimo esperado para o período em que estão.' : '',
+                default => 'Participação de '.$this->pct($ind['participacao']).' e '.$this->pct($ind['esperado']).' dos estudantes presentes com desempenho esperado.',
             };
 
             // O período do curso com o indicador mais fraco (com amostra mínima, para não destacar uma turma de 3 alunos).
-            $campo = $visual === 'participacao' ? 'participacao' : 'proficiencia';
+            $campo = $visual === 'participacao' ? 'participacao' : 'esperado';
             $fracos = collect($ind['periodos'])->filter(fn ($p) => $p[$campo] !== null && $p['fizeram'] >= 5)->sortBy($campo)->take(2);
             if ($fracos->isNotEmpty()) {
-                $evidencias[] = 'Períodos do curso com menor '.($campo === 'participacao' ? 'participação' : 'proficiência').': '
+                $evidencias[] = 'Períodos do curso com menor '.($campo === 'participacao' ? 'participação' : 'alunos com desempenho esperado').': '
                     .$fracos->map(fn ($p) => "{$p['ordinal']}º ({$this->pct($p[$campo])})")->implode(', ').'.';
             }
         }

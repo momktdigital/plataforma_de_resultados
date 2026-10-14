@@ -74,7 +74,9 @@
                 $sino = $ehCoordenador && ! $emVisaoDeCurso;
                 $naoLidas = $ehCoordenador ? $usuarioLogado->notificacoesNaoLidas() : 0;
                 // Planos de ação: quantos têm ação com o prazo vencido (o coordenador, os do curso dele; quem acompanha, os de todos).
-                $planosPendentes = ($ehCoordenador || $ehColaborador || $usuarioLogado->ehAdministrador()) ? \App\Services\PlanoAcaoService::comAcaoAtrasada($usuarioLogado) : 0;
+                // O módulo pode estar desligado (ou só em teste para outros usuários): sem item de menu e sem a conta do selo.
+                $planoLiberado = \App\Support\PlanoAcaoModulo::liberadoPara($usuarioLogado);
+                $planosPendentes = $planoLiberado && ($ehCoordenador || $ehColaborador || $usuarioLogado->ehAdministrador()) ? \App\Services\PlanoAcaoService::comAcaoAtrasada($usuarioLogado) : 0;
             @endphp
 
             {{-- Busca global procura alunos de qualquer curso: só administrador. --}}
@@ -139,6 +141,9 @@
                                 ['rota' => 'perfil.edit', 'padrao' => 'perfil.*', 'icone' => 'ph-user-circle', 'label' => 'Meu Perfil'],
                             ]));
                     @endphp
+                    @unless ($planoLiberado)
+                        @php $itensMenu = array_values(array_filter($itensMenu, fn ($i) => ! in_array($i['rota'], ['reitor.planos', 'coordenador.planos.index', 'colaborador.planos.index'], true))); @endphp
+                    @endunless
                     @if ($emVisaoDeCurso)
                         @php
                             $itensMenu = array_values(array_filter($itensMenu, fn ($i) => $i['rota'] !== 'notificacoes.index'));

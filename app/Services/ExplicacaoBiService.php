@@ -35,6 +35,7 @@ class ExplicacaoBiService
             'kpi_mediana' => $this->kpiMediana($psicometria),
             'kpi_desvio' => $this->kpiDesvio($psicometria),
             'kpi_kr20' => $this->kpiKr20($psicometria),
+            'kpi_esperado' => $this->kpiEsperado($ctx['esperado'] ?? null),
 
             'mapa_itens' => $this->mapaItens($psicometria),
             // A leitura sai daqui vazia de propósito: ela fala da questão
@@ -120,6 +121,32 @@ class ExplicacaoBiService
             $media < 60 => ['Fica na faixa intermediária — normal em avaliação diagnóstica, preocupante em prova de aprovação.', 'atencao'],
             $media > 85 => ['É um resultado alto: a prova pode ter sido fácil demais para distinguir os respondentes entre si.', 'atencao'],
             default => ['É um patamar saudável para uma prova que precisa diferenciar quem domina o conteúdo de quem não domina.', 'bom'],
+        };
+
+        return $this->entrada($generico, $leitura.$complemento, $tom);
+    }
+
+    /** @param array{comMeta: bool, presentes: int, dentro: int, pct: ?float}|null $esperado */
+    private function kpiEsperado(?array $esperado): array
+    {
+        $generico = 'Dos alunos que fizeram a prova, quantos alcançaram o mínimo esperado para o período do curso em que '
+            .'estão. O mínimo é 60% da parte da prova que já cabe no período (a meta "período mínimo" de cada questão): '
+            .'numa prova de 100 questões em que só 10 cabem no 1º período, o aluno do 1º período precisa acertar 6. '
+            .'Quando a prova não traz esse período nas questões, vale 60% da prova inteira. Diferente da média, não depende '
+            .'de a prova ser fácil ou difícil: diz quantos alunos estão onde deveriam para o momento do curso.';
+
+        if ($esperado === null || $esperado['pct'] === null) {
+            return $this->entrada($generico, null);
+        }
+
+        $pct = $esperado['pct'];
+        $leitura = $this->num($pct).'% dos alunos presentes ('.$esperado['dentro'].' de '.$esperado['presentes'].') alcançaram o desempenho esperado'
+            .($esperado['comMeta'] ? ' para o período em que estão. ' : ' (60% da prova, pois ela não informa o período mínimo das questões). ');
+
+        [$complemento, $tom] = match (true) {
+            $pct >= 50 => ['A maior parte da turma está onde deveria estar.', 'bom'],
+            $pct >= 25 => ['Menos da metade da turma alcançou o esperado: vale olhar quais conteúdos mais pesaram.', 'atencao'],
+            default => ['Poucos alunos alcançaram o esperado: o resultado pede uma ação sobre conteúdo ou metodologia.', 'ruim'],
         };
 
         return $this->entrada($generico, $leitura.$complemento, $tom);

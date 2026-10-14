@@ -108,6 +108,6 @@
     <div class="mb-6 -mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800" role="note">
         <i class="ph-bold ph-warning mr-1" aria-hidden="true"></i>
         Este recorte reúne avaliações de <strong>categorias diferentes</strong>. Provas de categorias diferentes não são comparáveis em desempenho:
-        a participação continua valendo, mas para ler proficiência, média e evolução escolha uma <strong>categoria</strong> no filtro.
+        a participação continua valendo, mas para ler alunos com desempenho esperado, média e evolução escolha uma <strong>categoria</strong> no filtro.
     </div>
 @endif

@@ -60,7 +60,8 @@ class RespondenteController extends Controller
 
         $this->anexarAlunoEAcertos($avaliacao, $respondentes->getCollection());
 
-        $periodosDisponiveis = $avaliacao->resultados()->select('periodo')->distinct()->pluck('periodo');
+        // Sem o período vazio: o valor dele ('') é o de "Todos os períodos", e a opção "(sem período)" apareceria selecionada.
+        $periodosDisponiveis = $avaliacao->resultados()->select('periodo')->where('periodo', '!=', '')->distinct()->pluck('periodo');
 
         $trashedNoPeriodo = $periodo !== ''
             ? $avaliacao->resultados()->onlyTrashed()->where('periodo', $periodo)->count()

@@ -27,7 +27,7 @@
         'meta' => $meta,
         'mistura' => $ctx['avaliacao']['mistura'],
         'kpis' => [
-            ['rotulo' => 'Proficiência institucional (≥ '.$fmt($corte, 0).'%)', 'valor' => $fmt($total['proficienciaPct']).'%', 'detalhe' => $fmt($total['proficientes'], 0).' de '.$fmt($total['n'], 0).' estudantes'],
+            ['rotulo' => 'Alunos com desempenho esperado', 'valor' => $fmt($total['esperadoPct']).'%', 'detalhe' => $fmt($total['esperados'], 0).' de '.$fmt($total['n'], 0).' estudantes'],
             ['rotulo' => '% de acerto médio', 'valor' => $fmt($total['media']).'%', 'detalhe' => 'mediana '.$fmt($total['mediana']).'%'],
             ['rotulo' => 'Participação', 'valor' => $fmt($total['participacao']).'%', 'detalhe' => $fmt($total['fizeram'], 0).' de '.$fmt($total['previstos'], 0).' previstos'],
             ['rotulo' => 'Meta de participação', 'valor' => $fmt($meta, 0).'%', 'detalhe' => $total['alunosAMais'] > 0 ? 'faltam '.$fmt($total['alunosAMais'], 0).' estudantes' : 'meta atingida'],
@@ -35,7 +35,7 @@
         'alertas' => array_map(fn ($a) => $a['texto'], $alertas),
         'leituras' => [
             'participacao' => $texto('participacao'),
-            'proficiencia' => $texto('proficiencia'),
+            'esperado' => $texto('esperado'),
             'media' => $texto('media'),
             'faixas' => $texto('faixas'),
             'trajetoria' => $texto('trajetoria_acerto'),
@@ -43,14 +43,14 @@
             'areas' => $texto('areas_ranking'),
             'evolucao' => $texto('evolucao_institucional'),
         ],
-        'tabela' => array_map(fn ($c) => [$c['nome'], $fmt($c['previstos'], 0), $fmt($c['fizeram'], 0), $fmt($c['participacao']).'%', $fmt($c['proficienciaPct']).'%', $fmt($c['media']).'%', $fmt($c['mediana']).'%'], $cursos),
+        'tabela' => array_map(fn ($c) => [$c['nome'], $fmt($c['previstos'], 0), $fmt($c['fizeram'], 0), $fmt($c['participacao']).'%', $fmt($c['esperadoPct']).'%', $fmt($c['media']).'%', $fmt($c['mediana']).'%'], $cursos),
         'cursosGraficos' => array_map(fn ($c) => [
-            'nome' => $c['nome'], 'prof' => $c['proficienciaPct'], 'media' => $c['media'], 'mediana' => $c['mediana'],
+            'nome' => $c['nome'], 'prof' => $c['esperadoPct'], 'media' => $c['media'], 'mediana' => $c['mediana'],
             'faixas' => array_column($c['faixas'], 'pct'),
             'periodos' => array_map(fn ($p) => ['ordinal' => $p['ordinal'], 'media' => $p['media'], 'n' => $p['n']], array_values($c['periodos'])),
             'cor' => $ctx['cores'][$c['chave']] ?? '#64748b',
         ], $cursos),
-        'totalProf' => $total['proficienciaPct'],
+        'totalProf' => $total['esperadoPct'],
         'faixasRotulos' => array_map(fn ($f) => $f['rotulo'], $faixas),
         'totalFaixas' => array_column($total['faixas'], 'pct'),
         'ordinais' => $est['periodos'],
@@ -58,13 +58,13 @@
         'minimoPeriodo' => $minimoPeriodo,
         'bloom' => $bloom['temDados'] ? [
             'rotulos' => array_column($bloom['niveis'], 'rotulo'),
-            'prof' => array_map(fn ($n) => $bloom['proficientes'][$n['chave']]['pct'] ?? null, $bloom['niveis']),
-            'nao' => array_map(fn ($n) => $bloom['naoProficientes'][$n['chave']]['pct'] ?? null, $bloom['niveis']),
+            'prof' => array_map(fn ($n) => $bloom['esperado'][$n['chave']]['pct'] ?? null, $bloom['niveis']),
+            'nao' => array_map(fn ($n) => $bloom['abaixo'][$n['chave']]['pct'] ?? null, $bloom['niveis']),
         ] : null,
         'areas' => array_map(fn ($a) => ['area' => $a['area'], 'pct' => $a['pct']], array_slice($ranking, 0, 12)),
         'evolucao' => $mostraEvolucao ? [
             'rotulos' => array_column($semestres, 'periodoLetivo'),
-            'prof' => array_map(fn ($s) => $s['total']['proficienciaPct'], $semestres),
+            'prof' => array_map(fn ($s) => $s['total']['esperadoPct'], $semestres),
             'media' => array_map(fn ($s) => $s['total']['media'], $semestres),
             'part' => array_map(fn ($s) => $s['total']['participacao'], $semestres),
         ] : null,
@@ -110,19 +110,19 @@
         <p class="mt-6 text-xl font-semibold">{{ $ctx['avaliacao']['nome'] }}</p>
         <p class="mt-1 text-white/85">{{ $periodoTxt }} &middot; {{ count($cursos) }} {{ count($cursos) === 1 ? 'curso' : 'cursos' }} &middot; {{ $fmt($total['fizeram'], 0) }} estudantes</p>
         <dl class="mt-16 grid max-w-md grid-cols-2 gap-x-6 gap-y-2 text-sm text-white/90">
-            <dt class="font-semibold">Critério de proficiência</dt><dd>≥ {{ $fmt($corte, 0) }}% de acerto</dd>
+            <dt class="font-semibold">Desempenho esperado</dt><dd>mínimo do período do curso (60% do que cabe nele)</dd>
             <dt class="font-semibold">Meta de participação</dt><dd>{{ $fmt($meta, 0) }}%</dd>
             <dt class="font-semibold">Gerado em</dt><dd>{{ now()->format('d/m/Y') }}</dd>
             <dt class="font-semibold">Gerado por</dt><dd>{{ $usuario->username }}</dd>
         </dl>
         <p class="mt-10 max-w-xl text-xs text-white/75">
-            Critério interno da instituição, sem validação contra a proficiência do ENADE/ENAMED. Indicadores agregados: não há dado nominal de estudantes neste documento.
+            Desempenho esperado é um critério interno da instituição, para acompanhamento. Indicadores agregados: não há dado nominal de estudantes neste documento.
         </p>
     </section>
 
     @if ($ctx['avaliacao']['mistura'])
         <p class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 rel-bloco">
-            Atenção: este recorte reúne avaliações de categorias diferentes, que não são comparáveis em desempenho. A participação vale; para proficiência, média e evolução, gere o relatório de uma categoria.
+            Atenção: este recorte reúne avaliações de categorias diferentes, que não são comparáveis em desempenho. A participação vale; para alunos com desempenho esperado, média e evolução, gere o relatório de uma categoria.
         </p>
     @endif
 
@@ -153,11 +153,11 @@
         <h2 id="rel-participacao" class="text-lg font-black text-[#1e3a5f]">2. Participação por curso</h2>
         @if ($texto('participacao'))<p class="mt-2 text-sm text-slate-800">{{ $texto('participacao') }}</p>@endif
         <table class="mt-4 w-full text-sm">
-            <caption class="sr-only">Previstos, quem fez, participação, proficiência, média e mediana por curso.</caption>
+            <caption class="sr-only">Previstos, quem fez, participação, alunos com desempenho esperado, média e mediana por curso.</caption>
             <thead class="text-left text-[11px] font-bold uppercase tracking-wide text-slate-600">
                 <tr class="border-b border-slate-300">
                     <th scope="col" class="py-2 pr-2">Curso</th><th scope="col" class="py-2 px-2 text-right">Previstos</th><th scope="col" class="py-2 px-2 text-right">Fizeram</th>
-                    <th scope="col" class="py-2 px-2 text-right">Participação</th><th scope="col" class="py-2 px-2 text-right">Proficientes</th><th scope="col" class="py-2 px-2 text-right">Média</th><th scope="col" class="py-2 pl-2 text-right">Mediana</th>
+                    <th scope="col" class="py-2 px-2 text-right">Participação</th><th scope="col" class="py-2 px-2 text-right">Desempenho esperado</th><th scope="col" class="py-2 px-2 text-right">Média</th><th scope="col" class="py-2 pl-2 text-right">Mediana</th>
                 </tr>
             </thead>
             <tbody>
@@ -174,19 +174,19 @@
                 <tr class="font-bold text-slate-800">
                     <td class="py-2 pr-2">Total da visão</td>
                     <td class="py-2 px-2 text-right font-mono">{{ $fmt($total['previstos'], 0) }}</td><td class="py-2 px-2 text-right font-mono">{{ $fmt($total['fizeram'], 0) }}</td>
-                    <td class="py-2 px-2 text-right font-mono">{{ $fmt($total['participacao']) }}%</td><td class="py-2 px-2 text-right font-mono">{{ $fmt($total['proficienciaPct']) }}%</td>
+                    <td class="py-2 px-2 text-right font-mono">{{ $fmt($total['participacao']) }}%</td><td class="py-2 px-2 text-right font-mono">{{ $fmt($total['esperadoPct']) }}%</td>
                     <td class="py-2 px-2 text-right font-mono">{{ $fmt($total['media']) }}%</td><td class="py-2 pl-2 text-right font-mono">{{ $fmt($total['mediana']) }}%</td>
                 </tr>
             </tfoot>
         </table>
     </section>
 
-    {{-- 3 · Proficiência --}}
-    <section class="rel-quebra {{ $secao }}" aria-labelledby="rel-proficiencia">
-        <h2 id="rel-proficiencia" class="text-lg font-black text-[#1e3a5f]">3. Proficiência institucional</h2>
-        <p class="mt-1 text-xs text-slate-600">Estudantes que acertaram {{ $fmt($corte, 0) }}% ou mais. Critério interno, sem validação contra exames externos.</p>
-        @if ($texto('proficiencia'))<p class="mt-2 text-sm text-slate-800">{{ $texto('proficiencia') }}</p>@endif
-        <figure class="rel-figura mt-4"><div class="relative h-72"><canvas id="rel-grafico-prof" data-titulo="Estudantes proficientes por curso"></canvas></div></figure>
+    {{-- 3 · Alunos com desempenho esperado --}}
+    <section class="rel-quebra {{ $secao }}" aria-labelledby="rel-esperado">
+        <h2 id="rel-esperado" class="text-lg font-black text-[#1e3a5f]">3. Alunos com desempenho esperado</h2>
+        <p class="mt-1 text-xs text-slate-600">Estudantes que alcançaram o mínimo esperado para o período do curso em que estão (60% do que cabe no período). Critério interno, para acompanhamento.</p>
+        @if ($texto('esperado'))<p class="mt-2 text-sm text-slate-800">{{ $texto('esperado') }}</p>@endif
+        <figure class="rel-figura mt-4"><div class="relative h-72"><canvas id="rel-grafico-prof" data-titulo="Estudantes com desempenho esperado por curso"></canvas></div></figure>
     </section>
 
     {{-- 4 · Desempenho --}}
@@ -211,7 +211,7 @@
         <h2 id="rel-competencias" class="text-lg font-black text-[#1e3a5f]">6. Competências</h2>
         @if ($dados['bloom'])
             @if ($texto('bloom_distingue'))<p class="mt-2 text-sm text-slate-800">{{ $texto('bloom_distingue') }}</p>@endif
-            <figure class="rel-figura mt-4"><div class="relative h-64"><canvas id="rel-grafico-bloom" data-titulo="Acerto de proficientes e não proficientes por nível de Bloom"></canvas></div></figure>
+            <figure class="rel-figura mt-4"><div class="relative h-64"><canvas id="rel-grafico-bloom" data-titulo="Acerto de quem teve o desempenho esperado e de quem ficou abaixo, por nível de Bloom"></canvas></div></figure>
         @else
             <p class="mt-2 text-sm text-slate-600">Nenhuma questão deste recorte tem o nível de Bloom cadastrado.</p>
         @endif
@@ -227,7 +227,7 @@
             <h2 id="rel-evolucao" class="text-lg font-black text-[#1e3a5f]">7. Evolução entre semestres</h2>
             <p class="mt-1 text-xs text-slate-600">Cada ponto é uma foto do semestre, na mesma categoria de avaliação; não acompanha os mesmos estudantes.</p>
             @if ($texto('evolucao_institucional'))<p class="mt-2 text-sm text-slate-800">{{ $texto('evolucao_institucional') }}</p>@endif
-            <figure class="rel-figura mt-4"><div class="relative h-72"><canvas id="rel-grafico-evolucao" data-titulo="Proficiência, média e participação por período letivo"></canvas></div></figure>
+            <figure class="rel-figura mt-4"><div class="relative h-72"><canvas id="rel-grafico-evolucao" data-titulo="Alunos com desempenho esperado, média e participação por período letivo"></canvas></div></figure>
         </section>
     @endif
 </article>
@@ -248,12 +248,12 @@
     graficos.prof = V.criar('rel-grafico-prof', {
         type: 'bar',
         data: { labels: cursos.map(function (c) { return c.nome; }), datasets: [{
-            label: '% proficientes', data: cursos.map(function (c) { return c.prof; }),
+            label: '% com desempenho esperado', data: cursos.map(function (c) { return c.prof; }),
             backgroundColor: cursos.map(function (c) { return c.prof !== null && dados.totalProf !== null && c.prof >= dados.totalProf ? V.cores.verde : V.cores.marinho; }), maxBarThickness: 48,
         }] },
         options: {
             maintainAspectRatio: false, scales: { y: V.eixoPct(), x: { grid: { display: false }, ticks: { maxRotation: 60, minRotation: 30 } } },
-            plugins: { legend: { display: false }, linhaReferencia: { linhas: [{ valor: dados.totalProf, cor: V.cores.vermelho, rotulo: 'Proficiência geral do conjunto ' + pct(dados.totalProf) }] }, rotulosValores: { dataset: 0, formato: pct } },
+            plugins: { legend: { display: false }, linhaReferencia: { linhas: [{ valor: dados.totalProf, cor: V.cores.vermelho, rotulo: 'Geral do conjunto ' + pct(dados.totalProf) }] }, rotulosValores: { dataset: 0, formato: pct } },
         },
     });
 
@@ -266,7 +266,7 @@
         ] },
         options: {
             maintainAspectRatio: false, scales: { y: V.eixoPct(), x: { grid: { display: false }, ticks: { maxRotation: 60, minRotation: 30 } } },
-            plugins: { legend: V.legenda('top'), linhaReferencia: { linhas: [{ valor: dados.corte, cor: V.cores.vermelho, rotulo: 'Critério ' + V.fmt(dados.corte, 0) + '%' }] } },
+            plugins: { legend: V.legenda('top'), linhaReferencia: { linhas: [{ valor: dados.corte, cor: V.cores.vermelho, rotulo: V.fmt(dados.corte, 0) + '%' }] } },
         },
     });
 
@@ -299,8 +299,8 @@
         graficos.bloom = V.criar('rel-grafico-bloom', {
             type: 'bar',
             data: { labels: dados.bloom.rotulos, datasets: [
-                { label: 'Proficientes', data: dados.bloom.prof, backgroundColor: V.cores.verde, maxBarThickness: 44 },
-                { label: 'Não proficientes', data: dados.bloom.nao, backgroundColor: V.cores.cinza, maxBarThickness: 44 },
+                { label: 'Desempenho esperado', data: dados.bloom.prof, backgroundColor: V.cores.verde, maxBarThickness: 44 },
+                { label: 'Abaixo do esperado', data: dados.bloom.nao, backgroundColor: V.cores.cinza, maxBarThickness: 44 },
             ] },
             options: { maintainAspectRatio: false, scales: { y: V.eixoPct(), x: { grid: { display: false } } }, plugins: { legend: V.legenda('top') } },
         });
@@ -316,7 +316,7 @@
         graficos.evolucao = V.criar('rel-grafico-evolucao', {
             type: 'line',
             data: { labels: dados.evolucao.rotulos, datasets: [
-                { label: 'Proficientes (%)', data: dados.evolucao.prof, borderColor: V.cores.verde, backgroundColor: V.cores.verde, tension: 0.3 },
+                { label: 'Desempenho esperado (%)', data: dados.evolucao.prof, borderColor: V.cores.verde, backgroundColor: V.cores.verde, tension: 0.3 },
                 { label: 'Média de acerto (%)', data: dados.evolucao.media, borderColor: V.cores.marinho, backgroundColor: V.cores.marinho, tension: 0.3 },
                 { label: 'Participação (%)', data: dados.evolucao.part, borderColor: V.cores.ambar, backgroundColor: V.cores.ambar, borderDash: [6, 4], tension: 0.3 },
             ] },
@@ -359,7 +359,7 @@
         capa.addText(dados.titulo, { x: 0.8, y: 1.9, w: 11.5, h: 1.2, fontSize: 44, bold: true, color: 'FFFFFF' });
         capa.addText(dados.recorte, { x: 0.8, y: 3.4, w: 11.5, h: 0.6, fontSize: 24, color: 'FFFFFF' });
         capa.addText(dados.periodo + ' · ' + dados.cursos + ' cursos', { x: 0.8, y: 4.0, w: 11.5, h: 0.4, fontSize: 16, color: 'CFE8E1' });
-        capa.addText('Critério de proficiência ≥ ' + V.fmt(dados.corte, 0) + '% (interno, sem validação contra ENADE/ENAMED) · Meta de participação ' + V.fmt(dados.meta, 0) + '%\nGerado em ' + dados.geradoEm + ' por ' + dados.geradoPor, { x: 0.8, y: 6.2, w: 11.5, h: 0.8, fontSize: 11, color: 'CFE8E1' });
+        capa.addText('Desempenho esperado: mínimo do período do curso (critério interno) · Meta de participação ' + V.fmt(dados.meta, 0) + '%\nGerado em ' + dados.geradoEm + ' por ' + dados.geradoPor, { x: 0.8, y: 6.2, w: 11.5, h: 0.8, fontSize: 11, color: 'CFE8E1' });
 
         // Resumo
         var resumo = slide('Resumo');
@@ -376,14 +376,14 @@
 
         // Participação (tabela, em páginas de 10 cursos)
         for (var i = 0; i < dados.tabela.length; i += 10) {
-            var linhas = [['Curso', 'Previstos', 'Fizeram', 'Participação', 'Proficientes', 'Média', 'Mediana'].map(function (t) { return { text: t, options: { bold: true, color: 'FFFFFF', fill: { color: marinho }, fontSize: 11 } }; })]
+            var linhas = [['Curso', 'Previstos', 'Fizeram', 'Participação', 'Desempenho esperado', 'Média', 'Mediana'].map(function (t) { return { text: t, options: { bold: true, color: 'FFFFFF', fill: { color: marinho }, fontSize: 11 } }; })]
                 .concat(dados.tabela.slice(i, i + 10).map(function (l) { return l.map(function (t, j) { return { text: t, options: { fontSize: 11, align: j === 0 ? 'left' : 'right' } }; }); }));
             var s = slide('Participação por curso' + (dados.tabela.length > 10 ? ' (' + (Math.floor(i / 10) + 1) + ')' : ''));
             s.addTable(linhas, { x: 0.5, y: 1.2, w: 12.3, colW: [4.2, 1.3, 1.3, 1.5, 1.5, 1.2, 1.3], border: { type: 'solid', color: 'D5DEDB', pt: 0.5 } });
             if (i === 0 && dados.leituras.participacao) s.addText(dados.leituras.participacao, { x: 0.5, y: 6.1, w: 12.3, h: 0.8, fontSize: 11, color: tinta, valign: 'top' });
         }
 
-        comGrafico('Proficiência institucional', graficos.prof, dados.leituras.proficiencia);
+        comGrafico('Alunos com desempenho esperado', graficos.prof, dados.leituras.esperado);
         comGrafico('Média e mediana', graficos.media, dados.leituras.media);
         comGrafico('Distribuição por faixa de acerto', graficos.faixas, dados.leituras.faixas);
         comGrafico('Trajetória ao longo do curso', graficos.trajetoria, dados.leituras.trajetoria);

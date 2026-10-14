@@ -8,6 +8,7 @@ use App\Models\Categoria;
 use App\Models\Resposta;
 use App\Support\Anulacao;
 use App\Support\CacheDeAnalise;
+use App\Support\DesempenhoEsperado;
 use App\Support\NomeCurso;
 use App\Support\PeriodoCurso;
 use Illuminate\Database\Query\Builder;
@@ -63,7 +64,7 @@ class CoordenadorDashboardService
     private const MINIMO_RESPOSTAS_CELULA = 10;
 
     /** Mínimo esperado (% de acerto) de quem não tem período reconhecível — o mesmo padrão do boletim do aluno. */
-    public const MINIMO_PADRAO = 60.0;
+    public const MINIMO_PADRAO = DesempenhoEsperado::MINIMO_PADRAO;
 
     /** Períodos do curso com menos presentes que isto não entram no insight de melhor/pior. */
     private const MINIMO_PRESENTES_PERIODO = 10;
@@ -588,17 +589,8 @@ class CoordenadorDashboardService
     /** @return array<int, array{comMeta: bool, periodos: array<int, array{presentes: int, dentro: int}>}> */
     private function calcularDentroDoEsperado(array $variantes, array $codigos): array
     {
-        // Questões válidas por (avaliação × período mínimo): a fatia esperada de um período sai daqui.
-        $questoes = Anulacao::excluirDistribuidas(
-            DB::table('questoes')
-                ->whereIn('avaliacao_codigo', $codigos)
-                ->whereNull('deleted_at')
-                ->whereNotNull('gabarito')->where('gabarito', '!=', '')
-        )
-            ->groupBy('avaliacao_codigo', 'periodo_minimo')
-            ->selectRaw('avaliacao_codigo as codigo, periodo_minimo as minimo, COUNT(*) as n')
-            ->get()
-            ->groupBy(fn ($l) => (int) $l->codigo);
+        // A regra do esperado (mínimo por período do curso) mora em DesempenhoEsperado, compartilhada com o painel da reitoria e o Dashboard.
+        $provas = DesempenhoEsperado::provas($codigos);
 
         $notas = $this->resumos($variantes)
             ->whereIn('rr.avaliacao_codigo', $codigos)
@@ -611,29 +603,23 @@ class CoordenadorDashboardService
 
         $resultado = [];
         foreach ($codigos as $codigo) {
-            $daProva = $questoes->get($codigo, collect());
-            $totalQuestoes = (int) $daProva->sum('n');
-            $comMeta = $totalQuestoes > 0 && $daProva->contains(fn ($l) => $l->minimo !== null);
+            $prova = $provas[(int) $codigo] ?? null;
 
             $periodos = [];
             foreach ($notas->get($codigo, collect()) as $linha) {
                 $n = (int) $linha->n;
                 $ordinal = PeriodoCurso::ordinal((string) $linha->periodo);
-                // A meta é 60% do que cabe no período do aluno (PeriodoCurso::metaDoPeriodo), não 100% dele.
-                $minimo = $comMeta && $ordinal !== null
-                    ? PeriodoCurso::metaDoPeriodo($totalQuestoes - (int) $daProva->filter(fn ($l) => PeriodoCurso::aFrente($ordinal, $l->minimo !== null ? (int) $l->minimo : null))->sum('n'), $totalQuestoes)
-                    : self::MINIMO_PADRAO;
+                $minimo = DesempenhoEsperado::minimo($prova, (string) $linha->periodo);
 
                 $p = &$periodos[$ordinal ?? 0];
                 $p ??= ['presentes' => 0, 'dentro' => 0];
                 $p['presentes'] += $n;
-                // 0,005 = a precisão (2 casas) em que o percentual é gravado.
-                $p['dentro'] += (float) $linha->percentual + 0.005 >= $minimo ? $n : 0;
+                $p['dentro'] += DesempenhoEsperado::alcancou((float) $linha->percentual, $minimo) ? $n : 0;
                 unset($p);
             }
             ksort($periodos);
 
-            $resultado[(int) $codigo] = ['comMeta' => $comMeta, 'periodos' => $periodos];
+            $resultado[(int) $codigo] = ['comMeta' => $prova['comMeta'] ?? false, 'periodos' => $periodos];
         }
 
         return $resultado;

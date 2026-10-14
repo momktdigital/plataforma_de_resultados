@@ -26,7 +26,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * cada avaliação é de um curso, então a categoria reúne os cursos) e, se quiser, um subconjunto de cursos — escolhido
  * na barra de filtros e mantido ao trocar de tela:
  *
- *  - visao:        participação por curso × meta, proficiência institucional, pontos de atenção;
+ *  - visao:        participação por curso × meta, alunos com desempenho esperado, pontos de atenção;
  *  - desempenho:   média e mediana, distribuição por faixa, dispersão, patamares;
  *  - trajetoria:   desempenho ao longo dos períodos do curso, mapa curso × período, crescimento, cobertura;
  *  - competencias: níveis de Bloom e áreas de conhecimento;
@@ -41,7 +41,7 @@ class ReitorController extends Controller
         private readonly ReitorLeituraService $leitura,
     ) {}
 
-    /** Participação, proficiência e o que merece atenção. */
+    /** Participação, alunos com desempenho esperado e o que merece atenção. */
     public function visao(Request $request, ReitorEvolucaoService $evolucaoServico): View
     {
         [$ctx, $est] = $this->recorte($request);
@@ -129,7 +129,7 @@ class ReitorController extends Controller
     }
 
     /**
-     * Relatório institucional do recorte para reunião: capa, resumo, participação, proficiência, desempenho, trajetória,
+     * Relatório institucional do recorte para reunião: capa, resumo, participação, alunos com desempenho esperado, desempenho, trajetória,
      * competências e evolução, cada um com a leitura. Imprime em A4 (salvar como PDF) e exporta PowerPoint (no navegador).
      */
     public function relatorio(Request $request, ReitorEvolucaoService $evolucaoServico, ReitorCompetenciasService $competenciasServico): View

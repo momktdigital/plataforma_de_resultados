@@ -7,6 +7,8 @@ use App\Models\Resposta;
 use App\Support\Anulacao;
 use App\Support\CacheDeAnalise;
 use App\Support\Concerns\ComEscopoDeCurso;
+use App\Support\NomeCurso;
+use App\Support\DesempenhoEsperado;
 use App\Support\Psicometria;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
@@ -68,6 +70,23 @@ class PsicometriaService
      */
     public function analisar(Avaliacao $avaliacao, string $periodo = ''): ?array
     {
+        return $this->calcular($avaliacao, $periodo, true);
+    }
+
+    /**
+     * A análise SEM o que só o Dashboard da avaliação mostra (`semAusentes` e a simulação de remoção de itens — esta varre
+     * `respostas` mais uma vez): respondentes, questões, média, mediana, desvio, KR-20 e os itens. É o que o painel da reitoria
+     * precisa para as dezenas de avaliações do recorte; `semAusentes` e `simulacao` vêm nulos.
+     *
+     * @return array{respondentes: int, questoes: int, media: float, mediana: float, desvio: float, kr20: ?float, itens: array<int, array<string, mixed>>}|null
+     */
+    public function analisarItens(Avaliacao $avaliacao, string $periodo = ''): ?array
+    {
+        return $this->calcular($avaliacao, $periodo, false);
+    }
+
+    private function calcular(Avaliacao $avaliacao, string $periodo, bool $completa): ?array
+    {
         $escores = $this->escores($avaliacao, $periodo);
 
         if (count($escores) < self::MINIMO_RESPONDENTES) {
@@ -95,11 +114,70 @@ class PsicometriaService
             'media' => round(array_sum($percentuais) / count($percentuais), 1),
             'mediana' => round(Psicometria::mediana($percentuais), 1),
             'desvio' => round(Psicometria::desvioPadrao($percentuais), 1),
-            'semAusentes' => $this->mediaMedianaSemAusentes($avaliacao, $periodo, $k),
+            'semAusentes' => $completa ? $this->mediaMedianaSemAusentes($avaliacao, $periodo, $k) : null,
             'kr20' => Psicometria::kr20(count($itens), $this->somaPQ($itens), Psicometria::variancia($escores)),
             'itens' => $itens,
-            'simulacao' => $this->simularRemocao($avaliacao, $periodo, $itens, $escores),
+            'simulacao' => $completa ? $this->simularRemocao($avaliacao, $periodo, $itens, $escores) : null,
         ];
+    }
+
+    /**
+     * Acerto (%) de cada questão, por CURSO do resultado — de uma vez, numa varredura só de `respostas` (agrupada por curso ×
+     * questão), em vez de uma análise completa por curso. Só entram cursos com respondentes suficientes
+     * (MINIMO_RESPONDENTES) e a mesma regra de itens da análise (sem anuladas). Grafias do mesmo curso (acento/caixa) somam.
+     * Cacheado (só arrays), com o resto das análises da avaliação.
+     *
+     * @return array<string, array<int, float>>  chave do curso (NomeCurso::chave) => [número da questão => % de acerto]
+     */
+    public function acertoPorCurso(Avaliacao $avaliacao): array
+    {
+        return CacheDeAnalise::lembrar('itens-por-curso', $avaliacao->codigo, [], function () use ($avaliacao) {
+            $respondentes = [];
+            foreach (DB::table('resultado_resumos')
+                ->where('avaliacao_codigo', $avaliacao->codigo)
+                ->where('itens_considerados', '>', 0)
+                ->whereNotNull('curso')->where('curso', '!=', '')
+                ->groupBy('curso')
+                ->selectRaw('curso, COUNT(*) as n')
+                ->get() as $l) {
+                $respondentes[NomeCurso::chave((string) $l->curso)] = ($respondentes[NomeCurso::chave((string) $l->curso)] ?? 0) + (int) $l->n;
+            }
+            $elegiveis = array_filter($respondentes, fn ($n) => $n >= self::MINIMO_RESPONDENTES);
+            if ($elegiveis === []) {
+                return [];
+            }
+
+            $linhas = $this->comEscore($this->baseItens($avaliacao, ''), $avaliacao)
+                ->whereNotNull('sc.curso')->where('sc.curso', '!=', '')
+                ->groupBy('sc.curso', 'r.questao_numero')
+                ->selectRaw('sc.curso as curso, r.questao_numero as numero, COUNT(*) as respostas')
+                ->selectRaw('SUM(CASE WHEN '.$this->condicaoAcerto().' THEN 1 ELSE 0 END) as acertos')
+                ->get();
+
+            $soma = [];
+            foreach ($linhas as $l) {
+                $chave = NomeCurso::chave((string) $l->curso);
+                if (! isset($elegiveis[$chave])) {
+                    continue;
+                }
+                $c = &$soma[$chave][(int) $l->numero];
+                $c ??= [0, 0];
+                $c[0] += (int) $l->acertos;
+                $c[1] += (int) $l->respostas;
+                unset($c);
+            }
+
+            $resultado = [];
+            foreach ($soma as $chave => $questoes) {
+                foreach ($questoes as $numero => [$acertos, $respostas]) {
+                    if ($respostas > 0) {
+                        $resultado[$chave][$numero] = round($acertos / $respostas * 100, 1);
+                    }
+                }
+            }
+
+            return $resultado;
+        });
     }
 
     /**
@@ -151,6 +229,43 @@ class PsicometriaService
             'presentes' => $presentes,
             'ausentes' => $total - $presentes,
             'percentual' => $total > 0 ? round($presentes / $total * 100, 1) : 0.0,
+        ];
+    }
+
+    /**
+     * Alunos com DESEMPENHO ESPERADO: dos presentes com nota, quantos alcançaram o mínimo do período do curso em que estavam
+     * (60% da fatia da prova que cabe no período — `questoes.periodo_minimo`; 60% da prova quando ela não traz a meta). É a
+     * regra única de App\Support\DesempenhoEsperado, a mesma do painel do coordenador e do da reitoria.
+     *
+     * Respeita o período e o escopo de cursos como o resto das análises. Agrega em SQL por (período do curso × percentual):
+     * poucas linhas, sem varrer `respostas`.
+     *
+     * @return array{comMeta: bool, presentes: int, dentro: int, pct: ?float}  `comMeta` false = a prova não traz o período mínimo das questões (vale 60% da prova)
+     */
+    public function desempenhoEsperado(Avaliacao $avaliacao, string $periodo = ''): array
+    {
+        $prova = DesempenhoEsperado::provas([$avaliacao->codigo])[$avaliacao->codigo] ?? null;
+
+        $linhas = $this->resumos($avaliacao, $periodo)
+            ->where('rr.ausente', false)
+            ->whereNotNull('rr.percentual')
+            ->groupBy('rr.periodo', 'rr.percentual')
+            ->selectRaw('rr.periodo as periodo, rr.percentual as percentual, COUNT(*) as n')
+            ->get();
+
+        $presentes = 0;
+        $dentro = 0;
+        foreach ($linhas as $l) {
+            $n = (int) $l->n;
+            $presentes += $n;
+            $dentro += DesempenhoEsperado::alcancou((float) $l->percentual, DesempenhoEsperado::minimo($prova, (string) $l->periodo)) ? $n : 0;
+        }
+
+        return [
+            'comMeta' => $prova['comMeta'] ?? false,
+            'presentes' => $presentes,
+            'dentro' => $dentro,
+            'pct' => $presentes > 0 ? round($dentro / $presentes * 100, 1) : null,
         ];
     }
 

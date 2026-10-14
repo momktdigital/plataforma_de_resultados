@@ -5,7 +5,7 @@ namespace App\Support;
 /**
  * Estatística sobre um histograma de percentuais de acerto: `[décimos de ponto => quantidade]` (59,9% → 599).
  *
- * É o que permite ao painel da reitoria calcular média, mediana, quartis, faixas e patamares de proficiência de
+ * É o que permite ao painel da reitoria calcular média, mediana, quartis, faixas e patamares de acerto de
  * dezenas de milhares de resultados SEM trazê-los para o PHP: `resultado_resumos.percentual` tem uma casa decimal
  * (no máximo 1001 valores possíveis), então um `GROUP BY percentual` no banco devolve, por curso e período, no
  * máximo ~1000 linhas — e daí sai tudo de forma exata (nada de aproximar por faixas de 1 ponto, que classificaria

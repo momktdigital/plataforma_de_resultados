@@ -170,7 +170,7 @@
                         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
                             <div class="flex items-start justify-between gap-2">
                                 <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ $m['rotulo'] }}</p>
-                                @include('plano._botao', ['visual' => $m['rotulo'] === 'Presença' ? 'participacao' : 'proficiencia', 'titulo' => $m['rotulo'].' (comparação de semestres)', 'ctx' => $ctxPlano])
+                                @include('plano._botao', ['visual' => $m['rotulo'] === 'Presença' ? 'participacao' : 'esperado', 'titulo' => $m['rotulo'].' (comparação de semestres)', 'ctx' => $ctxPlano])
                             </div>
                             <p class="text-3xl font-bold mt-2 tracking-tight {{ $m['cor'] ? CorDesempenho::classeTexto($m['par']['atual']) : '' }}">{{ $fmt($m['par']['atual']) }}<span class="text-lg font-medium text-slate-500">%</span></p>
                             <p class="text-xs text-slate-500 mt-1">{{ $atual }} &middot; em {{ $referencia }}: {{ $fmt($m['par']['referencia']) }}%</p>

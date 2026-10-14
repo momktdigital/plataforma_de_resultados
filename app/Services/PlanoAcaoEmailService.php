@@ -116,8 +116,8 @@ class PlanoAcaoEmailService
         $html .= $secao('Indicadores',
             $campo('Participação atual', e($pct($plano->participacao_atual)).(! empty($ctx['previstos']) ? ' ('.e((string) $ctx['fizeram']).' de '.e((string) $ctx['previstos']).' previstos)' : ''))
             .$campo('Meta de participação', e($pct($plano->meta_participacao)).' (meta institucional)')
-            .$campo('Proficiência atual', e($pct($plano->proficiencia_atual)).' '.(($ctx['criterio'] ?? 'corte') === 'periodo' ? '(alunos que alcançaram 60% do que cabe no período deles)' : (! empty($ctx['corte']) ? '(estudantes com ≥ '.(int) $ctx['corte'].'% de acerto)' : '')))
-            .$campo('Meta de proficiência', e($pct($plano->meta_proficiencia)))
+            .$campo('Alunos com desempenho esperado', e($pct($plano->esperado_atual)).' (alcançaram o mínimo esperado para o período em que estão)')
+            .$campo('Meta de alunos com desempenho esperado', e($pct($plano->meta_esperado)))
             .$campo('Próxima avaliação', e($plano->data_proxima_avaliacao?->format('d/m/Y') ?? 'Não informada')));
 
         $avaliacoes = $plano->avaliacoesDoRecorte();

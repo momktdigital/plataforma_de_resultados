@@ -18,7 +18,7 @@
     </p>
     <div class="overflow-x-auto rounded-xl border border-slate-200">
         <table class="w-full text-sm">
-            <caption class="sr-only">Participação e proficiência: linha de base, metas e resultado na avaliação seguinte</caption>
+            <caption class="sr-only">Participação e alunos com desempenho esperado: linha de base, metas e resultado na avaliação seguinte</caption>
             <thead class="bg-slate-50 text-left text-slate-600">
                 <tr>
                     <th scope="col" class="px-4 py-2.5">Indicador</th>
@@ -30,7 +30,7 @@
             </thead>
             <tbody class="divide-y divide-slate-100">
                 @foreach ([
-                    ['Proficiência', 'proficiencia', 'dProficiencia', 'metaProficiencia'],
+                    ['Alunos com desempenho esperado', 'esperado', 'dEsperado', 'metaEsperado'],
                     ['Participação', 'participacao', 'dParticipacao', 'metaParticipacao'],
                 ] as [$nome, $chave, $chaveDif, $chaveMeta])
                     <tr>

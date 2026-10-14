@@ -25,6 +25,10 @@
         ['id' => 'planos', 'rota' => 'coordenador.planos.index', 'icone' => 'ph-clipboard-text', 'rotulo' => 'Planos de ação'],
         ['id' => 'alunos', 'rota' => 'coordenador.alunos', 'icone' => 'ph-users-three', 'rotulo' => 'Alunos'],
     ];
+    // Módulo desligado (ou em teste para outros usuários): sem a aba de planos de ação.
+    if (! \App\Support\PlanoAcaoModulo::liberadoPara($usuario)) {
+        $abas = array_values(array_filter($abas, fn ($a) => $a['id'] !== 'planos'));
+    }
 @endphp
 <div class="relative overflow-hidden rounded-2xl shadow-lg mb-6" style="background: linear-gradient(135deg, #00b48d 0%, #009e7d 55%, #007a61 100%);">
     <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(circle at 85% 15%, white 0, transparent 45%), radial-gradient(circle at 10% 90%, white 0, transparent 40%);"></div>

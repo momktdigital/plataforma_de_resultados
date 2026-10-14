@@ -8,12 +8,28 @@
         <h2 class="text-lg font-bold">Números da prova</h2>
         <span class="ml-auto">@include('plano._botao', ['visual' => 'avaliacao', 'titulo' => 'Números da prova', 'ctx' => ['curso' => '', 'avaliacao' => $avaliacao->codigo], 'planoItem' => (string) $avaliacao->codigo])</span>
     </div>
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5 mb-6">
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 mb-6">
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Alunos presentes</p>
             <p class="text-3xl font-bold mt-2 tracking-tight">{{ number_format($presenca['percentual'], 1, ',', '.') }}<span class="text-lg font-medium text-slate-500">%</span></p>
             <p class="text-xs text-slate-500 mt-1">{{ $presenca['presentes'] }} de {{ $presenca['total'] }} · {{ $presenca['ausentes'] }} ausente(s) (prova inteira em branco)</p>
         </div>
+        @if ($esperado !== null)
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+                <div class="flex items-center gap-2">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Alunos com desempenho esperado</p>
+                    @include('_explicacao', ['explicacao' => $explicacoes['kpi_esperado'] ?? null])
+                </div>
+                @if ($esperado['pct'] === null)
+                    <p class="text-3xl font-bold mt-2 tracking-tight text-slate-300">—</p>
+                    <p class="text-xs text-slate-500 mt-1">sem presentes com nota</p>
+                @else
+                    <p class="text-3xl font-bold mt-2 tracking-tight">{{ number_format($esperado['pct'], 1, ',', '.') }}<span class="text-lg font-medium text-slate-500">%</span></p>
+                    <p class="text-xs text-slate-500 mt-1">{{ $esperado['dentro'] }} de {{ $esperado['presentes'] }} presente(s) com nota</p>
+                    <p class="text-xs text-slate-500 mt-2 pt-2 border-t border-slate-100">{{ $esperado['comMeta'] ? 'Mínimo do período do curso de cada aluno' : 'Mínimo de 60% da prova (sem período mínimo nas questões)' }}</p>
+                @endif
+            </div>
+        @endif
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
             <div class="flex items-center gap-2">
                 <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Média da turma</p>

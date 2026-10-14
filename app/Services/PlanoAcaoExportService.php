@@ -19,7 +19,7 @@ class PlanoAcaoExportService
 {
     private const PLANOS = [
         'Nº', 'Curso', 'Período letivo', 'Categoria', 'Origem', 'Situação', 'Autor', 'Enviado em', 'Decidido em', 'Dias de análise',
-        'Participação na criação (%)', 'Meta de participação (%)', 'Proficiência na criação (%)', 'Meta de proficiência (%)', 'Próxima avaliação',
+        'Participação na criação (%)', 'Meta de participação (%)', 'Alunos com desempenho esperado na criação (%)', 'Meta de alunos com desempenho esperado (%)', 'Próxima avaliação',
         'Causa priorizada', 'Pontuação', 'Causa-raiz', 'Ações', 'Concluídas', 'Atrasadas', 'Encerrado em', 'Síntese do encerramento',
     ];
 
@@ -60,8 +60,8 @@ class PlanoAcaoExportService
             $numero($abaPlanos, $c++, $linha, $p->enviado_em && $p->decidido_em ? (int) $p->enviado_em->diffInDays($p->decidido_em) : null);
             $numero($abaPlanos, $c++, $linha, $p->participacao_atual);
             $numero($abaPlanos, $c++, $linha, $p->meta_participacao);
-            $numero($abaPlanos, $c++, $linha, $p->proficiencia_atual);
-            $numero($abaPlanos, $c++, $linha, $p->meta_proficiencia);
+            $numero($abaPlanos, $c++, $linha, $p->esperado_atual);
+            $numero($abaPlanos, $c++, $linha, $p->meta_esperado);
             $texto($abaPlanos, $c++, $linha, $p->data_proxima_avaliacao?->format('d/m/Y'));
             $texto($abaPlanos, $c++, $linha, $p->causa_priorizada);
             $numero($abaPlanos, $c++, $linha, $p->pontuacao());

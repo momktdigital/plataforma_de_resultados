@@ -27,8 +27,8 @@
         'niveis' => $bloom['niveis'],
         'bloom' => [
             'total' => array_map(fn ($n) => $bloom['total'][$n['chave']]['pct'] ?? null, $bloom['niveis']),
-            'proficientes' => array_map(fn ($n) => $bloom['proficientes'][$n['chave']]['pct'] ?? null, $bloom['niveis']),
-            'naoProficientes' => array_map(fn ($n) => $bloom['naoProficientes'][$n['chave']]['pct'] ?? null, $bloom['niveis']),
+            'esperado' => array_map(fn ($n) => $bloom['esperado'][$n['chave']]['pct'] ?? null, $bloom['niveis']),
+            'abaixo' => array_map(fn ($n) => $bloom['abaixo'][$n['chave']]['pct'] ?? null, $bloom['niveis']),
             'cursos' => array_map(fn ($c) => [
                 'nome' => $c['nome'],
                 'pcts' => array_map(fn ($n) => $bloom['porCurso'][$c['chave']][$n['chave']]['pct'] ?? null, $bloom['niveis']),
@@ -63,13 +63,13 @@
     </div>
 @else
     <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5" aria-labelledby="secao-bloom">
-        <h3 class="text-xs font-bold uppercase tracking-wide text-emerald-800 mb-3">O que distingue os proficientes</h3>
-        <div class="relative h-80"><canvas id="grafico-bloom-distingue" data-titulo="Acerto de proficientes e não proficientes por nível de Bloom"></canvas></div>
-        <ul class="mt-3 flex flex-wrap gap-2" aria-label="Distância entre proficientes e não proficientes">
+        <h3 class="text-xs font-bold uppercase tracking-wide text-emerald-800 mb-3">O que distingue quem teve o desempenho esperado</h3>
+        <div class="relative h-80"><canvas id="grafico-bloom-distingue" data-titulo="Acerto de quem teve o desempenho esperado e de quem ficou abaixo, por nível de Bloom"></canvas></div>
+        <ul class="mt-3 flex flex-wrap gap-2" aria-label="Distância entre quem teve o desempenho esperado e quem ficou abaixo">
             @foreach ($bloom['niveis'] as $n)
                 @php
-                    $p = $bloom['proficientes'][$n['chave']]['pct'] ?? null;
-                    $q = $bloom['naoProficientes'][$n['chave']]['pct'] ?? null;
+                    $p = $bloom['esperado'][$n['chave']]['pct'] ?? null;
+                    $q = $bloom['abaixo'][$n['chave']]['pct'] ?? null;
                 @endphp
                 @if ($p !== null && $q !== null)
                     <li class="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700"><strong>{{ $n['rotulo'] }}</strong> <span class="font-mono">+{{ $fmt($p - $q) }} pp</span></li>
@@ -147,10 +147,10 @@
 
         <div class="mt-4 overflow-x-auto">
             <table data-ordenavel class="w-full text-sm">
-                <caption class="sr-only">Percentual de acerto por área: conjunto, proficientes, não proficientes e a distância entre eles.</caption>
+                <caption class="sr-only">Percentual de acerto por área: conjunto, quem teve o desempenho esperado, quem ficou abaixo e a distância entre eles.</caption>
                 <thead class="text-left text-[11px] font-bold uppercase tracking-wide text-slate-600">
                     <tr class="border-b border-slate-200">
-                        @foreach ([['Área', 'texto'], ['Respostas', 'numero'], ['Conjunto', 'numero'], ['Proficientes', 'numero'], ['Não proficientes', 'numero'], ['Distância', 'numero']] as [$rotulo, $tipo])
+                        @foreach ([['Área', 'texto'], ['Respostas', 'numero'], ['Conjunto', 'numero'], ['Desempenho esperado', 'numero'], ['Abaixo do esperado', 'numero'], ['Distância', 'numero']] as [$rotulo, $tipo])
                             <th scope="col" data-ordem="{{ $tipo }}" class="px-3 py-2 {{ $tipo === 'numero' ? 'text-right' : '' }}">
                                 <button type="button" class="inline-flex items-center gap-1 font-bold uppercase tracking-wide hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded">{{ $rotulo }} <i class="ph ph-arrows-down-up text-xs" aria-hidden="true"></i></button>
                             </th>
@@ -163,8 +163,8 @@
                             <td data-valor="{{ $a['area'] }}" class="px-3 py-2.5 font-medium text-slate-800">{{ $a['area'] }}</td>
                             <td data-valor="{{ $a['respostas'] }}" class="px-3 py-2.5 text-right font-mono">{{ $fmt($a['respostas'], 0) }}</td>
                             <td data-valor="{{ $a['pct'] }}" class="px-3 py-2.5 text-right font-mono font-bold">{{ $fmt($a['pct']) }}%</td>
-                            <td data-valor="{{ $a['proficientes'] }}" class="px-3 py-2.5 text-right font-mono">{{ $a['proficientes'] === null ? '—' : $fmt($a['proficientes']).'%' }}</td>
-                            <td data-valor="{{ $a['naoProficientes'] }}" class="px-3 py-2.5 text-right font-mono">{{ $a['naoProficientes'] === null ? '—' : $fmt($a['naoProficientes']).'%' }}</td>
+                            <td data-valor="{{ $a['esperado'] }}" class="px-3 py-2.5 text-right font-mono">{{ $a['esperado'] === null ? '—' : $fmt($a['esperado']).'%' }}</td>
+                            <td data-valor="{{ $a['abaixo'] }}" class="px-3 py-2.5 text-right font-mono">{{ $a['abaixo'] === null ? '—' : $fmt($a['abaixo']).'%' }}</td>
                             <td data-valor="{{ $a['distancia'] }}" class="px-3 py-2.5 text-right font-mono">{{ $a['distancia'] === null ? '—' : '+'.$fmt($a['distancia']).' pp' }}</td>
                         </tr>
                     @endforeach
@@ -217,14 +217,14 @@
     var V = window.ReitorViz;
     var rotulos = dados.niveis.map(function (n) { return n.rotulo; });
 
-    // 1 · O que distingue os proficientes: barras agrupadas por nível de Bloom.
+    // 1 · O que distingue quem teve o desempenho esperado: barras agrupadas por nível de Bloom.
     V.criar('grafico-bloom-distingue', {
         type: 'bar',
         data: {
             labels: rotulos,
             datasets: [
-                { label: 'Proficientes (≥ ' + V.fmt(dados.corte, 0) + '%)', data: dados.bloom.proficientes, backgroundColor: V.cores.verde, maxBarThickness: 48 },
-                { label: 'Não proficientes', data: dados.bloom.naoProficientes, backgroundColor: V.cores.cinza, maxBarThickness: 48 },
+                { label: 'Desempenho esperado', data: dados.bloom.esperado, backgroundColor: V.cores.verde, maxBarThickness: 48 },
+                { label: 'Abaixo do esperado', data: dados.bloom.abaixo, backgroundColor: V.cores.cinza, maxBarThickness: 48 },
             ],
         },
         options: {
@@ -288,7 +288,7 @@
                     rotulosValores: { dataset: 0, horizontal: true, formato: function (v) { return V.pct(v); } },
                     tooltip: { callbacks: { label: function (item) {
                         var a = dados.areas[item.dataIndex];
-                        return ['Conjunto: ' + V.pct(a.pct) + ' (' + a.respostas + ' respostas)', 'Proficientes: ' + V.pct(a.proficientes), 'Não proficientes: ' + V.pct(a.naoProficientes)];
+                        return ['Conjunto: ' + V.pct(a.pct) + ' (' + a.respostas + ' respostas)', 'Desempenho esperado: ' + V.pct(a.esperado), 'Abaixo do esperado: ' + V.pct(a.abaixo)];
                     } } },
                 },
             },

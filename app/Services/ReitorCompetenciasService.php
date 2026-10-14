@@ -4,15 +4,17 @@ namespace App\Services;
 
 use App\Support\Anulacao;
 use App\Support\CacheDeAnalise;
+use App\Support\DesempenhoEsperado;
 use App\Support\NomeCurso;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Desempenho institucional por COMPETÊNCIA: nível cognitivo da taxonomia de Bloom e área de conhecimento das
- * questões, por curso e entre proficientes × não proficientes ("o que distingue quem passou do corte?").
+ * questões, por curso e entre quem teve o desempenho esperado × quem ficou abaixo dele ("o que distingue quem alcançou o
+ * esperado?" — DesempenhoEsperado).
  *
  * É a única parte do painel da reitoria que varre `respostas` — numa ÚNICA consulta agregada no banco (JOIN +
- * GROUP BY + SUM(CASE...)), restrita aos presentes da avaliação e agrupada por curso × proficiente × Bloom × área,
+ * GROUP BY + SUM(CASE...)), restrita aos presentes da avaliação e agrupada por curso × esperado × Bloom × área,
  * então devolve algumas centenas de linhas, não os milhões de respostas. O resultado é cacheado por avaliação
  * (CacheDeAnalise) — só arrays — e a seleção de cursos é aplicada depois, em PHP, sobre o cache.
  *
@@ -24,7 +26,7 @@ class ReitorCompetenciasService
     /** Células (curso × nível/área) com menos respostas que isto aparecem como "—": amostra pequena demais. */
     public const MINIMO_RESPOSTAS = 30;
 
-    /** Respostas mínimas de proficientes / não proficientes numa célula do conjunto. */
+    /** Respostas mínimas de quem alcançou / ficou abaixo do esperado numa célula do conjunto. */
     private const MINIMO_GRUPO = 10;
 
     /** Áreas mostradas no mapa de calor (as de mais respostas); a lista completa vai no ranking. */
@@ -67,14 +69,14 @@ class ReitorCompetenciasService
      */
     public function gerar(array $ctx): array
     {
-        $linhas = $this->linhas($ctx['avaliacao']['codigos'], $ctx['corte']);
+        $linhas = $this->linhas($ctx['avaliacao']['codigos']);
         $selecionados = $ctx['cursosSelecionados'];
 
-        // [escopo => [grupo => [acertos, total]]] para o total da visão, proficientes, não proficientes e por curso.
-        $bloom = ['total' => [], 'prof' => [], 'nao' => [], 'cursos' => []];
-        $areas = ['total' => [], 'prof' => [], 'nao' => [], 'cursos' => []];
+        // [escopo => [grupo => [acertos, total]]] para o total da visão, quem alcançou o esperado, quem ficou abaixo e por curso.
+        $bloom = ['total' => [], 'esperado' => [], 'abaixo' => [], 'cursos' => []];
+        $areas = ['total' => [], 'esperado' => [], 'abaixo' => [], 'cursos' => []];
 
-        foreach ($linhas as [$curso, $proficiente, $nivelBruto, $area, $total, $acertos]) {
+        foreach ($linhas as [$curso, $alcancou, $nivelBruto, $area, $total, $acertos]) {
             $chave = NomeCurso::chave($curso);
             if (! in_array($chave, $selecionados, true)) {
                 continue;
@@ -82,13 +84,13 @@ class ReitorCompetenciasService
 
             if (($nivel = self::nivelDeBloom($nivelBruto)) !== null) {
                 $this->somar($bloom['total'], $nivel, $total, $acertos);
-                $this->somar($bloom[$proficiente ? 'prof' : 'nao'], $nivel, $total, $acertos);
+                $this->somar($bloom[$alcancou ? 'esperado' : 'abaixo'], $nivel, $total, $acertos);
                 $this->somar($bloom['cursos'][$chave], $nivel, $total, $acertos);
             }
             if ($area !== null && trim($area) !== '') {
                 $rotulo = trim((string) preg_replace('/\s+/u', ' ', $area));
                 $this->somar($areas['total'], $rotulo, $total, $acertos);
-                $this->somar($areas[$proficiente ? 'prof' : 'nao'], $rotulo, $total, $acertos);
+                $this->somar($areas[$alcancou ? 'esperado' : 'abaixo'], $rotulo, $total, $acertos);
                 $this->somar($areas['cursos'][$chave], $rotulo, $total, $acertos);
             }
         }
@@ -97,22 +99,24 @@ class ReitorCompetenciasService
     }
 
     /**
-     * Uma varredura de `respostas` por recorte (as avaliações dele juntas): [curso, proficiente (0/1), bloom_nivel, área, respostas, acertos].
-     * Só presentes com nota; cacheada.
+     * Uma varredura de `respostas` por recorte (as avaliações dele juntas): [curso, alcançou o esperado (0/1), bloom_nivel, área, respostas, acertos].
+     * Só presentes com nota; cacheada. O "esperado" é o mínimo de cada aluno no período dele (DesempenhoEsperado::sqlAlcancou),
+     * decidido no banco; mudar a meta das questões (`periodo_minimo`) invalida o cache junto com as questões.
      *
      * @param  array<int, int>  $codigos
      * @return array<int, array{0: string, 1: bool, 2: ?string, 3: ?string, 4: int, 5: int}>
      */
-    private function linhas(array $codigos, float $corte): array
+    private function linhas(array $codigos): array
     {
-        return CacheDeAnalise::lembrarVarias('reitor-competencias', $codigos, ['corte' => $corte], function () use ($codigos, $corte) {
+        return CacheDeAnalise::lembrarVarias('reitor-competencias', $codigos, [], function () use ($codigos) {
+            [$alcancou, $bindings] = DesempenhoEsperado::sqlAlcancou($codigos);
             $presentes = DB::table('resultado_resumos as rr')
                 ->whereIn('rr.avaliacao_codigo', $codigos)
                 ->where('rr.ausente', false)
                 ->whereNotNull('rr.percentual')
                 ->whereNotNull('rr.curso')->where('rr.curso', '!=', '')
                 ->select('rr.avaliacao_codigo', 'rr.aluno_chave', 'rr.periodo', 'rr.curso')
-                ->selectRaw('CASE WHEN rr.percentual >= ? THEN 1 ELSE 0 END as proficiente', [$corte]);
+                ->selectRaw("CASE WHEN {$alcancou} THEN 1 ELSE 0 END as esperado", $bindings);
 
             return DB::table('respostas as r')
                 ->joinSub($presentes, 'pr', function ($join) {
@@ -132,11 +136,11 @@ class ReitorCompetenciasService
                 })
                 ->whereIn('r.avaliacao_codigo', $codigos)
                 ->whereNull('r.deleted_at')
-                ->groupBy('pr.curso', 'pr.proficiente', 'q.bloom_nivel', 'q.area')
-                ->selectRaw('pr.curso as curso, pr.proficiente as proficiente, q.bloom_nivel as bloom, q.area as area, COUNT(*) as total')
+                ->groupBy('pr.curso', 'pr.esperado', 'q.bloom_nivel', 'q.area')
+                ->selectRaw('pr.curso as curso, pr.esperado as esperado, q.bloom_nivel as bloom, q.area as area, COUNT(*) as total')
                 ->selectRaw('SUM(CASE WHEN '.Anulacao::condicaoAcertoSql('r.resposta', 'q.gabarito', 'q.anulada_modo').' THEN 1 ELSE 0 END) as acertos')
                 ->get()
-                ->map(fn ($l) => [(string) $l->curso, (bool) $l->proficiente, $l->bloom !== null ? (string) $l->bloom : null, $l->area !== null ? (string) $l->area : null, (int) $l->total, (int) $l->acertos])
+                ->map(fn ($l) => [(string) $l->curso, (bool) $l->esperado, $l->bloom !== null ? (string) $l->bloom : null, $l->area !== null ? (string) $l->area : null, (int) $l->total, (int) $l->acertos])
                 ->all();
         });
     }
@@ -164,7 +168,7 @@ class ReitorCompetenciasService
     {
         $niveis = array_map(fn ($n) => ['chave' => $n['chave'], 'rotulo' => $n['rotulo']], self::NIVEIS_BLOOM);
 
-        // Proficientes e não proficientes são grupos menores: aceitam menos respostas por célula que curso × nível.
+        // Quem alcançou o esperado e quem ficou abaixo são grupos menores: aceitam menos respostas por célula que curso × nível.
         $linha = fn (array $mapa, int $minimo = self::MINIMO_RESPOSTAS) => collect($niveis)->mapWithKeys(fn ($n) => [$n['chave'] => [
             'pct' => $this->pct($mapa[$n['chave']] ?? null, $minimo),
             'respostas' => $mapa[$n['chave']][1] ?? 0,
@@ -180,8 +184,8 @@ class ReitorCompetenciasService
         return [
             'niveis' => $niveis,
             'total' => $linha($b['total']),
-            'proficientes' => $linha($b['prof'], self::MINIMO_GRUPO),
-            'naoProficientes' => $linha($b['nao'], self::MINIMO_GRUPO),
+            'esperado' => $linha($b['esperado'], self::MINIMO_GRUPO),
+            'abaixo' => $linha($b['abaixo'], self::MINIMO_GRUPO),
             'porCurso' => $porCurso,
             'temDados' => $b['total'] !== [],
         ];
@@ -200,15 +204,15 @@ class ReitorCompetenciasService
                 continue;
             }
             $pct = $this->pct($celula);
-            $prof = $this->pct($a['prof'][$area] ?? null, self::MINIMO_GRUPO);
-            $nao = $this->pct($a['nao'][$area] ?? null, self::MINIMO_GRUPO);
+            $esperado = $this->pct($a['esperado'][$area] ?? null, self::MINIMO_GRUPO);
+            $abaixo = $this->pct($a['abaixo'][$area] ?? null, self::MINIMO_GRUPO);
             $ranking[] = [
                 'area' => $area,
                 'pct' => $pct,
                 'respostas' => $celula[1],
-                'proficientes' => $prof,
-                'naoProficientes' => $nao,
-                'distancia' => $prof !== null && $nao !== null ? round($prof - $nao, 1) : null,
+                'esperado' => $esperado,
+                'abaixo' => $abaixo,
+                'distancia' => $esperado !== null && $abaixo !== null ? round($esperado - $abaixo, 1) : null,
             ];
         }
         usort($ranking, fn ($x, $y) => $x['pct'] <=> $y['pct']);

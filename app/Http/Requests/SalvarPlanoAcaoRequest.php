@@ -20,8 +20,8 @@ class SalvarPlanoAcaoRequest extends FormRequest
     /** "72,5" é um número válido para quem digita em português. */
     protected function prepareForValidation(): void
     {
-        if (is_string($this->input('meta_proficiencia'))) {
-            $this->merge(['meta_proficiencia' => str_replace(',', '.', trim($this->input('meta_proficiencia')))]);
+        if (is_string($this->input('meta_esperado'))) {
+            $this->merge(['meta_esperado' => str_replace(',', '.', trim($this->input('meta_esperado')))]);
         }
     }
 
@@ -34,7 +34,7 @@ class SalvarPlanoAcaoRequest extends FormRequest
             'acao' => ['nullable', Rule::in(['salvar', 'publicar'])],
             'etapa_atual' => ['nullable', 'integer', 'between:1,5'],
 
-            'meta_proficiencia' => ['nullable', 'numeric', 'between:0,100'],
+            'meta_esperado' => ['nullable', 'numeric', 'between:0,100'],
             'data_proxima_avaliacao' => $data,
 
             'recorte' => $texto,
@@ -65,8 +65,8 @@ class SalvarPlanoAcaoRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'meta_proficiencia.numeric' => 'A meta de proficiência deve ser um número de 0 a 100.',
-            'meta_proficiencia.between' => 'A meta de proficiência deve ficar entre 0% e 100%.',
+            'meta_esperado.numeric' => 'A meta de alunos com desempenho esperado deve ser um número de 0 a 100.',
+            'meta_esperado.between' => 'A meta de alunos com desempenho esperado deve ficar entre 0% e 100%.',
             'data_proxima_avaliacao.date_format' => 'Informe a data da próxima avaliação no formato dia/mês/ano.',
             'acoes.max' => 'Um plano pode ter no máximo 15 ações.',
             'acoes.*.prazo.date_format' => 'Informe o prazo das ações como uma data válida.',

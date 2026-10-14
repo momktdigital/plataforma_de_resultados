@@ -49,7 +49,8 @@ class BiController extends Controller
 
         $periodo = trim((string) $request->query('periodo', ''));
         // Dos resumos (uma linha por respondente), não de `respostas`: um DISTINCT sobre centenas de milhares de linhas.
-        $periodosDisponiveis = DB::table('resultado_resumos')->where('avaliacao_codigo', $avaliacao->codigo)->distinct()->orderBy('periodo')->pluck('periodo');
+        // Sem o período vazio: o valor dele ('') é o mesmo de "Todos", então a opção "(sem período)" selecionava junto com "Todos".
+        $periodosDisponiveis = DB::table('resultado_resumos')->where('avaliacao_codigo', $avaliacao->codigo)->where('periodo', '!=', '')->distinct()->orderBy('periodo')->pluck('periodo');
         $filtro = FiltroDemografico::deQueryString($request->query());
         $opcoesFiltro = [
             ...$alunoResolver->opcoesDisponiveis($avaliacao->codigo, $coordenador ? new EscopoCurso($cursosDoEscopo) : null),
@@ -100,6 +101,9 @@ class BiController extends Controller
             'comparacao' => $comparacaoAvaliacoes,
         ];
 
+        // % de presentes com nota que alcançaram o desempenho esperado (o mínimo do período do curso em que estavam).
+        $esperado = $psicometria !== null ? $psicometriaService->desempenhoEsperado($avaliacao, $periodo) : null;
+
         return view('admin.avaliacoes.bi', [
             'avaliacao' => $avaliacao,
             'periodo' => $periodo,
@@ -126,6 +130,7 @@ class BiController extends Controller
             'mediaPorMiller' => $painel['mediaPorMiller'],
             'psicometria' => $psicometria,
             'presenca' => $psicometria !== null ? $psicometriaService->presenca($avaliacao, $periodo) : null,
+            'esperado' => $esperado,
             'curvasItens' => ($visivel('mapa_itens') && $psicometria !== null)
                 ? $psicometriaService->curvasCaracteristicas($avaliacao, $periodo)
                 : null,
@@ -139,6 +144,7 @@ class BiController extends Controller
             // consulta a mais só para explicar os gráficos.
             'explicacoes' => $explicacaoService->gerar([
                 ...$painel,
+                'esperado' => $esperado,
                 // O texto sobre a lista fala do conjunto inteiro (primeiro e último colocado), não só da página.
                 'ranking' => $resumoRanking !== null ? array_map(fn ($p) => ['percentual' => $p], $resumoRanking['percentuais']) : null,
             ]),

@@ -45,7 +45,7 @@ class PlanoAcao extends Model
     public const VISUAIS = [
         'geral' => ['rotulo' => 'Visão geral do curso', 'icone' => 'ph-squares-four'],
         'participacao' => ['rotulo' => 'Participação', 'icone' => 'ph-user-check'],
-        'proficiencia' => ['rotulo' => 'Proficiência', 'icone' => 'ph-target'],
+        'esperado' => ['rotulo' => 'Alunos com desempenho esperado', 'icone' => 'ph-target'],
         'evolucao' => ['rotulo' => 'Evolução entre as avaliações', 'icone' => 'ph-chart-line-up'],
         'area' => ['rotulo' => 'Desempenho por área', 'icone' => 'ph-chart-polar'],
         'bloom' => ['rotulo' => 'Desempenho por nível de Bloom', 'icone' => 'ph-brain'],
@@ -74,7 +74,7 @@ class PlanoAcao extends Model
 
     protected $fillable = [
         'admin_id', 'curso', 'periodo_letivo', 'categoria_id', 'avaliacao_codigo', 'origem_visual', 'origem_item', 'origem_rotulo', 'contexto',
-        'participacao_atual', 'meta_participacao', 'proficiencia_atual', 'meta_proficiencia', 'data_proxima_avaliacao',
+        'participacao_atual', 'meta_participacao', 'esperado_atual', 'meta_esperado', 'data_proxima_avaliacao',
         'recorte', 'resultado', 'fragilidades', 'evidencias',
         'causas', 'causa_priorizada', 'nota_impacto', 'nota_evidencia', 'nota_governabilidade', 'porques', 'causa_raiz',
         'status', 'envios', 'enviado_em', 'decidido_em', 'decidido_por', 'encerrado_em', 'conclusao',
@@ -88,8 +88,8 @@ class PlanoAcao extends Model
             'porques' => 'array',
             'participacao_atual' => 'float',
             'meta_participacao' => 'float',
-            'proficiencia_atual' => 'float',
-            'meta_proficiencia' => 'float',
+            'esperado_atual' => 'float',
+            'meta_esperado' => 'float',
             'data_proxima_avaliacao' => 'date',
             'enviado_em' => 'datetime',
             'decidido_em' => 'datetime',
@@ -245,7 +245,7 @@ class PlanoAcao extends Model
     public function conteudo(): array
     {
         return [
-            ...$this->only(['meta_proficiencia', 'recorte', 'resultado', 'fragilidades', 'evidencias', 'causas', 'causa_priorizada', 'nota_impacto', 'nota_evidencia', 'nota_governabilidade', 'porques', 'causa_raiz']),
+            ...$this->only(['meta_esperado', 'recorte', 'resultado', 'fragilidades', 'evidencias', 'causas', 'causa_priorizada', 'nota_impacto', 'nota_evidencia', 'nota_governabilidade', 'porques', 'causa_raiz']),
             'data_proxima_avaliacao' => $this->data_proxima_avaliacao?->format('d/m/Y'),
             'acoes' => $this->acoes()->get()->map(fn (PlanoAcaoAcao $a) => [
                 'id' => $a->id, 'descricao' => $a->descricao, 'execucao' => $a->execucao, 'responsavel' => $a->responsavel,

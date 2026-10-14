@@ -66,9 +66,9 @@
         <p class="mt-1 text-xs text-slate-600">do 1º ao 3º quartil (amplitude de {{ $total['q1'] !== null ? $fmt($total['q3'] - $total['q1']) : '—' }} pp)</p>
     </div>
     <div class="rounded-2xl border border-emerald-200 border-t-4 border-t-emerald-500 bg-emerald-50 p-5 shadow-sm">
-        <p class="text-xs font-bold uppercase tracking-wide text-emerald-800">Acima do critério (≥ {{ $corteTxt }}%)</p>
-        <p class="mt-2 font-mono text-4xl font-black text-emerald-700">{{ $fmt($total['proficienciaPct']) }}<span class="text-2xl">%</span></p>
-        <p class="mt-1 text-xs text-slate-600">{{ $fmt($total['proficientes'], 0) }} de {{ $fmt($total['n'], 0) }} estudantes</p>
+        <p class="text-xs font-bold uppercase tracking-wide text-emerald-800">Alunos com desempenho esperado</p>
+        <p class="mt-2 font-mono text-4xl font-black text-emerald-700">{{ $fmt($total['esperadoPct']) }}<span class="text-2xl">%</span></p>
+        <p class="mt-1 text-xs text-slate-600">{{ $fmt($total['esperados'], 0) }} de {{ $fmt($total['n'], 0) }} estudantes que fizeram a prova</p>
     </div>
 </div>
 
@@ -106,7 +106,7 @@
         </select>
     </div>
     <div class="relative h-80"><canvas id="grafico-histograma" data-titulo="Histograma do percentual de acerto do conjunto"></canvas></div>
-    <p class="mt-2 text-xs text-slate-600">Cada barra reúne 5 pontos percentuais de acerto; a altura é a parte dos estudantes nessa faixa. A linha vermelha marca o critério de proficiência ({{ $corteTxt }}%).</p>
+    <p class="mt-2 text-xs text-slate-600">Cada barra reúne 5 pontos percentuais de acerto; a altura é a parte dos estudantes nessa faixa. A linha vermelha marca os {{ $corteTxt }}% de acerto.</p>
 </section>
 
 {{-- 5 · Tabela --}}
@@ -114,10 +114,10 @@
 <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5" aria-labelledby="secao-tabela">
     <div class="overflow-x-auto">
         <table data-ordenavel class="w-full text-sm">
-            <caption class="sr-only">Estudantes com nota, média, mediana, quartis, percentis, mínimo, máximo e proporção de proficientes por curso.</caption>
+            <caption class="sr-only">Estudantes com nota, média, mediana, quartis, percentis, mínimo, máximo e proporção de alunos com desempenho esperado por curso.</caption>
             <thead class="text-left text-[11px] font-bold uppercase tracking-wide text-slate-600">
                 <tr class="border-b border-slate-200">
-                    @foreach ([['Curso', 'texto'], ['N', 'numero'], ['Média', 'numero'], ['Mediana', 'numero'], ['1º quartil', 'numero'], ['3º quartil', 'numero'], ['P10', 'numero'], ['P90', 'numero'], ['Mínimo', 'numero'], ['Máximo', 'numero'], ['Proficientes', 'numero']] as [$rotulo, $tipo])
+                    @foreach ([['Curso', 'texto'], ['N', 'numero'], ['Média', 'numero'], ['Mediana', 'numero'], ['1º quartil', 'numero'], ['3º quartil', 'numero'], ['P10', 'numero'], ['P90', 'numero'], ['Mínimo', 'numero'], ['Máximo', 'numero'], ['Desempenho esperado', 'numero']] as [$rotulo, $tipo])
                         <th scope="col" data-ordem="{{ $tipo }}" class="px-3 py-2 {{ $tipo === 'numero' ? 'text-right' : '' }}">
                             <button type="button" class="inline-flex items-center gap-1 font-bold uppercase tracking-wide hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded">{{ $rotulo }} <i class="ph ph-arrows-down-up text-xs" aria-hidden="true"></i></button>
                         </th>
@@ -131,7 +131,7 @@
                         @foreach ([$c['n'], $c['media'], $c['mediana'], $c['q1'], $c['q3'], $c['p10'], $c['p90'], $c['minimo'], $c['maximo']] as $i => $valor)
                             <td data-valor="{{ $valor }}" class="px-3 py-2.5 text-right font-mono">{{ $i === 0 ? $fmt($valor, 0) : $fmt($valor) }}{{ $i === 0 ? '' : '%' }}</td>
                         @endforeach
-                        <td data-valor="{{ $c['proficienciaPct'] }}" class="px-3 py-2.5 text-right font-mono font-bold">{{ $fmt($c['proficienciaPct']) }}%</td>
+                        <td data-valor="{{ $c['esperadoPct'] }}" class="px-3 py-2.5 text-right font-mono font-bold">{{ $fmt($c['esperadoPct']) }}%</td>
                     </tr>
                 @endforeach
             </tbody>
@@ -141,7 +141,7 @@
                     @foreach ([$total['n'], $total['media'], $total['mediana'], $total['q1'], $total['q3'], $total['p10'], $total['p90'], $total['minimo'], $total['maximo']] as $i => $valor)
                         <td class="px-3 py-2.5 text-right font-mono">{{ $i === 0 ? $fmt($valor, 0) : $fmt($valor) }}{{ $i === 0 ? '' : '%' }}</td>
                     @endforeach
-                    <td class="px-3 py-2.5 text-right font-mono">{{ $fmt($total['proficienciaPct']) }}%</td>
+                    <td class="px-3 py-2.5 text-right font-mono">{{ $fmt($total['esperadoPct']) }}%</td>
                 </tr>
             </tfoot>
         </table>
@@ -259,7 +259,7 @@
             scales: { y: V.eixoPct(), x: { grid: { display: false } } },
             plugins: {
                 legend: V.legenda('top'),
-                linhaReferencia: { linhas: [{ valor: dados.corte, cor: V.cores.vermelho, rotulo: 'Critério ' + V.fmt(dados.corte, 0) + '%' }] },
+                linhaReferencia: { linhas: [{ valor: dados.corte, cor: V.cores.vermelho, rotulo: V.fmt(dados.corte, 0) + '%' }] },
                 tooltip: { callbacks: { label: function (item) {
                     var c = porMediana[item.dataIndex];
                     if (item.dataset.label === 'Mediana') return 'Mediana: ' + V.pct(c.mediana);
@@ -294,7 +294,7 @@
             },
             plugins: {
                 legend: V.legenda('top'),
-                linhaReferenciaX: { linhas: [{ valor: corteIndice, cor: V.cores.vermelho, rotulo: 'Critério' }] },
+                linhaReferenciaX: { linhas: [{ valor: corteIndice, cor: V.cores.vermelho, rotulo: V.fmt(dados.corte, 0) + '%' }] },
                 tooltip: { callbacks: {
                     title: function (itens) { return 'Acerto de ' + itens[0].label + '%'; },
                     label: function (item) { return item.dataset.label + ': ' + V.pct(item.raw); },

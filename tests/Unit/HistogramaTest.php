@@ -48,7 +48,7 @@ class HistogramaTest extends TestCase
     {
         $h = $this->de([59.9, 60.0, 60.1, 45.5]);
 
-        // 59,9% NÃO é proficiente: um histograma de faixas de 1 ponto classificaria errado.
+        // 59,9% NÃO alcança o mínimo esperado (60%): um histograma de faixas de 1 ponto classificaria errado.
         $this->assertSame(2, Histograma::contarAcima($h, 60.0));
         $this->assertSame(3, Histograma::contarAcima($h, 59.9));
     }

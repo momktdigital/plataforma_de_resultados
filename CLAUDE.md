@@ -121,13 +121,18 @@ auditada (`reitor.visao_de_curso`), com aviso fixo no layout; e só vale para o 
 - Estatística de percentual (média, mediana, quartis, faixas, patamares) sai de um
   histograma em décimos de ponto (`Histograma`), vindo de um `GROUP BY percentual`
   — não carregue resultados para o PHP e não aproxime por faixas de 1 ponto (59,9%
-  não é proficiente).
+  não está em 60%).
 - **Previstos** (`Previstos`) vêm das matrículas vigentes e NÃO entram no cache
   (`CacheDeAnalise` não enxerga matrícula); só o que depende de resumos/respostas é
   cacheado, e só como array.
-- Corte de proficiência e meta de participação ficam em `ConfiguracaoSistema`
-  (`reitor_corte_proficiencia`, `reitor_meta_participacao`) — o corte entra na chave
-  do cache.
+- **Não se trabalha com "proficiência"**: o que a instituição acompanha são os **alunos com desempenho esperado**
+  (`App\Support\DesempenhoEsperado`, regra única): presente com nota que alcançou o mínimo do período do curso em que
+  estava (60% da fatia da prova que cabe nele, `periodo_minimo`; 60% da prova quando ela não traz a meta). Painel da
+  reitoria, Dashboard da avaliação (`PsicometriaService::desempenhoEsperado`), painel do coordenador e plano de ação
+  precisam contar as mesmas pessoas — não reintroduza um corte fixo nem o termo "proficiência" em tela nova. No SQL use
+  `DesempenhoEsperado::sqlAlcancou()` (o mínimo muda com avaliação × período do aluno), nunca o histograma em décimos.
+  O corte de 60% de `ReitorDashboardService::corte()` é só a âncora das faixas/patamares de acerto e não é configurável.
+  Só a meta de participação fica em `ConfiguracaoSistema` (`reitor_meta_participacao`).
 
 ## "Estudante em risco" é uma regra só (`RegraDeRisco`)
 
@@ -175,11 +180,15 @@ já é bloqueada para o reitor pelo middleware `VisaoDeCursoDoReitor` (só méto
 
 ## Plano de ação: números do servidor, só agregado
 
+O módulo tem chave liga/desliga/teste (`PlanoAcaoModulo`, Configurações → Plano de ação): **rota nova do plano entra no grupo
+`modulo-plano`** (404 quando não liberado), e tela/menu/ícone novos que apontem para o plano perguntam
+`PlanoAcaoModulo::liberadoPara($usuario)` — não só o perfil. O estado é lido uma vez por requisição (nos atributos do request).
+
 O plano de ação (`planos_acao`, ver README) nasce de um dado do painel do coordenador e é **acompanhado** pelo colaborador (não há aprovação: publicar = em execução). O plano em si leva só agregado. Por isso:
 
 - **Os números nunca vêm do navegador.** O link do ícone (`plano/_botao.blade.php`) só leva *onde* o coordenador estava (curso,
   período, categoria, visual, item); `PlanoAcaoOrigemService::montar()` recalcula tudo, só para os cursos dele, e o `store` o chama de
-  novo. Participação, meta e proficiência vêm do `ReitorDashboardService` (via `PlanoAcaoIndicadoresService`) para o plano e o painel
+  novo. Participação, meta e alunos com desempenho esperado vêm do `ReitorDashboardService` (via `PlanoAcaoIndicadoresService`) para o plano e o painel
   nunca discordarem; ele cai silenciosamente no período/categoria mais recente quando o pedido não existe, e o serviço trata isso como
   "sem resultado" (não troque por um número de outro recorte com o rótulo deste).
 - **Só dado agregado** em `planos_acao` (incluindo o `contexto` JSON): nunca nome, RA ou CPF de aluno. Há teste (`PlanoAcaoTest`).

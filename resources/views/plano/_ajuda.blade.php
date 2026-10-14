@@ -7,9 +7,9 @@
     $ajuda = [
         1 => [
             ['O que é participação?', 'É a proporção de estudantes previstos (pela matrícula) que realizaram a avaliação. O número já vem calculado pelo painel; compare com a meta institucional.'],
-            ['O que significa proficiência?', 'Quando a prova define o período de cada questão, é proficiente o estudante que acertou 60% do que cabe no período dele (se só 10 de 100 questões cabem no 1º período, a meta são 6, não 10). Sem essa informação, nesta leitura institucional é proficiente o estudante com pelo menos 60% de acerto (o corte pode ser alterado nas Configurações). O indicador é o percentual de estudantes proficientes. Não é a escala oficial do ENADE/ENAMED.'],
-            ['Como definir a meta de proficiência?', 'Pactue com o NDE um avanço factível para a próxima avaliação, olhando a distribuição dos resultados e a capacidade real de intervenção. Evite metas que dependam de mudanças estruturais fora do ciclo.'],
-            ['Preciso de um plano se a participação está adequada?', 'Não. Se a participação está na meta, concentre o plano na proficiência. Investigue causas de participação somente quando houver necessidade real de intervenção.'],
+            ['O que são alunos com desempenho esperado?', 'É o percentual dos estudantes presentes, com nota, que alcançaram o mínimo esperado para o período do curso em que estão: 60% da parte da prova que cabe no período deles (se só 10 de 100 questões cabem no 1º período, o mínimo são 6, não 10). Quando a prova não indica o período de cada questão, o mínimo é 60% da prova inteira. Não é a escala oficial do ENADE/ENAMED.'],
+            ['Como definir a meta de alunos com desempenho esperado?', 'Pactue com o NDE um avanço factível para a próxima avaliação, olhando a distribuição dos resultados e a capacidade real de intervenção. Evite metas que dependam de mudanças estruturais fora do ciclo.'],
+            ['Preciso de um plano se a participação está adequada?', 'Não. Se a participação está na meta, concentre o plano nos alunos com desempenho esperado. Investigue causas de participação somente quando houver necessidade real de intervenção.'],
         ],
         2 => [
             ['Por onde começo a leitura?', 'Do geral para o específico: resultado geral → períodos do curso → estudantes próximos ao corte → áreas, temas e níveis cognitivos → questões. O dado que originou o plano já está resumido na etapa anterior.'],

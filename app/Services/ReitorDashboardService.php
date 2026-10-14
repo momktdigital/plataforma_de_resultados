@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Categoria;
 use App\Models\ConfiguracaoSistema;
 use App\Support\CacheDeAnalise;
+use App\Support\DesempenhoEsperado;
 use App\Support\Histograma;
 use App\Support\NomeCurso;
 use App\Support\PeriodoCurso;
@@ -23,16 +24,20 @@ use Illuminate\Support\Facades\DB;
  * Mesmas regras do resto do sistema (CLAUDE.md):
  *  - o curso de cada resultado é `resultado_resumos.curso` (o curso na data da prova), nunca `alunos.curso`;
  *  - ausente = prova inteira em branco (`resultado_resumos.ausente`): fora de média, mediana, faixas e
- *    proficiência — conta só na participação;
+ *    alunos com desempenho esperado — conta só na participação;
  *  - tudo é agregado em SQL sobre `resultado_resumos` (um GROUP BY por curso × período × percentual, ver
  *    Histograma) — nada de varrer `respostas` aqui (isso fica no ReitorCompetenciasService, em SQL e em cache).
  *
- * PROFICIENTE = percentual de acerto igual ou acima do CORTE (padrão 60%, o limiar do resto do sistema; o
- * administrador pode mudar em Configurações). É um critério interno da instituição, sem validação contra a
- * proficiência de exames externos — as telas dizem isso.
+ * DESEMPENHO ESPERADO (no lugar de "proficiência", que a instituição não usa): o aluno alcançou o mínimo esperado para o
+ * período do curso em que estava — 60% da parte da prova que já cabe nesse período, ou 60% da prova quando ela não traz o
+ * período mínimo das questões (App\Support\DesempenhoEsperado, a mesma conta do painel do coordenador e do Dashboard da
+ * avaliação). Só conta quem fez a prova. O agregado sai do banco já com a regra aplicada (`carregar()`).
+ *
+ * O CORTE (60%) que sobrou aqui NÃO define ninguém: é só a âncora das faixas de acerto e dos patamares da tela de desempenho.
  */
 class ReitorDashboardService
 {
+    /** Âncora das faixas de acerto e dos patamares (não classifica estudante — ver o topo da classe). */
     public const CORTE_PADRAO = CoordenadorDashboardService::LIMIAR_ADEQUADO;
 
     public const META_PADRAO = 98.0;
@@ -46,12 +51,10 @@ class ReitorDashboardService
     // Parâmetros institucionais (editáveis em Configurações)
     // ------------------------------------------------------------------------------------------------------------
 
-    /** Percentual de acerto a partir do qual o estudante é "proficiente" (30 a 90, inteiro). */
+    /** A âncora das faixas de acerto e dos patamares: sempre 60% (não é configurável, nem define quem tem o desempenho esperado). */
     public static function corte(): float
     {
-        $valor = (float) ConfiguracaoSistema::valor('reitor_corte_proficiencia', (string) self::CORTE_PADRAO);
-
-        return (float) max(30, min(90, round($valor)));
+        return self::CORTE_PADRAO;
     }
 
     /** Meta de participação (% de previstos que fizeram a prova), 50 a 100. */
@@ -64,7 +67,7 @@ class ReitorDashboardService
 
     /**
      * As 5 faixas de acerto, ancoradas no corte: com 60%, "< 40", "40–49", "50–59", "60–69" e "≥ 70" — o corte é
-     * sempre o começo da 4ª faixa, então "quem passou" fica sempre nas duas últimas.
+     * sempre o começo da 4ª faixa.
      *
      * @return array<int, array{rotulo: string, de: float, ate: ?float}>
      */
@@ -312,12 +315,15 @@ class ReitorDashboardService
     }
 
     /**
-     * Resultados do recorte agregados no banco, só ARRAYS (o cache não desserializa objetos). Duas consultas pequenas:
-     * contagens por (curso, período do curso) e o histograma de percentuais por (curso, período, percentual) —
-     * somando as avaliações do recorte.
+     * Resultados do recorte agregados no banco, só ARRAYS (o cache não desserializa objetos). Três consultas pequenas:
+     * contagens por (curso, período do curso), o histograma de percentuais por (curso, período, percentual) e quantos
+     * presentes com nota alcançaram o desempenho esperado por (curso, período) — somando as avaliações do recorte.
+     *
+     * O esperado é decidido no banco (o mínimo muda com a avaliação e o período do aluno — DesempenhoEsperado::sqlAlcancou),
+     * não pelo histograma em décimos: 59,96% não alcança 60%, mas arredondado a um décimo viraria 60,0%.
      *
      * @param  array<int, int>  $codigos
-     * @return array{contagens: array<int, array{0: int, 1: string, 2: string, 3: int, 4: int}>, notas: array<int, array{0: string, 1: string, 2: int, 3: int}>}
+     * @return array{contagens: array<int, array{0: int, 1: string, 2: string, 3: int, 4: int}>, notas: array<int, array{0: string, 1: string, 2: int, 3: int}>, esperado: array<int, array{0: string, 1: string, 2: int, 3: int}>}
      */
     private function carregar(array $codigos): array
     {
@@ -343,7 +349,18 @@ class ReitorDashboardService
                 ->map(fn ($l) => [(string) $l->curso, (string) $l->periodo, (int) round(((float) $l->percentual) * 10), (int) $l->n])
                 ->all();
 
-            return ['contagens' => $contagens, 'notas' => $notas];
+            [$alcancou, $bindings] = DesempenhoEsperado::sqlAlcancou($codigos);
+            $esperado = $resumos()
+                ->where('rr.ausente', false)
+                ->whereNotNull('rr.percentual')
+                ->groupBy('rr.curso', 'rr.periodo')
+                ->selectRaw('rr.curso as curso, rr.periodo as periodo, COUNT(*) as n')
+                ->selectRaw("SUM(CASE WHEN {$alcancou} THEN 1 ELSE 0 END) as dentro", $bindings)
+                ->get()
+                ->map(fn ($l) => [(string) $l->curso, (string) $l->periodo, (int) $l->n, (int) $l->dentro])
+                ->all();
+
+            return ['contagens' => $contagens, 'notas' => $notas, 'esperado' => $esperado];
         });
     }
 
@@ -392,8 +409,8 @@ class ReitorDashboardService
     // ------------------------------------------------------------------------------------------------------------
 
     /**
-     * Tudo que as telas mostram por curso e para a visão como um todo: participação, proficiência, média, mediana,
-     * quartis, faixas, patamares e o detalhe por período do curso.
+     * Tudo que as telas mostram por curso e para a visão como um todo: participação, alunos com desempenho esperado,
+     * média, mediana, quartis, faixas, patamares e o detalhe por período do curso.
      *
      * @param  array<string, mixed>  $ctx  saída de contexto()
      * @return array{cursos: array<string, array<string, mixed>>, total: array<string, mixed>, periodos: array<int, int>, semAplicacao: array<string, array{nome: string, ativos: int}>, previstosPelosResultados: bool}
@@ -417,7 +434,7 @@ class ReitorDashboardService
             $ordinal = PeriodoCurso::ordinal($periodo);
             $periodoLetivo = (string) ($periodoDe[$codigo] ?? '');
             $c = &$acc[$chave];
-            $c ??= ['inscritos' => 0, 'presentes' => 0, 'hist' => [], 'ordinais' => [], 'semPeriodoInscritos' => 0, 'semPeriodoPresentes' => 0, 'porPeriodoLetivo' => []];
+            $c ??= ['inscritos' => 0, 'presentes' => 0, 'hist' => [], 'esperado' => 0, 'ordinais' => [], 'semPeriodoInscritos' => 0, 'semPeriodoPresentes' => 0, 'porPeriodoLetivo' => []];
             $c['inscritos'] += $inscritos;
             $c['presentes'] += $presentes;
             $pl = &$c['porPeriodoLetivo'][$periodoLetivo];
@@ -433,7 +450,7 @@ class ReitorDashboardService
                 $c['semPeriodoPresentes'] += $presentes;
             } else {
                 $o = &$c['ordinais'][$ordinal];
-                $o ??= ['inscritos' => 0, 'presentes' => 0, 'hist' => []];
+                $o ??= ['inscritos' => 0, 'presentes' => 0, 'hist' => [], 'esperado' => 0];
                 $o['inscritos'] += $inscritos;
                 $o['presentes'] += $presentes;
                 unset($o);
@@ -452,6 +469,18 @@ class ReitorDashboardService
             }
         }
 
+        // Quantos dos presentes com nota alcançaram o desempenho esperado (já decidido no banco, ver carregar()).
+        foreach ($ctx['bruto']['esperado'] as [$curso, $periodo, , $dentro]) {
+            $chave = NomeCurso::chave($curso);
+            if (! isset($acc[$chave])) {
+                continue;
+            }
+            $acc[$chave]['esperado'] += $dentro;
+            if (($ordinal = PeriodoCurso::ordinal($periodo)) !== null && isset($acc[$chave]['ordinais'][$ordinal])) {
+                $acc[$chave]['ordinais'][$ordinal]['esperado'] += $dentro;
+            }
+        }
+
         $matriculas = [];
         foreach (array_unique(array_map(fn ($c) => (string) ($periodoDe[$c] ?? ''), $ctx['avaliacao']['codigos'])) as $periodoLetivo) {
             $matriculas[$periodoLetivo] = Previstos::matriculasVigentes($periodoLetivo);
@@ -459,6 +488,7 @@ class ReitorDashboardService
 
         $cursos = [];
         $totalHist = [];
+        $totalEsperado = 0;
         $totalOrdinais = [];
         foreach ($nomes as $chave => $nome) {
             if (! isset($acc[$chave])) {
@@ -470,20 +500,22 @@ class ReitorDashboardService
             $periodos = [];
             ksort($a['ordinais']);
             foreach ($a['ordinais'] as $ordinal => $o) {
-                $periodos[$ordinal] = $this->indicadores($o['hist'], $o['presentes'], $previsao['porOrdinal'][$ordinal] ?? $o['inscritos'], $corte, $meta)
+                $periodos[$ordinal] = $this->indicadores($o['hist'], $o['presentes'], $previsao['porOrdinal'][$ordinal] ?? $o['inscritos'], $meta, $o['esperado'])
                     + ['ordinal' => $ordinal, 'rotulo' => $ordinal.'º', 'patamares' => $this->patamaresDe($o['hist'], $corte)];
                 $totalOrdinais[$ordinal]['hist'] = Histograma::mesclar($totalOrdinais[$ordinal]['hist'] ?? [], $o['hist']);
+                $totalOrdinais[$ordinal]['esperado'] = ($totalOrdinais[$ordinal]['esperado'] ?? 0) + $o['esperado'];
                 $totalOrdinais[$ordinal]['presentes'] = ($totalOrdinais[$ordinal]['presentes'] ?? 0) + $o['presentes'];
                 $totalOrdinais[$ordinal]['previstos'] = ($totalOrdinais[$ordinal]['previstos'] ?? 0) + ($previsao['porOrdinal'][$ordinal] ?? $o['inscritos']);
             }
 
             $totalHist = Histograma::mesclar($totalHist, $a['hist']);
+            $totalEsperado += $a['esperado'];
             $avaliados = array_keys($periodos);
 
             $cursos[$chave] = [
                 'chave' => $chave,
                 'nome' => $nome,
-                ...$this->indicadores($a['hist'], $a['presentes'], $previsao['previstos'], $corte, $meta),
+                ...$this->indicadores($a['hist'], $a['presentes'], $previsao['previstos'], $meta, $a['esperado']),
                 'faixas' => $this->faixasDe($a['hist'], $corte),
                 'patamares' => $this->patamaresDe($a['hist'], $corte),
                 'distribuicao' => Histograma::baldes($a['hist']),
@@ -503,7 +535,7 @@ class ReitorDashboardService
         $total = [
             'chave' => '__total',
             'nome' => 'Total da visão',
-            ...$this->indicadores($totalHist, $totalPresentes, $totalPrevistos, $corte, $meta),
+            ...$this->indicadores($totalHist, $totalPresentes, $totalPrevistos, $meta, $totalEsperado),
             'faixas' => $this->faixasDe($totalHist, $corte),
             'patamares' => $this->patamaresDe($totalHist, $corte),
             'distribuicao' => Histograma::baldes($totalHist),
@@ -512,14 +544,14 @@ class ReitorDashboardService
         $total['periodos'] = [];
         ksort($totalOrdinais);
         foreach ($totalOrdinais as $ordinal => $o) {
-            $total['periodos'][$ordinal] = $this->indicadores($o['hist'], $o['presentes'], $o['previstos'], $corte, $meta)
+            $total['periodos'][$ordinal] = $this->indicadores($o['hist'], $o['presentes'], $o['previstos'], $meta, $o['esperado'])
                 + ['ordinal' => $ordinal, 'rotulo' => $ordinal.'º', 'patamares' => $this->patamaresDe($o['hist'], $corte)];
         }
 
         // Diferença para a média da visão — só faz sentido depois do total.
         foreach ($cursos as $chave => $curso) {
             $cursos[$chave]['difParticipacao'] = $curso['participacao'] !== null && $total['participacao'] !== null ? round($curso['participacao'] - $total['participacao'], 1) : null;
-            $cursos[$chave]['difProficiencia'] = $curso['proficienciaPct'] !== null && $total['proficienciaPct'] !== null ? round($curso['proficienciaPct'] - $total['proficienciaPct'], 1) : null;
+            $cursos[$chave]['difEsperado'] = $curso['esperadoPct'] !== null && $total['esperadoPct'] !== null ? round($curso['esperadoPct'] - $total['esperadoPct'], 1) : null;
             $cursos[$chave]['difMedia'] = $curso['media'] !== null && $total['media'] !== null ? round($curso['media'] - $total['media'], 1) : null;
         }
 
@@ -581,13 +613,13 @@ class ReitorDashboardService
      * Os números de um conjunto de resultados (um curso, um período do curso, ou a visão inteira).
      *
      * @param  array<int, int>  $hist  histograma dos percentuais dos PRESENTES com nota
+     * @param  int  $esperados  quantos desses presentes com nota alcançaram o desempenho esperado
      * @return array<string, mixed>
      */
-    private function indicadores(array $hist, int $presentes, int $previstos, float $corte, float $meta): array
+    private function indicadores(array $hist, int $presentes, int $previstos, float $meta, int $esperados): array
     {
         $n = Histograma::n($hist);
         $previstos = max($previstos, $presentes);
-        $proficientes = Histograma::contarAcima($hist, $corte);
         $participacao = $previstos > 0 ? round($presentes / $previstos * 100, 1) : null;
         $alvo = (int) ceil($meta / 100 * $previstos - 1e-9);
 
@@ -607,8 +639,8 @@ class ReitorDashboardService
             'p90' => $n > 0 ? round(Histograma::quantil($hist, 0.90), 1) : null,
             'minimo' => Histograma::minimo($hist),
             'maximo' => Histograma::maximo($hist),
-            'proficientes' => $proficientes,
-            'proficienciaPct' => $n > 0 ? round($proficientes / $n * 100, 1) : null,
+            'esperados' => $esperados,
+            'esperadoPct' => $n > 0 ? round($esperados / $n * 100, 1) : null,
         ];
     }
 

@@ -140,20 +140,22 @@ Route::middleware('instalado')->group(function () {
             Route::post('/painel/alunos/{aluno}/acompanhamento', [CoordenadorAcompanhamentoController::class, 'store'])->whereNumber('aluno')->name('coordenador.alunos.acompanhamento');
             // Planos de ação: o coordenador inicia a partir de um dado do painel, preenche o roteiro (dado → causa → ação), envia ao
             // colaborador e acompanha a execução. Segmento literal (`novo`) ANTES do coringa {plano}.
-            Route::get('/painel/planos', [CoordenadorPlanoAcaoController::class, 'index'])->name('coordenador.planos.index');
-            Route::get('/painel/planos/exportar.xlsx', [CoordenadorPlanoAcaoController::class, 'exportar'])->name('coordenador.planos.exportar');
-            Route::get('/painel/planos/novo', [CoordenadorPlanoAcaoController::class, 'novo'])->name('coordenador.planos.novo');
-            Route::post('/painel/planos', [CoordenadorPlanoAcaoController::class, 'store'])->name('coordenador.planos.store');
-            Route::get('/painel/planos/{plano}', [CoordenadorPlanoAcaoController::class, 'show'])->whereNumber('plano')->name('coordenador.planos.show');
-            Route::get('/painel/planos/{plano}/editar', [CoordenadorPlanoAcaoController::class, 'edit'])->whereNumber('plano')->name('coordenador.planos.edit');
-            Route::put('/painel/planos/{plano}', [CoordenadorPlanoAcaoController::class, 'update'])->whereNumber('plano')->name('coordenador.planos.update');
-            Route::delete('/painel/planos/{plano}', [CoordenadorPlanoAcaoController::class, 'destroy'])->whereNumber('plano')->name('coordenador.planos.destroy');
-            Route::post('/painel/planos/{plano}/duplicar', [CoordenadorPlanoAcaoController::class, 'duplicar'])->whereNumber('plano')->name('coordenador.planos.duplicar');
-            Route::put('/painel/planos/{plano}/acoes/{acao}', [CoordenadorPlanoExecucaoController::class, 'atualizarAcao'])->whereNumber(['plano', 'acao'])->name('coordenador.planos.acoes.update');
-            Route::post('/painel/planos/{plano}/comentarios', [CoordenadorPlanoExecucaoController::class, 'comentar'])->whereNumber('plano')->name('coordenador.planos.comentarios.store');
-            Route::post('/painel/planos/{plano}/encerrar', [CoordenadorPlanoExecucaoController::class, 'encerrar'])->whereNumber('plano')->name('coordenador.planos.encerrar');
-            Route::get('/painel/planos/{plano}/anexos/{anexo}', [CoordenadorPlanoExecucaoController::class, 'anexo'])->whereNumber(['plano', 'anexo'])->name('coordenador.planos.anexos.show');
-            Route::post('/painel/planos/{plano}/cancelar', [CoordenadorPlanoExecucaoController::class, 'cancelar'])->whereNumber('plano')->name('coordenador.planos.cancelar');
+            Route::middleware('modulo-plano')->group(function () {
+                Route::get('/painel/planos', [CoordenadorPlanoAcaoController::class, 'index'])->name('coordenador.planos.index');
+                Route::get('/painel/planos/exportar.xlsx', [CoordenadorPlanoAcaoController::class, 'exportar'])->name('coordenador.planos.exportar');
+                Route::get('/painel/planos/novo', [CoordenadorPlanoAcaoController::class, 'novo'])->name('coordenador.planos.novo');
+                Route::post('/painel/planos', [CoordenadorPlanoAcaoController::class, 'store'])->name('coordenador.planos.store');
+                Route::get('/painel/planos/{plano}', [CoordenadorPlanoAcaoController::class, 'show'])->whereNumber('plano')->name('coordenador.planos.show');
+                Route::get('/painel/planos/{plano}/editar', [CoordenadorPlanoAcaoController::class, 'edit'])->whereNumber('plano')->name('coordenador.planos.edit');
+                Route::put('/painel/planos/{plano}', [CoordenadorPlanoAcaoController::class, 'update'])->whereNumber('plano')->name('coordenador.planos.update');
+                Route::delete('/painel/planos/{plano}', [CoordenadorPlanoAcaoController::class, 'destroy'])->whereNumber('plano')->name('coordenador.planos.destroy');
+                Route::post('/painel/planos/{plano}/duplicar', [CoordenadorPlanoAcaoController::class, 'duplicar'])->whereNumber('plano')->name('coordenador.planos.duplicar');
+                Route::put('/painel/planos/{plano}/acoes/{acao}', [CoordenadorPlanoExecucaoController::class, 'atualizarAcao'])->whereNumber(['plano', 'acao'])->name('coordenador.planos.acoes.update');
+                Route::post('/painel/planos/{plano}/comentarios', [CoordenadorPlanoExecucaoController::class, 'comentar'])->whereNumber('plano')->name('coordenador.planos.comentarios.store');
+                Route::post('/painel/planos/{plano}/encerrar', [CoordenadorPlanoExecucaoController::class, 'encerrar'])->whereNumber('plano')->name('coordenador.planos.encerrar');
+                Route::get('/painel/planos/{plano}/anexos/{anexo}', [CoordenadorPlanoExecucaoController::class, 'anexo'])->whereNumber(['plano', 'anexo'])->name('coordenador.planos.anexos.show');
+                Route::post('/painel/planos/{plano}/cancelar', [CoordenadorPlanoExecucaoController::class, 'cancelar'])->whereNumber('plano')->name('coordenador.planos.cancelar');
+            });
             // Cronograma de atividades (somente leitura): o coordenador vê as atividades dos cursos dele e as pendências.
             Route::get('/cronograma', [CronogramaController::class, 'index'])->name('cronograma.index');
             Route::get('/cronograma/atividades/{item}', [CronogramaController::class, 'show'])->whereNumber('item')->name('cronograma.show');
@@ -190,7 +192,7 @@ Route::middleware('instalado')->group(function () {
             Route::get('/competencias', [ReitorController::class, 'competencias'])->name('competencias');
             Route::get('/evolucao', [ReitorController::class, 'evolucao'])->name('evolucao');
             Route::get('/risco', [ReitorController::class, 'risco'])->name('risco');
-            Route::get('/planos', [ReitorPlanosController::class, 'index'])->name('planos');
+            Route::get('/planos', [ReitorPlanosController::class, 'index'])->middleware('modulo-plano')->name('planos');
             Route::get('/itens', [ReitorController::class, 'itens'])->name('itens');
             Route::get('/relatorio', [ReitorController::class, 'relatorio'])->name('relatorio');
             Route::get('/exportar.xlsx', [ReitorController::class, 'xlsx'])->name('xlsx');
@@ -209,14 +211,16 @@ Route::middleware('instalado')->group(function () {
             Route::delete('/atividades/{item}', [ColaboradorCronogramaController::class, 'destroy'])->whereNumber('item')->name('atividades.destroy');
             // Planos de ação publicados pelos coordenadores: o colaborador (e o administrador) só ACOMPANHA — fila, quadro por curso,
             // comentários e exportação. Não há aprovação.
-            Route::get('/planos', [ColaboradorPlanoAcaoController::class, 'index'])->name('planos.index');
-            Route::get('/planos/exportar.xlsx', [ColaboradorPlanoAcaoController::class, 'exportar'])->name('planos.exportar');
-            Route::get('/planos/{plano}', [ColaboradorPlanoAcaoController::class, 'show'])->whereNumber('plano')->name('planos.show');
-            Route::get('/planos/{plano}/anexos/{anexo}', [ColaboradorPlanoAcaoController::class, 'anexo'])->whereNumber(['plano', 'anexo'])->name('planos.anexos.show');
-            Route::post('/planos/{plano}/comentarios', [ColaboradorPlanoAcaoController::class, 'comentar'])->whereNumber('plano')->name('planos.comentar');
-            // Só o administrador: devolver o plano ao rascunho do coordenador ou apagá-lo de vez (lista positiva, como as demais).
-            Route::post('/planos/{plano}/reverter', [ColaboradorPlanoAcaoController::class, 'reverter'])->whereNumber('plano')->middleware('perfil:administrador')->name('planos.reverter');
-            Route::delete('/planos/{plano}', [ColaboradorPlanoAcaoController::class, 'excluir'])->whereNumber('plano')->middleware('perfil:administrador')->name('planos.excluir');
+            Route::middleware('modulo-plano')->group(function () {
+                Route::get('/planos', [ColaboradorPlanoAcaoController::class, 'index'])->name('planos.index');
+                Route::get('/planos/exportar.xlsx', [ColaboradorPlanoAcaoController::class, 'exportar'])->name('planos.exportar');
+                Route::get('/planos/{plano}', [ColaboradorPlanoAcaoController::class, 'show'])->whereNumber('plano')->name('planos.show');
+                Route::get('/planos/{plano}/anexos/{anexo}', [ColaboradorPlanoAcaoController::class, 'anexo'])->whereNumber(['plano', 'anexo'])->name('planos.anexos.show');
+                Route::post('/planos/{plano}/comentarios', [ColaboradorPlanoAcaoController::class, 'comentar'])->whereNumber('plano')->name('planos.comentar');
+                // Só o administrador: devolver o plano ao rascunho do coordenador ou apagá-lo de vez (lista positiva, como as demais).
+                Route::post('/planos/{plano}/reverter', [ColaboradorPlanoAcaoController::class, 'reverter'])->whereNumber('plano')->middleware('perfil:administrador')->name('planos.reverter');
+                Route::delete('/planos/{plano}', [ColaboradorPlanoAcaoController::class, 'excluir'])->whereNumber('plano')->middleware('perfil:administrador')->name('planos.excluir');
+            });
             Route::get('/pendencias', [ColaboradorPendenciaController::class, 'index'])->name('pendencias.index');
             Route::post('/atividades/{item}/pendencias', [ColaboradorPendenciaController::class, 'store'])->whereNumber('item')->name('pendencias.store');
             Route::put('/pendencias/{pendencia}', [ColaboradorPendenciaController::class, 'update'])->whereNumber('pendencia')->name('pendencias.update');

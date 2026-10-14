@@ -21,7 +21,7 @@
     $referencia = collect($anteriores)->firstWhere('periodoLetivo', $pedido) ?? (count($anteriores) ? $anteriores[count($anteriores) - 1] : null);
 
     $kpis = [
-        ['Proficientes (≥ '.$corteTxt.'%)', 'proficienciaPct', 'border-t-emerald-500', 'bg-emerald-50 border-emerald-200', 'text-emerald-700'],
+        ['Alunos com desempenho esperado', 'esperadoPct', 'border-t-emerald-500', 'bg-emerald-50 border-emerald-200', 'text-emerald-700'],
         ['% de acerto médio', 'media', 'border-t-violet-500', 'bg-white border-slate-200', 'text-[#1e3a5f]'],
         ['Participação', 'participacao', 'border-t-[#1e3a5f]', 'bg-white border-slate-200', 'text-[#1e3a5f]'],
     ];
@@ -39,7 +39,7 @@
                 'nome' => $c['nome'],
                 'agora' => $agora,
                 'antes' => $antes,
-                'dProf' => $delta($agora['proficienciaPct'] ?? null, $antes['proficienciaPct'] ?? null),
+                'dProf' => $delta($agora['esperadoPct'] ?? null, $antes['esperadoPct'] ?? null),
                 'dMedia' => $delta($agora['media'] ?? null, $antes['media'] ?? null),
                 'dPart' => $delta($agora['participacao'] ?? null, $antes['participacao'] ?? null),
             ];
@@ -51,7 +51,7 @@
         'rotulos' => array_column($semestres, 'periodoLetivo'),
         'selecionada' => $atualIndice,
         'total' => [
-            'prof' => array_map(fn ($s) => $s['total']['proficienciaPct'], $semestres),
+            'prof' => array_map(fn ($s) => $s['total']['esperadoPct'], $semestres),
             'media' => array_map(fn ($s) => $s['total']['media'], $semestres),
             'part' => array_map(fn ($s) => $s['total']['participacao'], $semestres),
             'n' => array_map(fn ($s) => $s['total']['fizeram'], $semestres),
@@ -60,12 +60,12 @@
             'chave' => $c['chave'],
             'nome' => $c['nome'],
             'cor' => $ctx['cores'][$c['chave']] ?? '#64748b',
-            'prof' => array_map(fn ($s) => $s['cursos'][$c['chave']]['proficienciaPct'] ?? null, $semestres),
+            'prof' => array_map(fn ($s) => $s['cursos'][$c['chave']]['esperadoPct'] ?? null, $semestres),
             'media' => array_map(fn ($s) => $s['cursos'][$c['chave']]['media'] ?? null, $semestres),
             'part' => array_map(fn ($s) => $s['cursos'][$c['chave']]['participacao'] ?? null, $semestres),
             'n' => array_map(fn ($s) => $s['cursos'][$c['chave']]['n'] ?? 0, $semestres),
         ], $cursos),
-        'variacao' => array_values(array_filter(array_map(fn ($l) => $l['dProf'] === null ? null : ['chave' => $l['chave'], 'nome' => $l['nome'], 'delta' => $l['dProf'], 'de' => $l['antes']['proficienciaPct'], 'para' => $l['agora']['proficienciaPct']], $porCurso))),
+        'variacao' => array_values(array_filter(array_map(fn ($l) => $l['dProf'] === null ? null : ['chave' => $l['chave'], 'nome' => $l['nome'], 'delta' => $l['dProf'], 'de' => $l['antes']['esperadoPct'], 'para' => $l['agora']['esperadoPct']], $porCurso))),
         'referencia' => $referencia['periodoLetivo'] ?? null,
         'atual' => $atual['periodoLetivo'] ?? null,
         'limiar' => $limiar,
@@ -116,7 +116,7 @@
     {{-- 1 · Série institucional --}}
     @include('reitor._secao', ['numero' => 1, 'titulo' => 'A instituição ao longo dos semestres', 'id' => 'secao-evolucao-inst'])
     <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5" aria-labelledby="secao-evolucao-inst">
-        <div class="relative h-80"><canvas id="grafico-evolucao-inst" data-titulo="Proficiência, média e participação da instituição por período letivo"></canvas></div>
+        <div class="relative h-80"><canvas id="grafico-evolucao-inst" data-titulo="Alunos com desempenho esperado, média e participação da instituição por período letivo"></canvas></div>
         @include('reitor._rodape-quadro', ['id' => 'evolucao-inst', 'sobre' => $sobre['evolucao_institucional'], 'leitura' => $leituras['evolucao_institucional'] ?? null])
     </section>
 
@@ -148,15 +148,15 @@
         @else
             <div class="grid gap-6 xl:grid-cols-2">
                 <div>
-                    <h3 class="text-xs font-bold uppercase tracking-wide text-emerald-800 mb-3">Variação de proficientes: {{ $referencia['periodoLetivo'] }} → {{ $atual['periodoLetivo'] }} (pp)</h3>
-                    <div class="relative" style="height: {{ 90 + 34 * max(1, count($dados['variacao'])) }}px"><canvas id="grafico-variacao" data-titulo="Variação de proficientes por curso entre os dois períodos"></canvas></div>
+                    <h3 class="text-xs font-bold uppercase tracking-wide text-emerald-800 mb-3">Variação de alunos com desempenho esperado: {{ $referencia['periodoLetivo'] }} → {{ $atual['periodoLetivo'] }} (pp)</h3>
+                    <div class="relative" style="height: {{ 90 + 34 * max(1, count($dados['variacao'])) }}px"><canvas id="grafico-variacao" data-titulo="Variação de alunos com desempenho esperado por curso entre os dois períodos"></canvas></div>
                 </div>
                 <div class="overflow-x-auto">
                     <table data-ordenavel class="w-full text-sm">
-                        <caption class="sr-only">Para cada curso: proficientes, média e participação nos dois períodos e a variação em pontos percentuais.</caption>
+                        <caption class="sr-only">Para cada curso: alunos com desempenho esperado, média e participação nos dois períodos e a variação em pontos percentuais.</caption>
                         <thead class="text-left text-[11px] font-bold uppercase tracking-wide text-slate-600">
                             <tr class="border-b border-slate-200">
-                                @foreach ([['Curso', 'texto'], ['Proficientes', 'numero'], ['Média', 'numero'], ['Participação', 'numero']] as [$rotulo, $tipo])
+                                @foreach ([['Curso', 'texto'], ['Desempenho esperado', 'numero'], ['Média', 'numero'], ['Participação', 'numero']] as [$rotulo, $tipo])
                                     <th scope="col" data-ordem="{{ $tipo }}" class="px-3 py-2 {{ $tipo === 'numero' ? 'text-right' : '' }}">
                                         <button type="button" class="inline-flex items-center gap-1 font-bold uppercase tracking-wide hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded">{{ $rotulo }} <i class="ph ph-arrows-down-up text-xs" aria-hidden="true"></i></button>
                                     </th>
@@ -167,7 +167,7 @@
                             @foreach ($porCurso as $l)
                                 <tr class="border-b border-slate-100">
                                     <td data-valor="{{ $l['nome'] }}" class="px-3 py-2.5 font-medium text-slate-800">@include('reitor._nome-curso', ['chave' => $l['chave'], 'nome' => $l['nome']])</td>
-                                    @foreach ([['proficienciaPct', 'dProf'], ['media', 'dMedia'], ['participacao', 'dPart']] as [$campo, $dCampo])
+                                    @foreach ([['esperadoPct', 'dProf'], ['media', 'dMedia'], ['participacao', 'dPart']] as [$campo, $dCampo])
                                         <td data-valor="{{ $l[$dCampo] }}" class="px-3 py-2.5 text-right">
                                             <span class="block font-mono">{{ $fmt($l['antes'][$campo] ?? null) }}% → <strong>{{ $fmt($l['agora'][$campo] ?? null) }}%</strong></span>
                                             <span class="block font-mono text-xs font-semibold {{ $classeDelta($l[$dCampo]) }}">{{ $setaTxt($l[$dCampo]) }}</span>
@@ -179,7 +179,7 @@
                         <tfoot>
                             <tr class="bg-slate-50 font-bold text-slate-800">
                                 <td class="px-3 py-2.5">Total da visão</td>
-                                @foreach (['proficienciaPct', 'media', 'participacao'] as $campo)
+                                @foreach (['esperadoPct', 'media', 'participacao'] as $campo)
                                     @php $d = $delta($atual['total'][$campo], $referencia['total'][$campo]); @endphp
                                     <td class="px-3 py-2.5 text-right">
                                         <span class="block font-mono">{{ $fmt($referencia['total'][$campo]) }}% → {{ $fmt($atual['total'][$campo]) }}%</span>
@@ -199,7 +199,7 @@
     @include('reitor._secao', ['numero' => 3, 'titulo' => 'Cada curso, semestre a semestre', 'id' => 'secao-curso-semestre'])
     <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5" aria-labelledby="secao-curso-semestre">
         <div class="mb-3 flex flex-wrap items-center gap-2" role="group" aria-label="Indicador mostrado">
-            @foreach ([['prof', 'Proficientes'], ['media', 'Média de acerto'], ['part', 'Participação']] as $i => [$valor, $rotulo])
+            @foreach ([['prof', 'Desempenho esperado'], ['media', 'Média de acerto'], ['part', 'Participação']] as $i => [$valor, $rotulo])
                 <button type="button" data-metrica-evolucao="{{ $valor }}" aria-pressed="{{ $i === 0 ? 'true' : 'false' }}"
                         class="rounded-full border px-4 py-1.5 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-primary {{ $i === 0 ? 'border-[#1e3a5f] bg-[#1e3a5f] text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50' }}">{{ $rotulo }}</button>
             @endforeach
@@ -216,7 +216,7 @@
     var dados = @json($dados);
     var V = window.ReitorViz;
 
-    // 1 · Instituição: proficiência, média e participação por semestre (o semestre em foco com ponto maior).
+    // 1 · Instituição: alunos com desempenho esperado, média e participação por semestre (o semestre em foco com ponto maior).
     var raio = dados.rotulos.map(function (r, i) { return i === dados.selecionada ? 8 : 5; });
     function linha(rotulo, valores, cor, tracejado) {
         return { label: rotulo, data: valores, borderColor: cor, backgroundColor: cor, pointBackgroundColor: cor, pointRadius: raio, borderDash: tracejado || [], tension: 0.3 };
@@ -226,7 +226,7 @@
         data: {
             labels: dados.rotulos,
             datasets: [
-                linha('Proficientes (%)', dados.total.prof, V.cores.verde),
+                linha('Desempenho esperado (%)', dados.total.prof, V.cores.verde),
                 linha('Média de acerto (%)', dados.total.media, V.cores.marinho),
                 linha('Participação (%)', dados.total.part, V.cores.ambar, [6, 4]),
             ],
@@ -245,7 +245,7 @@
         },
     });
 
-    // 2 · Variação de proficientes por curso (barras divergentes; cinza = dentro do ruído).
+    // 2 · Variação de alunos com desempenho esperado por curso (barras divergentes; cinza = dentro do ruído).
     if (dados.variacao.length && document.getElementById('grafico-variacao')) {
         var ordenada = dados.variacao.slice().sort(function (a, b) { return b.delta - a.delta; });
         V.criar('grafico-variacao', {
@@ -284,7 +284,7 @@
     // 3 · Cada curso, semestre a semestre: linhas + tabela, com troca de indicador.
     var metrica = 'prof';
     var grafico = null;
-    var titulos = { prof: '% de proficientes', media: '% de acerto médio', part: '% de participação' };
+    var titulos = { prof: '% com desempenho esperado', media: '% de acerto médio', part: '% de participação' };
     function conjunto() {
         return dados.cursos.map(function (c) {
             return { label: c.nome, data: c[metrica], borderColor: c.cor, backgroundColor: c.cor, pointBackgroundColor: c.cor, pointRadius: raio, tension: 0.3 };

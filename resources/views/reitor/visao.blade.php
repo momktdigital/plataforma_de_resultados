@@ -29,7 +29,7 @@
 
         return ['delta' => $delta, 'texto' => ($delta > 0 ? '▲ +' : ($delta < 0 ? '▼ −' : '= ')).$fmt(abs($delta)).' pp vs '.$anterior['periodoLetivo'], 'classe' => $delta > 0 ? 'text-emerald-700' : ($delta < 0 ? 'text-red-700' : 'text-slate-500')];
     };
-    $vProf = $variacao($total['proficienciaPct'], $anterior['total']['proficienciaPct'] ?? null);
+    $vEsperado = $variacao($total['esperadoPct'], $anterior['total']['esperadoPct'] ?? null);
     $vMedia = $variacao($total['media'], $anterior['total']['media'] ?? null);
     $vPart = $variacao($total['participacao'], $anterior['total']['participacao'] ?? null);
 
@@ -62,16 +62,16 @@
         'meta' => $meta,
         'corte' => $corte,
         'patamares' => $patamares,
-        'total' => ['proficiencia' => $total['proficienciaPct'], 'participacao' => $total['participacao']],
+        'total' => ['esperado' => $total['esperadoPct'], 'participacao' => $total['participacao']],
         'cursos' => array_map(fn ($c) => [
             'chave' => $c['chave'],
             'nome' => $c['nome'],
             'cor' => $ctx['cores'][$c['chave']] ?? '#64748b',
             'participacao' => $c['participacao'],
-            'proficiencia' => $c['proficienciaPct'],
+            'esperado' => $c['esperadoPct'],
             'previstos' => $c['previstos'],
             'fizeram' => $c['fizeram'],
-            'proficientes' => $c['proficientes'],
+            'esperados' => $c['esperados'],
             'n' => $c['n'],
             'periodos' => array_map(fn ($p) => ['rotulo' => $p['rotulo'], 'n' => $p['n'], 'pcts' => array_values($p['patamares'])], array_values($c['periodos'])),
         ], $cursos),
@@ -117,10 +117,10 @@
 {{-- Números principais --}}
 <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4 mb-2">
     <div class="rounded-2xl border border-emerald-200 border-t-4 border-t-emerald-500 bg-emerald-50 p-5 shadow-sm">
-        <p class="text-xs font-bold uppercase tracking-wide text-emerald-800">Proficiência institucional · critério ≥ {{ $corteTxt }}%</p>
-        <p class="mt-2 font-mono text-4xl font-black text-emerald-700">{{ $fmt($total['proficienciaPct']) }}<span class="text-2xl">%</span></p>
-        <p class="mt-1 text-xs text-slate-600">{{ $fmt($total['proficientes'], 0) }} de {{ $fmt($total['n'], 0) }} estudantes &middot; ≥ {{ $patamares[2] }}%: {{ $fmt($total['patamares'][$patamares[2]] ?? null) }}%</p>
-        @if ($vProf)<p class="mt-1 text-xs font-semibold {{ $vProf['classe'] }}">{{ $vProf['texto'] }}</p>@endif
+        <p class="text-xs font-bold uppercase tracking-wide text-emerald-800">Alunos com desempenho esperado</p>
+        <p class="mt-2 font-mono text-4xl font-black text-emerald-700">{{ $fmt($total['esperadoPct']) }}<span class="text-2xl">%</span></p>
+        <p class="mt-1 text-xs text-slate-600">{{ $fmt($total['esperados'], 0) }} de {{ $fmt($total['n'], 0) }} estudantes que fizeram a prova &middot; ≥ {{ $patamares[2] }}% de acerto: {{ $fmt($total['patamares'][$patamares[2]] ?? null) }}%</p>
+        @if ($vEsperado)<p class="mt-1 text-xs font-semibold {{ $vEsperado['classe'] }}">{{ $vEsperado['texto'] }}</p>@endif
     </div>
     <div class="rounded-2xl border border-slate-200 border-t-4 border-t-violet-500 bg-white p-5 shadow-sm">
         <p class="text-xs font-bold uppercase tracking-wide text-slate-600">% de acerto médio</p>
@@ -266,24 +266,24 @@
     @include('reitor._rodape-quadro', ['id' => 'participacao', 'sobre' => $sobre['participacao'], 'leitura' => $leituras['participacao'] ?? null])
 </section>
 
-{{-- 2 · Proficiência institucional --}}
-@include('reitor._secao', ['numero' => 2, 'titulo' => 'Proficiência institucional', 'id' => 'secao-proficiencia'])
+{{-- 2 · Alunos com desempenho esperado --}}
+@include('reitor._secao', ['numero' => 2, 'titulo' => 'Alunos com desempenho esperado', 'id' => 'secao-esperado'])
 <div class="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-    <span>Critério interno da instituição (≥ {{ $corteTxt }}% de acerto), sem validação contra a proficiência do ENADE/ENAMED.</span>
-    <button type="button" data-alternar="sobre-proficiencia" aria-expanded="false" aria-controls="sobre-proficiencia"
+    <span>Alcançou o mínimo esperado para o período do curso em que está: 60% da parte da prova que já cabe nele (60% da prova, quando ela não traz o período mínimo das questões).</span>
+    <button type="button" data-alternar="sobre-esperado" aria-expanded="false" aria-controls="sobre-esperado"
             class="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-1 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary print:hidden">
         <i class="ph ph-book-open text-base" aria-hidden="true"></i> Saiba mais
     </button>
 </div>
 
-<section class="bg-white border border-slate-200 border-t-4 border-t-emerald-500 rounded-2xl shadow-sm p-5" aria-labelledby="secao-proficiencia">
-    <h3 class="text-xs font-bold uppercase tracking-wide text-emerald-800 mb-3">Estudantes proficientes pelo critério (≥ {{ $corteTxt }}% de acerto) por curso</h3>
-    <div class="relative h-80"><canvas id="grafico-proficiencia" data-titulo="Estudantes proficientes por curso"></canvas></div>
-    @include('reitor._rodape-quadro', ['id' => 'proficiencia', 'sobre' => $sobre['proficiencia'], 'leitura' => $leituras['proficiencia'] ?? null])
+<section class="bg-white border border-slate-200 border-t-4 border-t-emerald-500 rounded-2xl shadow-sm p-5" aria-labelledby="secao-esperado">
+    <h3 class="text-xs font-bold uppercase tracking-wide text-emerald-800 mb-3">Estudantes com desempenho esperado por curso (% de quem fez a prova)</h3>
+    <div class="relative h-80"><canvas id="grafico-esperado" data-titulo="Estudantes com desempenho esperado por curso"></canvas></div>
+    @include('reitor._rodape-quadro', ['id' => 'esperado', 'sobre' => $sobre['esperado'], 'leitura' => $leituras['esperado'] ?? null])
 </section>
 
 <section class="mt-4 bg-white border border-slate-200 rounded-2xl shadow-sm p-5" aria-labelledby="titulo-patamares">
-    <h3 id="titulo-patamares" class="text-xs font-bold uppercase tracking-wide text-emerald-800">Patamares de proficiência — {{ implode(', ', array_slice($patamares, 0, -1)) }}% e {{ end($patamares) }}%</h3>
+    <h3 id="titulo-patamares" class="text-xs font-bold uppercase tracking-wide text-emerald-800">Patamares de acerto — {{ implode(', ', array_slice($patamares, 0, -1)) }}% e {{ end($patamares) }}%</h3>
     <ul class="mt-2 flex flex-wrap gap-4 text-xs text-slate-600" aria-label="Legenda das cores">
         <li class="flex items-center gap-1.5"><span class="inline-block h-3 w-3 rounded-sm" style="background:#fbe4e6"></span> &lt; 20% dos estudantes</li>
         <li class="flex items-center gap-1.5"><span class="inline-block h-3 w-3 rounded-sm" style="background:#fdf0cf"></span> 20–39%</li>
@@ -343,11 +343,11 @@
     </div>
 </section>
 
-{{-- 3 · Participação × proficiência --}}
-@include('reitor._secao', ['numero' => 3, 'titulo' => 'Onde agir primeiro: participação × proficiência', 'id' => 'secao-quadrante'])
+{{-- 3 · Participação × desempenho esperado --}}
+@include('reitor._secao', ['numero' => 3, 'titulo' => 'Onde agir primeiro: participação × desempenho esperado', 'id' => 'secao-quadrante'])
 <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5" aria-labelledby="secao-quadrante">
-    <p class="text-sm text-slate-600 mb-3">Cada bolha é um curso; o tamanho é o número de previstos. A área rosada é o quadrante de atenção: participação abaixo da meta e proficiência abaixo da geral do conjunto.</p>
-    <div class="relative h-96"><canvas id="grafico-quadrante" data-titulo="Participação e proficiência por curso"></canvas></div>
+    <p class="text-sm text-slate-600 mb-3">Cada bolha é um curso; o tamanho é o número de previstos. A área rosada é o quadrante de atenção: participação abaixo da meta e percentual de alunos com desempenho esperado abaixo do geral do conjunto.</p>
+    <div class="relative h-96"><canvas id="grafico-quadrante" data-titulo="Participação e alunos com desempenho esperado por curso"></canvas></div>
     @include('reitor._rodape-quadro', ['id' => 'quadrante', 'sobre' => $sobre['quadrante'], 'leitura' => $leituras['quadrante'] ?? null])
 </section>
 
@@ -358,20 +358,20 @@
     var V = window.ReitorViz;
     var cursos = dados.cursos;
 
-    // 2 · Proficiência por curso: barras (verde acima do conjunto, azul-marinho abaixo) + linha do total da visão.
-    var totalProf = dados.total.proficiencia;
-    V.criar('grafico-proficiencia', {
+    // 2 · Alunos com desempenho esperado por curso: barras (verde acima do conjunto, azul-marinho abaixo) + linha do total da visão.
+    var totalEsperado = dados.total.esperado;
+    V.criar('grafico-esperado', {
         type: 'bar',
         data: {
             labels: cursos.map(function (c) { return c.nome; }),
             datasets: [{
-                label: '% proficientes',
-                data: cursos.map(function (c) { return c.proficiencia; }),
-                backgroundColor: cursos.map(function (c) { return c.proficiencia !== null && totalProf !== null && c.proficiencia >= totalProf ? V.cores.verde : V.cores.marinho; }),
+                label: '% com desempenho esperado',
+                data: cursos.map(function (c) { return c.esperado; }),
+                backgroundColor: cursos.map(function (c) { return c.esperado !== null && totalEsperado !== null && c.esperado >= totalEsperado ? V.cores.verde : V.cores.marinho; }),
                 maxBarThickness: 64,
             }, {
-                // entrada só para a legenda (a "proficiência geral do conjunto" é a linha tracejada desenhada pelo plugin)
-                label: 'Proficiência geral do conjunto (' + V.pct(totalProf) + ')',
+                // entrada só para a legenda (o "geral do conjunto" é a linha tracejada desenhada pelo plugin)
+                label: 'Geral do conjunto (' + V.pct(totalEsperado) + ')',
                 data: [],
                 type: 'line',
                 borderColor: V.cores.vermelho,
@@ -384,20 +384,20 @@
             scales: { y: V.eixoPct(), x: { grid: { display: false } } },
             plugins: {
                 legend: V.legenda('top'),
-                linhaReferencia: { linhas: [{ valor: totalProf, cor: V.cores.vermelho }] },
+                linhaReferencia: { linhas: [{ valor: totalEsperado, cor: V.cores.vermelho }] },
                 rotulosValores: { dataset: 0, formato: function (v) { return V.pct(v); } },
                 tooltip: { callbacks: {
                     label: function (item) {
                         if (item.datasetIndex !== 0) return null;
                         var c = cursos[item.dataIndex];
-                        return V.pct(c.proficiencia) + ' (' + c.proficientes + ' de ' + c.n + ' estudantes)';
+                        return V.pct(c.esperado) + ' (' + c.esperados + ' de ' + c.n + ' estudantes)';
                     },
                 } },
             },
         },
     });
 
-    // 3 · Quadrante participação × proficiência.
+    // 3 · Quadrante participação × desempenho esperado.
     var minX = Math.min.apply(null, cursos.map(function (c) { return c.participacao === null ? 100 : c.participacao; }).concat([dados.meta]));
     var limiteX = Math.max(0, Math.floor((minX - 5) / 5) * 5);
     var maiorPrevistos = Math.max.apply(null, cursos.map(function (c) { return c.previstos; }).concat([1]));
@@ -405,8 +405,8 @@
         id: 'quadranteAtencao',
         beforeDatasetsDraw: function (chart) {
             var x = chart.scales.x, y = chart.scales.y, area = chart.chartArea;
-            if (dados.total.proficiencia === null) return;
-            var xMeta = x.getPixelForValue(dados.meta), yTotal = y.getPixelForValue(dados.total.proficiencia);
+            if (dados.total.esperado === null) return;
+            var xMeta = x.getPixelForValue(dados.meta), yTotal = y.getPixelForValue(dados.total.esperado);
             chart.ctx.save();
             chart.ctx.fillStyle = 'rgba(193, 18, 31, 0.07)';
             chart.ctx.fillRect(area.left, yTotal, Math.max(0, xMeta - area.left), Math.max(0, area.bottom - yTotal));
@@ -431,8 +431,8 @@
         data: {
             datasets: [{
                 label: 'Cursos',
-                data: cursos.filter(function (c) { return c.participacao !== null && c.proficiencia !== null; }).map(function (c) {
-                    return { x: c.participacao, y: c.proficiencia, r: 6 + 16 * Math.sqrt(c.previstos / maiorPrevistos), curso: c };
+                data: cursos.filter(function (c) { return c.participacao !== null && c.esperado !== null; }).map(function (c) {
+                    return { x: c.participacao, y: c.esperado, r: 6 + 16 * Math.sqrt(c.previstos / maiorPrevistos), curso: c };
                 }),
                 backgroundColor: cursos.map(function (c) { return c.cor + 'cc'; }),
                 borderColor: '#ffffff',
@@ -444,17 +444,17 @@
             layout: { padding: { right: 90 } },
             scales: {
                 x: { min: limiteX, max: 100, title: { display: true, text: 'Participação (% dos previstos)' }, ticks: { callback: function (v) { return v + '%'; } } },
-                y: { min: 0, max: 100, title: { display: true, text: 'Estudantes proficientes (%)' }, ticks: { callback: function (v) { return v + '%'; } } },
+                y: { min: 0, max: 100, title: { display: true, text: 'Estudantes com desempenho esperado (%)' }, ticks: { callback: function (v) { return v + '%'; } } },
             },
             plugins: {
                 legend: { display: false },
-                linhaReferencia: { linhas: [{ valor: dados.total.proficiencia, cor: V.cores.vermelho, rotulo: 'Proficiência geral do conjunto' }] },
+                linhaReferencia: { linhas: [{ valor: dados.total.esperado, cor: V.cores.vermelho, rotulo: 'Geral do conjunto' }] },
                 linhaReferenciaX: { linhas: [{ valor: dados.meta, cor: V.cores.verdeEscuro, rotulo: 'Meta' }] },
                 tooltip: { callbacks: {
                     title: function (itens) { return itens[0].raw.curso.nome; },
                     label: function (item) {
                         var c = item.raw.curso;
-                        return ['Participação: ' + V.pct(c.participacao) + ' (' + c.fizeram + ' de ' + c.previstos + ')', 'Proficientes: ' + V.pct(c.proficiencia)];
+                        return ['Participação: ' + V.pct(c.participacao) + ' (' + c.fizeram + ' de ' + c.previstos + ')', 'Desempenho esperado: ' + V.pct(c.esperado)];
                     },
                 } },
             },
@@ -462,7 +462,7 @@
     });
 
     // Drill-down (reitor): clicar numa barra ou bolha abre a análise do curso.
-    V.habilitarDrill(Chart.getChart('grafico-proficiencia'), function (el) { return el.datasetIndex === 0 && cursos[el.index] ? { chave: cursos[el.index].chave } : null; });
+    V.habilitarDrill(Chart.getChart('grafico-esperado'), function (el) { return el.datasetIndex === 0 && cursos[el.index] ? { chave: cursos[el.index].chave } : null; });
     V.habilitarDrill(Chart.getChart('grafico-quadrante'), function (el, grafico) {
         var ponto = grafico.data.datasets[0].data[el.index];
         return ponto && ponto.curso ? { chave: ponto.curso.chave } : null;

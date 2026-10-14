@@ -15,7 +15,7 @@
     // Plano já criado: a linha de base é a foto gravada. Plano novo: o que o painel mostra agora.
     $participacao = $existe ? $plano->participacao_atual : ($ind['participacao'] ?? null);
     $metaParticipacao = $existe ? $plano->meta_participacao : ($ind['meta_participacao'] ?? null);
-    $proficiencia = $existe ? $plano->proficiencia_atual : ($ind['proficiencia'] ?? null);
+    $esperado = $existe ? $plano->esperado_atual : ($ind['esperado'] ?? null);
 
     $etapas = [1 => 'Ponto de partida', 2 => 'Leitura do dado', 3 => 'Causas', 4 => 'Ações', 5 => 'Síntese e envio'];
     $acoes = old('acoes') ?? ($existe ? $plano->acoes->map(fn ($a) => [
@@ -145,7 +145,7 @@
                 <section data-etapa="{{ 1 }}" aria-labelledby="titulo-etapa-1" class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 space-y-5">
                     <div>
                         <h2 id="titulo-etapa-1" class="text-lg font-bold">1. Ponto de partida</h2>
-                        <p class="text-sm text-slate-600">O painel já preencheu a identificação do curso e os indicadores do recorte. Falta só pactuar a meta de proficiência.</p>
+                        <p class="text-sm text-slate-600">O painel já preencheu a identificação do curso e os indicadores do recorte. Falta só pactuar a meta de alunos com desempenho esperado.</p>
                     </div>
 
                     <dl class="grid gap-4 sm:grid-cols-3 text-sm">
@@ -175,14 +175,14 @@
                             <p class="text-xs text-slate-500 mt-1">meta institucional</p>
                         </div>
                         <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Proficiência atual</p>
-                            <p class="text-2xl font-bold mt-1">{{ $fmt($proficiencia) }}</p>
-                            <p class="text-xs text-slate-500 mt-1">{{ ($ind['criterio'] ?? ($plano->contexto['criterio'] ?? 'corte')) === 'periodo' ? 'alunos que alcançaram 60% do que cabe no período deles' : 'estudantes com ≥ '.(int) ($ind['corte'] ?? ($plano->contexto['corte'] ?? 60)).'% de acerto' }}</p>
+                            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Alunos com desempenho esperado</p>
+                            <p class="text-2xl font-bold mt-1">{{ $fmt($esperado) }}</p>
+                            <p class="text-xs text-slate-500 mt-1">alcançaram o mínimo esperado para o período em que estão</p>
                         </div>
                         <div class="rounded-xl border border-emerald-300 bg-emerald-50 p-4">
-                            <label for="meta_proficiencia" class="block text-xs font-semibold uppercase tracking-wide text-emerald-800">Meta de proficiência (%)</label>
-                            <input id="meta_proficiencia" name="meta_proficiencia" type="text" inputmode="decimal" maxlength="5" placeholder="Ex.: 70"
-                                   value="{{ old('meta_proficiencia', $plano->meta_proficiencia !== null ? rtrim(rtrim(number_format($plano->meta_proficiencia, 1, ',', ''), '0'), ',') : '') }}"
+                            <label for="meta_esperado" class="block text-xs font-semibold uppercase tracking-wide text-emerald-800">Meta de alunos com desempenho esperado (%)</label>
+                            <input id="meta_esperado" name="meta_esperado" type="text" inputmode="decimal" maxlength="5" placeholder="Ex.: 70"
+                                   value="{{ old('meta_esperado', $plano->meta_esperado !== null ? rtrim(rtrim(number_format($plano->meta_esperado, 1, ',', ''), '0'), ',') : '') }}"
                                    class="mt-1 w-full rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-lg font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                             <p class="text-xs text-emerald-900 mt-1">pactuada com o NDE para a próxima avaliação</p>
                         </div>

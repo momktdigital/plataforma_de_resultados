@@ -503,6 +503,14 @@ precisa existir como curso para poder ser marcado.
 
 ## Plano de ação (`/painel/planos`, `/colaboracao/planos`)
 
+**Liga/desliga do módulo.** Em **Configurações → Plano de ação** o administrador escolhe: *ativo para todos* (padrão),
+*só para usuários escolhidos (teste)* ou *desativado* (`App\Support\PlanoAcaoModulo`, chaves `plano_acao_modo` e
+`plano_acao_usuarios` em `configuracoes_sistema`). Fora de quem está liberado o módulo "não existe": some o item de menu, a
+aba do coordenador e o ícone "Iniciar plano de ação" dos gráficos, e as rotas respondem 404 (middleware `modulo-plano`). No teste
+o administrador também precisa estar na lista. Desativar não apaga nada: os planos voltam quando o módulo é religado. Os
+lembretes diários (`planos:lembretes`) não são gerados com o módulo desativado e, em teste, só para planos de quem está liberado.
+A mudança fica na auditoria (`configuracao.plano_modulo_alterado`).
+
 O resultado da avaliação vira **ação pedagógica** dentro da própria plataforma. O coordenador inicia um plano a partir de um dado do
 painel, percorre o roteiro **dado → causa → ação**, **publica** (não há aprovação: o plano entra direto em execução e o **colaborador só acompanha**, comentando quando quiser)
 e acompanha a execução até o encerramento. O roteiro é o do "Assistente interativo" (Do dashboard à ação pedagógica)
@@ -523,9 +531,9 @@ o visual inteiro" ou sobre **um item** (uma área, um nível de Bloom, um perío
 dele, e nunca vêm do navegador:
 
 1. **Identificação do curso**, período letivo e categoria de avaliação;
-2. **Participação atual**, **meta de participação** (a institucional, de Configurações) e **proficiência atual** — os mesmos
+2. **Participação atual**, **meta de participação** (a institucional, de Configurações) e **alunos com desempenho esperado atual** — os mesmos
    números do painel da reitoria para aquele curso (`ReitorDashboardService`: participação = fizeram ÷ previstos pela matrícula;
-   proficiência = % dos presentes no corte institucional, 60% por padrão), de modo que plano e painel nunca discordem;
+   desempenho esperado = % dos presentes com nota que alcançaram o mínimo do período do curso deles), de modo que plano e painel nunca discordem;
 3. o **dado do visual** (as linhas que o gráfico mostra, com o item clicado em destaque), guardado dentro do plano — o colaborador
    não enxerga o painel de resultados e analisa só com o que está no plano — e **sugestões de texto** para a etapa de leitura
    ("Inserir sugestão do painel"), sempre editáveis.
@@ -535,7 +543,7 @@ dele, e nunca vêm do navegador:
    abre para o coordenador do curso (só as avaliações do curso dele), o colaborador e o administrador. Há
    também "Ver este dado no painel de desempenho" (curso, período e categoria do plano).
 
-A **meta de proficiência** é a única que o coordenador pactua (sem ela o plano não tem como ser avaliado depois).
+A **meta de alunos com desempenho esperado** é a única que o coordenador pactua (sem ela o plano não tem como ser avaliado depois).
 
 **O roteiro** (formulário único em `plano/form.blade.php`, cinco etapas; sem JavaScript as etapas ficam empilhadas e o envio
 funciona igual): 1 *Ponto de partida* · 2 *Leitura do dado* (recorte, resultado, fragilidades, dados que sustentam) · 3 *Causas*
@@ -648,7 +656,7 @@ têm busca sem acento e teclado). Escolher uma avaliação mostra só o curso
 dela. Se o recorte reúne **famílias de categoria diferentes** (categoria "todas" com
 mais de uma raiz no período — "DI" e "Simulado", mas não "DI › Direito" e
 "DI › Medicina"), as telas avisam: essas provas não são comparáveis em desempenho — a
-participação segue valendo, mas proficiência, média e evolução devem ser lidas
+participação segue valendo, mas alunos com desempenho esperado, média e evolução devem ser lidas
 com uma categoria escolhida. "Estudante" = um resultado (se a mesma pessoa tiver
 resultado em duas avaliações do recorte, conta duas vezes). O curso de cada
 resultado é `resultado_resumos.curso` (o curso na data da prova), nunca
@@ -658,11 +666,11 @@ Sete telas sobre o mesmo recorte (mais a lista **Análise do curso**, abaixo):
 
 | Tela | O que mostra |
 | --- | --- |
-| **Visão institucional** | pontos de atenção; cartões (proficiência, acerto médio, participação, cursos na meta, com variação frente ao semestre anterior); **participação por curso** (previstos × fizeram × ausentes, dif. da média, distância e "alunos a mais" para a meta, períodos avaliados, ativos sem aplicação; ordenável e filtrável); **proficiência por curso**; **patamares** (60–80%, também por período de um curso); **mapa participação × proficiência** (bolhas, quadrante de atenção) |
+| **Visão institucional** | pontos de atenção; cartões (alunos com desempenho esperado, acerto médio, participação, cursos na meta, com variação frente ao semestre anterior); **participação por curso** (previstos × fizeram × ausentes, dif. da média, distância e "alunos a mais" para a meta, períodos avaliados, ativos sem aplicação; ordenável e filtrável); **alunos com desempenho esperado por curso**; **patamares** (60–80%, também por período de um curso); **mapa participação × desempenho esperado** (bolhas, quadrante de atenção) |
 | **Desempenho** | média e mediana; distribuição por faixa de acerto; **dispersão** (quartis e P10–P90 — caixa e haste); histograma do conjunto (com um curso à escolha); tabela estatística |
-| **Trajetória no curso** | proficiência e acerto médio por período do curso (1º, 2º...), com seletor **Todos juntos / Minigráficos** (um gráfico pequeno por curso, mesma escala, total da visão como referência) **/ Um curso**; **mapa de calor curso × período** (média, proficientes, participação ou participantes); **crescimento** (pp por período, ajuste ponderado); **cobertura da aplicação** (onde a prova chegou e onde há aluno ativo sem aplicação) |
-| **Competências** | níveis de **Bloom** (proficientes × não proficientes, mapa por curso, radar curso × conjunto) e **áreas** de conhecimento (ranking e mapa curso × área) |
-| **Evolução entre semestres** | série institucional (proficiência, média, participação), **variação de cada curso** frente a um semestre à escolha, curso × semestre |
+| **Trajetória no curso** | alunos com desempenho esperado e acerto médio por período do curso (1º, 2º...), com seletor **Todos juntos / Minigráficos** (um gráfico pequeno por curso, mesma escala, total da visão como referência) **/ Um curso**; **mapa de calor curso × período** (média, desempenho esperado, participação ou participantes); **crescimento** (pp por período, ajuste ponderado); **cobertura da aplicação** (onde a prova chegou e onde há aluno ativo sem aplicação) |
+| **Competências** | níveis de **Bloom** (quem teve o desempenho esperado × quem ficou abaixo, mapa por curso, radar curso × conjunto) e **áreas** de conhecimento (ranking e mapa curso × área) |
+| **Evolução entre semestres** | série institucional (alunos com desempenho esperado, média, participação), **variação de cada curso** frente a um semestre à escolha, curso × semestre |
 | **Análise dos itens** | análise **institucional** das questões (`ReitorItensService`): mapa acerto × discriminação, itens a revisar — **gabarito suspeito** (discriminação negativa e uma alternativa errada mais marcada que o gabarito), **problema da questão** (acerto muito baixo e não discrimina) × **lacuna de formação** (acerto muito baixo, mas discrimina bem), item fraco, baixo em todos os cursos —, por área e por avaliação (KR-20). O item é sempre (avaliação × número): cada avaliação cadastra as suas questões. Usa `PsicometriaService` e `RelatorioAdminService::analiseAlternativas()` (com cache próprio) e, quando a avaliação tem estudantes de vários cursos, calcula o item por curso |
 | **Estudantes em risco** | **só agregado** (`ReitorRiscoService`): quantos estudantes se enquadram na **regra de risco da instituição** (ver *Estudante em risco*, abaixo) — por faltas, por acerto e no total —, por curso e por período do curso, com tendência frente ao semestre anterior. Funciona com uma aplicação só (a regra de faltas avisa quando o recorte tem menos aplicações que o limite); grupos com menos de 5 estudantes não mostram percentual. A lista nominal é do coordenador (o nome do curso abre a lista de alunos em atenção) e usa a MESMA regra |
 
@@ -675,7 +683,7 @@ destinos e valores validados. Cada **ponto de atenção** da Visão instituciona
 gráfico mostra no momento — acessível e com **Copiar para planilha**).
 
 **Relatório institucional.** O botão **Relatório (PDF / PowerPoint)** (`/reitoria/relatorio`) monta, para o recorte
-atual, capa, resumo, participação, proficiência, desempenho, trajetória, competências e evolução, cada um com a
+atual, capa, resumo, participação, alunos com desempenho esperado, desempenho, trajetória, competências e evolução, cada um com a
 leitura. **PDF**: *Imprimir / salvar como PDF* (A4 retrato; o layout esconde menu e botões ao imprimir — qualquer tela
 imprime sem o menu lateral). **PowerPoint**: gerado no navegador (PptxGenJS, via CDN), com os gráficos como imagem e as
 leituras em cada slide. Cada abertura vai para a auditoria (`reitor.relatorio_aberto`).
@@ -687,9 +695,13 @@ em `/reitoria/exportar.xlsx` e a exportação é registrada na auditoria.
 
 **Definições** (ficam nas telas também):
 
-- **Proficiente** = acertou o **critério** (padrão 60%) ou mais. É um critério
-  interno, **sem validação contra ENADE/ENAMED** — as telas dizem isso. As faixas
-  e os patamares se ancoram nele (60% ⇒ <40, 40–49, 50–59, 60–69, ≥70).
+- **Aluno com desempenho esperado** (no lugar de "proficiência", que não é usada) =
+  presente com nota que alcançou o **mínimo esperado para o período do curso em que
+  estava**: 60% da parte da prova que já cabe nesse período (meta `periodo_minimo` das
+  questões) ou, sem a meta, 60% da prova — a mesma conta do painel do coordenador e do
+  Dashboard da avaliação (`App\Support\DesempenhoEsperado`). Critério interno, para
+  acompanhamento. As faixas e os patamares de acerto se ancoram em 60% (⇒ <40, 40–49,
+  50–59, 60–69, ≥70), valor fixo.
 - **Previstos** = matrículas **vigentes** (ativa ou período cumprido) no período
   letivo da avaliação, só nos períodos do curso em que ela foi aplicada
   (`Previstos`). Alunos ativos em períodos **sem aplicação** ficam à parte ("ativos
@@ -697,7 +709,7 @@ em `/reitoria/exportar.xlsx` e a exportação é registrada na auditoria.
   tem resultado; sem matrícula importada, os previstos são os resultados (a
   participação vira presença, e a tela avisa). **Participação** = fizeram ÷ previstos.
 - **Ausente** = prova inteira em branco (`resultado_resumos.ausente`): fora de
-  média, mediana, faixas e proficiência.
+  média, mediana, faixas e alunos com desempenho esperado.
 - **Evolução**: acompanha o mesmo filtro de categoria nos outros períodos letivos
   (cada semestre reúne as avaliações dela); com uma avaliação escolhida, vale a
   escolhida no semestre dela e a de mais participantes da mesma categoria nos outros.
@@ -721,15 +733,15 @@ notificações dele e pelo painel da reitoria (que conta, em agregado, as mesmas
   agregados em cache levam a regra (e a de cada avaliação) na chave: trocar o valor nunca serve número velho.
 
 **Parâmetros** (Configurações do sistema → *Painel da reitoria*, só administrador;
-`configuracoes_sistema`): `reitor_corte_proficiencia` (inteiro 30–90, padrão 60) e
-`reitor_meta_participacao` (50–100, padrão 98).
+`configuracoes_sistema`): `reitor_meta_participacao` (50–100, padrão 98). Os alunos com
+desempenho esperado não têm parâmetro.
 
 **Como é calculado.** Tudo em SQL sobre `resultado_resumos`: um `GROUP BY` por curso ×
 período × percentual (`percentual` tem 1 casa, então no máximo ~1000 linhas por
 grupo) vira um **histograma** (`App\Support\Histograma`) e dele saem média, mediana,
 quartis, faixas e patamares **exatos** em PHP — nada de trazer resultados um a um.
 Bloom e área são a única varredura de `respostas` (`ReitorCompetenciasService`: um
-`JOIN` + `GROUP BY curso × proficiente × Bloom × área`, regra de `Anulacao`),
+`JOIN` + `GROUP BY curso × esperado × Bloom × área`, regra de `Anulacao`),
 cacheada por avaliação com `CacheDeAnalise` (só arrays). Os previstos vêm de
 `aluno_matriculas` a cada visita (não entram no cache, que não enxerga matrícula).
 
@@ -1376,8 +1388,7 @@ Tela para ajustar, sem precisar de acesso ao servidor:
 
 - **Quantos backups manter** (os mais antigos além desse número são apagados
   a cada novo backup).
-- **Painel da reitoria**: critério de proficiência (% de acerto) e meta de
-  participação (ver "Painel da reitoria").
+- **Painel da reitoria**: meta de participação (ver "Painel da reitoria").
 
 O repositório de atualização aparece só para leitura: vem de
 `ATUALIZACAO_REPOSITORIO` no `.env` (ver "Atualização" acima).

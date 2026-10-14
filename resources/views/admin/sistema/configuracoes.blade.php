@@ -34,24 +34,62 @@
             <legend class="text-sm font-semibold text-slate-800 pr-2">Painel da reitoria</legend>
 
             <div class="mt-3">
-                <label class="block text-sm font-medium mb-1" for="reitor_corte_proficiencia">Critério de proficiência (% de acerto)</label>
-                <input id="reitor_corte_proficiencia" name="reitor_corte_proficiencia" type="number" min="30" max="90" step="1" required
-                       value="{{ old('reitor_corte_proficiencia', $reitorCorte) }}"
-                       class="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                <p class="text-xs text-slate-600 mt-1">O estudante é "proficiente" quando acerta esse percentual ou mais da prova. É um critério interno, sem validação contra exames externos (ENADE/ENAMED). Padrão: 60.</p>
-            </div>
-
-            <div class="mt-4">
                 <label class="block text-sm font-medium mb-1" for="reitor_meta_participacao">Meta de participação (% dos previstos)</label>
                 <input id="reitor_meta_participacao" name="reitor_meta_participacao" type="number" min="50" max="100" step="0.1" required
                        value="{{ old('reitor_meta_participacao', $reitorMeta) }}"
                        class="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm">
                 <p class="text-xs text-slate-600 mt-1">Quantos por cento dos estudantes previstos devem fazer a avaliação. Padrão: 98.</p>
             </div>
+
+            <p class="text-xs text-slate-600 mt-4">Os <strong>alunos com desempenho esperado</strong> não têm parâmetro a configurar: é quem alcança o mínimo esperado para o período do curso em que está (60% da parte da prova que já cabe no período; 60% da prova, quando ela não traz o período mínimo das questões).</p>
         </fieldset>
 
         <fieldset class="border-t border-slate-200 pt-5">
             <legend class="text-sm font-semibold text-slate-800 pr-2">Plano de ação</legend>
+            <input type="hidden" name="plano_modulo_enviado" value="1">
+            @php $modoPlano = old('plano_modo', $planoModo); $usuariosPlano = array_map('intval', (array) old('plano_usuarios', $planoUsuarios)); @endphp
+            <div role="radiogroup" aria-labelledby="plano-modo-titulo" class="mt-3">
+                <p id="plano-modo-titulo" class="text-sm font-medium mb-2">Módulo de planos de ação</p>
+                <label class="flex items-start gap-2 text-sm mb-2">
+                    <input type="radio" name="plano_modo" value="ativo" class="mt-1" data-plano-modo @checked($modoPlano === 'ativo')>
+                    <span><strong>Ativo para todos</strong> — coordenadores, colaboradores, administradores e reitoria veem o módulo.</span>
+                </label>
+                <label class="flex items-start gap-2 text-sm mb-2">
+                    <input type="radio" name="plano_modo" value="teste" class="mt-1" data-plano-modo @checked($modoPlano === 'teste')>
+                    <span><strong>Só para usuários escolhidos (teste)</strong> — os demais não veem menu, ícones nem telas do módulo. O administrador também precisa estar na lista para testar.</span>
+                </label>
+                <label class="flex items-start gap-2 text-sm">
+                    <input type="radio" name="plano_modo" value="desativado" class="mt-1" data-plano-modo @checked($modoPlano === 'desativado')>
+                    <span><strong>Desativado</strong> — ninguém vê o módulo. Os planos já criados ficam guardados e voltam quando for reativado.</span>
+                </label>
+                @error('plano_modo')<p class="text-sm text-red-700 mt-1" role="alert">{{ $message }}</p>@enderror
+            </div>
+
+            <div id="plano-usuarios-teste" class="mt-4" @if ($modoPlano !== 'teste') hidden @endif>
+                <p class="text-sm font-medium mb-1" id="plano-usuarios-titulo">Usuários liberados para o teste</p>
+                <div role="group" aria-labelledby="plano-usuarios-titulo" class="max-h-56 overflow-y-auto rounded-lg border border-slate-300 bg-white p-2 max-w-2xl">
+                    @forelse ($planoCandidatos as $u)
+                        <label class="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-slate-50">
+                            <input type="checkbox" name="plano_usuarios[]" value="{{ $u['id'] }}" @checked(in_array($u['id'], $usuariosPlano, true))>
+                            <span class="font-medium">{{ $u['nome'] }}</span>
+                            <span class="text-xs text-slate-600">{{ $u['perfil'] }}@if ($u['email']) · {{ $u['email'] }}@endif</span>
+                        </label>
+                    @empty
+                        <p class="text-sm text-slate-600 px-2 py-1">Nenhum usuário cadastrado.</p>
+                    @endforelse
+                </div>
+                @error('plano_usuarios.*')<p class="text-sm text-red-700 mt-1" role="alert">{{ $message }}</p>@enderror
+                <p class="text-xs text-slate-600 mt-1 max-w-2xl">Só quem estiver marcado enxerga o módulo. Sem ninguém marcado, ninguém o enxerga (como desativado).</p>
+            </div>
+            <script>
+                (function () {
+                    var caixa = document.getElementById('plano-usuarios-teste');
+                    document.querySelectorAll('[data-plano-modo]').forEach(function (r) {
+                        r.addEventListener('change', function () { caixa.hidden = document.querySelector('[data-plano-modo]:checked').value !== 'teste'; });
+                    });
+                })();
+            </script>
+
             <input type="hidden" name="plano_emails_enviado" value="1">
             <label class="block text-sm font-medium mb-1 mt-3" for="plano_emails">E-mails que recebem o plano publicado</label>
             <textarea id="plano_emails" name="plano_emails" rows="4" placeholder="um@dominio.com.br&#10;outro@dominio.com.br"

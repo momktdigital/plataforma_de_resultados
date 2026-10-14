@@ -29,9 +29,9 @@ class ReitorLeituraService
         'ph-user-minus' => ['reitor.visao', 'secao-participacao', 'Ver participação por curso'],
         'ph-user-check' => ['reitor.visao', 'secao-participacao', 'Ver participação por curso'],
         'ph-prohibit' => ['reitor.visao', 'secao-participacao', 'Ver participação por curso'],
-        'ph-warning-circle' => ['reitor.visao', 'secao-quadrante', 'Ver o mapa participação × proficiência'],
+        'ph-warning-circle' => ['reitor.visao', 'secao-quadrante', 'Ver o mapa participação × desempenho esperado'],
         'ph-calendar-x' => ['reitor.trajetoria', 'secao-cobertura', 'Ver a cobertura da aplicação'],
-        'ph-target' => ['reitor.visao', 'secao-proficiencia', 'Ver proficiência por curso'],
+        'ph-target' => ['reitor.visao', 'secao-esperado', 'Ver alunos com desempenho esperado por curso'],
         'ph-trend-up' => ['reitor.evolucao', 'secao-evolucao-inst', 'Ver a evolução entre semestres'],
         'ph-trend-down' => ['reitor.evolucao', 'secao-evolucao-inst', 'Ver a evolução entre semestres'],
         'ph-minus' => ['reitor.evolucao', 'secao-evolucao-inst', 'Ver a evolução entre semestres'],
@@ -64,22 +64,22 @@ class ReitorLeituraService
         $textos = [
             'participacao' => 'Compara, em cada curso, quantos estudantes eram previstos (matrículas ativas no período letivo, nos períodos do curso em que a avaliação foi aplicada) com quantos fizeram a prova. Ausente é quem tinha matrícula e não fez (ou entregou em branco). "Dif. da média" mostra a diferença para a participação do conjunto; "distância da meta" e "alunos a mais" dizem o quanto falta para a meta de {meta}%. Períodos do curso com alunos ativos mas sem nenhuma aplicação ficam à parte ("ativos sem aplicação") e não entram na conta.',
             'meta' => 'A meta de participação é um parâmetro institucional ({meta}%), definido pela administração em Configurações. "Alunos a mais" é o menor número de participantes adicionais para o curso chegar à meta com os mesmos previstos.',
-            'proficiencia' => 'Estudantes proficientes são os que acertaram {corte}% ou mais da prova. É um critério interno da instituição, escolhido para acompanhamento — não foi validado contra a proficiência medida em exames externos (ENADE, ENAMED) e não deve ser lido como equivalente a ela. A linha tracejada é o percentual do conjunto da visão. Só entram quem fez a prova.',
-            'patamares' => 'Mostra quanto da turma passa de cada patamar de acerto, a partir do critério de proficiência. A queda de um patamar para o seguinte mede o quanto o resultado depende de um corte específico: uma queda brusca indica muitos estudantes "encostados" no corte.',
+            'esperado' => 'Alunos com desempenho esperado são os que alcançaram o mínimo esperado para o período do curso em que estão: 60% da parte da prova que já cabe nesse período (a meta "período mínimo" de cada questão) ou, quando a prova não traz essa informação, 60% da prova. É a mesma conta do painel do coordenador. É um critério interno da instituição, para acompanhamento. A linha tracejada é o percentual do conjunto da visão. Só entram quem fez a prova.',
+            'patamares' => 'Mostra quanto da turma passa de cada patamar de acerto da prova inteira ({corte}%, 65%, 70%...). A queda de um patamar para o seguinte mede o quanto o resultado depende de um corte específico: uma queda brusca indica muitos estudantes "encostados" no corte.',
             'media' => 'Média e mediana do percentual de acerto de quem fez a prova. A mediana é o valor do meio: metade dos estudantes fica abaixo dela. Quando a média é bem diferente da mediana, poucos resultados muito altos ou muito baixos estão puxando a média.',
             'faixas' => 'Distribui os estudantes de cada curso em cinco faixas de acerto, de 100%: a soma de cada barra é toda a turma. Mostra o formato do desempenho que a média esconde — dois cursos de mesma média podem ter perfis opostos.',
             'dispersao' => 'Para cada curso: a caixa vai do 1º ao 3º quartil (metade central dos estudantes), a linha fina vai do 10º ao 90º percentil, e o losango é a mediana. Caixa larga = turma heterogênea; caixa estreita = turma homogênea.',
-            'quadrante' => 'Cruza participação (horizontal) com proficiência (vertical). O tamanho da bolha é o número de previstos. As linhas marcam a meta de participação e a proficiência geral do conjunto: cursos abaixo das duas são o quadrante de atenção. Proficiência com baixa participação pode estar medindo só quem se dispôs a fazer a prova.',
-            'trajetoria_proficiencia' => 'Percentual de proficientes em cada período do curso (1º, 2º...). É uma FOTO do semestre — estudantes de períodos diferentes são pessoas diferentes —, não o acompanhamento da mesma turma ao longo do curso. Períodos com menos de {minimo} participantes não aparecem na linha.',
+            'quadrante' => 'Cruza participação (horizontal) com o percentual de alunos com desempenho esperado (vertical). O tamanho da bolha é o número de previstos. As linhas marcam a meta de participação e o percentual geral do conjunto: cursos abaixo das duas são o quadrante de atenção. Um bom percentual com baixa participação pode estar medindo só quem se dispôs a fazer a prova.',
+            'trajetoria_esperado' => 'Percentual de alunos com desempenho esperado em cada período do curso (1º, 2º...). É uma FOTO do semestre — estudantes de períodos diferentes são pessoas diferentes —, não o acompanhamento da mesma turma ao longo do curso. Períodos com menos de {minimo} participantes não aparecem na linha.',
             'trajetoria_acerto' => 'Média de acerto em cada período do curso. Leitura transversal (cada período é uma turma diferente): uma linha que sobe sugere que quem está mais adiantado sabe mais; uma linha plana, que o curso não está produzindo ganho visível entre períodos. Períodos com menos de {minimo} participantes não aparecem.',
             'mapa_periodo' => 'Mapa de calor da média de acerto por curso e período do curso. Células vazias são períodos sem aplicação ou com menos de {minimo} participantes; passe o mouse (ou veja a tabela) para ver o número de participantes de cada célula.',
             'crescimento' => 'Quanto o curso "cresce" ao longo dos períodos: a inclinação da reta (em pontos percentuais por período) ajustada às médias dos períodos avaliados, ponderada pelo nº de participantes, e a diferença entre o último e o primeiro período avaliado. É uma leitura transversal: indica a tendência da sequência de turmas, não o ganho individual de um estudante.',
             'cobertura' => 'Mostra, por curso, em quais períodos a avaliação foi aplicada e em quais há alunos ativos sem aplicação. Serve para separar "o aluno faltou" de "a prova não chegou àquela turma".',
-            'bloom_distingue' => 'Compara o percentual de acerto dos estudantes proficientes (≥ {corte}%) e dos não proficientes em cada nível da taxonomia de Bloom. Onde a distância é maior, a habilidade cognitiva mais separa quem foi bem de quem não foi.',
+            'bloom_distingue' => 'Compara o percentual de acerto dos estudantes que tiveram o desempenho esperado e dos que ficaram abaixo dele em cada nível da taxonomia de Bloom. Onde a distância é maior, a habilidade cognitiva mais separa quem foi bem de quem não foi.',
             'bloom_mapa' => 'Percentual de acerto de cada curso em cada nível da taxonomia de Bloom (das questões que têm o nível cadastrado). Células com menos de {minimo_respostas} respostas aparecem como "—".',
-            'areas_ranking' => 'Percentual de acerto por área de conhecimento (campo "área" das questões) no conjunto da visão, da mais fraca para a mais forte, com a distância entre proficientes e não proficientes em cada área.',
+            'areas_ranking' => 'Percentual de acerto por área de conhecimento (campo "área" das questões) no conjunto da visão, da mais fraca para a mais forte, com a distância entre quem teve o desempenho esperado e quem ficou abaixo dele em cada área.',
             'areas_mapa' => 'Percentual de acerto de cada curso nas áreas com mais respostas. Células com menos de {minimo_respostas} respostas aparecem como "—".',
-            'evolucao_institucional' => 'Participação, média e proficiência da instituição em cada período letivo, sempre na mesma categoria de avaliação. Cada ponto é uma foto do semestre: os estudantes de um semestre e de outro são, em parte, pessoas diferentes.',
+            'evolucao_institucional' => 'Participação, média e alunos com desempenho esperado da instituição em cada período letivo, sempre na mesma categoria de avaliação. Cada ponto é uma foto do semestre: os estudantes de um semestre e de outro são, em parte, pessoas diferentes.',
             'itens_mapa' => 'Cada ponto é um item (questão de uma avaliação): acerto (%) no eixo horizontal e discriminação (D, diferença de acerto entre os 27% de melhor e de pior desempenho) no vertical. D abaixo de {d_minimo} não separa quem sabe de quem não sabe; acerto abaixo de {acerto_baixo}% é muito baixo. O diagnóstico combina os dois: baixo acerto E baixa discriminação aponta a QUESTÃO; baixo acerto com boa discriminação aponta uma LACUNA DE FORMAÇÃO; discriminação negativa com uma alternativa errada mais marcada que o gabarito aponta possível ERRO DE GABARITO.',
             'itens_lista' => 'Os itens com diagnóstico, do mais urgente (gabarito suspeito) ao menos. Em avaliações com estudantes de vários cursos, o acerto por curso mostra se o problema é da questão (baixo em todos) ou de um curso. O nome da avaliação abre o Dashboard dela (visão do coordenador). Itens com menos de {minimo_itens} respostas não são diagnosticados.',
             'itens_areas' => 'Percentual de itens com diagnóstico em cada área (campo "área" da questão). Uma área com muitos itens a revisar pede revisão das questões ou reforço do conteúdo, conforme o diagnóstico predominante.',
@@ -138,13 +138,13 @@ class ReitorLeituraService
             .($menorPart !== null && $menorPart['participacao'] < $meta ? ". A menor participação é a de {$menorPart['nome']} (".self::pct($menorPart['participacao']).'%).' : '.')];
         $leituras['meta'] = $leituras['participacao'];
 
-        // Proficiência
-        $porProf = $porValor('proficienciaPct', true);
-        $acimaMedia = collect($cursos)->filter(fn ($x) => $x['proficienciaPct'] !== null && $total['proficienciaPct'] !== null && $x['proficienciaPct'] >= $total['proficienciaPct'])->count();
-        $tomProf = $total['proficienciaPct'] === null ? null : ($total['proficienciaPct'] >= 50 ? 'bom' : ($total['proficienciaPct'] >= 25 ? 'atencao' : 'ruim'));
-        $leituras['proficiencia'] = ['tom' => $tomProf, 'texto' => $total['proficienciaPct'] === null ? 'Sem resultados para calcular a proficiência.'
-            : self::pct($total['proficienciaPct'])."% dos estudantes ({$total['proficientes']} de {$total['n']}) atingiram o critério de ≥ {$c}% de acerto. "
-            .($porProf->count() >= 2 ? "A maior proporção é a de {$porProf->first()['nome']} (".self::pct($porProf->first()['proficienciaPct'])."%) e a menor a de {$porProf->last()['nome']} (".self::pct($porProf->last()['proficienciaPct']).'%); ' : '')
+        // Alunos com desempenho esperado
+        $porEsperado = $porValor('esperadoPct', true);
+        $acimaMedia = collect($cursos)->filter(fn ($x) => $x['esperadoPct'] !== null && $total['esperadoPct'] !== null && $x['esperadoPct'] >= $total['esperadoPct'])->count();
+        $tomEsperado = $total['esperadoPct'] === null ? null : ($total['esperadoPct'] >= 50 ? 'bom' : ($total['esperadoPct'] >= 25 ? 'atencao' : 'ruim'));
+        $leituras['esperado'] = ['tom' => $tomEsperado, 'texto' => $total['esperadoPct'] === null ? 'Sem resultados para calcular os alunos com desempenho esperado.'
+            : self::pct($total['esperadoPct'])."% dos estudantes ({$total['esperados']} de {$total['n']}) alcançaram o desempenho esperado para o período do curso em que estão. "
+            .($porEsperado->count() >= 2 ? "A maior proporção é a de {$porEsperado->first()['nome']} (".self::pct($porEsperado->first()['esperadoPct'])."%) e a menor a de {$porEsperado->last()['nome']} (".self::pct($porEsperado->last()['esperadoPct']).'%); ' : '')
             ."$acimaMedia de ".count($cursos).' cursos estão acima do conjunto. (Referência do tom: ≥ 50% bom, 25–49% atenção, abaixo disso precisa de ação.)'];
 
         // Patamares
@@ -154,7 +154,7 @@ class ReitorLeituraService
         $ultimo = $patamares[count($patamares) - 1];
         $leituras['patamares'] = ['tom' => null, 'texto' => $pat[$primeiro] === null ? 'Sem dados.'
             : 'No conjunto, '.self::pct($pat[$primeiro])."% passam de {$primeiro}% de acerto, ".self::pct($pat[$patamares[2]]).'% passam de '.$patamares[2].'% e '.self::pct($pat[$ultimo])."% passam de {$ultimo}%. "
-            .($pat[$primeiro] > 0 && $pat[$patamares[2]] / $pat[$primeiro] < 0.5 ? 'A queda é forte: boa parte de quem é proficiente está perto do corte, sem folga.' : 'A queda entre patamares é gradual: quem passa do corte tende a ter alguma folga.')];
+            .($pat[$primeiro] > 0 && $pat[$patamares[2]] / $pat[$primeiro] < 0.5 ? 'A queda é forte: boa parte dos estudantes está perto do corte, sem folga.' : 'A queda entre patamares é gradual: quem passa do corte tende a ter alguma folga.')];
 
         // Média e mediana
         $tomMedia = $total['media'] === null ? null : ($total['media'] >= $corte ? 'bom' : ($total['media'] >= $corte - 10 ? 'atencao' : 'ruim'));
@@ -177,11 +177,11 @@ class ReitorLeituraService
         $leituras['dispersao'] = ['tom' => null, 'texto' => $comIqr->count() < 2 ? 'Poucos cursos com resultados suficientes para comparar a dispersão.'
             : "O curso mais homogêneo é {$comIqr->first()['nome']} (metade central dos estudantes numa faixa de ".self::pct($comIqr->first()['iqr']).' pp) e o mais heterogêneo, '.$comIqr->last()['nome'].' ('.self::pct($comIqr->last()['iqr']).' pp). Turmas heterogêneas pedem estratégias diferentes de turmas homogêneas com a mesma média.'];
 
-        // Quadrante participação × proficiência
-        $criticos = collect($cursos)->filter(fn ($x) => $x['participacao'] !== null && $x['proficienciaPct'] !== null && $x['participacao'] < $meta && $total['proficienciaPct'] !== null && $x['proficienciaPct'] < $total['proficienciaPct'])->map($nome)->all();
+        // Quadrante participação × desempenho esperado
+        $criticos = collect($cursos)->filter(fn ($x) => $x['participacao'] !== null && $x['esperadoPct'] !== null && $x['participacao'] < $meta && $total['esperadoPct'] !== null && $x['esperadoPct'] < $total['esperadoPct'])->map($nome)->all();
         $leituras['quadrante'] = ['tom' => $criticos === [] ? 'bom' : 'atencao', 'texto' => $criticos === []
-            ? 'Nenhum curso está, ao mesmo tempo, abaixo da meta de participação e abaixo da proficiência geral do conjunto.'
-            : count($criticos).' curso(s) estão abaixo da meta de participação E abaixo da proficiência geral do conjunto: '.self::lista($criticos).'. Nesses, o resultado tem dois problemas somados: parte da turma não fez a prova e quem fez foi pior que a média.'];
+            ? 'Nenhum curso está, ao mesmo tempo, abaixo da meta de participação e abaixo do percentual geral de alunos com desempenho esperado.'
+            : count($criticos).' curso(s) estão abaixo da meta de participação E abaixo do percentual geral de alunos com desempenho esperado: '.self::lista($criticos).'. Nesses, o resultado tem dois problemas somados: parte da turma não fez a prova e quem fez foi pior que a média.'];
 
         // Trajetória
         $leituras += $this->leiturasDeTrajetoria($cursos, $total, $corte);
@@ -225,10 +225,10 @@ class ReitorLeituraService
         $periodos = array_values(array_filter($total['periodos'], fn ($p) => $p['n'] >= ReitorDashboardService::MINIMO_PERIODO));
 
         if (count($periodos) >= 2) {
-            $melhor = collect($periodos)->sortByDesc('proficienciaPct')->first();
-            $pior = collect($periodos)->sortBy('proficienciaPct')->first();
-            $leituras['trajetoria_proficiencia'] = ['tom' => null, 'texto' => 'No conjunto, a proficiência vai de '.self::pct($pior['proficienciaPct'])."% no {$pior['rotulo']} período a ".self::pct($melhor['proficienciaPct'])."% no {$melhor['rotulo']}. "
-                .($melhor['ordinal'] > $pior['ordinal'] ? 'Os períodos mais adiantados têm mais proficientes, como se espera.' : 'Os períodos iniciais estão melhor que os finais — vale investigar a trajetória.')];
+            $melhor = collect($periodos)->sortByDesc('esperadoPct')->first();
+            $pior = collect($periodos)->sortBy('esperadoPct')->first();
+            $leituras['trajetoria_esperado'] = ['tom' => null, 'texto' => 'No conjunto, os alunos com desempenho esperado vão de '.self::pct($pior['esperadoPct'])."% no {$pior['rotulo']} período a ".self::pct($melhor['esperadoPct'])."% no {$melhor['rotulo']}. "
+                .($melhor['ordinal'] > $pior['ordinal'] ? 'Os períodos mais adiantados têm mais alunos com desempenho esperado, como se espera.' : 'Os períodos iniciais estão melhor que os finais — vale investigar a trajetória.')];
 
             $primeiro = $periodos[0];
             $ultimo = $periodos[count($periodos) - 1];
@@ -332,14 +332,14 @@ class ReitorLeituraService
         if ($bloom['temDados']) {
             $niveis = collect($bloom['niveis']);
             $distancias = $niveis->map(function ($n) use ($bloom) {
-                $p = $bloom['proficientes'][$n['chave']]['pct'] ?? null;
-                $q = $bloom['naoProficientes'][$n['chave']]['pct'] ?? null;
+                $p = $bloom['esperado'][$n['chave']]['pct'] ?? null;
+                $q = $bloom['abaixo'][$n['chave']]['pct'] ?? null;
 
                 return $p !== null && $q !== null ? ['rotulo' => $n['rotulo'], 'distancia' => round($p - $q, 1)] : null;
             })->filter()->sortByDesc('distancia')->values();
 
             $leituras['bloom_distingue'] = ['tom' => null, 'texto' => $distancias->isEmpty() ? 'Sem questões com nível de Bloom e respostas suficientes.'
-                : "A maior distância entre proficientes e não proficientes está em {$distancias->first()['rotulo']} (".self::pp($distancias->first()['distancia']).') e a menor em '.$distancias->last()['rotulo'].' ('.self::pp($distancias->last()['distancia']).'). Onde a distância é grande, a habilidade separa bem quem foi bem de quem não foi.'];
+                : "A maior distância entre quem teve o desempenho esperado e quem ficou abaixo dele está em {$distancias->first()['rotulo']} (".self::pp($distancias->first()['distancia']).') e a menor em '.$distancias->last()['rotulo'].' ('.self::pp($distancias->last()['distancia']).'). Onde a distância é grande, a habilidade separa bem quem foi bem de quem não foi.'];
 
             $totais = $niveis->map(fn ($n) => ['rotulo' => $n['rotulo'], 'pct' => $bloom['total'][$n['chave']]['pct'] ?? null])->filter(fn ($n) => $n['pct'] !== null)->sortBy('pct')->values();
             $leituras['bloom_mapa'] = ['tom' => null, 'texto' => $totais->count() < 2 ? 'Sem níveis suficientes para comparar.'
@@ -372,13 +372,13 @@ class ReitorLeituraService
 
         $atual = $semestres[$indice];
         $anterior = $semestres[$indice - 1];
-        $dProf = $atual['total']['proficienciaPct'] !== null && $anterior['total']['proficienciaPct'] !== null ? round($atual['total']['proficienciaPct'] - $anterior['total']['proficienciaPct'], 1) : null;
+        $dEsperado = $atual['total']['esperadoPct'] !== null && $anterior['total']['esperadoPct'] !== null ? round($atual['total']['esperadoPct'] - $anterior['total']['esperadoPct'], 1) : null;
         $dMedia = $atual['total']['media'] !== null && $anterior['total']['media'] !== null ? round($atual['total']['media'] - $anterior['total']['media'], 1) : null;
         $dPart = $atual['total']['participacao'] !== null && $anterior['total']['participacao'] !== null ? round($atual['total']['participacao'] - $anterior['total']['participacao'], 1) : null;
 
         $partes = [];
-        if ($dProf !== null) {
-            $partes[] = 'a proficiência '.($dProf >= 0 ? 'subiu' : 'caiu').' '.self::pct(abs($dProf))." pp ({$this->p($anterior['total']['proficienciaPct'])}% → {$this->p($atual['total']['proficienciaPct'])}%)";
+        if ($dEsperado !== null) {
+            $partes[] = 'o percentual de alunos com desempenho esperado '.($dEsperado >= 0 ? 'subiu' : 'caiu').' '.self::pct(abs($dEsperado))." pp ({$this->p($anterior['total']['esperadoPct'])}% → {$this->p($atual['total']['esperadoPct'])}%)";
         }
         if ($dMedia !== null) {
             $partes[] = 'a média '.($dMedia >= 0 ? 'subiu' : 'caiu').' '.self::pct(abs($dMedia)).' pp';
@@ -390,8 +390,8 @@ class ReitorLeituraService
         $variacoes = [];
         foreach ($atual['cursos'] as $chave => $c) {
             $antes = $anterior['cursos'][$chave] ?? null;
-            if ($antes !== null && $c['proficienciaPct'] !== null && $antes['proficienciaPct'] !== null) {
-                $variacoes[] = ['chave' => $chave, 'delta' => round($c['proficienciaPct'] - $antes['proficienciaPct'], 1)];
+            if ($antes !== null && $c['esperadoPct'] !== null && $antes['esperadoPct'] !== null) {
+                $variacoes[] = ['chave' => $chave, 'delta' => round($c['esperadoPct'] - $antes['esperadoPct'], 1)];
             }
         }
         usort($variacoes, fn ($a, $b) => $b['delta'] <=> $a['delta']);
@@ -399,9 +399,9 @@ class ReitorLeituraService
         $texto = "De {$anterior['periodoLetivo']} para {$atual['periodoLetivo']}: ".implode('; ', $partes).'.';
 
         return [
-            'evolucao_institucional' => ['tom' => $dProf === null ? null : ($dProf >= 1 ? 'bom' : ($dProf <= -1 ? 'ruim' : 'atencao')), 'texto' => $texto],
+            'evolucao_institucional' => ['tom' => $dEsperado === null ? null : ($dEsperado >= 1 ? 'bom' : ($dEsperado <= -1 ? 'ruim' : 'atencao')), 'texto' => $texto],
             'evolucao_cursos' => ['tom' => null, 'texto' => $variacoes === [] ? 'Sem cursos com resultado nos dois períodos.'
-                : 'Entre os cursos presentes nos dois períodos, '.count(array_filter($variacoes, fn ($v) => $v['delta'] >= ReitorEvolucaoService::VARIACAO_RELEVANTE)).' melhoraram e '.count(array_filter($variacoes, fn ($v) => $v['delta'] <= -ReitorEvolucaoService::VARIACAO_RELEVANTE)).' pioraram a proficiência em '.ReitorEvolucaoService::VARIACAO_RELEVANTE.' pp ou mais; o restante ficou estável.'],
+                : 'Entre os cursos presentes nos dois períodos, '.count(array_filter($variacoes, fn ($v) => $v['delta'] >= ReitorEvolucaoService::VARIACAO_RELEVANTE)).' melhoraram e '.count(array_filter($variacoes, fn ($v) => $v['delta'] <= -ReitorEvolucaoService::VARIACAO_RELEVANTE)).' pioraram o percentual de alunos com desempenho esperado em '.ReitorEvolucaoService::VARIACAO_RELEVANTE.' pp ou mais; o restante ficou estável.'],
         ];
     }
 
@@ -531,12 +531,12 @@ class ReitorLeituraService
             $cartoes[] = ['tom' => 'positivo', 'icone' => 'ph-user-check', 'texto' => 'Todos os cursos estão na meta de participação ('.self::pct($meta).'%).'];
         }
 
-        $duplo = collect($cursos)->filter(fn ($c) => $c['difParticipacao'] !== null && $c['difProficiencia'] !== null && $c['difParticipacao'] < 0 && $c['difProficiencia'] < 0)->sortBy('difProficiencia')->values();
+        $duplo = collect($cursos)->filter(fn ($c) => $c['difParticipacao'] !== null && $c['difEsperado'] !== null && $c['difParticipacao'] < 0 && $c['difEsperado'] < 0)->sortBy('difEsperado')->values();
         if ($duplo->isNotEmpty()) {
             $cartoes[] = [
                 'tom' => 'atencao',
                 'icone' => 'ph-warning-circle',
-                'texto' => 'Abaixo do conjunto em participação e em proficiência ao mesmo tempo: '.self::lista($duplo->map(fn ($c) => $c['nome'])->all(), 4).'.',
+                'texto' => 'Abaixo do conjunto em participação e em alunos com desempenho esperado ao mesmo tempo: '.self::lista($duplo->map(fn ($c) => $c['nome'])->all(), 4).'.',
             ];
         }
 
@@ -556,12 +556,12 @@ class ReitorLeituraService
             ];
         }
 
-        $porProf = collect($cursos)->filter(fn ($c) => $c['proficienciaPct'] !== null && $c['n'] >= 10)->sortByDesc('proficienciaPct')->values();
-        if ($porProf->count() >= 2) {
+        $porEsperado = collect($cursos)->filter(fn ($c) => $c['esperadoPct'] !== null && $c['n'] >= 10)->sortByDesc('esperadoPct')->values();
+        if ($porEsperado->count() >= 2) {
             $cartoes[] = [
                 'tom' => 'neutro',
                 'icone' => 'ph-target',
-                'texto' => "Maior proporção de proficientes: {$porProf->first()['nome']} (".self::pct($porProf->first()['proficienciaPct'])."%). Menor: {$porProf->last()['nome']} (".self::pct($porProf->last()['proficienciaPct']).'%).',
+                'texto' => "Maior proporção de alunos com desempenho esperado: {$porEsperado->first()['nome']} (".self::pct($porEsperado->first()['esperadoPct'])."%). Menor: {$porEsperado->last()['nome']} (".self::pct($porEsperado->last()['esperadoPct']).'%).',
             ];
         }
 

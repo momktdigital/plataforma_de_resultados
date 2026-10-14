@@ -36,10 +36,10 @@
 
     <div class="overflow-x-auto">
         <table id="tabela-cursos" data-ordenavel class="w-full text-sm">
-            <caption class="sr-only">Cursos da instituição com participação, proficiência e média no recorte atual, e o botão para abrir a análise de cada um.</caption>
+            <caption class="sr-only">Cursos da instituição com participação, alunos com desempenho esperado e média no recorte atual, e o botão para abrir a análise de cada um.</caption>
             <thead class="text-left text-[11px] font-bold uppercase tracking-wide text-slate-600">
                 <tr class="border-b border-slate-200">
-                    @foreach ([['Curso', 'texto', ''], ['Previstos', 'numero', 'text-right'], ['Participação', 'numero', 'text-right'], ['Proficientes', 'numero', 'text-right'], ['Média', 'numero', 'text-right']] as [$rotulo, $tipo, $alinhamento])
+                    @foreach ([['Curso', 'texto', ''], ['Previstos', 'numero', 'text-right'], ['Participação', 'numero', 'text-right'], ['Desempenho esperado', 'numero', 'text-right'], ['Média', 'numero', 'text-right']] as [$rotulo, $tipo, $alinhamento])
                         <th scope="col" data-ordem="{{ $tipo }}" class="px-3 py-2 {{ $alinhamento }}">
                             <button type="button" class="inline-flex items-center gap-1 font-bold uppercase tracking-wide hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded">{{ $rotulo }} <i class="ph ph-arrows-down-up text-xs" aria-hidden="true"></i></button>
                         </th>
@@ -54,7 +54,7 @@
                         <td data-valor="{{ $curso['nome'] }}" class="px-3 py-3 font-medium text-slate-800">{{ $curso['nome'] }}</td>
                         <td data-valor="{{ $c['previstos'] ?? '' }}" class="px-3 py-3 text-right font-mono">{{ $fmt($c['previstos'] ?? null, 0) }}</td>
                         <td data-valor="{{ $c['participacao'] ?? '' }}" class="px-3 py-3 text-right font-mono">{{ $c === null ? '—' : $fmt($c['participacao']).'%' }}</td>
-                        <td data-valor="{{ $c['proficienciaPct'] ?? '' }}" class="px-3 py-3 text-right font-mono">{{ $c === null ? '—' : $fmt($c['proficienciaPct']).'%' }}</td>
+                        <td data-valor="{{ $c['esperadoPct'] ?? '' }}" class="px-3 py-3 text-right font-mono">{{ $c === null ? '—' : $fmt($c['esperadoPct']).'%' }}</td>
                         <td data-valor="{{ $c['media'] ?? '' }}" class="px-3 py-3 text-right font-mono">{{ $c === null ? '—' : $fmt($c['media']).'%' }}</td>
                         <td class="px-3 py-3 text-right whitespace-nowrap">
                             <a href="{{ route('reitor.curso.abrir', ['curso' => $curso['chave']]) }}"

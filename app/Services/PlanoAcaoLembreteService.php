@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\PlanoAcao;
 use App\Models\PlanoAcaoAcao;
+use App\Support\PlanoAcaoModulo;
 
 /**
  * Lembretes diários para o coordenador sobre os planos em execução: ação que vence nos próximos dias, ação com o prazo
@@ -23,12 +24,25 @@ class PlanoAcaoLembreteService
 
     public function __construct(private readonly PlanoAcaoService $planos) {}
 
+    /**
+     * Módulo desligado: nenhum aviso. Em teste, só dos planos de quem está liberado (o coordenador que não vê o módulo não
+     * receberia um aviso que leva a uma tela inexistente).
+     */
+    private function daquelesLiberados(PlanoAcao $plano): bool
+    {
+        return PlanoAcaoModulo::modo() === PlanoAcaoModulo::ATIVO || in_array((int) $plano->admin_id, PlanoAcaoModulo::usuarios(), true);
+    }
+
     /** @return int quantos avisos foram criados */
     public function gerar(): int
     {
+        if (! PlanoAcaoModulo::ligado()) {
+            return 0;
+        }
+
         $total = 0;
 
-        $emExecucao = PlanoAcao::where('status', PlanoAcao::EM_EXECUCAO)->with(['acoes', 'eventos'])->get();
+        $emExecucao = PlanoAcao::where('status', PlanoAcao::EM_EXECUCAO)->with(['acoes', 'eventos'])->get()->filter(fn (PlanoAcao $p) => $this->daquelesLiberados($p));
 
         foreach ($emExecucao as $plano) {
             foreach ($plano->acoes as $acao) {
@@ -62,7 +76,7 @@ class PlanoAcaoLembreteService
     private function rascunhosParados(): int
     {
         $total = 0;
-        foreach (PlanoAcao::where('status', PlanoAcao::RASCUNHO)->where('updated_at', '<=', now()->subDays(self::DIAS_RASCUNHO))->get() as $plano) {
+        foreach (PlanoAcao::where('status', PlanoAcao::RASCUNHO)->where('updated_at', '<=', now()->subDays(self::DIAS_RASCUNHO))->get()->filter(fn (PlanoAcao $p) => $this->daquelesLiberados($p)) as $plano) {
             $total += $this->planos->avisar(
                 $plano, 'plano_prazo', 'Rascunho de plano parado',
                 "O rascunho “{$plano->origem_rotulo}” está parado há ".self::DIAS_RASCUNHO.' dias ou mais. Termine e envie, ou exclua se não for mais necessário.',

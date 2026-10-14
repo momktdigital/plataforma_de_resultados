@@ -12,10 +12,15 @@ use App\Support\Psicometria;
  * recorte e destaca o que merece revisão — acerto muito baixo, item que não discrimina e possível erro de gabarito —
  * e diz, quando dá, se o problema parece ser da QUESTÃO ou da FORMAÇÃO.
  *
- * Não refaz conta: cada avaliação passa por PsicometriaService::analisar() (dificuldade, discriminação, ponto-bisserial,
+ * Não refaz conta: cada avaliação passa por PsicometriaService::analisarItens() (dificuldade, discriminação, ponto-bisserial,
  * KR-20) e RelatorioAdminService::analiseAlternativas() (alternativa mais marcada), ambos com cache próprio. Quando a
- * avaliação tem estudantes de vários cursos (resultado_resumos.curso), o item também é calculado por curso — "baixo em
- * todos os cursos" aponta a questão ou um conteúdo comum; "baixo só em um" aponta o curso.
+ * avaliação tem estudantes de vários cursos (resultado_resumos.curso), o item também é calculado por curso
+ * (PsicometriaService::acertoPorCurso(), uma varredura só) — "baixo em todos os cursos" aponta a questão ou um conteúdo
+ * comum; "baixo só em um" aponta o curso.
+ *
+ * DESEMPENHO: a análise a frio é uma varredura de `respostas` por avaliação (dezenas delas num recorte amplo), então o resultado
+ * de CADA avaliação é cacheado à parte — trocar o recorte (categoria, período, cursos) só calcula as avaliações novas — e a tela
+ * não pede o que só o Dashboard da avaliação usa (simulação de remoção de itens, média sem ausentes).
  *
  * A questão não tem identidade entre avaliações (cada avaliação cadastra as suas), então o item é sempre
  * (avaliação × número); a leitura institucional vem de somar por área, por avaliação e pelo diagnóstico.
@@ -82,7 +87,14 @@ class ReitorItensService
             $itens = [];
             $resumos = [];
             foreach ($avaliacoes as $a) {
-                [$itensDaAvaliacao, $resumo] = $this->analisarAvaliacao($a, $cursosPorAvaliacao[$a['codigo']] ?? []);
+                $cursos = $cursosPorAvaliacao[$a['codigo']] ?? [];
+                // Por avaliação (e não só pelo conjunto): o nome e os cursos entram porque saem nas linhas, e não mudam a fingerprint.
+                [$itensDaAvaliacao, $resumo] = CacheDeAnalise::lembrar(
+                    'reitor-itens-avaliacao',
+                    (int) $a['codigo'],
+                    ['nome' => $a['nome'], 'cursos' => $cursos],
+                    fn () => $this->analisarAvaliacao($a, $cursos),
+                );
                 array_push($itens, ...$itensDaAvaliacao);
                 if ($resumo !== null) {
                     $resumos[] = $resumo;
@@ -102,23 +114,15 @@ class ReitorItensService
     private function analisarAvaliacao(array $a, array $cursos): array
     {
         $avaliacao = Avaliacao::find($a['codigo']);
-        $geral = $avaliacao === null ? null : $this->psicometria->analisar($avaliacao);
+        $geral = $avaliacao === null ? null : $this->psicometria->analisarItens($avaliacao);
         if ($geral === null) {
             return [[], null];
         }
 
         $alternativas = collect($this->relatorio->analiseAlternativas($avaliacao))->keyBy('numero');
 
-        // Por curso só quando a avaliação tem mais de um com respondentes suficientes.
-        $porCurso = [];
-        if (count($cursos) >= 2) {
-            foreach ($cursos as $chave => $grafias) {
-                $analiseDoCurso = $this->psicometria->paraCursos([$grafias[0]])->analisar($avaliacao);
-                if ($analiseDoCurso !== null) {
-                    $porCurso[$chave] = collect($analiseDoCurso['itens'])->keyBy('numero')->map(fn ($i) => $i['dificuldade'])->all();
-                }
-            }
-        }
+        // Por curso só quando a avaliação tem mais de um com respondentes suficientes (o serviço já descarta os pequenos demais).
+        $porCurso = count($cursos) >= 2 ? array_intersect_key($this->psicometria->acertoPorCurso($avaliacao), $cursos) : [];
 
         $itens = [];
         foreach ($geral['itens'] as $item) {

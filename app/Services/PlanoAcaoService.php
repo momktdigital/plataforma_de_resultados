@@ -64,8 +64,6 @@ class PlanoAcaoService
                     'categoria' => $origem['categoria_nome'] ?? null,
                     'categoria_automatica' => (bool) ($origem['categoria_automatica'] ?? false),
                     'recorte_indicadores' => $ind['recorte'] ?? null,
-                    'corte' => $ind['corte'] ?? null,
-                    'criterio' => $ind['criterio'] ?? 'corte',
                     'previstos' => $ind['previstos'] ?? null,
                     'fizeram' => $ind['fizeram'] ?? null,
                     'mistura' => (bool) ($ind['mistura'] ?? false),
@@ -75,7 +73,7 @@ class PlanoAcaoService
                 // de onde partiu).
                 'participacao_atual' => $ind['participacao'] ?? null,
                 'meta_participacao' => $ind['meta_participacao'] ?? null,
-                'proficiencia_atual' => $ind['proficiencia'] ?? null,
+                'esperado_atual' => $ind['esperado'] ?? null,
                 'status' => PlanoAcao::RASCUNHO,
             ]);
             $this->preencher($plano, $dados);
@@ -108,7 +106,7 @@ class PlanoAcaoService
     {
         $dados = $modelo->only([
             'recorte', 'resultado', 'fragilidades', 'evidencias', 'causas', 'causa_priorizada', 'nota_impacto', 'nota_evidencia',
-            'nota_governabilidade', 'porques', 'causa_raiz', 'meta_proficiencia',
+            'nota_governabilidade', 'porques', 'causa_raiz', 'meta_esperado',
         ]);
         // Prazo e situação não se herdam: o novo plano é de outro ciclo.
         $dados['acoes'] = $modelo->acoes->reject(fn (PlanoAcaoAcao $a) => $a->status === PlanoAcaoAcao::CANCELADA)
@@ -481,9 +479,9 @@ class PlanoAcaoService
             }
         }
 
-        // A meta de participação é a institucional (vem do painel, não se edita); só a de proficiência é pactuada pelo coordenador.
-        if (array_key_exists('meta_proficiencia', $dados)) {
-            $plano->meta_proficiencia = ($v = str_replace(',', '.', trim((string) $dados['meta_proficiencia']))) === '' ? null : round((float) $v, 1);
+        // A meta de participação é a institucional (vem do painel, não se edita); só a de alunos com desempenho esperado é pactuada pelo coordenador.
+        if (array_key_exists('meta_esperado', $dados)) {
+            $plano->meta_esperado = ($v = str_replace(',', '.', trim((string) $dados['meta_esperado']))) === '' ? null : round((float) $v, 1);
         }
 
         if (array_key_exists('data_proxima_avaliacao', $dados)) {

@@ -26,7 +26,7 @@ use Tests\TestCase;
 
 /**
  * Perfil de reitor e o painel da reitoria: acesso (só leitura, sem dado nominal), números por curso (participação
- * com previstos da matrícula, proficiência, média, mediana), evolução entre semestres e competências.
+ * com previstos da matrícula, alunos com desempenho esperado, média, mediana), evolução entre semestres e competências.
  */
 class ReitorTest extends TestCase
 {
@@ -290,20 +290,20 @@ class ReitorTest extends TestCase
         $this->assertSame(75.0, $est['total']['participacao']);
     }
 
-    public function test_proficiencia_media_e_mediana_excluem_os_ausentes(): void
+    public function test_desempenho_esperado_media_e_mediana_excluem_os_ausentes(): void
     {
         [, $est] = $this->estatisticas($this->cenario());
         $direito = $est['cursos']['DIREITO'];
 
         $this->assertSame(4, $direito['n']);
-        $this->assertSame(3, $direito['proficientes']); // 100, 70 e 60 (o corte inclui 60)
-        $this->assertSame(75.0, $direito['proficienciaPct']);
+        $this->assertSame(3, $direito['esperados']); // 100, 70 e 60 (o mínimo inclui 60)
+        $this->assertSame(75.0, $direito['esperadoPct']);
         $this->assertSame(65.0, $direito['media']);
         $this->assertSame(65.0, $direito['mediana']);
 
-        $this->assertSame(50.0, $est['cursos']['MEDICINA']['proficienciaPct']);
+        $this->assertSame(50.0, $est['cursos']['MEDICINA']['esperadoPct']);
         $this->assertSame(6, $est['total']['n']);
-        $this->assertSame(66.7, $est['total']['proficienciaPct']);
+        $this->assertSame(66.7, $est['total']['esperadoPct']);
         $this->assertSame(65.0, $est['total']['media']);
     }
 
@@ -317,24 +317,12 @@ class ReitorTest extends TestCase
         $this->assertSame([60 => 66.7, 65 => 50.0, 70 => 50.0, 75 => 33.3, 80 => 33.3], $total['patamares']);
     }
 
-    public function test_corte_configurado_pelo_administrador_muda_a_proficiencia(): void
+    public function test_corte_das_faixas_e_fixo_e_so_a_meta_de_participacao_e_configuravel(): void
     {
-        $avaliacao = $this->cenario();
-        ConfiguracaoSistema::definir('reitor_corte_proficiencia', '70');
-
-        [$ctx, $est] = $this->estatisticas($avaliacao);
-
-        $this->assertSame(70.0, $ctx['corte']);
-        $this->assertSame(50.0, $est['total']['proficienciaPct']); // 100, 70 e 80 de 6
-        $this->assertSame(['< 50%', '50–59%', '60–69%', '70–79%', '≥ 80%'], array_column(ReitorDashboardService::faixas(70.0), 'rotulo'));
-    }
-
-    public function test_corte_e_meta_invalidos_na_configuracao_voltam_para_limites_seguros(): void
-    {
-        ConfiguracaoSistema::definir('reitor_corte_proficiencia', '5');
+        ConfiguracaoSistema::definir('reitor_corte_proficiencia', '70'); // valor antigo, de quando havia um critério de acerto configurável
         ConfiguracaoSistema::definir('reitor_meta_participacao', '250');
 
-        $this->assertSame(30.0, ReitorDashboardService::corte());
+        $this->assertSame(60.0, ReitorDashboardService::corte());
         $this->assertSame(100.0, ReitorDashboardService::meta());
     }
 
@@ -398,7 +386,7 @@ class ReitorTest extends TestCase
         $this->actingAs($reitor, 'admin')->get(route('reitor.xlsx'))->assertNotFound();
     }
 
-    public function test_tela_de_visao_mostra_participacao_proficiencia_e_pontos_de_atencao(): void
+    public function test_tela_de_visao_mostra_participacao_desempenho_esperado_e_pontos_de_atencao(): void
     {
         $avaliacao = $this->cenario();
 
@@ -408,7 +396,8 @@ class ReitorTest extends TestCase
             ->assertSee('66,7%')
             ->assertSee('Cursos na meta de participação')
             ->assertSee('Ativos sem aplicação')
-            ->assertSee('Critério interno da instituição');
+            ->assertSee('Alunos com desempenho esperado')
+            ->assertDontSee('roficiência');
     }
 
     public function test_avaliacao_inexistente_cai_na_mais_recente_em_vez_de_quebrar(): void
@@ -469,12 +458,12 @@ class ReitorTest extends TestCase
         $est = $servico->estatisticas($ctx);
 
         $this->assertSame(['DIREITO' => 'DIREITO', 'MEDICINA' => 'MEDICINA'], $ctx['cursosDisponiveis']);
-        $this->assertSame(66.7, $est['total']['proficienciaPct']);
+        $this->assertSame(66.7, $est['total']['esperadoPct']);
         $this->assertSame(6, $est['total']['n']);
         $this->assertSame(65.0, $est['total']['media']);
         $this->assertSame(85.7, $est['total']['participacao']); // 6 fizeram de 7 com matrícula (1 ausente)
-        $this->assertSame(75.0, $est['cursos']['DIREITO']['proficienciaPct']);
-        $this->assertSame(50.0, $est['cursos']['MEDICINA']['proficienciaPct']);
+        $this->assertSame(75.0, $est['cursos']['DIREITO']['esperadoPct']);
+        $this->assertSame(50.0, $est['cursos']['MEDICINA']['esperadoPct']);
     }
 
     public function test_avaliacao_escolhida_mostra_so_o_curso_dela_e_o_codigo_solto_tambem_vale(): void
@@ -569,9 +558,9 @@ class ReitorTest extends TestCase
         $serie = app(ReitorEvolucaoService::class)->serie($servico->contexto(['periodo' => '2026/1', 'categoria' => (string) $categoria->id], []));
 
         $this->assertSame(['2025/2', '2026/1'], array_column($serie['semestres'], 'periodoLetivo'));
-        // 2025/2: 100, 100, 20, 20 → média 60 e metade proficiente; 2026/1: o mesmo cenário de sempre
+        // 2025/2: 100, 100, 20, 20 → média 60 e metade com o desempenho esperado; 2026/1: o mesmo cenário de sempre
         $this->assertSame(60.0, $serie['semestres'][0]['total']['media']);
-        $this->assertSame(50.0, $serie['semestres'][0]['total']['proficienciaPct']);
+        $this->assertSame(50.0, $serie['semestres'][0]['total']['esperadoPct']);
         $this->assertSame(65.0, $serie['semestres'][1]['total']['media']);
         $this->assertEqualsCanonicalizing(['DIREITO', 'MEDICINA'], array_keys($serie['semestres'][1]['cursos']));
         $this->assertCount(2, $serie['semestres'][0]['avaliacao']['codigos']);
@@ -617,7 +606,7 @@ class ReitorTest extends TestCase
         $this->assertEqualsCanonicalizing([$direito->codigo, $medicina->codigo], $ctx['avaliacao']['codigos']);
         $this->assertSame(['DIREITO', 'MEDICINA'], array_keys($ctx['cursosDisponiveis']));
         $this->assertSame(6, $est['total']['n']);
-        $this->assertSame(66.7, $est['total']['proficienciaPct']);
+        $this->assertSame(66.7, $est['total']['esperadoPct']);
         $this->assertFalse($ctx['avaliacao']['mistura']);
 
         // a filha continua escolhível e mostra só o curso dela
@@ -781,9 +770,9 @@ class ReitorTest extends TestCase
         $this->assertSame(6, $est['total']['previstos']);
         $this->assertSame(100.0, $est['total']['participacao']);
         $this->assertSame(['DIREITO'], array_keys($est['cursos']));
-        // 100, 40, 80, 60, 20, 60 → média 60, proficientes (≥60): 100, 80, 60, 60
+        // 100, 40, 80, 60, 20, 60 → média 60, desempenho esperado (≥60): 100, 80, 60, 60
         $this->assertSame(60.0, $est['total']['media']);
-        $this->assertSame(66.7, $est['total']['proficienciaPct']);
+        $this->assertSame(66.7, $est['total']['esperadoPct']);
     }
 
     public function test_todos_os_periodos_nas_cinco_telas_e_na_evolucao(): void
@@ -1359,6 +1348,81 @@ class ReitorTest extends TestCase
     }
 
     // ------------------------------------------------------------------------------------------------------------
+    // Desempenho esperado: a mesma conta no painel da reitoria, no Dashboard da avaliação e no painel do coordenador
+    // ------------------------------------------------------------------------------------------------------------
+
+    /**
+     * 10 questões: Q1–Q2 cabem já no 1º período, Q3–Q10 só a partir do 3º. Meta do 1º período = 60% de 2/10 = 12%; do 3º = 60%.
+     * 1º: A acerta só Q1 (10% < 12%), B acerta Q1 e Q2 (20%). 3º: C acerta 5 (50% < 60%), D acerta 6 (60%).
+     */
+    private function avaliacaoComMetaPorPeriodo(): Avaliacao
+    {
+        $avaliacao = Avaliacao::create(['nome' => '2026/1 - Meta por período', 'data_avaliacao' => '2026-03-10']);
+        foreach (range(1, 10) as $n) {
+            Questao::create(['avaliacao_codigo' => $avaliacao->codigo, 'numero' => $n, 'gabarito' => 'A', 'periodo_minimo' => $n <= 2 ? 1 : 3]);
+        }
+
+        foreach ([['1º', 1], ['1º', 2], ['3º', 5], ['3º', 6]] as [$periodo, $acertos]) {
+            $aluno = $this->aluno('DIREITO', $periodo, '2026/1');
+            foreach (range(1, 10) as $n) {
+                Resposta::create([
+                    'avaliacao_codigo' => $avaliacao->codigo, 'aluno_id' => $aluno->id, 'ra' => $aluno->ra, 'periodo' => $periodo,
+                    'questao_numero' => $n, 'resposta' => $n <= $acertos ? 'A' : 'B',
+                ]);
+            }
+        }
+        app(ResumoResultadoService::class)->recalcular($avaliacao->codigo);
+
+        return $avaliacao;
+    }
+
+    public function test_desempenho_esperado_usa_a_meta_do_periodo_do_curso_e_as_telas_concordam(): void
+    {
+        $avaliacao = $this->avaliacaoComMetaPorPeriodo();
+        $ctx = app(ReitorDashboardService::class)->contexto(['avaliacao' => (string) $avaliacao->codigo], []);
+
+        // painel da reitoria: B (1º) e D (3º) alcançaram o esperado; A e C não
+        $est = app(ReitorDashboardService::class)->estatisticas($ctx);
+        $this->assertSame(2, $est['total']['esperados']);
+        $this->assertSame(50.0, $est['total']['esperadoPct']);
+        $this->assertSame(50.0, $est['total']['periodos'][1]['esperadoPct']);
+        $this->assertSame(50.0, $est['total']['periodos'][3]['esperadoPct']);
+
+        // Dashboard da avaliação
+        $bi = app(\App\Services\PsicometriaService::class)->desempenhoEsperado($avaliacao);
+        $this->assertSame(['comMeta' => true, 'presentes' => 4, 'dentro' => 2, 'pct' => 50.0], $bi);
+        $primeiro = app(\App\Services\PsicometriaService::class)->desempenhoEsperado($avaliacao, '1º');
+        $this->assertSame([2, 1], [$primeiro['presentes'], $primeiro['dentro']]);
+
+        // painel do coordenador
+        $coord = app(\App\Services\CoordenadorDashboardService::class)->alunosDentroDoEsperado(['DIREITO'], [$avaliacao->codigo]);
+        $this->assertSame(2, $coord[$avaliacao->codigo]['dentro']);
+        $this->assertSame(4, $coord[$avaliacao->codigo]['presentes']);
+
+        // competências e evolução usam a mesma regra no SQL
+        $evolucao = app(ReitorEvolucaoService::class)->serie($ctx);
+        $this->assertSame(50.0, $evolucao['semestres'][0]['total']['esperadoPct']);
+        $bloomOuAreas = app(ReitorCompetenciasService::class)->gerar($ctx);
+        $this->assertArrayHasKey('esperado', $bloomOuAreas['bloom']);
+    }
+
+    public function test_dashboard_da_avaliacao_mostra_o_percentual_de_alunos_com_desempenho_esperado(): void
+    {
+        $avaliacao = $this->avaliacaoDeItens(); // 40 respondentes, sem meta por período: vale 60% da prova
+
+        $this->actingAs($this->admin(), 'admin')->get(route('avaliacoes.bi', $avaliacao))
+            ->assertOk()->assertSee('Alunos com desempenho esperado')->assertDontSee('(sem período)');
+    }
+
+    public function test_sem_meta_por_periodo_vale_60_por_cento_da_prova(): void
+    {
+        [, $est] = $this->estatisticas($this->cenario());
+
+        // 100, 70, 60 (DIREITO) e 80 (MEDICINA) alcançam 60% da prova; 30 e 50 não
+        $this->assertSame(4, $est['total']['esperados']);
+    }
+
+    // ------------------------------------------------------------------------------------------------------------
     // Relatório institucional (PDF / PowerPoint)
     // ------------------------------------------------------------------------------------------------------------
 
@@ -1372,7 +1436,7 @@ class ReitorTest extends TestCase
             ->assertSee('Relatório institucional')
             ->assertSee('1. Resumo')
             ->assertSee('2. Participação por curso')
-            ->assertSee('3. Proficiência institucional')
+            ->assertSee('3. Alunos com desempenho esperado')
             ->assertSee('4. Desempenho na prova')
             ->assertSee('5. Trajetória ao longo do curso')
             ->assertSee('6. Competências')
@@ -1435,9 +1499,9 @@ class ReitorTest extends TestCase
 
         $this->assertSame([1, 2], array_keys($periodos));
         $this->assertSame(50.0, $periodos[1]['media']);
-        $this->assertSame(50.0, $periodos[1]['proficienciaPct']);
+        $this->assertSame(50.0, $periodos[1]['esperadoPct']);
         $this->assertSame(90.0, $periodos[2]['media']);
-        $this->assertSame(100.0, $periodos[2]['proficienciaPct']);
+        $this->assertSame(100.0, $periodos[2]['esperadoPct']);
         $this->assertSame('1º, 2º', $est['cursos']['DIREITO']['periodosAvaliadosRotulo']);
     }
 
@@ -1470,8 +1534,8 @@ class ReitorTest extends TestCase
         $this->assertSame([false, true], array_column($serie['semestres'], 'ehSelecionada'));
         $this->assertSame(70.0, $serie['semestres'][0]['total']['media']);
         $this->assertSame(75.0, $serie['semestres'][1]['total']['media']);
-        $this->assertSame(75.0, $serie['semestres'][0]['total']['proficienciaPct']); // 60, 80, 100 de 4
-        $this->assertSame(100.0, $serie['semestres'][1]['total']['proficienciaPct']);
+        $this->assertSame(75.0, $serie['semestres'][0]['total']['esperadoPct']); // 60, 80, 100 de 4
+        $this->assertSame(100.0, $serie['semestres'][1]['total']['esperadoPct']);
 
         $this->actingAs($this->reitor(), 'admin')->get(route('reitor.evolucao', ['avaliacao' => $atual->codigo]))
             ->assertOk()->assertSee('A instituição ao longo dos semestres')->assertSee('2025/2');
@@ -1485,7 +1549,7 @@ class ReitorTest extends TestCase
             ->assertOk()->assertSee('A evolução aparece quando houver ao menos dois períodos letivos');
     }
 
-    public function test_competencias_por_bloom_e_area_com_proficientes_e_nao_proficientes(): void
+    public function test_competencias_por_bloom_e_area_entre_quem_teve_o_esperado_e_quem_ficou_abaixo(): void
     {
         $avaliacao = $this->cenario();
         $ctx = app(ReitorDashboardService::class)->contexto($avaliacao->codigo, []);
@@ -1496,10 +1560,10 @@ class ReitorTest extends TestCase
         // 6 alunos com nota × 5 questões por nível: Lembrar acertou 28 de 30; Aplicar, 11 de 30
         $this->assertSame(93.3, $bloom['total']['lembrar']['pct']);
         $this->assertSame(36.7, $bloom['total']['aplicar']['pct']);
-        $this->assertSame(100.0, $bloom['proficientes']['lembrar']['pct']);
-        $this->assertSame(55.0, $bloom['proficientes']['aplicar']['pct']);
-        $this->assertSame(80.0, $bloom['naoProficientes']['lembrar']['pct']);
-        $this->assertSame(0.0, $bloom['naoProficientes']['aplicar']['pct']);
+        $this->assertSame(100.0, $bloom['esperado']['lembrar']['pct']);
+        $this->assertSame(55.0, $bloom['esperado']['aplicar']['pct']);
+        $this->assertSame(80.0, $bloom['abaixo']['lembrar']['pct']);
+        $this->assertSame(0.0, $bloom['abaixo']['aplicar']['pct']);
         // curso × nível com menos de 30 respostas fica oculto
         $this->assertNull($bloom['porCurso']['MEDICINA']['lembrar']['pct']);
         $this->assertNull($bloom['total']['criar']['pct']);
@@ -1534,23 +1598,19 @@ class ReitorTest extends TestCase
         $this->assertStringContainsString('Sobre este quadro', $html);
     }
 
-    public function test_configuracoes_guardam_corte_e_meta_validando_os_limites(): void
+    public function test_configuracoes_guardam_a_meta_de_participacao_validando_os_limites(): void
     {
         $admin = $this->admin();
 
-        $this->actingAs($admin, 'admin')->post('/sistema/configuracoes', ['backup_manter_ultimos' => 5, 'reitor_corte_proficiencia' => 65, 'reitor_meta_participacao' => '95,5'])
+        $this->actingAs($admin, 'admin')->post('/sistema/configuracoes', ['backup_manter_ultimos' => 5, 'reitor_meta_participacao' => '95,5'])
             ->assertSessionHasErrors('reitor_meta_participacao');
 
-        $this->actingAs($admin, 'admin')->post('/sistema/configuracoes', ['backup_manter_ultimos' => 5, 'reitor_corte_proficiencia' => 65, 'reitor_meta_participacao' => '95.5'])
+        $this->actingAs($admin, 'admin')->post('/sistema/configuracoes', ['backup_manter_ultimos' => 5, 'reitor_meta_participacao' => '95.5'])
             ->assertSessionHasNoErrors();
-        $this->assertSame(65.0, ReitorDashboardService::corte());
         $this->assertSame(95.5, ReitorDashboardService::meta());
-
-        $this->actingAs($admin, 'admin')->post('/sistema/configuracoes', ['backup_manter_ultimos' => 5, 'reitor_corte_proficiencia' => 10])
-            ->assertSessionHasErrors('reitor_corte_proficiencia');
 
         // o formulário antigo (sem os campos novos) continua válido e não apaga o que já estava salvo
         $this->actingAs($admin, 'admin')->post('/sistema/configuracoes', ['backup_manter_ultimos' => 7])->assertSessionHasNoErrors();
-        $this->assertSame(65.0, ReitorDashboardService::corte());
+        $this->assertSame(95.5, ReitorDashboardService::meta());
     }
 }

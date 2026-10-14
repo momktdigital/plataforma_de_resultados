@@ -41,7 +41,7 @@
             </p>
         @elseif ($reitores)
             <p class="px-4 pt-4 text-sm text-slate-500">
-                A reitoria acompanha os indicadores institucionais de <strong>todos os cursos</strong> (participação, proficiência, desempenho,
+                A reitoria acompanha os indicadores institucionais de <strong>todos os cursos</strong> (participação, alunos com desempenho esperado, desempenho,
                 trajetória e evolução entre semestres). O painel é <strong>agregado, sem dados nominais</strong>. Para analisar um curso a fundo, o reitor
                 pode abrir a <strong>visão do coordenador</strong> daquele curso (somente leitura, com os alunos do curso); cada abertura fica registrada na auditoria.
             </p>

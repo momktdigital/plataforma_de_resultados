@@ -170,7 +170,7 @@
                         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
                             <div class="flex items-start justify-between gap-2">
                                 <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Média da categoria</p>
-                                @include('plano._botao', ['visual' => 'proficiencia', 'titulo' => 'Média e proficiência da categoria', 'ctx' => $ctxPlano])
+                                @include('plano._botao', ['visual' => 'esperado', 'titulo' => 'Média e alunos com desempenho esperado da categoria', 'ctx' => $ctxPlano])
                             </div>
                             <p class="text-3xl font-bold mt-2 tracking-tight {{ CorDesempenho::classeTexto($t['media']) }}">{{ $fmt($t['media']) }}<span class="text-lg font-medium text-slate-500">%</span></p>
                             <p class="text-xs text-slate-500 mt-1">só alunos presentes</p>
@@ -180,14 +180,14 @@
                                 @php $ae = $det['abaixoEsperado']; @endphp
                                 <div class="flex items-start justify-between gap-2">
                                     <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Alunos abaixo do desempenho esperado</p>
-                                    @include('plano._botao', ['visual' => 'proficiencia', 'titulo' => 'Alunos abaixo do desempenho esperado', 'ctx' => $ctxPlano])
+                                    @include('plano._botao', ['visual' => 'esperado', 'titulo' => 'Alunos abaixo do desempenho esperado', 'ctx' => $ctxPlano])
                                 </div>
                                 <p class="text-3xl font-bold mt-2 tracking-tight">{{ $fmt($ae['pct']) }}<span class="text-lg font-medium text-slate-500">%</span></p>
                                 <p class="text-xs text-slate-500 mt-1">{{ $ae['abaixo'] }} de {{ $ae['total'] }} resultados &middot; esperado para o período de cada aluno</p>
                             @else
                                 <div class="flex items-start justify-between gap-2">
                                     <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Abaixo de 60%</p>
-                                    @include('plano._botao', ['visual' => 'proficiencia', 'titulo' => 'Alunos abaixo de 60%', 'ctx' => $ctxPlano])
+                                    @include('plano._botao', ['visual' => 'esperado', 'titulo' => 'Alunos abaixo de 60%', 'ctx' => $ctxPlano])
                                 </div>
                                 <p class="text-3xl font-bold mt-2 tracking-tight">{{ $fmt($t['abaixoPct']) }}<span class="text-lg font-medium text-slate-500">%</span></p>
                                 <p class="text-xs text-slate-500 mt-1">{{ $t['abaixo'] }} de {{ $t['comNota'] }} resultados</p>

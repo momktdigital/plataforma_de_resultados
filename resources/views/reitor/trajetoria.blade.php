@@ -17,7 +17,7 @@
 
     $celula = fn (array $p) => [
         'n' => $p['n'], 'previstos' => $p['previstos'], 'fizeram' => $p['fizeram'],
-        'media' => $p['media'], 'prof' => $p['proficienciaPct'], 'part' => $p['participacao'],
+        'media' => $p['media'], 'prof' => $p['esperadoPct'], 'part' => $p['participacao'],
     ];
 
     $dados = [
@@ -72,13 +72,13 @@
     </div>
 @endif
 
-{{-- 1 · Proficiência ao longo do curso --}}
-@include('reitor._secao', ['numero' => 1, 'titulo' => 'Proficiência ao longo do curso', 'id' => 'secao-traj-prof'])
+{{-- 1 · Desempenho esperado ao longo do curso --}}
+@include('reitor._secao', ['numero' => 1, 'titulo' => 'Alunos com desempenho esperado ao longo do curso', 'id' => 'secao-traj-prof'])
 <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5" aria-labelledby="secao-traj-prof">
-    <p class="text-xs font-bold uppercase tracking-wide text-emerald-800 mb-3">% de estudantes proficientes (≥ {{ $corteTxt }}%) em cada período do curso</p>
-    <div id="traj-prof-grande" class="relative h-96"><canvas id="grafico-traj-prof" data-titulo="Proficiência ao longo do curso, por curso"></canvas></div>
+    <p class="text-xs font-bold uppercase tracking-wide text-emerald-800 mb-3">% de estudantes com desempenho esperado em cada período do curso</p>
+    <div id="traj-prof-grande" class="relative h-96"><canvas id="grafico-traj-prof" data-titulo="Alunos com desempenho esperado ao longo do curso, por curso"></canvas></div>
     <div id="traj-prof-mini" hidden class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"></div>
-    @include('reitor._rodape-quadro', ['id' => 'traj-prof', 'sobre' => $sobre['trajetoria_proficiencia'], 'leitura' => $leituras['trajetoria_proficiencia'] ?? null])
+    @include('reitor._rodape-quadro', ['id' => 'traj-prof', 'sobre' => $sobre['trajetoria_esperado'], 'leitura' => $leituras['trajetoria_esperado'] ?? null])
 </section>
 
 {{-- 2 · Acerto por período --}}
@@ -93,7 +93,7 @@
 @include('reitor._secao', ['numero' => 3, 'titulo' => 'Mapa de calor: curso × período do curso', 'id' => 'secao-mapa'])
 <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5" aria-labelledby="secao-mapa">
     <div class="mb-3 flex flex-wrap items-center gap-2" role="group" aria-label="Indicador do mapa de calor">
-        @foreach ([['media', 'Média de acerto'], ['prof', 'Proficientes'], ['part', 'Participação'], ['n', 'Participantes']] as $i => [$valor, $rotulo])
+        @foreach ([['media', 'Média de acerto'], ['prof', 'Desempenho esperado'], ['part', 'Participação'], ['n', 'Participantes']] as $i => [$valor, $rotulo])
             <button type="button" data-metrica="{{ $valor }}" aria-pressed="{{ $i === 0 ? 'true' : 'false' }}"
                     class="rounded-full border px-4 py-1.5 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-primary {{ $i === 0 ? 'border-[#1e3a5f] bg-[#1e3a5f] text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50' }}">{{ $rotulo }}</button>
         @endforeach
@@ -237,12 +237,12 @@
                 maintainAspectRatio: false,
                 interaction: { mode: 'nearest', intersect: true },
                 scales: {
-                    y: V.eixoPct({ title: { display: true, text: campo === 'prof' ? '% de estudantes proficientes' : '% de acerto médio' } }),
+                    y: V.eixoPct({ title: { display: true, text: campo === 'prof' ? '% de estudantes com desempenho esperado' : '% de acerto médio' } }),
                     x: { title: { display: true, text: 'Período do curso' }, grid: { display: false } },
                 },
                 plugins: {
                     legend: V.legenda('top'),
-                    linhaReferencia: referencia ? { linhas: [{ valor: dados.corte, cor: '#94a3b8', rotulo: 'Critério ' + V.fmt(dados.corte, 0) + '%' }] } : {},
+                    linhaReferencia: referencia ? { linhas: [{ valor: dados.corte, cor: '#94a3b8', rotulo: V.fmt(dados.corte, 0) + '%' }] } : {},
                     tooltip: { callbacks: { label: function (item) {
                         var origem = item.dataset.chave === null ? dados.total : porChave[item.dataset.chave];
                         var p = origem.periodos[ordinais[item.dataIndex]];
@@ -298,7 +298,7 @@
             caixa.className = 'relative h-36';
             var canvas = document.createElement('canvas');
             canvas.id = 'mini-' + secao + '-' + i;
-            canvas.setAttribute('data-titulo', (campo === 'prof' ? 'Proficiência ao longo do curso' : 'Percentual de acerto médio por período') + ' — ' + c.nome);
+            canvas.setAttribute('data-titulo', (campo === 'prof' ? 'Alunos com desempenho esperado ao longo do curso' : 'Percentual de acerto médio por período') + ' — ' + c.nome);
             caixa.appendChild(canvas);
             cartao.appendChild(caixa);
             raiz.appendChild(cartao);
@@ -395,7 +395,7 @@
                 }
                 var escala = metrica === 'n' ? valor / maiorN * 100 : valor;
                 var texto = metrica === 'n' ? String(valor) : V.fmt(valor, 0) + '%';
-                var dica = V.esc(c.nome) + ' · ' + o + 'º período: média ' + V.pct(p.media) + ', proficientes ' + V.pct(p.prof) + ', participação ' + V.pct(p.part) + ', ' + p.n + ' participantes';
+                var dica = V.esc(c.nome) + ' · ' + o + 'º período: média ' + V.pct(p.media) + ', desempenho esperado ' + V.pct(p.prof) + ', participação ' + V.pct(p.part) + ', ' + p.n + ' participantes';
                 var destino = V.urlCurso(c.chave, { destino: 'alunos', periodo_curso: o });
                 var conteudo = destino ? '<a href="' + V.esc(destino) + '" class="block hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded">' + texto + '</a>' : texto;
                 html += '<td class="px-3 py-2 text-center font-mono font-semibold" style="background:' + Viz.corSequencial(escala) + ';color:' + Viz.tintaSobreSequencial(escala) + '" title="' + dica + '">' + conteudo + '</td>';

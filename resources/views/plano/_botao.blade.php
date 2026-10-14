@@ -17,7 +17,7 @@
 --}}
 @php
     $usuarioPlano = auth('admin')->user();
-    $mostrarPlano = $usuarioPlano && $usuarioPlano->ehCoordenador() && ! $usuarioPlano->emVisaoDeCurso;
+    $mostrarPlano = $usuarioPlano && $usuarioPlano->ehCoordenador() && ! $usuarioPlano->emVisaoDeCurso && \App\Support\PlanoAcaoModulo::liberadoPara($usuarioPlano);
     $planoItens = $planoItens ?? [];
     $planoItem = $planoItem ?? null;
     $urlPlano = fn (?string $doItem) => route('coordenador.planos.novo', array_filter([...($ctx ?? []), 'visual' => $visual, 'item' => $doItem], fn ($v) => $v !== null));

@@ -21,13 +21,13 @@ class PlanoAcaoResultadoService
     ) {}
 
     /**
-     * @return array{base: array{participacao: ?float, proficiencia: ?float}, metas: array{participacao: ?float, proficiencia: ?float}, proximo: ?array{periodo_letivo: string, participacao: ?float, proficiencia: ?float, dParticipacao: ?float, dProficiencia: ?float, metaParticipacao: ?bool, metaProficiencia: ?bool}}
+     * @return array{base: array{participacao: ?float, esperado: ?float}, metas: array{participacao: ?float, esperado: ?float}, proximo: ?array{periodo_letivo: string, participacao: ?float, esperado: ?float, dParticipacao: ?float, dEsperado: ?float, metaParticipacao: ?bool, metaEsperado: ?bool}}
      */
     public function calcular(PlanoAcao $plano): array
     {
         $resultado = [
-            'base' => ['participacao' => $plano->participacao_atual, 'proficiencia' => $plano->proficiencia_atual],
-            'metas' => ['participacao' => $plano->meta_participacao, 'proficiencia' => $plano->meta_proficiencia],
+            'base' => ['participacao' => $plano->participacao_atual, 'esperado' => $plano->esperado_atual],
+            'metas' => ['participacao' => $plano->meta_participacao, 'esperado' => $plano->meta_esperado],
             'proximo' => null,
         ];
 
@@ -55,12 +55,12 @@ class PlanoAcaoResultadoService
         $resultado['proximo'] = [
             'periodo_letivo' => $proximo,
             'participacao' => $ind['participacao'],
-            'proficiencia' => $ind['proficiencia'],
+            'esperado' => $ind['esperado'],
             'dParticipacao' => $dif($ind['participacao'], $plano->participacao_atual),
-            'dProficiencia' => $dif($ind['proficiencia'], $plano->proficiencia_atual),
+            'dEsperado' => $dif($ind['esperado'], $plano->esperado_atual),
             // A meta de participação do plano é a institucional do momento; a de agora pode ter mudado — vale a de agora.
             'metaParticipacao' => $bateu($ind['participacao'], $ind['meta_participacao']),
-            'metaProficiencia' => $bateu($ind['proficiencia'], $plano->meta_proficiencia),
+            'metaEsperado' => $bateu($ind['esperado'], $plano->meta_esperado),
         ];
 
         return $resultado;

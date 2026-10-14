@@ -36,10 +36,10 @@ class ReitorExportService
             }
         };
 
-        $texto($sheet, 1, 1, "{$avaliacao['nome']} — período letivo {$avaliacao['periodoLetivo']} — critério de proficiência: ≥ ".CoordenadorDashboardService::pct($corte).'% de acerto — meta de participação: '.CoordenadorDashboardService::pct($ctx['meta']).'%');
+        $texto($sheet, 1, 1, "{$avaliacao['nome']} — período letivo {$avaliacao['periodoLetivo']} — desempenho esperado: mínimo do período do curso (60% do que cabe nele) — meta de participação: ".CoordenadorDashboardService::pct($ctx['meta']).'%');
 
         $cabecalho = ['Curso', 'Previstos', 'Fizeram', 'Ausentes', 'Participação (%)', 'Distância da meta (pp)', 'Estudantes a mais p/ a meta', 'Períodos avaliados', 'Ativos sem aplicação',
-            'Proficientes (nº)', 'Proficientes (%)', 'Média (%)', 'Mediana (%)', '1º quartil (%)', '3º quartil (%)'];
+            'Desempenho esperado (nº)', 'Desempenho esperado (%)', 'Média (%)', 'Mediana (%)', '1º quartil (%)', '3º quartil (%)'];
         foreach ($patamares as $p) {
             $cabecalho[] = "≥ {$p}% (% dos estudantes)";
         }
@@ -62,8 +62,8 @@ class ReitorExportService
             $numero($sheet, 7, $linha, $c['alunosAMais']);
             $texto($sheet, 8, $linha, $c['periodosAvaliadosRotulo'] ?? '');
             $texto($sheet, 9, $linha, $c['ativosSemAplicacaoRotulo'] ?? '');
-            $numero($sheet, 10, $linha, $c['proficientes']);
-            $numero($sheet, 11, $linha, $c['proficienciaPct']);
+            $numero($sheet, 10, $linha, $c['esperados']);
+            $numero($sheet, 11, $linha, $c['esperadoPct']);
             $numero($sheet, 12, $linha, $c['media']);
             $numero($sheet, 13, $linha, $c['mediana']);
             $numero($sheet, 14, $linha, $c['q1']);
@@ -87,7 +87,7 @@ class ReitorExportService
         // Por período do curso
         $aba = $spreadsheet->createSheet();
         $aba->setTitle('Por período do curso');
-        foreach (['Curso', 'Período do curso', 'Previstos', 'Fizeram', 'Participação (%)', 'Com nota (nº)', 'Média (%)', 'Mediana (%)', 'Proficientes (%)'] as $i => $titulo) {
+        foreach (['Curso', 'Período do curso', 'Previstos', 'Fizeram', 'Participação (%)', 'Com nota (nº)', 'Média (%)', 'Mediana (%)', 'Desempenho esperado (%)'] as $i => $titulo) {
             $texto($aba, $i + 1, 1, $titulo);
         }
         $aba->getStyle([1, 1, 9, 1])->getFont()->setBold(true);
@@ -102,7 +102,7 @@ class ReitorExportService
                 $numero($aba, 6, $linha, $p['n']);
                 $numero($aba, 7, $linha, $p['media']);
                 $numero($aba, 8, $linha, $p['mediana']);
-                $numero($aba, 9, $linha, $p['proficienciaPct']);
+                $numero($aba, 9, $linha, $p['esperadoPct']);
                 $linha++;
             }
         }

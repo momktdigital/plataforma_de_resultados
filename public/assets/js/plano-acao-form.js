@@ -206,7 +206,7 @@
         function curto(t) { return String(t || '').trim().length < 5; }
         var hoje = new Date(); hoje.setHours(0, 0, 0, 0);
 
-        if (valor('meta_proficiencia') === '') falta(1, 'Defina a meta de proficiência para a próxima avaliação.');
+        if (valor('meta_esperado') === '') falta(1, 'Defina a meta de alunos com desempenho esperado para a próxima avaliação.');
         if (curto(valor('recorte'))) falta(2, 'Diga qual recorte merece atenção (período, grupo, faixa de desempenho).');
         if (curto(valor('resultado'))) falta(2, 'Descreva o resultado que precisa ser enfrentado.');
         if (curto(valor('fragilidades'))) falta(2, 'Registre as competências, objetivos de aprendizagem ou níveis cognitivos com fragilidade.');
@@ -259,7 +259,7 @@
         try { dimensoes = JSON.parse(q('#plano-dimensoes').textContent) || {}; } catch (e) { dimensoes = {}; }
 
         var linhas = [
-            ['Meta de proficiência', valor('meta_proficiencia') ? valor('meta_proficiencia') + '%' : ''],
+            ['Meta de alunos com desempenho esperado', valor('meta_esperado') ? valor('meta_esperado') + '%' : ''],
             ['Recorte prioritário', valor('recorte')],
             ['Resultado a enfrentar', valor('resultado')],
             ['Fragilidades', valor('fragilidades')],
